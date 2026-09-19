@@ -1,0 +1,128 @@
+{
+  "light": {
+    "name": "Lordaeron",
+    "scheme": "light",
+    "accent": "#71b5f3",
+    "colors": {
+      "panel": "#f0f0f0",
+      "surface": "#f0f0f0",
+      "field": "#ffffff",
+      "trim": "#000080",
+      "text": "#16191e",
+      "muted": "#555555",
+      "border": "#8b8b87",
+      "selected": "#c5d6ec",
+      "selected-text": "#101820",
+      "link": "#174aa1",
+      "hover": "#e7e3db"
+    }
+  },
+  "dark": {
+    "name": "Blackrock",
+    "scheme": "dark",
+    "accent": "#ff8a00",
+    "colors": {
+      "panel": "#303030",
+      "surface": "#3b3b3b",
+      "field": "#232323",
+      "trim": "#343434",
+      "text": "#e6e6e6",
+      "muted": "#b6b6b6",
+      "border": "#616161",
+      "selected": "#54422f",
+      "selected-text": "#fff0db",
+      "link": "#ffb765",
+      "hover": "#494949"
+    }
+  },
+  "warm-dark": {
+    "name": "Ironforge",
+    "scheme": "dark",
+    "accent": "#d7ad77",
+    "colors": {
+      "panel": "#302e2b",
+      "surface": "#3b3834",
+      "field": "#262421",
+      "trim": "#49413a",
+      "text": "#eee8df",
+      "muted": "#bcb2a5",
+      "border": "#655d52",
+      "selected": "#594934",
+      "selected-text": "#fff0dc",
+      "link": "#e6bd86",
+      "hover": "#494239"
+    }
+  },
+  "nord": {
+    "name": "Northrend",
+    "scheme": "dark",
+    "accent": "#88c0d0",
+    "colors": {
+      "panel": "#2e3440",
+      "surface": "#3b4252",
+      "field": "#272d38",
+      "trim": "#3b4252",
+      "text": "#eceff4",
+      "muted": "#d8dee9",
+      "border": "#4c566a",
+      "selected": "#434c5e",
+      "selected-text": "#eceff4",
+      "link": "#88c0d0",
+      "hover": "#434c5e"
+    }
+  },
+  "solarized-light": {
+    "name": "Silvermoon",
+    "scheme": "light",
+    "accent": "#268bd2",
+    "colors": {
+      "panel": "#eee8d5",
+      "surface": "#fdf6e3",
+      "field": "#fdf6e3",
+      "trim": "#073642",
+      "text": "#465e65",
+      "muted": "#465e65",
+      "border": "#93a1a1",
+      "selected": "#d6e5df",
+      "selected-text": "#073642",
+      "link": "#006b9a",
+      "hover": "#e5dfcd"
+    }
+  },
+  "gruvbox-dark": {
+    "name": "Durotar",
+    "scheme": "dark",
+    "accent": "#b8bb26",
+    "colors": {
+      "panel": "#282828",
+      "surface": "#3c3836",
+      "field": "#242424",
+      "trim": "#3c3836",
+      "text": "#ebdbb2",
+      "muted": "#bdae93",
+      "border": "#665c54",
+      "selected": "#504945",
+      "selected-text": "#fbf1c7",
+      "link": "#83a598",
+      "hover": "#504945"
+    }
+  },
+  "catppuccin-mocha": {
+    "name": "Dalaran",
+    "scheme": "dark",
+    "accent": "#cba6f7",
+    "colors": {
+      "panel": "#1e1e2e",
+      "surface": "#313244",
+      "field": "#181825",
+      "trim": "#313244",
+      "text": "#cdd6f4",
+      "muted": "#bac2de",
+      "border": "#585b70",
+      "selected": "#45475a",
+      "selected-text": "#cdd6f4",
+      "link": "#89b4fa",
+      "hover": "#45475a"
+    }
+  }
+}

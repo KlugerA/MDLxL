@@ -1,0 +1,2 @@
+export const DEFAULT_PAINT_APPEARANCE=Object.freeze({brushTipLight:'#242424',brushTipDark:'#f1eee7',brushCursor:'#ffffff',geosetSelection:'#83b9e8',geosetBorder:'#35d9ff',lampSelection:'#ffc34b',borderThickness:2});
+export function normalizePaintAppearance(value={}){const result={};for(const [key,fallback]of Object.entries(DEFAULT_PAINT_APPEARANCE))result[key]=key==='borderThickness'?Math.max(1,Math.min(6,Number(value[key])||fallback)):/^#[0-9a-f]{6}$/i.test(value[key])?value[key]:fallback;return result;}

@@ -1,0 +1,96 @@
+{
+  "forVersion": "MDLxL v7",
+  "contents": "Seven Warcraft-named appearance preset/theme pairs",
+  "changedFiles": [
+    {
+      "path": "resources/app/dist/assets/AnimationController-Bn2Chemj.js",
+      "sha256": "aa4f0a6c1187bbd80111f8221a206749e8e38c74c72d64e147f846cce4093f1a"
+    },
+    {
+      "path": "resources/app/dist/assets/BitsAndParts-BE-HW2Ut.js",
+      "sha256": "d48162611abe7cd79784aba327633905b452d5dec76eba6317fb294a9f2e45d5"
+    },
+    {
+      "path": "resources/app/dist/assets/Forge-qkJftfAu.js",
+      "sha256": "c8438051ad2b2f897c435b09840e569cc6283d53b6036d4a75dd50e2301f3ff2"
+    },
+    {
+      "path": "resources/app/dist/assets/GamePreview-DKgOmRdc.js",
+      "sha256": "2fe2dd0b01e9483ca83db0ec3c1e803472fb72942eebda457913f92ae03b05f9"
+    },
+    {
+      "path": "resources/app/dist/assets/KeyframeTimeline-CrrgJ0Ju.js",
+      "sha256": "5931b748e92ad5cb4701515291a93acb4c13633372bb3326c5f10002705b170f"
+    },
+    {
+      "path": "resources/app/dist/assets/MovementControllerRecomp-Bho-U9zu.js",
+      "sha256": "0a243852d284d5b51805e40b257035223db4f7a18b161b1df70871fb2c7b3ffc"
+    },
+    {
+      "path": "resources/app/dist/assets/OptimizeModel-C0OShZNv.js",
+      "sha256": "ba6a750791888e4ef6b669055a82b947b0488331ec1feedf36e73d5993a5dfb3"
+    },
+    {
+      "path": "resources/app/dist/assets/PaintWorkspace-DBSxqv4b.js",
+      "sha256": "358fe5607f87398bbd877c9d0b58b18a627b0126eba1bb381b2ba4b86f2b6188"
+    },
+    {
+      "path": "resources/app/dist/assets/ParticleEditor-DlYULY67.js",
+      "sha256": "ab9cef001f9cc648163b3febc03644d55d5331820c0c3cf817c7edf0f6a5606a"
+    },
+    {
+      "path": "resources/app/dist/assets/ResourceEditors-tS229ein.js",
+      "sha256": "ec67e0984daf8f59fb07f1e199ea46462ec62534b2c300f2636427232148aadb"
+    },
+    {
+      "path": "resources/app/dist/assets/ShapingDialog-B0ioxNcq.js",
+      "sha256": "19bac1e9c2dc66c9d74612268aacfce26e6bed3f9b7335ad5c3feb8519221eb2"
+    },
+    {
+      "path": "resources/app/dist/assets/TextureLibrary--6AsmPWE.js",
+      "sha256": "7b58b931802b75eaba10b65cf572d334759a25ce283f6f66b026fd3e523ead44"
+    },
+    {
+      "path": "resources/app/dist/assets/forge-DN_Xjjgb.js",
+      "sha256": "0c2d6d8b3540594f12781d33096b2de95b36cfd05ddb5c26f6ef7337a434d1c7"
+    },
+    {
+      "path": "resources/app/dist/assets/index-6IBpHkef.css",
+      "sha256": "099397a28fc27d5ffbac64b82b29cc88e8c5d77f11396ee65325df4d21a3554d"
+    },
+    {
+      "path": "resources/app/dist/assets/index-DtFgtZdG.js",
+      "sha256": "4f600f5b63eaca2f7b64cb6da5211f3db6a54210e82f08d6be6badd382c4de8e"
+    },
+    {
+      "path": "resources/app/dist/assets/resource-editors-vgiPophK.js",
+      "sha256": "56416a875932917609144d39754962fe96bceccd2b984e9688ad77f2b33eb2f9"
+    },
+    {
+      "path": "resources/app/dist/assets/trash-2-DQWaj8UG.js",
+      "sha256": "2a55b2a1d3559ea21a3693071eec3c3e4c60d649302d50f4ce03eeae0404063c"
+    },
+    {
+      "path": "resources/app/dist/index.html",
+      "sha256": "bedb4d39538a65d42c2eaf425095711c5fda713b08a35c843cc5cda3053da004"
+    },
+    {
+      "path": "resources/app/electron/main.cjs",
+      "sha256": "2aecf283c543ec60da0506c819c14d31fbb3125fb73ccf113a80d05a1cd758ce"
+    },
+    {
+      "path": "resources/app/src/application-themes.json",
+      "sha256": "9ce81e6b6d592d9fcadf5e36b2b787e5046087a0594f1f1a4c7a15837f26c011"
+    },
+    {
+      "path": "resources/app/src/preferences.js",
+      "sha256": "c3a2d833cb41ab9ea51b6d75b0c09850328437a82fb3265510681813419cfe0b"
+    },
+    {
+      "path": "resources/app/src/viewport-appearance.js",
+      "sha256": "9d8f157bfd78babaf4df9a9e43e081ca68ec62cc4f73004188c1aa5416d1ca9f"
+    }
+  ],
+  "verifiedApplicationFiles": 516,
+  "preferencesIncluded": false
+}

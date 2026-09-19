@@ -1,0 +1,36 @@
+MDLxL v7 Appearance Patch — 7 presets / 7 matching themes
+
+Lordaeron, Blackrock, Ironforge, Northrend, Silvermoon, Durotar, Dalaran.
+
+INSTALL ON MDLxL v7 ONLY
+1. Close MDLxL, including detached editor windows.
+2. Back up the existing resources/app folder if you want to be able to undo this patch.
+3. Extract this ZIP to a temporary folder.
+4. Copy the extracted resources folder INTO the folder containing MDLxL.exe.
+   Merge the folders and replace matching files when Windows asks.
+   The result must be: [your MDLxL folder]/resources/app/dist/index.html
+   Do not create a second resources/resources folder and do not delete resources/app.
+5. Start your existing MDLxL.exe. Open Settings > Appearance.
+
+The viewport preset list and application theme buttons each contain seven choices.
+Choosing a built-in preset also loads its matching theme. Theme buttons can then
+change the application colors separately without changing viewport colors.
+Your saved settings, custom presets, models, textures, add-ons and portrait resources
+are not replaced. No reset or reinstallation is needed.
+
+The Electron executable itself is unchanged; its application files are updated.
+This is a patch, not a standalone editor. Keep the rest of your v7 installation.
+Older hashed renderer files may remain unused; no manual cleanup is necessary.
+
+TO UNDO: close MDLxL and restore your backed-up resources/app folder.
+
+Palette inspirations (adapted for this editor, not official integrations):
+Lordaeron: existing MDLVis Vanilla viewport with a classic light application theme.
+Blackrock: existing Blender-style viewport with a charcoal/orange application theme.
+Ironforge: warm-neutral graphite and brass, retaining the existing warm-dark theme ID.
+Northrend: Nord — https://www.nordtheme.com/docs/colors-and-palettes/
+Silvermoon: Solarized Light — https://ethanschoonover.com/solarized/
+Durotar: Gruvbox — https://github.com/morhetz/gruvbox
+Dalaran: Catppuccin Mocha — https://catppuccin.com/palette/
+
+Warcraft names describe the adapted color moods. No Blizzard art is added by this patch.

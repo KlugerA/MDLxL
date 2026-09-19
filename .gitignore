@@ -1,0 +1,22 @@
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local Electron/runtime state
+profile/
+GPUCache/
+*.log
+
+# Local build/package output
+out/
+release/
+*.asar
+*.zip
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,120 @@
+{
+  "schema": "mdlxl-paint-brush-tips",
+  "version": 1,
+  "createdAt": "2026-09-11T11:11:01.179Z",
+  "conversion": "GIH/GBR grayscale mask to cropped 256×256 RGBA PNG",
+  "tips": [
+    {
+      "id": "painted_bristle",
+      "file": "painted_bristle.png",
+      "sourceFile": "Brushes/painted-style_574BB1D2.gih",
+      "sourceCell": 0,
+      "provenance": {
+        "author": "rubberduck",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/60-free-gimp-krita-brushes",
+        "archive": "60-free-gimp-and-krita-brushes.zip"
+      },
+      "sourceSha256": "574bb1d2e267ea8b8abde106ed65613a19752a24f9cf077f0230ec0c7e2ecdcf",
+      "outputSha256": "2ccbb948acf7a726cd6277ba27f3495e5195921b92406c550653297143a5e813"
+    },
+    {
+      "id": "painted_chisel",
+      "file": "painted_chisel.png",
+      "sourceFile": "Brushes/painted-style_574BB1D2.gih",
+      "sourceCell": 2,
+      "provenance": {
+        "author": "rubberduck",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/60-free-gimp-krita-brushes",
+        "archive": "60-free-gimp-and-krita-brushes.zip"
+      },
+      "sourceSha256": "574bb1d2e267ea8b8abde106ed65613a19752a24f9cf077f0230ec0c7e2ecdcf",
+      "outputSha256": "be800e3554954dc4fe7378cc725ab9c047b2c4793ac693c78ad515270bbd9a8c"
+    },
+    {
+      "id": "painted_scumble",
+      "file": "painted_scumble.png",
+      "sourceFile": "Brushes/painted-style_574BB1D2.gih",
+      "sourceCell": 4,
+      "provenance": {
+        "author": "rubberduck",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/60-free-gimp-krita-brushes",
+        "archive": "60-free-gimp-and-krita-brushes.zip"
+      },
+      "sourceSha256": "574bb1d2e267ea8b8abde106ed65613a19752a24f9cf077f0230ec0c7e2ecdcf",
+      "outputSha256": "ee7ae87c0cdb4d176595def03c58ca017393d8537834f9029b63a85e1b7d6121"
+    },
+    {
+      "id": "fine_grain",
+      "file": "fine_grain.png",
+      "sourceFile": "Misc/fine-grain_AA4E5565.gih",
+      "sourceCell": 0,
+      "provenance": {
+        "author": "rubberduck",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/60-free-gimp-krita-brushes",
+        "archive": "60-free-gimp-and-krita-brushes.zip"
+      },
+      "sourceSha256": "aa4e55654c3302a8ebcd441d1122bdcce73e205080cb20a574d61bb865e28044",
+      "outputSha256": "9e6fe6dbf22eecd74a64dc81e1b676fd04ae19b9f72ce9b3704b357a405b7d57"
+    },
+    {
+      "id": "surface_scratches",
+      "file": "surface_scratches.png",
+      "sourceFile": "Misc/scratches_D4F54D42.gih",
+      "sourceCell": 0,
+      "provenance": {
+        "author": "rubberduck",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/60-free-gimp-krita-brushes",
+        "archive": "60-free-gimp-and-krita-brushes.zip"
+      },
+      "sourceSha256": "d4f54d42a5e4709c58eb25b274f89221c4ae28bd0175e5f83fce3406b2b8c74c",
+      "outputSha256": "a62cbd875473724579182f98385a42a474e0364b56fe95403aa12861060ccbd3"
+    },
+    {
+      "id": "armor_cracks",
+      "file": "armor_cracks.png",
+      "sourceFile": "Misc/cracks_9CA0DCAE.gih",
+      "sourceCell": 0,
+      "provenance": {
+        "author": "rubberduck",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/60-free-gimp-krita-brushes",
+        "archive": "60-free-gimp-and-krita-brushes.zip"
+      },
+      "sourceSha256": "9ca0dcae4a5a005a2271d5eef8a99865b30da02903084e57475e759b25427975",
+      "outputSha256": "4240ec3b500e5c449c2f14ede6a6224979cb8a0fe4786e7524d91098a66d34c8"
+    },
+    {
+      "id": "chipped_paint",
+      "file": "chipped_paint.png",
+      "sourceFile": "Brushes/Damaged Paint_4438BAED.gih",
+      "sourceCell": 0,
+      "provenance": {
+        "author": "ElDuderino",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/scratch-damaged-paint-brush",
+        "archive": "scratch-damaged-paint-brush.zip"
+      },
+      "sourceSha256": "4438baede96e1d43bdd483afeb6e7b3dc2a9f0f0ab4f353fd07f1f2dc92182b3",
+      "outputSha256": "7a3e30244cd0cc40bec35974a01fc12565e2dfec1dd3552ef3af82129e26b967"
+    },
+    {
+      "id": "scuffed_paint",
+      "file": "scuffed_paint.png",
+      "sourceFile": "Brushes/Damaged Paint_4438BAED.gih",
+      "sourceCell": 5,
+      "provenance": {
+        "author": "ElDuderino",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/scratch-damaged-paint-brush",
+        "archive": "scratch-damaged-paint-brush.zip"
+      },
+      "sourceSha256": "4438baede96e1d43bdd483afeb6e7b3dc2a9f0f0ab4f353fd07f1f2dc92182b3",
+      "outputSha256": "947199c0a267015645a54030e185976ade155e3675b59be57c1948aa7292fd3d"
+    }
+  ]
+}

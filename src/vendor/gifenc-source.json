@@ -1,0 +1,7 @@
+{
+  "name": "gifenc",
+  "version": "1.0.3",
+  "url": "https://registry.npmjs.org/gifenc/-/gifenc-1.0.3.tgz",
+  "integrity": "sha512-xdr6AdrfGBcfzncONUOlXMBuc5wJDtOueE3c5rdG0oNgtINLD+f2iFZltrBRZYzACRbKr+mSVU/x98zv2u3jmw==",
+  "repository": "https://github.com/mattdesl/gifenc"
+}

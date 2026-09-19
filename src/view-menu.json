@@ -1,0 +1,22 @@
+[
+  ["Bones", "display:bones"],
+  ["Wireframe Overlay", "display:wires"],
+  ["Nodes", "display:nodes"],
+  ["Attachments", "display:attachments"],
+  ["Emitters", "display:particles"],
+  ["Vertices", "showVertices"],
+  ["Grid", "grid"],
+
+  ["Normals", "normals"],
+  ["Show Particles", "showParticles"],
+  ["Clean View", "cleanView"],
+  null,
+  ["Small grid", "grid:small"],
+  ["XZ-grid", "grid:xz"],
+  ["YZ-grid", "grid:yz"],
+  ["XY-grid", "grid:xy"],
+  ["Axis", "axes"],
+  null,
+  ["Surface", "frameSelection"],
+  ["Textured View", "frame"]
+]
