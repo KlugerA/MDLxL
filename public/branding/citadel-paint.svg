@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 82" role="img" aria-labelledby="title">
+  <title id="title">Citadel Paint</title>
+  <path d="M49 57L13 63 24 50 13 37 58 41M371 57l36 6-11-13 11-13-45 4" fill="#711d38" stroke="#302126" stroke-width="2"/>
+  <path d="M58 43h304v24H58z" fill="#711d38" stroke="#d0b16b" stroke-width="2"/>
+  <g fill="#c7ab64" stroke="#302126" stroke-width="2">
+    <path d="M37 51V20h6V9h7v11h7V9h7v11h6v31l-17 9z"/>
+    <path d="M350 51V20h6V9h7v11h7V9h7v11h6v31l-17 9z"/>
+  </g>
+  <path d="M48 48V34q6-10 12 0v14M360 48V34q6-10 12 0v14" fill="#711d38"/>
+  <text x="210" y="46" text-anchor="middle" fill="#f1dfaa" stroke="#3a1a27" stroke-width="3.7" paint-order="stroke" font-family="Palatino Linotype,Book Antiqua,Georgia,serif" font-weight="bold" font-size="54" letter-spacing="-1">Citadel</text>
+  <text x="212" y="64" text-anchor="middle" fill="#f9e7b6" font-family="Georgia,serif" font-weight="bold" font-size="15" letter-spacing="8">PAINT</text>
+  <path d="M75 71h95m80 0h95" stroke="#6d2439" stroke-width="2"/>
+  <path d="m197 71 13-4 13 4-13 4z" fill="#c7ab64" stroke="#3a1a27"/>
+</svg>

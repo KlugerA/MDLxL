@@ -1,0 +1,72 @@
+/* Shared document theme. Canvas backgrounds stay under visual preferences. */
+:root{--ui-panel:#f0f0f0;--ui-surface:#f0f0f0;--ui-field:#fff;--ui-trim:#000080;--ui-text:#16191e;--ui-muted:#555;--ui-border:#8b8b87;--ui-selected:#c5d6ec;--ui-selected-text:#101820;--ui-link:#174aa1;--ui-hover:#e7e3db}
+:root[data-theme=dark]{color-scheme:dark;--ui-panel:#2c3037;--ui-surface:#353b45;--ui-field:#242a32;--ui-trim:#183654;--ui-text:#e4e9f0;--ui-muted:#adb8c8;--ui-border:#41536c;--ui-selected:#274d70;--ui-selected-text:#fff;--ui-link:#8ac6ff;--ui-hover:#3b4657}
+:root[data-theme=dark] body,:root[data-theme=dark] .classic-app{background:var(--ui-panel);color:var(--ui-text)}
+:root[data-theme=dark] :is(button,input,select,textarea){color:var(--ui-text);border-color:var(--ui-border);text-shadow:none}
+:root[data-theme=dark] :is(button,.resource-editor button){background:var(--ui-surface);color:var(--ui-text);border-color:var(--ui-border);box-shadow:none}
+:root[data-theme=dark] :is(button:hover,.resource-editor button:hover){background:var(--ui-hover);color:var(--ui-text);border-color:#627b9d}
+:root[data-theme=dark] :is(button:active,button.active,button.pressed,button[aria-pressed=true],.resource-editor button:active){background:var(--ui-selected);color:var(--ui-selected-text);border-color:#739cc7;box-shadow:inset 0 0 0 1px #4d7195}
+:root[data-theme=dark] :is(button:disabled,.resource-editor button:disabled){background:var(--ui-panel);color:#91a0b4;text-shadow:none;border-color:var(--ui-border);opacity:1}
+:root[data-theme=dark] :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea,.resource-editor input:not([type=checkbox]),.resource-editor select,.resource-editor textarea){background:var(--ui-field);color:var(--ui-text);border-color:var(--ui-border)}
+:root[data-theme=dark] :is(input:disabled,select:disabled,.resource-editor input:disabled,.resource-editor select:disabled){background:var(--ui-panel);color:#91a0b4}
+:root[data-theme=dark] :is(input[type=checkbox],input[type=radio],input[type=range]){accent-color:#71b5f3}
+:root[data-theme=dark] :is(button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible){outline:2px solid #82bdff;outline-offset:1px}
+:root[data-theme=dark] :is(.classic-sidebar,.classic-menu [role=menu],.classic-context,.classic-modal-window,.classic-dialog,.resource-editor .re-window,.settings-tabs,.classic-mouse-bar,.classic-modules,.classic-animation-bar,.overlay-toolbar,.animation-preview-tools,.uv-workspace,.uv-toolbar,.uv-status,.uv-actions,.uv-preview-title,.movement-controller,.resource-editor .inspector-section>summary,.resource-editor .track-badge){background:var(--ui-panel);color:var(--ui-text);border-color:var(--ui-border)}
+:root[data-theme=dark] :is(.classic-toolbar,.classic-status,.classic-toolbar-group,.classic-menu,.classic-mouse-bar,.classic-modules,.overlay-toolbar,.animation-preview-tools,.uv-module-tools,.uv-texture-path,.uv-preview-title){border-color:var(--ui-border)}
+:root[data-theme=dark] :is(.classic-modal-window>header,.classic-dialog>header,.resource-editor .re-caption,.tl-header,.tl-footer){background:var(--ui-trim);color:#f1f5ff;border-color:var(--ui-border)}
+:root[data-theme=dark] :is(.classic-modal-window,.classic-dialog,.resource-editor .re-window,.classic-context){border:2px solid var(--ui-trim);box-shadow:0 5px 24px #10192488}
+:root[data-theme=dark] :is(.classic-menu details[open]>summary,.classic-menu [role=menu] button:hover,.classic-context button:hover,.geoset-row.selected,.resource-editor .re-list button.re-selected,.resource-editor .re-list button.re-selected:hover,.movement-node-list label:has(input:checked)){background:var(--ui-selected);color:var(--ui-selected-text)}
+:root[data-theme=dark] :is(.classic-geosets [role=listbox],.resource-editor .re-list,.resource-editor .re-list button,.resource-editor .key-list,.module-controller .node-picks,.movement-node-list,.warmkeys-table-wrap,.warmkeys-capture){background:var(--ui-field);color:var(--ui-text);border-color:var(--ui-border)}
+:root[data-theme=dark] :is(.settings-tabs button[aria-selected=true],.mouse-mode-control.selected,.warmkeys-recorder,.warmkeys-chip,.warmkeys-table th,.game-data-path){background:var(--ui-surface);color:var(--ui-text);border-color:var(--ui-border);box-shadow:none}
+:root[data-theme=dark] :is(.resource-editor,.resource-editor .field,.resource-editor .field>span,.resource-editor .check,.resource-editor .vector-field,.resource-editor .inspector-fields,.resource-editor .re-list-label,.resource-editor .stat-grid b,.resource-editor .stat-grid span,.resource-editor .property-line,.resource-editor .track-heading,.resource-editor code){color:var(--ui-text)}
+:root[data-theme=dark] :is(.hint,.notice,.settings-hint,.settings-muted,.settings-toggle small,.settings-select small,.settings-range-labels,.settings-window>footer>span,.warmkeys-filter>span,.warmkeys-table td small,.mouse-mode-hint,.classic-modules .module-hint,.resource-editor .hint,.resource-editor .used-by,.resource-editor .re-status,.resource-editor .re-list button small,.resource-editor .re-empty-list,.resource-editor .re-empty-properties,.movement-node-list label small,.movement-hint,.movement-values){color:var(--ui-muted)}
+:root[data-theme=dark] :is(.notice,.uv-workspace .uv-preview-selection-note){background:#393a31;color:#e4dcb3;border-color:#626249}
+:root[data-theme=dark] :is(.settings-message,.warmkeys-chip kbd,.warmkeys-capture kbd,.game-data-path code){color:#9ddca6}
+:root[data-theme=dark] :is(.danger,.resource-editor .field-error,.movement-controller [role=alert],.capture-error,.warmkeys-conflict){color:#ffb3a5}
+:root[data-theme=dark] :is(a,.tl-details code){color:var(--ui-link)}
+:root[data-theme=dark] :is(.classic-empty-view,.uv-live-preview){background:var(--ui-surface);color:var(--ui-muted);border-color:var(--ui-border)}
+:root[data-theme=dark] :is(fieldset,.inspector-section,.classic-geosets,.classic-status>span,.classic-modal-body td,.warmkeys-table td,.resource-editor .track-field,.resource-editor .re-footer,.uv-workspace-panes,.uv-map-pane){border-color:var(--ui-border)}
+:root[data-theme=dark] .classic-modal{background:#10182277}
+:root[data-theme=dark] .animation-controller .ac-heading{background:var(--ui-panel);color:var(--ui-text)}
+:root[data-theme=dark] :is(.animation-controller .ac-hint,.animation-controller .ac-context){color:var(--ui-muted)}
+:root[data-theme=dark] .animation-controller legend{color:var(--ui-link)}
+:root[data-theme=dark] .animation-controller .ac-error{color:#ffb3a5}
+:root[data-theme=dark] .animation-controller .ac-notice{color:#9ddca6}
+:root[data-theme=dark] .warmkeys-sequence-cue{background:var(--ui-trim);color:var(--ui-text);border-color:var(--ui-border)}
+:root[data-theme=dark] .warmkeys-sequence-cue kbd{color:#9ddca6}
+.selection-box,.marquee{border-color:var(--visual-selection,#fff)}
+.classic-coordinates .field:nth-of-type(1)>span{color:var(--visual-axis-x,#c00)}
+.classic-coordinates .field:nth-of-type(2)>span{color:var(--visual-axis-y,#080)}
+.classic-coordinates .field:nth-of-type(3)>span{color:var(--visual-axis-z,#00c)}
+/* The texture library participates in the same Light / Dark preference. */
+:root[data-theme] :is(.tl-dialog,.tl-toolbar,.tl-folders,.tl-details,.tl-tile){background:var(--ui-panel);color:var(--ui-text);border-color:var(--ui-border)}
+:root[data-theme] :is(.tl-toolbar>input,.tl-toolbar select,.tl-header>button,.tl-actions button,.tl-more,.tl-tags>button){background:var(--ui-field);color:var(--ui-text);border-color:var(--ui-border)}
+:root[data-theme] :is(.tl-result-status,.tl-toolbar>label,.tl-tile-name,.tl-folder-row button,.tl-all-folders,.tl-details h3){color:var(--ui-text)}
+:root[data-theme] :is(.tl-folder small,.tl-tile small,.tl-result-status>span,.tl-details details,.tl-dimensions,.tl-empty,.tl-preview-reason){color:var(--ui-muted)}
+:root[data-theme] :is(.tl-folder-row.selected,.tl-all-folders.selected,.tl-tile.selected,.tl-actions>.tl-primary){background:var(--ui-selected);color:var(--ui-selected-text);border-color:var(--ui-link)}
+
+:root[data-theme=dark][data-palette=warm]{--ui-panel:#302e2b;--ui-surface:#3b3834;--ui-field:#262421;--ui-trim:#49413a;--ui-text:#eee8df;--ui-muted:#bcb2a5;--ui-border:#655d52;--ui-hover:#494239}
+:root[data-theme] :is(input[type=checkbox],input[type=radio],input[type=range]){accent-color:var(--ui-accent)}
+:root[data-theme] :is(button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible){outline-color:var(--ui-accent)}
+:root[data-theme] :is(button.active,button[aria-pressed=true],.settings-tabs button[aria-selected=true],.re-list button.re-selected,.geoset-row.selected){border-color:var(--ui-accent);box-shadow:inset 3px 0 var(--ui-accent)}
+:root[data-theme] .classic-sidebar{width:var(--panel-width);min-width:var(--panel-width);zoom:var(--panel-scale)}
+.classic-toolbar .language-switch{margin-right:4px}
+.compact-input-strength{margin-left:auto;display:flex;gap:4px;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap;padding:0 6px;color:var(--ui-muted)}
+.compact-input-strength>span{border:3px solid transparent;padding:2px 5px}.compact-input-strength>span.adjusting{border-color:#20b342;background:var(--ui-field);color:var(--ui-text)}
+/* Palette tokens also cover light themes and legacy fixed-color controls.
+   Semantic axis/selection colors and model/team colors keep their own owners. */
+:root[data-palette] :is(.classic-toolbar,.classic-modules,.classic-menu,.classic-menu [role=menu],.classic-sidebar,.classic-status,.classic-animation-bar,.settings-window,.settings-body,.settings-tabs,.settings-content,.classic-modal-window,.classic-context){background:var(--ui-panel);color:var(--ui-text);border-color:var(--ui-border)}
+:root[data-palette] :is(button,.classic-app button){background:var(--ui-surface);color:var(--ui-text);border-color:var(--ui-border);text-shadow:none}
+:root[data-palette] :is(input,select,textarea,.classic-geosets [role=listbox]){background:var(--ui-field);color:var(--ui-text);border-color:var(--ui-border)}
+:root[data-palette] :is(button:hover,.classic-menu summary:hover){background:var(--ui-hover);color:var(--ui-text)}
+:root[data-palette] :is(button[aria-pressed=true],button[aria-selected=true],.geoset-row.selected,.classic-menu [role=menu] button:hover){background:var(--ui-selected);color:var(--ui-selected-text)}
+:root[data-palette] :is(button:disabled,input:disabled,select:disabled){background:var(--ui-panel);color:var(--ui-muted);text-shadow:none}
+:root[data-palette] :is(.classic-modal-window>header,.settings-window>header){background:var(--ui-trim);color:#ffffff}
+
+@font-face{font-family:MDLxL-Mordor;src:url('/fonts/tengwar-annatar/tngan.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:MDLxL-Mordor;src:url('/fonts/tengwar-annatar/tnganb.ttf') format('truetype');font-style:normal;font-weight:700;font-display:swap}
+html[lang=mordor] .classic-app,html[lang=mordor] .classic-app :is(button,input,select,textarea,kbd,code){font-family:MDLxL-Mordor,serif;letter-spacing:.035em}
+/* Keep the escape hatch readable so Mordor mode can always be switched off. */
+html[lang=mordor] .language-switch,html[lang=mordor] .language-switch *{font-family:system-ui,sans-serif;letter-spacing:normal}
+
+.camera-angle-panel{margin:6px;padding:8px;min-width:0}.camera-angle-panel .field{display:grid;grid-template-columns:68px minmax(0,1fr);gap:4px;margin:5px 0}.camera-angle-panel input{min-width:0;width:100%;box-sizing:border-box}.camera-angle-panel small{display:block;color:var(--ui-muted)}.binding-inspection{padding:7px;border-top:1px solid var(--ui-border);overflow-wrap:anywhere}.binding-inspection p{font-size:11px;margin:5px 0}

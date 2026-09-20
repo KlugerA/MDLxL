@@ -1,0 +1,4 @@
+.geoset-row.hovered:not(.selected){background:#d7ecff;color:#102744;box-shadow:inset 3px 0 #1673c9}
+.geoset-row.hovered.selected{box-shadow:inset 3px 0 #7ed5ff}
+
+:root[data-theme=dark] .geoset-row.hovered:not(.selected){background:#234968;color:#eef7ff;box-shadow:inset 3px 0 #63c4ff}

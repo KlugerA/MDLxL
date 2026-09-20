@@ -226,7 +226,7 @@ export function ensureDummyBone(model, { weighted = false } = {}) {
   if (bone && model.Nodes?.[bone.ObjectId] !== bone) throw Error('DummyBone has an invalid node reference. Repair the model before importing or forging.');
   if (weighted) {
     const nextId = Math.max(-1, ...(model.Nodes || []).filter(Boolean).map(node => node.ObjectId), (model.PivotPoints?.length || 0) - 1) + 1;
-    if ((bone?.ObjectId ?? nextId) > 255) throw Error('DummyBone must have an object ID from 0 to 255 for weighted HD geometry.');
+    if ((bone?.ObjectId ?? nextId) > (model.Version >= 1400 ? 65535 : 255)) throw Error('DummyBone object ID exceeds this weighted skin format.');
   }
   if (!bone) { bone = createNode(model, 'Bone'); bone.Name = 'DummyBone'; }
   // A shared anchor cannot inherit the visibility of one part.
@@ -275,7 +275,7 @@ export function commitForge(model, mesh, { texturePath, trimColor = [0.8, 0.65, 
     // The codec's missing-LOD default becomes -1 on MDX save; the native
     // renderer displays LOD0. Preserve Forge visibility across reopening.
     if (model.Version >= 900) g.LevelOfDetail = 0;
-    if (hd) { g.SkinWeights = new Uint8Array(g.Vertices.length / 3 * 8); for (let v = 0; v < g.Vertices.length / 3; v++) g.SkinWeights.set([bone.ObjectId, 0, 0, 0, 255, 0, 0, 0], v * 8); g.Tangents = forgeTangents(g); }
+    if (hd) { g.SkinWeights = new (model.Version >= 1400 ? Uint16Array : Uint8Array)(g.Vertices.length / 3 * 8); for (let v = 0; v < g.Vertices.length / 3; v++) g.SkinWeights.set([bone.ObjectId, 0, 0, 0, 255, 0, 0, 0], v * 8); g.Tangents = forgeTangents(g); }
     model.Geosets.push(g); geosetIndices.push(index);
     if (i) model.GeosetAnims.push({ GeosetId: index, Flags: 2, Alpha: 1, Color: new Float32Array(trimColor) });
   }

@@ -1,0 +1,7 @@
+.paint-tip-section { margin-top: 12px; }
+.paint-tip-section header { margin-bottom: 5px; }
+.paint-tip-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.paint-tip-grid button { padding: 3px; aspect-ratio: 1; background: #242629; }
+.paint-tip-grid img,
+.paint-tip-basic { display: block; width: 100%; height: 100%; object-fit: contain; }
+.paint-tip-basic { border-radius: 50%; background: radial-gradient(circle, #fff 0 48%, #aaa8 58%, transparent 72%); }

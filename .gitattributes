@@ -1,0 +1,2 @@
+# These vendor files are checked against the upstream byte hashes at packaging.
+electron/ffmpeg/** -text

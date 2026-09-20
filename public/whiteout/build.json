@@ -1,0 +1,41 @@
+{
+  "schema": "mdlxl-whiteout-adapter-build",
+  "version": 1,
+  "library": "WhiteoutLib",
+  "source": "https://github.com/FernandoS27/WhiteoutLib",
+  "commit": "38d279c2a6d8d439377959c56fe4f1eb9ab12fa6",
+  "license": "BSD-3-Clause",
+  "toolchain": {
+    "emscripten": "6.0.5",
+    "cmake": "3.31.8",
+    "ninja": "1.12.1",
+    "dynamicExecution": 0
+  },
+  "profile": {
+    "container": "BLP1",
+    "encoding": "JPEG",
+    "pixelFormat": "RGBA8",
+    "jpegQuality": 90,
+    "alphaBits": 8,
+    "mipmaps": true
+  },
+  "files": {
+    "whiteout-paint-blp.js": "a9c6da362a07839067ac7d089cf1b75f973120629743310f9b10daab830b8393",
+    "whiteout-paint-blp.wasm": "9861a1e3919b073f21a48da3b08479586a69a0d281f4015c8af92ad8992c8bce"
+  },
+  "adapter": "native/paint-blp-bindings.cpp",
+  "decode": [
+    "BLP1",
+    "BLP2"
+  ],
+  "maximumDimension": 4096,
+  "additionalProfiles": [
+    {
+      "container": "DDS",
+      "encoding": "DXT5",
+      "pixelFormat": "BC3",
+      "alphaBits": 8,
+      "mipmaps": true
+    }
+  ]
+}

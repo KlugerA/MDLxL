@@ -2,7 +2,7 @@ import { Buffer } from 'buffer';
 import { diagnostic } from './diagnostic.js';
 
 const MDX_MAGIC = Buffer.from('MDLX', 'ascii');
-export const SUPPORTED_FORMAT_VERSIONS = Object.freeze([800, 900, 1000, 1100]);
+export const SUPPORTED_FORMAT_VERSIONS = Object.freeze([800, 900, 1000, 1100, 1200, 1300, 1400, 1600, 1800]);
 
 function asBuffer(input) {
   if (Buffer.isBuffer(input)) return Buffer.from(input);
@@ -174,6 +174,6 @@ export function isKnownTopLevelChunk(tag) {
   return new Set([
     'VERS', 'MODL', 'SEQS', 'GLBS', 'MTLS', 'TEXS', 'TXAN', 'GEOS', 'GEOA',
     'BONE', 'LITE', 'HELP', 'ATCH', 'PIVT', 'PREM', 'PRE2', 'RIBB', 'CAMS',
-    'EVTS', 'CLID', 'FAFX', 'BPOS', 'CORN', 'BPOS', 'CAMS', 'MDVI',
+    'EVTS', 'CLID', 'FAFX', 'BPOS', 'CORN', 'DILG', 'SNDS', 'SNEM', 'MDVI',
   ]).has(tag);
 }

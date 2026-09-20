@@ -1,0 +1,11 @@
+{
+  "schema": "mdlxl-addon",
+  "apiVersion": 1,
+  "id": "example.inspection",
+  "name": "Model inspection",
+  "actions": [
+    {"id": "frame", "label": "Fit model", "command": "fit"},
+    {"id": "normals", "label": "Toggle normals", "command": "normals"},
+    {"id": "materials", "label": "Inspect materials", "command": "Materials"}
+  ]
+}
