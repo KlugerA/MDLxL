@@ -6,6 +6,7 @@ import { DEFAULT_PAINT_APPEARANCE, normalizePaintAppearance } from './paint-appe
 import { normalizeWarmKeySequence, WARMKEY_LEADER } from './warmkey-defaults.js';
 import { DEFAULT_CAPTURE, normalizeCapture } from './capture-settings.js';
 import { DEFAULT_UV_PREVIEW_DISPLAY, normalizeUVPreviewDisplay } from './uv-preview-display.js';
+import { DEFAULT_UV_GRID, normalizeUVGrid } from './uv-grid.js';
 import { BUILT_IN_VIEWPORT_PRESETS, DEFAULT_VIEWPORT_APPEARANCE, DEFAULT_VIEWPORT_PRESET_ID, normalizeViewportAppearance, normalizeViewportPresets, viewportPresetById } from './viewport-appearance.js';
 export const DEFAULT_VISUALS = Object.freeze({
   background: '#cccccc', vertex: '#167bff', selectedVertex: '#ff0000', occludedVertex: '#8cacd0',
@@ -30,6 +31,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   rendererRevision: 3,
   citadelPaint: DEFAULT_PAINT_APPEARANCE,
   uvPreviewDisplay: DEFAULT_UV_PREVIEW_DISPLAY,
+  uvGrid: DEFAULT_UV_GRID,
   language: 'en', showPressedKeys: false, capture: DEFAULT_CAPTURE,
   scrollSensitivity: 2,
   wheelMode: 'rotate',
@@ -141,6 +143,7 @@ export function normalizePreferences(value = {}) {
   return {
     rendererRevision: 3,
     uvPreviewDisplay: normalizeUVPreviewDisplay(input.uvPreviewDisplay),
+    uvGrid: normalizeUVGrid(input.uvGrid),
     language: ['ru', 'es', 'zh', 'mordor'].includes(input.language) ? input.language : 'en', showPressedKeys: boolean(input.showPressedKeys, false), capture: normalizeCapture(input.capture),
     scrollSensitivity: Number.isFinite(sensitivity) && input.scrollSensitivity !== null ? Math.round(Math.min(10, Math.max(0.1, sensitivity)) * 100) / 100 : DEFAULT_PREFERENCES.scrollSensitivity,
     wheelMode: ['rotate', 'scroll', 'pointer'].includes(input.wheelMode) ? input.wheelMode : DEFAULT_PREFERENCES.wheelMode,
