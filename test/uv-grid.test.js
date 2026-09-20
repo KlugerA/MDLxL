@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizePreferences } from '../src/preferences.js';
-import { DEFAULT_UV_GRID, normalizeUVGrid, snapUVCoordinates, visibleUVGridLines } from '../src/uv-grid.js';
+import { coincidentUVSelection, DEFAULT_UV_GRID, normalizeUVGrid, snapUVCoordinates, visibleUVGridLines } from '../src/uv-grid.js';
 
 const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-6, `${actual} should equal ${expected}`);
 
@@ -24,8 +24,18 @@ test('snap to grid rounds one dragged vertex to an intersection', () => {
   closeTo(snapped[2], 0.63); closeTo(snapped[3], 0.61);
 });
 
-test('snap to grid never changes a multi-vertex transform', () => {
+test('snap to grid moves coincident vertices together to the exact crossing', () => {
+  const values = new Float32Array([0.24, 0.26, 0.24, 0.26, 0.63, 0.61]);
+  assert.equal(coincidentUVSelection(values, [0, 1]), true);
+  const snapped = snapUVCoordinates(values, [0, 1], { snap: true, spacing: 0.25 });
+  closeTo(snapped[0], 0.25); closeTo(snapped[1], 0.25);
+  closeTo(snapped[2], 0.25); closeTo(snapped[3], 0.25);
+  closeTo(snapped[4], 0.63); closeTo(snapped[5], 0.61);
+});
+
+test('snap to grid never changes a spread-out multi-vertex transform', () => {
   const values = new Float32Array([0.24, 0.26, 0.63, 0.61]);
+  assert.equal(coincidentUVSelection(values, [0, 1]), false);
   assert.deepEqual(snapUVCoordinates(values, [0, 1], { snap: true, spacing: 0.25 }), values);
   assert.deepEqual(snapUVCoordinates(values, [0], { snap: false, spacing: 0.25 }), values);
 });

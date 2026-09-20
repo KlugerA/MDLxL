@@ -47,7 +47,8 @@ function UVGridControls({ value, onChange }) {
   const update = change => onChange({ ...value, ...change });
   return <div className="uv-grid-toolbar" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
     <button type="button" className={value.enabled ? 'active' : ''} aria-pressed={value.enabled} title="Show UV grid" onClick={() => update({ enabled: !value.enabled })}>Grid</button>
-    <button type="button" className={value.snap ? 'active' : ''} aria-pressed={value.snap} title="Snap one dragged vertex to grid intersections" onClick={() => update({ snap: !value.snap })}>Snap</button>
+    <button type="button" className={value.snap ? 'active' : ''} aria-pressed={value.snap} title="Snap a dragged vertex or coincident vertex stack to grid crossings" onClick={() => update({ snap: !value.snap })}>Snap</button>
+    <label className="uv-grid-size"><span>Size</span><input aria-label="UV grid size" type="range" min="0.005" max="2" step="0.005" value={Math.min(2, value.spacing)} onChange={event => update({ spacing: Number(event.target.value) })}/><output>{value.spacing}</output></label>
     <button type="button" aria-haspopup="dialog" aria-expanded={open} title="UV grid settings" onClick={() => setOpen(previous => !previous)}>Settings</button>
     {open && <div className="uv-grid-settings" role="dialog" aria-label="UV grid settings">
       <label><span>Spacing</span><input aria-label="UV grid spacing" type="number" min="0.005" max="8" step="0.005" value={value.spacing} onChange={event => update({ spacing: Number(event.target.value) })}/></label>
@@ -149,6 +150,11 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   }, [current?.materialID, materialSignature, textureAssets, teamColor, preferences?.graphics?.textures]);
 
   const display = normalizeUVPreviewDisplay(preferences?.uvPreviewDisplay), uvGrid = normalizeUVGrid(preferences?.uvGrid), liveView = display.mesh === 'selected';
+  // UV-grid preferences belong only to the 2D texture canvas. Keep the 3D
+  // renderer's preference object stable while a grid control is adjusted.
+  const previewPreferencesInput = { ...(preferences || {}) }; delete previewPreferencesInput.uvGrid;
+  const previewPreferencesKey = JSON.stringify(previewPreferencesInput);
+  const previewPreferences = useMemo(() => previewPreferencesInput, [previewPreferencesKey]);
   const liveOverlay = selectingNew
     ? { allMesh: true, interactiveSelection: true, highlightSelection: false, size: Math.max(1, display.size), color: preferences?.visuals?.uvSelection, eligibleByGeoset: selectDomain, selectionByGeoset: selectionDraft }
     : uvPreviewOverlay(previewDomain, materialSelection, null, { ...display, mesh: liveView ? 'selected' : 'none' }, preferences?.visuals?.uvSelection);
@@ -208,11 +214,10 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   const changeUVGrid = value => onPreferences?.({ ...preferences, uvGrid: value });
 
   return <div className="uv-workspace" aria-label="UV wrapper workspace">
-    <header className="uv-workspace-header">
-      <strong>UV Wrapper</strong>
-      <label>Material <select aria-label="UV material" value={current?.materialID ?? ''} disabled={selectingNew} onChange={event => chooseMaterial(event.target.value)}>{materialEntries.map(entry => <option key={entry.materialID} value={entry.materialID}>{entry.label}</option>)}</select></label>
-      <span className="uv-material-summary">{current ? `${current.geosetIndices.length} geoset${current.geosetIndices.length === 1 ? '' : 's'} · UV ${current.coordId}` : 'No material for this selection'}</span>
-      <div className="uv-header-actions"><UVGridControls value={uvGrid} onChange={changeUVGrid}/><button disabled={readOnly} onClick={onLibrary}>Replace Texture…</button>{draftCount > 0 && <><button disabled={readOnly} onClick={onSavePreview}>Save texture</button><button disabled={readOnly} onClick={onRevertPreview}>Revert texture</button></>}<button onClick={onExit}>Exit UV Wrapper</button></div>
+    <header className="uv-workspace-header" style={{ '--uv-side-width': `${sidePercent}%` }}>
+      <div className="uv-map-header"><strong>UV Wrapper</strong><UVGridControls value={uvGrid} onChange={changeUVGrid}/></div>
+      <div className="uv-header-divider" aria-hidden="true"/>
+      <div className="uv-header-actions"><label>Material <select aria-label="UV material" value={current?.materialID ?? ''} disabled={selectingNew} onChange={event => chooseMaterial(event.target.value)}>{materialEntries.map(entry => <option key={entry.materialID} value={entry.materialID}>{entry.label}</option>)}</select></label><span className="uv-material-summary">{current ? `${current.geosetIndices.length} geoset${current.geosetIndices.length === 1 ? '' : 's'} · UV ${current.coordId}` : 'No material for this selection'}</span><button disabled={readOnly} onClick={onLibrary}>Replace Texture…</button>{draftCount > 0 && <><button disabled={readOnly} onClick={onSavePreview}>Save texture</button><button disabled={readOnly} onClick={onRevertPreview}>Revert texture</button></>}<button onClick={onExit}>Exit UV Wrapper</button></div>
     </header>
     {(materialError || materialPreview?.warnings?.length > 0) && <div className="uv-workspace-warning" role="status">{materialError || materialPreview.warnings.join(' · ')}</div>}
     <div ref={workspaceBody} className="uv-workspace-body" style={{ '--uv-side-width': `${sidePercent}%` }}>
@@ -236,7 +241,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
         </section>
         <section className="uv-live-preview" aria-label={selectingNew ? 'Select new vertices' : 'Live model preview'}>
           <div className="uv-panel-title"><strong>{selectingNew ? selectNewPrompt : 'Live Model Preview'}</strong>{selectingNew && selectNewCount > 0 ? <span className="uv-confirm-selection"><button onClick={finishSelectNew}>Yes</button><button onClick={clearSelectNew}>No</button></span> : selectingNew && <span className="uv-selection-hint">Drag selects · Shift/Ctrl modifies · Alt+drag rotates</span>}</div>
-          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} revision={0} presentation="preview" preserveCameraView={true} interactivePreview={selectingNew} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
+          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} revision={0} presentation="preview" preserveCameraView={true} interactivePreview={selectingNew} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
             selectionByGeoset={selectionDraft} selectableGeosets={selectingNew && selectGeoset >= 0 ? [selectGeoset] : []} onSelectionChange={selectingNew && selectGeoset >= 0 ? next => setSelectionDraft({ [selectGeoset]: unique(next[selectGeoset]) }) : undefined}
             hoveredGeoset={selectingNew ? hoveredGeoset : null} cameraMode={selectingNew ? 'work' : previewProps?.cameraMode} transformMode="select" cameraPresetRequest={projectionPreset} onProjectionViewChange={value => { projectionView.current = value; }} /></Suspense></div>
           <div className="uv-preview-footer">

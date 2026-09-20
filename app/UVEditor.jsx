@@ -138,7 +138,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
       s.drag.pivotScreen = [m.x + s.drag.center[0] * m.sizeX, m.y + s.drag.center[1] * m.sizeY]; draw();
     }
     function pointerMove(event) {
-      const drag = s.drag; if (!drag) return;
+      const drag = s.drag, p = current.current; if (!drag) return;
       const rawEnd = point(event), { x, y } = drag.type === 'select' ? rawEnd : pointerDragPoint(drag, rawEnd, drag.pointerSensitivity);
       const dx = x - drag.x, dy = y - drag.y; drag.endX = x; drag.endY = y; drag.moved = Math.hypot(dx, dy) > 1;
       if (drag.type === 'pan') { s.panX = drag.panX + dx; s.panY = drag.panY + dy; }
@@ -155,9 +155,19 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
           if (drag.type === 'scale') { s.uv[offset] = drag.center[0] + u * factor; s.uv[offset + 1] = drag.center[1] + v * (event.shiftKey ? 1 : factor); }
           if (drag.type === 'rotate') { s.uv[offset] = drag.center[0] + u * Math.cos(angle) - v * Math.sin(angle); s.uv[offset + 1] = drag.center[1] + u * Math.sin(angle) + v * Math.cos(angle); }
         }
-        if ((drag.type === 'translate' || drag.type === 'move') && drag.indices.length === 1 && p.uvGrid?.snap) s.uv.set(snapUVCoordinates(s.uv, drag.indices, p.uvGrid));
+        if ((drag.type === 'translate' || drag.type === 'move') && p.uvGrid?.snap) s.uv.set(snapUVCoordinates(s.uv, drag.indices, p.uvGrid));
       }
-      if (['translate', 'move', 'rotate', 'scale'].includes(drag.type)) current.current.onPreviewChange?.(restrictUVChange(current.current.geoset, current.current.uvSet, s.uv, drag.indices));
+      if (['translate', 'move', 'rotate', 'scale'].includes(drag.type)) {
+        const preview = restrictUVChange(p.geoset, p.uvSet, s.uv, drag.indices);
+        // While snapped, pointer events inside the same cell resolve to the
+        // same crossing. Do not rebuild the live preview until that crossing
+        // actually changes.
+        const signature = p.uvGrid?.snap && (drag.type === 'translate' || drag.type === 'move')
+          ? drag.indices.map(index => `${s.uv[index * 2]},${s.uv[index * 2 + 1]}`).join(';') : null;
+        if (signature === null || signature !== drag.previewSignature) {
+          drag.previewSignature = signature; p.onPreviewChange?.(preview);
+        }
+      }
       draw();
     }
     function pointerUp(event) {
