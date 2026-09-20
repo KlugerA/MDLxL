@@ -17,6 +17,7 @@ export function partTextureIndices(model) {
       const value = layer[slot];
       if (typeof value === 'number' && value >= 0) indices.add(value);
       else for (const key of value?.Keys || []) for (const field of ['Vector', 'InTan', 'OutTan']) for (const id of key[field] || []) if (id >= 0) indices.add(id);
+      if (typeof layer._MdxDefaults?.[slot] === 'number' && layer._MdxDefaults[slot] >= 0) indices.add(layer._MdxDefaults[slot]);
     }
   }
   for (const index of indices) if (!model.Textures?.[index]) throw Error(`The part references missing texture ${index}.`);
@@ -125,6 +126,7 @@ export function commitPart(target, source, { rgb = null, texturePaths = {} } = {
       for (const slot of TEXTURE_SLOTS) {
         if (typeof layer[slot] === 'number') layer[slot] = textureRef(layer[slot]);
         else if (layer[slot]?.Keys) for (const key of layer[slot].Keys) for (const field of ['Vector', 'InTan', 'OutTan']) if (key[field]) key[field] = new Int32Array(Array.from(key[field], textureRef));
+        if (typeof layer._MdxDefaults?.[slot] === 'number') layer._MdxDefaults[slot] = textureRef(layer._MdxDefaults[slot]);
       }
       const animationId = layer.TVertexAnimId;
       if (animationId != null && animationId !== -1) {
@@ -145,7 +147,7 @@ export function commitPart(target, source, { rgb = null, texturePaths = {} } = {
   for (const geoset of staged.Geosets) {
     const count = geoset.Vertices.length / 3;
     geoset.Groups = [[bone.ObjectId]]; geoset.TotalGroupsCount = 1; geoset.VertexGroup = new Uint8Array(count);
-    if (geoset.SkinWeights?.length) { geoset.SkinWeights = new Uint8Array(count * 8); for (let index = 0; index < count; index++) geoset.SkinWeights.set([bone.ObjectId, 0, 0, 0, 255, 0, 0, 0], index * 8); }
+    if (geoset.SkinWeights?.length) { geoset.SkinWeights = new (next.Version >= 1400 ? Uint16Array : Uint8Array)(count * 8); for (let index = 0; index < count; index++) geoset.SkinWeights.set([bone.ObjectId, 0, 0, 0, 255, 0, 0, 0], index * 8); }
     geosetIndices.push(next.Geosets.push(geoset) - 1);
   }
   for (const animation of staged.GeosetAnims || []) if (Number.isInteger(animation.GeosetId) && staged.Geosets[animation.GeosetId]) { animation.GeosetId += start; remapGlobals(animation); next.GeosetAnims.push(animation); }

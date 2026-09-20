@@ -18,7 +18,7 @@ const keyId = target => `${target.kind}:${target.id}:${target.property}`;
 export const animationTrackId = keyId;
 
 function validFrame(frame) {
-  if (!Number.isInteger(frame) || frame < 0 || frame > 0x7fffffff) throw new Error('Keyframe time must be a whole number from 0 to 2147483647.');
+  if (!Number.isInteger(frame) || frame < -2147483648 || frame > 0x7fffffff) throw new Error('Keyframe time must be a signed 32-bit whole number.');
   return frame;
 }
 function vectorValue(value, property) {
@@ -218,7 +218,7 @@ export function parseAnimationTrackText(text, { property = 'Alpha', lineType = l
         if (key[name]) throw new Error(`Duplicate ${name}.`);
         key[name] = parseVector(tangent[2], true); continue;
       }
-      const match = line.match(/^(\d+)\s*:\s*(.+)$/);
+      const match = line.match(/^([+-]?\d+)\s*:\s*(.+)$/);
       if (!match) throw new Error('Use time: value, or time: R, G, B.');
       const Frame = validFrame(Number(match[1]));
       if (seen.has(Frame)) throw new Error(`Duplicate keyframe ${Frame}.`);

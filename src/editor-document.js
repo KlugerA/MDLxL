@@ -1,6 +1,10 @@
 import { versionConversionIssues, normalizeVersionFields } from './model-version.js';
 import { Buffer } from 'buffer';
-import { parseMDL, parseMDX, generateMDL, generateMDX } from 'war3-model';
+import { parseMDL, generateMDL } from 'war3-model';
+import { parseCompatibleMdx as parseMDX, generateCompatibleMdx as generateMDX } from './mdx-compatibility.js';
+import { prepareCompatibleMdl, finishCompatibleMdl, readMdlPivotPoints } from './mdl-compatibility.js';
+import { assertModelEquivalent } from './save-equivalence.js';
+import { preserveMdxRecords, preserveMdlRecords } from './record-preservation.js';
 import { parseMdx, SUPPORTED_FORMAT_VERSIONS } from './mdx-container.js';
 import { parseMdl, mdlStringEnd } from './mdl-lossless.js';
 import { HistoryStore, createChanges, applyChanges } from './history-store.js';
@@ -27,6 +31,7 @@ const SECTION_TYPES = {
   TextureAnims: ['TextureAnims', 'TXAN'], Geosets: ['Geoset', 'GEOS'],
   GeosetAnims: ['GeosetAnim', 'GEOA'], PivotPoints: ['PivotPoints', 'PIVT'],
   Cameras: ['Camera', 'CAMS'], FaceFX: ['FaceFX', 'FAFX'], BindPoses: ['BindPose', 'BPOS'],
+  Gliders: ['Glider', 'DILG'],
   ...Object.fromEntries(Object.entries(NODE_TYPES).map(([name, [key, tag]]) => [key, [name, tag]])),
 };
 const MDL_TO_KEY = Object.fromEntries(Object.entries(SECTION_TYPES).map(([k, v]) => [v[0], k]));
@@ -113,7 +118,10 @@ function decodeMdl(bytes, sections) {
     }
     return stripBlockComments(source.toString('utf8'));
   }).join('\n');
-  const model = parseMDL(emptyFaceGroups(body));
+  const compatible = prepareCompatibleMdl(emptyFaceGroups(body));
+  const model = parseMDL(compatible.text);
+  compatible.restore(model);
+  for (const node of model.ParticleEmitters || []) node.Flags |= 4096;
   restoreMdlPopcornRotations(bytes, sections, model);
   for (const event of model.EventObjects || []) if (eventGlobals.has(event.ObjectId)) event.GlobalSeqId = eventGlobals.get(event.ObjectId);
   // MDL expresses the color flag by including Color; it has no separate flag
@@ -122,11 +130,7 @@ function decodeMdl(bytes, sections) {
   for (const anim of model.GeosetAnims || []) if (anim.Color != null) anim.Flags = (anim.Flags || 0) | 2;
   const pivots = sections.filter((s) => s.key === 'PivotPoints');
   if (pivots.length) {
-    const source = stripBlockComments(bytes.subarray(pivots.at(-1).start, pivots.at(-1).end).toString('utf8')).replace(/\/\/[^\r\n]*/g, '');
-    const values = source.slice(source.indexOf('{') + 1).match(/[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/g)?.map(Number) || [];
-    const declared = Number(source.match(/^PivotPoints\s+(\d+)/)?.[1]);
-    if (values.length !== declared * 3) throw new Error('PivotPoints count does not match its coordinates.');
-    model.PivotPoints = Array.from({ length: declared }, (_, i) => new Float32Array(values.slice(i * 3, i * 3 + 3)));
+    model.PivotPoints = readMdlPivotPoints(bytes.subarray(pivots.at(-1).start, pivots.at(-1).end));
   }
   normalizeModel(model);
   return model;
@@ -148,10 +152,6 @@ function normalizeModel(model, previous) {
     if (!model.PivotPoints[id]) model.PivotPoints[id] = node.PivotPoint || V3();
     node.PivotPoint = model.PivotPoints[id];
     model.Nodes[id] = node;
-    if (typeof node.Visibility === 'number') {
-      const frames = [...new Set([0, ...(model.Sequences || []).flatMap((s) => [...s.Interval])])].sort((a, b) => a - b);
-      node.Visibility = { LineType: 0, GlobalSeqId: null, Keys: frames.map((Frame) => ({ Frame, Vector: new Float32Array([node.Visibility]) })) };
-    }
   }
   // Pivot arrays require entries for unused IDs too; these are reserved zero pivots.
   for (let i = 0; i < model.PivotPoints.length; i++) model.PivotPoints[i] ||= V3();
@@ -168,13 +168,29 @@ function normalizeModel(model, previous) {
     layer.CoordId ??= 0; layer.FilterMode ??= 0; layer.Shading ??= 0;
   }
   for (const node of model.Bones) { node.GeosetId ??= null; node.GeosetAnimId ??= null; }
+  for (const node of model.Lights) { node.QuadraticFalloff ??= 0.0005; node.LinearFalloff ??= 0; node.Damping ??= 0.00001; }
+  for (const [i, geoset] of model.Geosets.entries()) {
+    if (previous && fingerprint(previous.Geosets[i]?.Faces) !== fingerprint(geoset.Faces) && geoset.PrimitiveCounts && Array.from(geoset.PrimitiveCounts).reduce((sum,n)=>sum+n,0) !== geoset.Faces.length) {
+      geoset.PrimitiveTypes = Uint32Array.of(4); geoset.PrimitiveCounts = Uint32Array.of(geoset.Faces.length);
+    }
+  }
   // The MDL writer omits these zero-valued emitter fields. Its parser leaves
   // them absent, but the MDX writer requires numbers (undefined becomes NaN).
   for (const node of model.ParticleEmitters2) for (const field of ['TailLength', 'Time', 'LifeSpan', 'PriorityPlane', 'ReplaceableId', 'Rows', 'Columns']) node[field] ??= 0;
+  for (const node of model.ParticleEmitters) for (const field of ['EmissionRate','Gravity','Longitude','Latitude','LifeSpan','InitVelocity']) node[field] ??= 0;
+  for (const node of model.ParticleEmitterPopcorns) {
+    for (const field of ['LifeSpan','EmissionRate','Speed','Alpha']) node[field] ??= 1;
+    node.ReplaceableId ??= 0; node.Path ??= ''; node.AnimVisibilityGuide ??= ''; node.Color ??= V3(1,1,1);
+  }
   for (const node of model.RibbonEmitters) {
     node.HeightAbove ??= 0; node.HeightBelow ??= 0; node.Alpha ??= 1; node.TextureSlot ??= 0;
   }
-  if (model.Info) { model.Info.MinimumExtent ||= V3(); model.Info.MaximumExtent ||= V3(); }
+  for (const item of [model.Info, ...model.Sequences, ...model.Geosets, ...model.Geosets.flatMap(g=>g.Anims || [])]) if (item) {
+    item.MinimumExtent ||= V3(); item.MaximumExtent ||= V3(); item.BoundsRadius ??= 0;
+  }
+  if (model.Info) model.Info.BlendTime ??= 0;
+  for (const texture of model.Textures) { texture.Image ??= ''; texture.ReplaceableId ??= 0; texture.Flags ??= 0; }
+  for (const node of model.ParticleEmitters2) node.Squirt = !!node.Squirt;
   updateCounts(model);
 }
 
@@ -220,7 +236,7 @@ export class EditorDocument {
     this.readOnly = this._sourceErrors.length > 0 || !SUPPORTED_FORMAT_VERSIONS.includes(this.version);
     if (!this.readOnly) {
       try {
-        this.model = this.format === 'mdx' ? parseMDX(this._original.buffer.slice(this._original.byteOffset, this._original.byteOffset + this._original.byteLength)) : decodeMdl(this._original, this._sections);
+        this.model = this.format === 'mdx' ? parseMDX(this._original) : decodeMdl(this._original, this._sections);
         if (this.format === 'mdx') {
           restoreMdxEventGlobalSequences(this._original, this.model);
           this.model.GeosetAnims = convertMdxGeosetColorTracks(this.model.GeosetAnims);
@@ -285,9 +301,10 @@ export class EditorDocument {
     if (issues.length) throw new Error(issues.join('\n'));
     // Prove the target writer/reader accepts the complete converted content before committing.
     const candidate=clone(this.model); normalizeVersionFields(candidate,target);
-    const bytes=generateMDX({...candidate,GeosetAnims:convertMdxGeosetColorTracks(candidate.GeosetAnims),BindPoses:candidate.BindPoses?.length?candidate.BindPoses:undefined});
+    const bytes=writeMdxEventGlobalSequences(generateMDX({...candidate,GeosetAnims:convertMdxGeosetColorTracks(candidate.GeosetAnims),BindPoses:candidate.BindPoses?.length?candidate.BindPoses:undefined}),candidate);
     const check=openDocument(bytes,'converted.mdx');
     if(check.readOnly || check.version!==target || check.diagnostics.some(d=>d.severity==='error')) throw new Error('Target format verification failed. The model was kept.');
+    assertModelEquivalent(candidate,check.model,{keys:Object.keys(SECTION_TYPES)});
     for(const key of Object.keys(SECTION_TYPES)) if(Array.isArray(candidate[key]) && candidate[key].length!==check.model[key]?.length) throw new Error('Target conversion changed '+key+' count.');
     this._versionConversion=true;
     try { return this.apply('Convert to MDX'+target,['Version','Materials','Geosets'],model=>normalizeVersionFields(model,target)); }
@@ -390,7 +407,9 @@ export class EditorDocument {
     if (conversion && this.model.Geosets?.some((g) => g.SkinWeights?.length) && format === 'mdl') warnings.push('Weighted HD geometry requires a compatible Reforged MDL consumer.');
     const stringIssues = (conversion || changed.length) && !this.readOnly ? serializationStringIssues(this.model, format, conversion ? Object.keys(SECTION_TYPES) : changed) : [];
     warnings.push(...stringIssues);
-    return { format, conversion, exact: !conversion && changed.length === 0, readOnly: this.readOnly, changedSections: changed.map((key) => key === 'Info' ? 'Model' : key), preservedUnknown: conversion ? [] : this._unknownSections(), warnings, canSave: ['mdl', 'mdx'].includes(format) && (!this.readOnly || !conversion && !changed.length) && !stringIssues.length };
+    const unknown = this._unknownSections();
+    if (conversion && unknown.length) warnings.push(`Cannot convert unrecognized source data: ${unknown.join(', ')}.`);
+    return { format, conversion, exact: !conversion && changed.length === 0, readOnly: this.readOnly, changedSections: changed.map((key) => key === 'Info' ? 'Model' : key), preservedUnknown: unknown, warnings, canSave: ['mdl', 'mdx'].includes(format) && (!this.readOnly || !conversion && !changed.length) && !stringIssues.length && !(conversion && unknown.length) };
   }
   serialize(format = this.format) {
     format = format.toLowerCase();
@@ -410,9 +429,11 @@ export class EditorDocument {
     // emits no BPOS chunk. Omit that empty export-only property to avoid junk
     // trailing bytes; the editable model and any nonempty bind poses stay intact.
     const exportModel = format === 'mdl' ? { ...this.model, ParticleEmitterPopcorns: prepareMdlPopcornColors(this.model.ParticleEmitterPopcorns), GeosetAnims: this.model.GeosetAnims.map(anim => (anim.Flags & 2) ? anim : { ...anim, Color: null }) } : { ...this.model, GeosetAnims: convertMdxGeosetColorTracks(this.model.GeosetAnims), BindPoses: this.model.BindPoses?.length ? this.model.BindPoses : undefined };
-    let generated = format === 'mdl' ? Buffer.from(emptyFaceGroups(generateMDL(exportModel)), 'utf8') : Buffer.from(generateMDX(exportModel));
+    const mdlModel = format === 'mdl' ? { ...exportModel, Geosets: exportModel.Geosets.map(g=>({...g,TVertices:g.TVertices.length?g.TVertices:[new Float32Array()]})), CollisionShapes: exportModel.CollisionShapes.map(n=>[1,3].includes(n.Shape)?{...n,Shape:0}:n) } : null;
+    let generated = format === 'mdl' ? finishCompatibleMdl(Buffer.from(emptyFaceGroups(generateMDL(mdlModel)), 'utf8'), this.model) : Buffer.from(generateMDX(exportModel));
     if (format === 'mdl') generated = writeMdlUVSets(generated, scanMdlSections(generated), exportModel);
     generated = format === 'mdl' ? writeMdlEventGlobalSequences(generated, scanMdlSections(generated), exportModel) : writeMdxEventGlobalSequences(generated, exportModel);
+    if (!impact.conversion) generated = format === 'mdx' ? preserveMdxRecords(this._original, generated, this._savedModel, this.model, SECTION_TYPES) : preserveMdlRecords(this._original, generated, this._savedModel, this.model, SECTION_TYPES);
     const keys = this._changedKeys();
     const output = impact.conversion ? generated : format === 'mdl' ? surgicalMdl(this._original, this._sections, generated, keys) : surgicalMdx(this._original, this._container, generated, keys);
     // A writer can succeed while emitting a dialect the reader cannot parse.
@@ -420,6 +441,7 @@ export class EditorDocument {
     const reopened = openDocument(output, `validation.${format}`);
     if (reopened.readOnly) throw new Error(`Save verification failed: ${reopened.diagnostics.filter((d) => d.severity === 'error').map((d) => d.message).join(' ') || 'Generated model is not editable.'}`);
     if (reopened.version !== this.version) throw new Error('Save verification failed: model version changed.');
+    assertModelEquivalent(this.model, reopened.model, { keys: Object.keys(SECTION_TYPES) });
     for (const key of Object.keys(SECTION_TYPES)) if (Array.isArray(this.model[key]) && this.model[key].length !== reopened.model[key]?.length) throw new Error(`Save verification failed: ${key} count changed during serialization.`);
     for (let index = 0; index < this.model.Geosets.length; index++) if (this.model.Geosets[index].TVertices.length !== reopened.model.Geosets[index].TVertices.length) throw new Error(`Save verification failed: Geoset ${index} UV set count changed during serialization.`);
     const existingErrors = new Set(validateModel(this.model).filter((d) => d.severity === 'error').map((d) => `${d.code}:${d.path}`));
@@ -444,10 +466,10 @@ function serializationStringIssues(model, format, keys) {
   const issues = [], seen = new Set();
   function walk(value, path, key) {
     if (typeof value === 'string') {
-      if (/["\r\n\0]/.test(value) && format === 'mdl') issues.push(`${path} contains a quote, newline or NUL that this MDL writer cannot safely encode.`);
+      if (format === 'mdl' && (/["\0]/.test(value) || key !== 'AnimVisibilityGuide' && /[\r\n]/.test(value))) issues.push(`${path} contains a quote, newline or NUL that this MDL writer cannot safely encode.`);
       if (format === 'mdx') {
         if ([...value].some((char) => char.charCodeAt(0) > 255)) issues.push(`${path} contains Unicode characters that this MDX writer cannot encode. Save as MDL or use a compatible name.`);
-        const limit = key === 'Image' ? 256 : key === 'Name' ? (path === 'Info.Name' ? 336 : 80) : key === 'Shader' ? 80 : key === 'Path' ? (/FaceFX|Popcorn/.test(path) ? 260 : 256) : key === 'AnimVisibilityGuide' ? 260 : null;
+        const limit = ['Image', 'Path', 'AnimationFile', 'AnimVisibilityGuide'].includes(key) ? 260 : ['Name', 'Shader'].includes(key) ? 80 : null;
         if (limit && value.length > limit) issues.push(`${path} exceeds its ${limit}-byte MDX field; saving would truncate it.`);
       }
       return;
@@ -490,12 +512,14 @@ export function validateModel(model) {
     if (g.Faces?.some((index) => index >= count || index < 0 || !Number.isInteger(index))) add('error', 'FACE_REFERENCE', `Geoset ${gi} contains a face with a missing vertex.`, path);
     if (!Number.isInteger(g.MaterialID) || !model.Materials?.[g.MaterialID]) add('error', 'MATERIAL_REFERENCE', `Geoset ${gi} references missing material ${g.MaterialID}.`, path);
     if (!g.TVertices?.length) add('warning', 'MISSING_UV', `Geoset ${gi} has no texture coordinates.`, path);
+    if (g.TVertices?.length > 16) add('error', 'UV_SET_LIMIT', `Geoset ${gi} exceeds the 16 UV set limit.`, path);
     for (const [uv, values] of (g.TVertices || []).entries()) if (values.length !== count * 2) add('error', 'UV_COUNT', `Geoset ${gi} UV set ${uv} has a mismatched vertex count.`, `${path}.TVertices[${uv}]`);
     if (g.VertexGroup?.length !== count) add('error', 'VERTEX_GROUP_COUNT', `Geoset ${gi} vertex groups do not match its vertices.`, path);
     if (g.VertexGroup?.some((index) => index >= (g.Groups?.length || 0))) add('error', 'GROUP_REFERENCE', `Geoset ${gi} references a missing matrix group.`, path);
     for (const id of new Set((g.Groups || []).flat())) if (!ids.has(id)) add('error', 'BONE_REFERENCE', `Geoset ${gi} references missing matrix node ${id}.`, `${path}.Groups[${id}]`);
     if (g.SkinWeights?.length) {
       if (g.SkinWeights.length !== count * 8) add('error', 'SKIN_COUNT', `Geoset ${gi} skin weights do not match its vertices.`, path);
+      if (g.SkinWeights.some((value,index)=>!Number.isInteger(value)||value<0||value>(index%8<4 && model.Version>=1400?65535:255))) add('error', 'SKIN_VALUE_RANGE', `Geoset ${gi} skin indices or weights exceed their format range.`, path);
       const missing = new Set(); let invalidWeights = false;
       for (let i = 0; i < g.SkinWeights.length; i += 8) {
         let total = 0;
@@ -522,6 +546,7 @@ export function validateModel(model) {
     }
   }
   for (const [i, anim] of (model.GeosetAnims || []).entries()) if (!model.Geosets?.[anim.GeosetId]) add('error', 'GEOSET_ANIM_REFERENCE', `Geoset animation ${i} references missing geoset ${anim.GeosetId}.`, `GeosetAnims[${i}]`);
+  for (const [i, glider] of (model.Gliders || []).entries()) if (!model.Geosets?.[glider.GeosetId]) add('error', 'GLIDER_REFERENCE', `Glider ${i} references missing geoset ${glider.GeosetId}.`, `Gliders[${i}]`);
   for (const node of model.Bones || []) {
     if (node.GeosetId != null && node.GeosetId !== -1 && !model.Geosets?.[node.GeosetId]) add('error', 'BONE_GEOSET_REFERENCE', `Bone ${node.Name} references missing geoset ${node.GeosetId}.`, `Nodes[${node.ObjectId}].GeosetId`);
     if (node.GeosetAnimId != null && node.GeosetAnimId !== -1 && !model.GeosetAnims?.[node.GeosetAnimId]) add('error', 'BONE_GEOSET_ANIM_REFERENCE', `Bone ${node.Name} references a missing geoset animation.`, `Nodes[${node.ObjectId}].GeosetAnimId`);
@@ -544,7 +569,7 @@ export function validateModel(model) {
       const property = path.split('.').at(-1);
       const width = property === 'Rotation' ? (path.includes('.Cameras.') ? 1 : 4) : ['Translation', 'Scaling', 'Color', 'AmbColor', 'FresnelColor', 'TargetTranslation'].includes(property) ? 3 : 1;
       for (const key of value.Keys) {
-        if (!Number.isInteger(key.Frame) || key.Frame < 0 || key.Frame < previous) add('error', 'KEYFRAME_ORDER', `${path} keyframes must use nonnegative integer frames in increasing order.`, path);
+        if (!Number.isInteger(key.Frame) || key.Frame < -2147483648 || key.Frame > 2147483647 || key.Frame < previous) add('error', 'KEYFRAME_ORDER', `${path} keyframes must use signed 32-bit integer frames in increasing order.`, path);
         previous = key.Frame;
         if (!key.Vector?.length) add('error', 'KEYFRAME_VECTOR', `${path} has a keyframe without a value.`, path);
         else if (key.Vector.length !== width) add('error', 'KEYFRAME_DIMENSIONS', `${path} keyframes need ${width} values.`, path);
@@ -628,6 +653,7 @@ export function deleteGeoset(model, index) {
     anims.push(anim);
   }
   model.Geosets.splice(index, 1); model.GeosetAnims = anims;
+  model.Gliders = (model.Gliders || []).filter(g=>g.GeosetId!==index).map(g=>({...g,GeosetId:g.GeosetId>index?g.GeosetId-1:g.GeosetId}));
   for (const bone of model.Bones || []) {
     if (bone.GeosetId === index) bone.GeosetId = null;
     else if (bone.GeosetId > index) bone.GeosetId--;
@@ -753,6 +779,7 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
       for (const layer of material.Layers) {
         for (const slot of TEXTURE_SLOTS) if (typeof layer[slot] === 'number') layer[slot] = textureRef(layer[slot]);
         else if (layer[slot]?.Keys) for (const key of layer[slot].Keys) { key.Vector = new Int32Array([...key.Vector].map(textureRef)); if (key.InTan) key.InTan = new Int32Array([...key.InTan].map(textureRef)); if (key.OutTan) key.OutTan = new Int32Array([...key.OutTan].map(textureRef)); }
+        for (const slot of TEXTURE_SLOTS) if (typeof layer._MdxDefaults?.[slot] === 'number') layer._MdxDefaults[slot] = textureRef(layer._MdxDefaults[slot]);
         const texAnim = layer.TVertexAnimId;
         if (texAnim != null && texAnim !== -1) {
           if (!source.TextureAnims[texAnim]) throw new Error('Source material references a missing texture animation.');
@@ -784,7 +811,7 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
     for (let i = 0; i < (g.SkinWeights?.length || 0); i += 8) for (let k = 0; k < 4; k++) {
       if (g.SkinWeights[i + 4 + k]) {
         const mapped = maps.nodes.get(g.SkinWeights[i + k]);
-        if (mapped > 255) throw new Error('Imported weighted skin would exceed the 8-bit bone-index capacity.');
+        if (mapped > (target.Version >= 1400 ? 65535 : 255)) throw new Error('Imported weighted skin would exceed the format bone-index capacity.');
         g.SkinWeights[i + k] = mapped;
       } else g.SkinWeights[i + k] = 0;
     }

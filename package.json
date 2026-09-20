@@ -5,5 +5,14 @@
   "type": "module",
   "description": "MDLxL Warcraft III model editor",
   "main": "electron/main.cjs",
-  "productName": "MDLxL"
+  "productName": "MDLxL",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "buffer": "6.0.3",
+    "clipper-lib": "6.4.2",
+    "three": "0.183.2",
+    "war3-model": "4.0.1"
+  }
 }

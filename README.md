@@ -6,6 +6,8 @@ For the Windows release, extract the whole ZIP and run MDLxL.exe. Keep its resou
 
 For source development, use Node.js 20 or newer. Install the pinned dependencies with npm ci, run npm test, then npm run build. Run npm start for Electron or npm run dev for browser development. After building, npm run package creates the Windows package with the MDLxL icon.
 
+Checkout note: this packaged checkout currently lacks the renderer entry point and full build/package scripts described above. The parser/save regression suite can be installed with `pnpm install --frozen-lockfile --ignore-scripts` and run with `node --test`. See [the compatibility fix status](docs/MDL-MDX-COMPATIBILITY-FIXES.md) for coverage and the remaining app-release requirements; the existing `dist/` is not rebuilt by these tests.
+
 The source archive includes docs/MDLxL-Guide.txt and earlier release notes. See THIRD_PARTY_NOTICES.md for component credits.
 
 Version 0.11.0 restores the repeatable F texture/wireframe toggle, corrects animated

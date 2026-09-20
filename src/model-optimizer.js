@@ -1,4 +1,4 @@
-import { generateMDX } from 'war3-model';
+import { generateCompatibleMdx as generateMDX } from './mdx-compatibility.js';
 import { EditorDocument, openDocument, validateModel } from './editor-document.js';
 import { parseMdx } from './mdx-container.js';
 import { sampleTrack } from './animation.js';
@@ -95,7 +95,10 @@ function transforms(model, counts, skipped) {
 
 function textureRefs(model) {
   const refs = [];
-  for (const material of model.Materials) for (const layer of material.Layers || []) for (const slot of slots) if (layer[slot] !== undefined) refs.push([layer, slot]);
+  for (const material of model.Materials) for (const layer of material.Layers || []) for (const slot of slots) {
+    if (layer[slot] !== undefined) refs.push([layer, slot]);
+    if (layer._MdxDefaults?.[slot] !== undefined) refs.push([layer._MdxDefaults, slot]);
+  }
   for (const emitter of model.ParticleEmitters2) refs.push([emitter, 'TextureID']);
   return refs;
 }
@@ -156,7 +159,7 @@ function resolvedTexture(value, model) {
 }
 function resolvedMaterial(id, model) {
   const material = model.Materials[id]; if (!material) return id;
-  return { ...material, Layers: material.Layers.map(layer => ({ ...layer, ...Object.fromEntries(slots.filter(slot => layer[slot] !== undefined).map(slot => [slot, resolvedTexture(layer[slot], model)])) })) };
+  return { ...material, Layers: material.Layers.map(layer => ({ ...layer, ...Object.fromEntries(slots.filter(slot => layer[slot] !== undefined).map(slot => [slot, resolvedTexture(layer[slot], model)])), ...(layer._MdxDefaults ? { _MdxDefaults: { ...layer._MdxDefaults, ...Object.fromEntries(slots.filter(slot => layer._MdxDefaults[slot] !== undefined).map(slot => [slot, resolvedTexture(layer._MdxDefaults[slot], model)])) } } : {}) })) };
 }
 function preservationView(model, original) {
   const view = clone(model); delete view.Materials; delete view.Textures; delete view.Nodes;

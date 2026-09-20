@@ -1,7 +1,7 @@
 export const nodeCollections = ['Bones','Helpers','Attachments','Lights','ParticleEmitters','ParticleEmitters2','RibbonEmitters','EventObjects','CollisionShapes','ParticleEmitterPopcorns'];
 export function nodeKind(model,node){return nodeCollections.find(k=>model[k]?.some(n=>n.ObjectId===node.ObjectId))||'Nodes';}
 export function setKey(target,property,frame,values,options={}) {
-  if(!Number.isInteger(frame)||frame<0||frame>0xffffffff)throw new Error('Keyframe time must be a non-negative integer.');
+  if(!Number.isInteger(frame)||frame < -2147483648||frame>2147483647)throw new Error('Keyframe time must be a signed 32-bit integer.');
   if(!values.length||values.some(n=>!Number.isFinite(n)))throw new Error('Key values must be finite numbers.');
   const previous=target[property];
   const track=previous?.Keys?previous:{LineType:options.lineType??1,Keys:[]};
@@ -73,7 +73,7 @@ export function bindVertices(model,geoset,indices,boneId){
   const count=geoset.Vertices.length/3;
   if(geoset.VertexGroup?.length!==count)throw new Error('Vertex groups do not match the vertex count.');
   checkAttribute(geoset.SkinWeights,count,8,'Skin weights');
-  if(geoset.SkinWeights?.length&&boneId>255)throw new Error('This skin uses 8-bit bone IDs.');
+  if(geoset.SkinWeights?.length&&boneId>(model.Version>=1400?65535:255))throw new Error('Bone ID exceeds this skin format.');
   let group=geoset.Groups.findIndex(g=>g.length===1&&g[0]===boneId);
   if(group<0){if(geoset.Groups.length>=256)throw new Error('Classic vertex groups are limited to 256 by the file format.');group=geoset.Groups.push([boneId])-1;}
   if(group>255)throw new Error('Classic vertex groups are limited to 256 by the file format.');
