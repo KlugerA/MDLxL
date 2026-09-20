@@ -39,13 +39,30 @@ test('Collapse shares the centroid and repeated Fold presses halve the selected 
   assert.deepEqual([...foldUVCoordinates(new Float32Array([0,0, .25,0, 1,0]), [0,1,2], 'right-to-left')], [0,0, .25,0, 0,0]);
 });
 
-test('UV Uncouple duplicates repeated face corners and preserves every 3D attribute exactly', () => {
+test('UV Uncouple matches MDLVis by duplicating face corners, moving active UVs inward, and clearing selection', () => {
   const joined = geoset(); joined.Faces = new Uint16Array([0,1,2, 0,2,3]); joined.Tangents = new Float32Array(16).map((_, i) => i); joined.SkinWeights = new Uint8Array(32).map((_, i) => i);
-  const joinedBefore = structuredClone(joined), changed = uncoupleUVVertices(joined, [0,2]);
-  assert.equal(changed.added, 2);
-  assert.deepEqual([...joined.Faces], [0,1,2,4,5,3]); assert.deepEqual(changed.selection, [0,2,4,5]);
-  assert.deepEqual([...joined.Vertices.slice(12,15)], [...joinedBefore.Vertices.slice(0,3)]); assert.deepEqual([...joined.Normals.slice(15,18)], [...joinedBefore.Normals.slice(6,9)]);
-  assert.deepEqual([...joined.Tangents.slice(16,20)], [...joinedBefore.Tangents.slice(0,4)]); assert.deepEqual([...joined.SkinWeights.slice(40,48)], [...joinedBefore.SkinWeights.slice(16,24)]);
+  joined.TVertices.push(new Float32Array([.2,.2, .8,.2, .2,.8, .8,.8]));
+  const joinedBefore = structuredClone(joined), changed = uncoupleUVVertices(joined, [0], 0);
+  assert.equal(changed.added, 1); assert.deepEqual(changed.created, [4]); assert.deepEqual(changed.selection, []);
+  assert.deepEqual([...joined.Faces], [0,1,2,4,2,3]);
+  assert.deepEqual([...joined.TVertices[0]], [.10000000149011612,.10000000149011612, 1,0, 0,1, 1,1, .10000000149011612,.20000000298023224]);
+  assert.deepEqual([...joined.TVertices[1].slice(8,10)], [.20000000298023224,.20000000298023224], 'inactive UV sets are copied without movement');
+  assert.deepEqual([...joined.Vertices.slice(12,15)], [...joinedBefore.Vertices.slice(0,3)]); assert.deepEqual([...joined.Normals.slice(12,15)], [...joinedBefore.Normals.slice(0,3)]);
+  assert.deepEqual([...joined.Tangents.slice(16,20)], [...joinedBefore.Tangents.slice(0,4)]); assert.deepEqual([...joined.SkinWeights.slice(32,40)], [...joinedBefore.SkinWeights.slice(0,8)]);
+});
+
+test('UV Uncouple separates selected coincident points by their own faces without touching unrelated stacks', () => {
+  const geo = {
+    Vertices: new Float32Array(30), Normals: new Float32Array(30), VertexGroup: new Uint8Array(10),
+    TVertices: [new Float32Array([.5,.5, 0,0, 0,1, .5,.5, 1,0, 1,1, .5,.5, .2,.8, .8,.8, .5,.5])],
+    Faces: new Uint16Array([0,1,2, 3,4,5, 6,7,8]),
+  };
+  const beforeGeometry = new Float32Array(geo.Vertices), result = uncoupleUVVertices(geo, [0,3,6], 0);
+  assert.equal(result.added, 0); assert.deepEqual(result.selection, []);
+  const points = [0,3,6].map(index => [...geo.TVertices[0].slice(index * 2, index * 2 + 2)]);
+  assert.deepEqual(points, [[.4000000059604645,.5], [.6000000238418579,.5], [.5,.5600000023841858]]);
+  assert.deepEqual([...geo.TVertices[0].slice(18,20)], [.5,.5], 'an unselected coincident point remains untouched');
+  assert.deepEqual(geo.Vertices, beforeGeometry, 'uncoupling never moves the 3D mesh');
 });
 
 test('view projection writes Warcraft top-down UV coordinates only for selected vertices', () => {

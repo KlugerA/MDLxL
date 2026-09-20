@@ -6,14 +6,15 @@ import { viewportCursor } from './viewport-cursors.js';
 import { eligibleUVVertices, eligibleUVFaces, restrictUVChange } from '../src/uv-selection.js';
 import { collapseUVCoordinates, foldUVCoordinates } from '../src/uv-tools.js';
 import { occupiedUVTextureFrames } from '../src/uv-preview-display.js';
+import { normalizeUVGrid, snapUVCoordinates, visibleUVGridLines } from '../src/uv-grid.js';
 
 const indicesOf = selection => Array.from(selection || []);
 
 /** Classic select/move/rotate/scale tools. UV V retains Warcraft's top-down convention. */
-export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, showGrid = true, showTextureFrame = false, textureFrameColor = '#ff3030' }) {
+export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, uvGrid, showTextureFrame = false, textureFrameColor = '#ff3030' }) {
   const host = useRef(null), canvas = useRef(null);
   const state = useRef({ zoom: .55, panX: 0, panY: 0, uv: new Float32Array(), drag: null, image: null, draw: () => {} });
-  const current = useRef({}); current.current = { geoset, uvSet, textureSize, selectedVertices, eligibleVertices, hiddenVertices, onSelectVertices, onChange, onPreviewChange, transformMode, cameraMode, preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended, showWires, showVertices, showGrid, showTextureFrame, textureFrameColor };
+  const current = useRef({}); current.current = { geoset, uvSet, textureSize, selectedVertices, eligibleVertices, hiddenVertices, onSelectVertices, onChange, onPreviewChange, transformMode, cameraMode, preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended, showWires, showVertices, uvGrid, showTextureFrame, textureFrameColor };
   const [imageError, setImageError] = useState(false), [adjustingSensitivity, setAdjustingSensitivity] = useState(null);
   const graphics = graphicsOptions(preferences);
   const count = (geoset?.TVertices?.[uvSet]?.length || 0) / 2;
@@ -21,7 +22,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
   // History can patch typed arrays in place; revision must invalidate this drawing copy.
   const eligibilityKey = eligibleVertices === undefined ? '*' : indicesOf(eligibleVertices).join(',');
   useLayoutEffect(() => { state.current.uv = new Float32Array(geoset?.TVertices?.[uvSet] || []); state.current.drag = null; current.current.onPreviewChange?.(null); state.current.draw(); }, [geoset, uvSet, geoset?.TVertices?.[uvSet], revision, textureUrl, eligibilityKey]);
-  useEffect(() => { state.current.draw(); }, [selectedVertices, hiddenVertices, eligibilityKey, showWires, showVertices, showGrid, showTextureFrame, textureFrameColor, textureSize?.[0], textureSize?.[1], preferences?.visuals, preferences?.theme]);
+  useEffect(() => { state.current.draw(); }, [selectedVertices, hiddenVertices, eligibilityKey, showWires, showVertices, uvGrid?.enabled, uvGrid?.spacing, uvGrid?.thickness, uvGrid?.color, uvGrid?.opacity, showTextureFrame, textureFrameColor, textureSize?.[0], textureSize?.[1], preferences?.visuals, preferences?.theme]);
   useEffect(() => {
     let cancelled = false; state.current.image = null; setImageError(false);
     if (!textureUrl || !graphics.textures) { state.current.draw(); return; }
@@ -56,7 +57,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
       element.style.cursor = s.drag?.cursor || viewportCursor(p.cameraMode, p.transformMode);
       // Suspended locks editing input (for example while Select New owns the
       // model preview), but the texture workstation must remain visible.
-      if (ownerDocument.hidden && graphicsOptions(p.preferences).pauseWhenHidden) return;
+      if (ownerDocument === document && ownerDocument.hidden && graphicsOptions(p.preferences).pauseWhenHidden) return;
       const visuals = visualOptions(p.preferences);
       context.setTransform(ratio, 0, 0, ratio, 0, 0); context.clearRect(0, 0, width, height);
       context.fillStyle = visuals.background; context.fillRect(0, 0, width, height);
@@ -71,9 +72,15 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
           context.fillRect(-x / scaleX, -y / scaleY, width / scaleX, height / scaleY);
           context.restore();
         }
-      } else if (p.showGrid) {
-        const cellX = sizeX / 16, cellY = sizeY / 16;
-        for (let row = -32; row < 48; row++) for (let col = -32; col < 48; col++) { context.fillStyle = (row + col) % 2 ? visuals.gridMinor : visuals.background; context.fillRect(x + col * cellX, y + row * cellY, cellX + 1, cellY + 1); }
+      }
+      const grid = normalizeUVGrid(p.uvGrid);
+      if (grid.enabled && grid.opacity > 0) {
+        const horizontal = grid.spacing * Math.abs(sizeY) >= 1 ? visibleUVGridLines((-y) / sizeY, (height - y) / sizeY, grid.spacing) : [];
+        const vertical = grid.spacing * Math.abs(sizeX) >= 1 ? visibleUVGridLines((-x) / sizeX, (width - x) / sizeX, grid.spacing) : [];
+        context.save(); context.globalAlpha = grid.opacity; context.strokeStyle = grid.color; context.lineWidth = grid.thickness; context.beginPath();
+        for (const u of vertical) { const position = x + u * sizeX; context.moveTo(position, 0); context.lineTo(position, height); }
+        for (const v of horizontal) { const position = y + v * sizeY; context.moveTo(0, position); context.lineTo(width, position); }
+        context.stroke(); context.restore();
       }
       context.strokeStyle = visuals.gridMajor; context.lineWidth = visuals.lineWidth; context.strokeRect(x, y, sizeX, sizeY);
       const uv = s.uv, allowed = eligible(), faces = eligibleUVFaces(p.geoset, allowed, p.uvSet);
@@ -131,7 +138,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
       s.drag.pivotScreen = [m.x + s.drag.center[0] * m.sizeX, m.y + s.drag.center[1] * m.sizeY]; draw();
     }
     function pointerMove(event) {
-      const drag = s.drag; if (!drag) return;
+      const drag = s.drag, p = current.current; if (!drag) return;
       const rawEnd = point(event), { x, y } = drag.type === 'select' ? rawEnd : pointerDragPoint(drag, rawEnd, drag.pointerSensitivity);
       const dx = x - drag.x, dy = y - drag.y; drag.endX = x; drag.endY = y; drag.moved = Math.hypot(dx, dy) > 1;
       if (drag.type === 'pan') { s.panX = drag.panX + dx; s.panY = drag.panY + dy; }
@@ -148,8 +155,19 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
           if (drag.type === 'scale') { s.uv[offset] = drag.center[0] + u * factor; s.uv[offset + 1] = drag.center[1] + v * (event.shiftKey ? 1 : factor); }
           if (drag.type === 'rotate') { s.uv[offset] = drag.center[0] + u * Math.cos(angle) - v * Math.sin(angle); s.uv[offset + 1] = drag.center[1] + u * Math.sin(angle) + v * Math.cos(angle); }
         }
+        if ((drag.type === 'translate' || drag.type === 'move') && p.uvGrid?.snap) s.uv.set(snapUVCoordinates(s.uv, drag.indices, p.uvGrid));
       }
-      if (['translate', 'move', 'rotate', 'scale'].includes(drag.type)) current.current.onPreviewChange?.(restrictUVChange(current.current.geoset, current.current.uvSet, s.uv, drag.indices));
+      if (['translate', 'move', 'rotate', 'scale'].includes(drag.type)) {
+        const preview = restrictUVChange(p.geoset, p.uvSet, s.uv, drag.indices);
+        // While snapped, pointer events inside the same cell resolve to the
+        // same crossing. Do not rebuild the live preview until that crossing
+        // actually changes.
+        const signature = p.uvGrid?.snap && (drag.type === 'translate' || drag.type === 'move')
+          ? drag.indices.map(index => `${s.uv[index * 2]},${s.uv[index * 2 + 1]}`).join(';') : null;
+        if (signature === null || signature !== drag.previewSignature) {
+          drag.previewSignature = signature; p.onPreviewChange?.(preview);
+        }
+      }
       draw();
     }
     function pointerUp(event) {

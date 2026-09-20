@@ -121,28 +121,47 @@ function copyVertexAttribute(source, sourceIndices, stride) {
   return output;
 }
 
-/** MDLVis UV Uncouple: duplicate repeated selected face corners without moving
- * the mesh. Every vertex attribute and every UV set is retained exactly. */
-export function uncoupleUVVertices(geoset, indices) {
+function transferUVCornerInward(values, faces, corner, weight = 0.8) {
+  const faceStart = Math.floor(corner / 3) * 3, localCorner = corner % 3;
+  const vertexIndex = faces[corner], firstNeighbor = faces[faceStart + (localCorner + 1) % 3], secondNeighbor = faces[faceStart + (localCorner + 2) % 3];
+  const offset = vertexIndex * 2, firstOffset = firstNeighbor * 2, secondOffset = secondNeighbor * 2, neighborWeight = (1 - weight) / 2;
+  values[offset] = weight * values[offset] + neighborWeight * values[firstOffset] + neighborWeight * values[secondOffset];
+  values[offset + 1] = weight * values[offset + 1] + neighborWeight * values[firstOffset + 1] + neighborWeight * values[secondOffset + 1];
+}
+
+/** MDLVis 1.40 UV Uncouple (unTex.pas): give every selected face corner its
+ * own vertex, then move those UVs 20% toward their respective triangle. The
+ * active UV set fans apart visibly while the 3D mesh and other UV sets stay
+ * unchanged. MDLVis clears the UV selection after this operation. */
+export function uncoupleUVVertices(geoset, indices, uvSet = 0) {
   const count = geoset?.Vertices?.length / 3, selected = new Set(uniqueIndices(indices));
-  if (!Number.isInteger(count) || selected.size === 0 || [...selected].some(index => index >= count)) throw Error('Select valid UV vertices first.');
-  const occurrences = new Uint32Array(count), sources = Array.from({ length: count }, (_, index) => index), faces = new Uint32Array(geoset.Faces), resultSelection = [...selected];
-  for (let corner = 0; corner < faces.length; corner++) {
-    const source = faces[corner]; if (!selected.has(source)) continue;
-    if (occurrences[source]++ === 0) continue;
-    if (sources.length >= 65536) throw Error('UV uncoupling would exceed the 65536-vertex geoset limit. Split the geoset first.');
-    faces[corner] = sources.length; resultSelection.push(sources.length); sources.push(source);
+  const activeUV = geoset?.TVertices?.[uvSet];
+  if (!Number.isInteger(count) || selected.size === 0 || [...selected].some(index => index >= count) || activeUV?.length !== count * 2) throw Error('Select valid UV vertices first.');
+  const sources = Array.from({ length: count }, (_, index) => index), faces = new Uint32Array(geoset.Faces), transferCorners = [], created = [];
+  for (const source of selected) {
+    const corners = [];
+    for (let corner = 0; corner < faces.length; corner++) if (faces[corner] === source) corners.push(corner);
+    if (!corners.length) continue;
+    for (const corner of corners.slice(1)) {
+      if (sources.length >= 65536) throw Error('UV uncoupling would exceed the 65536-vertex geoset limit. Split the geoset first.');
+      const duplicate = sources.length;
+      faces[corner] = duplicate; sources.push(source); created.push(duplicate); transferCorners.push(corner);
+    }
+    transferCorners.push(corners[0]);
   }
   const added = sources.length - count;
-  if (!added) return { added: 0, selection: resultSelection };
-  geoset.Vertices = copyVertexAttribute(geoset.Vertices, sources, 3);
-  geoset.Normals = copyVertexAttribute(geoset.Normals, sources, 3);
-  geoset.VertexGroup = copyVertexAttribute(geoset.VertexGroup, sources, 1);
-  geoset.TVertices = (geoset.TVertices || []).map(uv => copyVertexAttribute(uv, sources, 2));
-  if (geoset.Tangents?.length) geoset.Tangents = copyVertexAttribute(geoset.Tangents, sources, 4);
-  if (geoset.SkinWeights?.length) geoset.SkinWeights = copyVertexAttribute(geoset.SkinWeights, sources, 8);
-  geoset.Faces = new Uint16Array(faces);
-  return { added, selection: resultSelection };
+  if (added) {
+    geoset.Vertices = copyVertexAttribute(geoset.Vertices, sources, 3);
+    geoset.Normals = copyVertexAttribute(geoset.Normals, sources, 3);
+    geoset.VertexGroup = copyVertexAttribute(geoset.VertexGroup, sources, 1);
+    geoset.TVertices = (geoset.TVertices || []).map(uv => copyVertexAttribute(uv, sources, 2));
+    if (geoset.Tangents?.length) geoset.Tangents = copyVertexAttribute(geoset.Tangents, sources, 4);
+    if (geoset.SkinWeights?.length) geoset.SkinWeights = copyVertexAttribute(geoset.SkinWeights, sources, 8);
+    geoset.Faces = new Uint16Array(faces);
+  }
+  const movedUV = geoset.TVertices[uvSet];
+  for (const corner of transferCorners) transferUVCornerInward(movedUV, faces, corner);
+  return { added, created, selection: [] };
 }
 
 const transform4 = (matrix, vector) => [0, 1, 2, 3].map(row => matrix[row] * vector[0] + matrix[4 + row] * vector[1] + matrix[8 + row] * vector[2] + matrix[12 + row] * vector[3]);
