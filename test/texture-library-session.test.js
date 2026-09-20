@@ -55,8 +55,8 @@ test('confirmed preload warms the initial query without asset reads and preserve
   const sessions=createTextureLibrarySessions(),catalog={signature:'A',items:[{id:'native',variant:'classic'}]},calls=[];
   const loadCatalog=async()=>{calls.push('catalog');return catalog;};
   const search=async(data,options)=>{calls.push('search');assert.equal(data,catalog);return {items:data.items,total:1,options};};
-  const settings={sessions,modelPath:'model',loadCatalog,search,vibe:false};
-  const loaded=await warmTextureLibrarySession(settings),options={query:'',vibe:false,folder:'',variant:'classic',kind:'all',limit:120};
+  const settings={sessions,modelPath:'model',loadCatalog,search,vibe:false,format:'blp'};
+  const loaded=await warmTextureLibrarySession(settings),options={query:'',vibe:false,folder:'',variant:'classic',kind:'all',format:'blp',limit:120};
   assert.equal(loaded,catalog);assert.equal(sessions.result('model','A',options).total,1);assert.deepEqual(calls,['catalog','search']);
   await warmTextureLibrarySession(settings);assert.deepEqual(calls,['catalog','search','catalog'],'warm query retained but metadata still validated');
   const changed={signature:'B',items:[{id:'custom',variant:'custom'}]};

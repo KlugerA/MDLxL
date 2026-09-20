@@ -25,6 +25,26 @@ export function previewMeshDomain(model) {
   return result;
 }
 
+/** Return repeated texture tiles containing eligible UV faces. Exact edge
+ * coordinates remain in the face they enclose, so a normal 0..1 island marks
+ * one frame instead of the neighbouring repeats. */
+export function occupiedUVTextureFrames(values,faces=[],vertices=[],bounds={}) {
+  const uv=values||[],result=new Map(),maximum=Math.max(1,Number(bounds.maxFrames)||4096);
+  const limits={minU:Number.isFinite(bounds.minU)?Math.floor(bounds.minU):-Infinity,maxU:Number.isFinite(bounds.maxU)?Math.floor(bounds.maxU):Infinity,minV:Number.isFinite(bounds.minV)?Math.floor(bounds.minV):-Infinity,maxV:Number.isFinite(bounds.maxV)?Math.floor(bounds.maxV):Infinity};
+  const add=(u,v)=>{if(result.size<maximum&&u>=limits.minU&&u<=limits.maxU&&v>=limits.minV&&v<=limits.maxV)result.set(`${u}:${v}`,[u,v]);};
+  let validFace=false;
+  for(const face of faces||[]) {
+    const points=Array.from(face||[]).map(index=>[Number(uv[index*2]),Number(uv[index*2+1])]).filter(point=>point.every(Number.isFinite));
+    if(!points.length)continue;validFace=true;
+    const us=points.map(point=>point[0]),vs=points.map(point=>point[1]),minU=Math.min(...us),maxU=Math.max(...us),minV=Math.min(...vs),maxV=Math.max(...vs);
+    const firstU=Math.max(limits.minU,Math.floor(minU)),lastU=Math.min(limits.maxU,maxU>minU?Math.ceil(maxU)-1:Math.floor(minU));
+    const firstV=Math.max(limits.minV,Math.floor(minV)),lastV=Math.min(limits.maxV,maxV>minV?Math.ceil(maxV)-1:Math.floor(minV));
+    for(let v=firstV;v<=lastV&&result.size<maximum;v++)for(let u=firstU;u<=lastU&&result.size<maximum;u++)add(u,v);
+  }
+  if(!validFace)for(const index of vertices||[]){const u=Number(uv[index*2]),v=Number(uv[index*2+1]);if(Number.isFinite(u)&&Number.isFinite(v))add(Math.floor(u),Math.floor(v));}
+  return [...result.values()].sort((a,b)=>a[1]-b[1]||a[0]-b[0]);
+}
+
 /** Only the active UV map is manipulated; selections on other maps stay private. */
 export function uvPreviewOverlay(domain, selectionOrGeoset, selectedVertices, display, color = '#ff3030') {
   const options=normalizeUVPreviewDisplay(display),singleGeoset=Number(selectionOrGeoset),allowed=new Set(domain?.[singleGeoset]||[]);

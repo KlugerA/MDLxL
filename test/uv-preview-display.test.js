@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeUVPreviewDisplay,previewMeshDomain,uvPreviewOverlay} from '../src/uv-preview-display.js';
+import {normalizeUVPreviewDisplay,occupiedUVTextureFrames,previewMeshDomain,uvPreviewOverlay} from '../src/uv-preview-display.js';
 import {normalizePreferences} from '../src/preferences.js';
 import {exportConfiguration,importConfiguration} from '../src/portable-settings.js';
 import {createRequire} from 'node:module';
@@ -26,6 +26,13 @@ test('Show mesh covers model geometry but Highlight Select contains only active 
   assert.equal(selected.allMesh,false);assert.equal(selected.highlightSelection,true);assert.deepEqual(selected.selectionByGeoset,{1:[0]});
   assert.deepEqual(uvPreviewOverlay(domain,-1,[],{mesh:'selected'}).selectionByGeoset,{});
   assert.deepEqual(model,before,'preview decoration never mutates geometry');
+});
+
+test('texture-frame highlighting follows every repeated tile containing UV faces',()=>{
+  const uv=new Float32Array([0,0,1,0,1,1,0,1,1.2,.2,2.2,.2,1.2,.8]);
+  assert.deepEqual(occupiedUVTextureFrames(uv,[[0,1,2],[0,2,3],[4,5,6]],[0,1,2,3,4,5,6]),[[0,0],[1,0],[2,0]]);
+  assert.deepEqual(occupiedUVTextureFrames(new Float32Array([-1,-1,0,-1,0,0]),[[0,1,2]],[0,1,2]),[[-1,-1]]);
+  assert.deepEqual(occupiedUVTextureFrames(new Float32Array([3.2,-2.4]),[],[0]),[[3,-3]]);
 });
 
 test('clean preview View controls cannot change the retained editing display',()=>{

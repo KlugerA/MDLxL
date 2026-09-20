@@ -28,6 +28,10 @@ const inspirations = [
   {name:'Middle-earth',words:['lord of the rings','middle earth','tolkien','lotr','the hobbit'],tags:['plate','chain','leather','wood','elf-body','orc-body','dwarf-body'],traits:['worn','carved','ornate'],subjects:/knight|rider|orc|dwarf|elf|ranger|bandit/},
 ];
 const normalizedPath = value => String(value || '').replaceAll('/','\\').toLowerCase();
+const textureFormat = item => String(item?.path || '').split(/[\\/]/).at(-1).split('.').at(-1).toLowerCase();
+export function textureFormatMatches(item,format='all') {
+  return format === 'all' || format === textureFormat(item);
+}
 export function folderContains(sourcePath,folder) {
   if (!folder) return true;
   const full = normalizedPath(sourcePath), parent = normalizedPath(folder).replace(/[\\:]$/,'');
@@ -70,8 +74,8 @@ function inspirationScore(item,definition) {
   if(!named && (tagged.length<2 || traits.length<2))return null;
   return {score:(named?100:0)+tagged.length*12+traits.length*10,reason:[named?'Related native subject':null,...tagged.slice(0,3),...traits.slice(0,3)].filter(Boolean).join(' · ')};
 }
-export function searchTextureLibrary(prepared,{query='',vibe=true,folder='',variant='all',kind='all',limit=120}={}) {
-  let source=prepared.filter(item=>(variant==='all'||item.variant===variant)&&(kind==='all'||item.kinds.includes(kind))&&(item.source==='custom'?(!folder||folder==='Model folder'):folderContains(item.sourcePath,folder)));
+export function searchTextureLibrary(prepared,{query='',vibe=true,folder='',variant='all',kind='all',format='all',limit=120}={}) {
+  let source=prepared.filter(item=>(variant==='all'||item.variant===variant)&&(kind==='all'||item.kinds.includes(kind))&&textureFormatMatches(item,format)&&(item.source==='custom'?(!folder||folder==='Model folder'):folderContains(item.sourcePath,folder)));
   source.vocabulary=prepared.vocabulary;
   const q=norm(query),parts=q.split(/\s+/).filter(Boolean);
   if(!vibe) {

@@ -5,6 +5,7 @@ import { cameraBindings, uvTransformSensitivity, visualOptions } from '../src/pr
 import { viewportCursor } from './viewport-cursors.js';
 import { eligibleUVVertices, eligibleUVFaces, restrictUVChange } from '../src/uv-selection.js';
 import { collapseUVCoordinates, foldUVCoordinates } from '../src/uv-tools.js';
+import { occupiedUVTextureFrames } from '../src/uv-preview-display.js';
 
 const indicesOf = selection => Array.from(selection || []);
 
@@ -75,14 +76,17 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
         for (let row = -32; row < 48; row++) for (let col = -32; col < 48; col++) { context.fillStyle = (row + col) % 2 ? visuals.gridMinor : visuals.background; context.fillRect(x + col * cellX, y + row * cellY, cellX + 1, cellY + 1); }
       }
       context.strokeStyle = visuals.gridMajor; context.lineWidth = visuals.lineWidth; context.strokeRect(x, y, sizeX, sizeY);
+      const uv = s.uv, allowed = eligible(), faces = eligibleUVFaces(p.geoset, allowed, p.uvSet);
       if (p.showTextureFrame) {
-        // This locator is deliberately independent of Live View thickness.
-        context.save(); context.strokeStyle = /^#[0-9a-f]{6}$/i.test(p.textureFrameColor) ? p.textureFrameColor : '#ff3030';
-        context.lineWidth = 3; context.strokeRect(x, y, sizeX, sizeY); context.restore();
+        // Mark every repeated texture frame used by this UV topology.
+        const bounds={minU:(-x)/sizeX-1,maxU:(width-x)/sizeX+1,minV:(-y)/sizeY-1,maxV:(height-y)/sizeY+1};
+        context.save(); context.strokeStyle = /^#[0-9a-f]{6}$/i.test(p.textureFrameColor) ? p.textureFrameColor : '#ff3030'; context.lineWidth = 3;
+        for(const [frameU,frameV] of occupiedUVTextureFrames(uv,faces,allowed,bounds))context.strokeRect(x+frameU*sizeX,y+frameV*sizeY,sizeX,sizeY);
+        context.restore();
       }
-      const uv = s.uv, allowed = eligible(), selected = new Set(selection());
+      const selected = new Set(selection());
       context.beginPath(); context.strokeStyle = visuals.wireframe; context.lineWidth = visuals.lineWidth;
-      for (const ids of eligibleUVFaces(p.geoset, allowed, p.uvSet)) {
+      for (const ids of faces) {
         // Selected topology remains visible independently of the 3D wire overlay.
         if (!p.showWires && !ids.some(index => selected.has(index))) continue;
         const [a, b, c] = ids.map(index => index * 2);
