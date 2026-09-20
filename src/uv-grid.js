@@ -1,15 +1,14 @@
+export const UV_GRID_SPACING_MIN = 0.003;
+export const UV_GRID_SPACING_MAX = 0.02;
+
 export const DEFAULT_UV_GRID = Object.freeze({
   enabled: false,
   snap: false,
-  spacing: 0.125,
+  spacing: UV_GRID_SPACING_MAX,
   thickness: 1,
   color: '#ffffff',
   opacity: 0.35,
 });
-
-// At the editor's maximum zoom, denser cells than this are no longer useful.
-export const UV_GRID_SPACING_MIN = 0.0006;
-export const UV_GRID_SPACING_MAX = 8;
 
 const record = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 const bounded = (value, minimum, maximum, fallback) => value !== null && value !== '' && Number.isFinite(Number(value))
