@@ -178,7 +178,6 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
     (preview ? onPreviewChanges : onUVChanges)?.(changes, label);
   };
   const selectedForCurrent = Object.fromEntries(Object.entries(materialSelection).filter(([, ids]) => ids.length));
-  const domainForCurrent = Object.fromEntries((current?.geosetIndices || []).map(index => [index, unique(editingDomain[index])]));
   const currentSelectionCount = selectedCount(selectedForCurrent);
   const toolState = uvToolState({ readOnly, selectingNew, selectionCount: currentSelectionCount, draftCount });
   useEffect(() => {
@@ -186,7 +185,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
       if (selectingNew) return;
       const { kind, value } = event.detail || {};
       if (kind === 'tool' && ['select','move','rotate','scale'].includes(value)) setUVTool(value);
-      if (kind === 'uncouple' && toolState.uncouple) onUncouple?.(selectedForCurrent, domainForCurrent, current?.coordId || 0);
+      if (kind === 'uncouple' && toolState.uncouple) onUncouple?.(selectedForCurrent, current?.coordId || 0);
     };
     window.addEventListener('mdlvis-uv-action', action);
     return () => window.removeEventListener('mdlvis-uv-action', action);
@@ -263,7 +262,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
             <Tool action="uv:flip-u" icon="sb_mirror" iconClass="uv-icon-mirror-x" label="Mirror by X" disabled={!toolState.mirror} onClick={() => dispatch('flip-u')}/>
             <Tool action="uv:flip-v" icon="sb_mirror" label="Mirror by Y" disabled={!toolState.mirror} onClick={() => dispatch('flip-v')}/>
             <Tool action="Collapse" label="Collapse" disabled={!toolState.collapse} onClick={() => dispatch('collapse')}/>
-            <Tool action="Uncouple" icon="sb_uncouple" label="Uncouple stacked UV vertices" disabled={!toolState.uncouple} onClick={() => onUncouple?.(selectedForCurrent, domainForCurrent, current?.coordId || 0)}/>
+            <Tool action="Uncouple" icon="sb_uncouple" label="Uncouple selected face corners" disabled={!toolState.uncouple} onClick={() => onUncouple?.(selectedForCurrent, current?.coordId || 0)}/>
             <div className="uv-fold-control"><Tool action="uv:fold" iconNode={<FoldIcon/>} label="Fold" disabled={!toolState.fold} onClick={() => dispatch('fold', foldDirection)}/><select aria-label="Fold direction" value={foldDirection} onChange={event => setFoldDirection(event.target.value)}><option value="right-to-left">Right → left</option><option value="left-to-right">Left → right</option><option value="bottom-to-top">Bottom → top</option><option value="top-to-bottom">Top → bottom</option></select></div>
           </div></section>
         </div>

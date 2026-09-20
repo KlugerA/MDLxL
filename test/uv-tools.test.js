@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { combineUVGeosets, collapseUVCoordinates, foldUVCoordinates, projectUVFromView, relevantUVMaterials, splitCombinedUV, uncoupleUVStacks, uncoupleUVVertices } from '../src/uv-tools.js';
+import { combineUVGeosets, collapseUVCoordinates, foldUVCoordinates, projectUVFromView, relevantUVMaterials, splitCombinedUV, uncoupleUVVertices } from '../src/uv-tools.js';
 import { compositeMaterialPixels } from '../src/uv-material-compositor.js';
 
 const geoset = (offset = 0, material = 0) => ({ MaterialID: material,
@@ -39,35 +39,30 @@ test('Collapse shares the centroid and repeated Fold presses halve the selected 
   assert.deepEqual([...foldUVCoordinates(new Float32Array([0,0, .25,0, 1,0]), [0,1,2], 'right-to-left')], [0,0, .25,0, 0,0]);
 });
 
-test('UV Uncouple duplicates repeated face corners and preserves every 3D attribute exactly', () => {
+test('UV Uncouple matches MDLVis by duplicating face corners, moving active UVs inward, and clearing selection', () => {
   const joined = geoset(); joined.Faces = new Uint16Array([0,1,2, 0,2,3]); joined.Tangents = new Float32Array(16).map((_, i) => i); joined.SkinWeights = new Uint8Array(32).map((_, i) => i);
-  const joinedBefore = structuredClone(joined), changed = uncoupleUVVertices(joined, [0,2]);
-  assert.equal(changed.added, 2);
-  assert.deepEqual([...joined.Faces], [0,1,2,4,5,3]); assert.deepEqual(changed.selection, [0,2,4,5]);
-  assert.deepEqual([...joined.Vertices.slice(12,15)], [...joinedBefore.Vertices.slice(0,3)]); assert.deepEqual([...joined.Normals.slice(15,18)], [...joinedBefore.Normals.slice(6,9)]);
-  assert.deepEqual([...joined.Tangents.slice(16,20)], [...joinedBefore.Tangents.slice(0,4)]); assert.deepEqual([...joined.SkinWeights.slice(40,48)], [...joinedBefore.SkinWeights.slice(16,24)]);
+  joined.TVertices.push(new Float32Array([.2,.2, .8,.2, .2,.8, .8,.8]));
+  const joinedBefore = structuredClone(joined), changed = uncoupleUVVertices(joined, [0], 0);
+  assert.equal(changed.added, 1); assert.deepEqual(changed.created, [4]); assert.deepEqual(changed.selection, []);
+  assert.deepEqual([...joined.Faces], [0,1,2,4,2,3]);
+  assert.deepEqual([...joined.TVertices[0]], [.10000000149011612,.10000000149011612, 1,0, 0,1, 1,1, .10000000149011612,.20000000298023224]);
+  assert.deepEqual([...joined.TVertices[1].slice(8,10)], [.20000000298023224,.20000000298023224], 'inactive UV sets are copied without movement');
+  assert.deepEqual([...joined.Vertices.slice(12,15)], [...joinedBefore.Vertices.slice(0,3)]); assert.deepEqual([...joined.Normals.slice(12,15)], [...joinedBefore.Normals.slice(0,3)]);
+  assert.deepEqual([...joined.Tangents.slice(16,20)], [...joinedBefore.Tangents.slice(0,4)]); assert.deepEqual([...joined.SkinWeights.slice(32,40)], [...joinedBefore.SkinWeights.slice(0,8)]);
 });
 
-test('UV-wrapper Uncouple visibly separates every point in a selected coincident stack', () => {
-  const first = geoset(), second = geoset(2);
-  first.TVertices[0] = new Float32Array([.5,.5, .5,.5, .5,.5, 1,1]); first.Faces = new Uint16Array([0,1,2]);
-  second.TVertices[0] = new Float32Array([.5,.5, .8,.8, .9,.9, 1,1]); second.Faces = new Uint16Array([0,1,2]);
-  const geometry = [structuredClone(first.Vertices), structuredClone(second.Vertices)], model = { Geosets: [first, second] };
-  const result = uncoupleUVStacks(model, { 0: [0] }, { 0: [0,1,2,3], 1: [0,1,2,3] }, 0, .02);
-  assert.deepEqual(result.selection, { 0: [0,1,2], 1: [0] });
-  assert.equal(result.added, 0); assert.equal(result.separated, 4);
-  const points = [[first,0],[first,1],[first,2],[second,0]].map(([geo,index]) => [geo.TVertices[0][index*2], geo.TVertices[0][index*2+1]]);
-  for (let a = 0; a < points.length; a++) for (let b = a + 1; b < points.length; b++) assert.ok(Math.hypot(points[a][0]-points[b][0], points[a][1]-points[b][1]) >= .0199);
-  assert.deepEqual(first.Vertices, geometry[0]); assert.deepEqual(second.Vertices, geometry[1]);
-  assert.deepEqual([...first.TVertices[0].slice(6,8)], [1,1], 'unrelated UV points remain untouched');
-});
-
-test('UV-wrapper Uncouple spreads newly duplicated face corners instead of leaving an invisible stack', () => {
-  const joined = geoset(); joined.Faces = new Uint16Array([0,1,2, 0,2,3]);
-  const model = { Geosets: [joined] }, result = uncoupleUVStacks(model, { 0: [0] }, { 0: [0,1,2,3] }, 0, .02);
-  assert.equal(result.added, 1); assert.equal(result.separated, 2); assert.deepEqual(result.selection, { 0: [0,4] });
-  const uv = joined.TVertices[0]; assert.ok(Math.abs(uv[0] - uv[8]) >= .0199); assert.equal(uv[1], uv[9]);
-  assert.deepEqual([...joined.Vertices.slice(0,3)], [...joined.Vertices.slice(12,15)], 'uncoupling does not move the 3D mesh');
+test('UV Uncouple separates selected coincident points by their own faces without touching unrelated stacks', () => {
+  const geo = {
+    Vertices: new Float32Array(30), Normals: new Float32Array(30), VertexGroup: new Uint8Array(10),
+    TVertices: [new Float32Array([.5,.5, 0,0, 0,1, .5,.5, 1,0, 1,1, .5,.5, .2,.8, .8,.8, .5,.5])],
+    Faces: new Uint16Array([0,1,2, 3,4,5, 6,7,8]),
+  };
+  const beforeGeometry = new Float32Array(geo.Vertices), result = uncoupleUVVertices(geo, [0,3,6], 0);
+  assert.equal(result.added, 0); assert.deepEqual(result.selection, []);
+  const points = [0,3,6].map(index => [...geo.TVertices[0].slice(index * 2, index * 2 + 2)]);
+  assert.deepEqual(points, [[.4000000059604645,.5], [.6000000238418579,.5], [.5,.5600000023841858]]);
+  assert.deepEqual([...geo.TVertices[0].slice(18,20)], [.5,.5], 'an unselected coincident point remains untouched');
+  assert.deepEqual(geo.Vertices, beforeGeometry, 'uncoupling never moves the 3D mesh');
 });
 
 test('view projection writes Warcraft top-down UV coordinates only for selected vertices', () => {
