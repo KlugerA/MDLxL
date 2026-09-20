@@ -157,7 +157,11 @@ export default function GamePreview(inputProps) {
 
   useEffect(() => {
     if (!model || !host.current) return;
-    const ownerDocument = host.current.ownerDocument, ownerWindow = ownerDocument.defaultView || window;
+    const ownerDocument = host.current.ownerDocument, ownerWindow = ownerDocument.defaultView || window, detachedPreview = ownerDocument !== document;
+    const requestPreviewFrame = detachedPreview
+      ? callback => ownerWindow.setTimeout(() => callback(ownerWindow.performance.now()), 16)
+      : ownerWindow.requestAnimationFrame.bind(ownerWindow);
+    const cancelPreviewFrame = detachedPreview ? ownerWindow.clearTimeout.bind(ownerWindow) : ownerWindow.cancelAnimationFrame.bind(ownerWindow);
     const backgroundCanvas = ownerDocument.createElement('canvas'); backgroundCanvas.dataset.previewBackground = ''; backgroundCanvas.style.cssText = 'position:absolute;z-index:0;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(backgroundCanvas);
     const canvas = ownerDocument.createElement('canvas'); canvas.dataset.cleanModelCanvas = ''; canvas.style.cssText = 'position:relative;z-index:1;width:100%;height:100%;display:block;touch-action:none;outline:none'; canvas.tabIndex = 0;
     host.current.appendChild(canvas);
@@ -668,8 +672,13 @@ export default function GamePreview(inputProps) {
       continuous: () => {
         return latest.current.playing && !latest.current.restPose && !playbackStopped;
       },
-      paused: () => latest.current.suspended || (ownerDocument.hidden && graphicsOptions(latest.current.preferences).pauseWhenHidden),
+      // Electron may report an owned about:blank window as hidden during focus
+      // transfer. Only the main-document preview uses hidden-tab suspension;
+      // a detached preview must always be allowed to paint its first frame.
+      paused: () => latest.current.suspended || (ownerDocument === document && ownerDocument.hidden && graphicsOptions(latest.current.preferences).pauseWhenHidden),
       maxFps: () => graphicsOptions(latest.current.preferences).maxFps,
+      request: requestPreviewFrame,
+      cancel: cancelPreviewFrame,
     });
     state.captureApi = {
       get isReady() { return !disposed && texturesReady && eventPreview.isReady && backgroundState.current.status === 'ready' && (!latest.current.portraitMode || portraitFrame.current.status !== 'loading'); },

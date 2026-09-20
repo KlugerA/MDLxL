@@ -7,9 +7,12 @@ export const DEFAULT_UV_GRID = Object.freeze({
   opacity: 0.35,
 });
 
+export const UV_GRID_SPACING_MIN = 0.0001;
+export const UV_GRID_SPACING_MAX = 8;
+
 const record = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 const bounded = (value, minimum, maximum, fallback) => value !== null && value !== '' && Number.isFinite(Number(value))
-  ? Math.round(Math.max(minimum, Math.min(maximum, Number(value))) * 1000) / 1000
+  ? Math.round(Math.max(minimum, Math.min(maximum, Number(value))) * 1000000) / 1000000
   : fallback;
 
 export function normalizeUVGrid(value = {}) {
@@ -17,11 +20,20 @@ export function normalizeUVGrid(value = {}) {
   return {
     enabled: input.enabled === true,
     snap: input.snap === true,
-    spacing: bounded(input.spacing, 0.005, 8, DEFAULT_UV_GRID.spacing),
+    spacing: bounded(input.spacing, UV_GRID_SPACING_MIN, UV_GRID_SPACING_MAX, DEFAULT_UV_GRID.spacing),
     thickness: bounded(input.thickness, 0.5, 6, DEFAULT_UV_GRID.thickness),
     color: /^#[0-9a-f]{6}$/i.test(input.color) ? input.color.toLowerCase() : DEFAULT_UV_GRID.color,
     opacity: bounded(input.opacity, 0, 1, DEFAULT_UV_GRID.opacity),
   };
+}
+
+/** A logarithmic slider keeps both sub-pixel UV steps and large cells precise. */
+export function uvGridSpacingSliderValue(spacing) {
+  return Math.log10(bounded(spacing, UV_GRID_SPACING_MIN, UV_GRID_SPACING_MAX, DEFAULT_UV_GRID.spacing));
+}
+
+export function uvGridSpacingFromSlider(value) {
+  return bounded(10 ** Number(value), UV_GRID_SPACING_MIN, UV_GRID_SPACING_MAX, DEFAULT_UV_GRID.spacing);
 }
 
 export function coincidentUVSelection(values, selectedVertices, epsilon = 1e-6) {
@@ -52,7 +64,7 @@ export function snapUVCoordinates(values, selectedVertices, value = {}) {
 }
 
 export function visibleUVGridLines(minimum, maximum, spacing, maximumLines = 4096) {
-  const step = bounded(spacing, 0.005, 8, DEFAULT_UV_GRID.spacing);
+  const step = bounded(spacing, UV_GRID_SPACING_MIN, UV_GRID_SPACING_MAX, DEFAULT_UV_GRID.spacing);
   if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || maximum < minimum) return [];
   const first = Math.ceil((minimum - step * 1e-9) / step), last = Math.floor((maximum + step * 1e-9) / step);
   if (last - first + 1 > maximumLines) return [];

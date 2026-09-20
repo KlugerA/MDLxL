@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizePreferences } from '../src/preferences.js';
-import { coincidentUVSelection, DEFAULT_UV_GRID, normalizeUVGrid, snapUVCoordinates, visibleUVGridLines } from '../src/uv-grid.js';
+import { coincidentUVSelection, DEFAULT_UV_GRID, normalizeUVGrid, snapUVCoordinates, UV_GRID_SPACING_MIN, uvGridSpacingFromSlider, uvGridSpacingSliderValue, visibleUVGridLines } from '../src/uv-grid.js';
 
 const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-6, `${actual} should equal ${expected}`);
 
@@ -9,7 +9,14 @@ test('UV grid preferences are bounded, canonical and persist with editor prefere
   assert.deepEqual(normalizeUVGrid(), DEFAULT_UV_GRID);
   const preferences = normalizePreferences({ uvGrid: { enabled: true, snap: true, spacing: 0.25, thickness: 2.5, color: '#AbCdEf', opacity: 0.6 } });
   assert.deepEqual(preferences.uvGrid, { enabled: true, snap: true, spacing: 0.25, thickness: 2.5, color: '#abcdef', opacity: 0.6 });
-  assert.deepEqual(normalizeUVGrid({ spacing: 0, thickness: 99, color: 'red', opacity: -4 }), { ...DEFAULT_UV_GRID, spacing: 0.005, thickness: 6, opacity: 0 });
+  assert.deepEqual(normalizeUVGrid({ spacing: 0, thickness: 99, color: 'red', opacity: -4 }), { ...DEFAULT_UV_GRID, spacing: UV_GRID_SPACING_MIN, thickness: 6, opacity: 0 });
+});
+
+test('UV grid size slider is logarithmic, fine-grained and reaches tiny spacing', () => {
+  closeTo(uvGridSpacingSliderValue(UV_GRID_SPACING_MIN), -4);
+  closeTo(uvGridSpacingFromSlider(-4), UV_GRID_SPACING_MIN);
+  closeTo(uvGridSpacingFromSlider(-1), 0.1);
+  assert.ok(uvGridSpacingFromSlider(-1.01) > 0.097 && uvGridSpacingFromSlider(-1.01) < 0.098, 'one slider step changes spacing by only about two percent');
 });
 
 test('UV grid lines stay anchored to the global UV origin', () => {

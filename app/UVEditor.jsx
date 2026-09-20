@@ -75,8 +75,8 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
       }
       const grid = normalizeUVGrid(p.uvGrid);
       if (grid.enabled && grid.opacity > 0) {
-        const horizontal = grid.spacing * Math.abs(sizeY) >= 2 ? visibleUVGridLines((-y) / sizeY, (height - y) / sizeY, grid.spacing) : [];
-        const vertical = grid.spacing * Math.abs(sizeX) >= 2 ? visibleUVGridLines((-x) / sizeX, (width - x) / sizeX, grid.spacing) : [];
+        const horizontal = grid.spacing * Math.abs(sizeY) >= 1 ? visibleUVGridLines((-y) / sizeY, (height - y) / sizeY, grid.spacing) : [];
+        const vertical = grid.spacing * Math.abs(sizeX) >= 1 ? visibleUVGridLines((-x) / sizeX, (width - x) / sizeX, grid.spacing) : [];
         context.save(); context.globalAlpha = grid.opacity; context.strokeStyle = grid.color; context.lineWidth = grid.thickness; context.beginPath();
         for (const u of vertical) { const position = x + u * sizeX; context.moveTo(position, 0); context.lineTo(position, height); }
         for (const v of horizontal) { const position = y + v * sizeY; context.moveTo(0, position); context.lineTo(width, position); }

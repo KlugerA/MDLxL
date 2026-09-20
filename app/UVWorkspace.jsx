@@ -4,7 +4,7 @@ import { combineUVGeosets, projectUVFromView, relevantUVMaterials, splitCombined
 import { uvToolState } from '../src/uv-tool-state.js';
 import { normalizeUVPreviewDisplay, previewMeshDomain, uvPreviewOverlay } from '../src/uv-preview-display.js';
 import { renderUVMaterialTexture } from './uv-material-preview.js';
-import { normalizeUVGrid } from '../src/uv-grid.js';
+import { normalizeUVGrid, UV_GRID_SPACING_MAX, UV_GRID_SPACING_MIN, uvGridSpacingFromSlider, uvGridSpacingSliderValue } from '../src/uv-grid.js';
 import {
   UV_PREVIEW_DEFAULT, UV_PREVIEW_MAX, UV_PREVIEW_MIN, UV_SELECT_PREVIEW_DEFAULT,
   UV_SIDE_DEFAULT, UV_SIDE_MAX, UV_SIDE_MIN, clampUVPreviewPercent, clampUVSidePercent,
@@ -21,6 +21,7 @@ const ANGLED_PROJECTIONS = [
   ['top-front-right','Top Front Right'],['top-front-left','Top Front Left'],['top-back-right','Top Back Right'],['top-back-left','Top Back Left'],
   ['bottom-front-right','Bottom Front Right'],['bottom-front-left','Bottom Front Left'],['bottom-back-right','Bottom Back Right'],['bottom-back-left','Bottom Back Left'],
 ];
+const gridSpacingLabel = value => value < 0.01 ? value.toFixed(4) : value < 1 ? value.toFixed(3) : value.toFixed(2);
 
 function storedLayout(key, fallback, normalize) {
   try { return normalize(localStorage.getItem(key) ?? fallback); } catch { return fallback; }
@@ -48,10 +49,10 @@ function UVGridControls({ value, onChange }) {
   return <div className="uv-grid-toolbar" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
     <button type="button" className={value.enabled ? 'active' : ''} aria-pressed={value.enabled} title="Show UV grid" onClick={() => update({ enabled: !value.enabled })}>Grid</button>
     <button type="button" className={value.snap ? 'active' : ''} aria-pressed={value.snap} title="Snap a dragged vertex or coincident vertex stack to grid crossings" onClick={() => update({ snap: !value.snap })}>Snap</button>
-    <label className="uv-grid-size"><span>Size</span><input aria-label="UV grid size" type="range" min="0.005" max="2" step="0.005" value={Math.min(2, value.spacing)} onChange={event => update({ spacing: Number(event.target.value) })}/><output>{value.spacing}</output></label>
+    <label className="uv-grid-size"><span>Size</span><input aria-label="UV grid size" type="range" min={Math.log10(UV_GRID_SPACING_MIN)} max={Math.log10(UV_GRID_SPACING_MAX)} step="0.01" value={uvGridSpacingSliderValue(value.spacing)} onChange={event => update({ spacing: uvGridSpacingFromSlider(event.target.value) })}/><output>{gridSpacingLabel(value.spacing)}</output></label>
     <button type="button" aria-haspopup="dialog" aria-expanded={open} title="UV grid settings" onClick={() => setOpen(previous => !previous)}>Settings</button>
     {open && <div className="uv-grid-settings" role="dialog" aria-label="UV grid settings">
-      <label><span>Spacing</span><input aria-label="UV grid spacing" type="number" min="0.005" max="8" step="0.005" value={value.spacing} onChange={event => update({ spacing: Number(event.target.value) })}/></label>
+      <label><span>Spacing</span><input aria-label="UV grid spacing" type="number" min={UV_GRID_SPACING_MIN} max={UV_GRID_SPACING_MAX} step="0.0001" value={value.spacing} onChange={event => update({ spacing: Number(event.target.value) })}/></label>
       <label><span>Thickness</span><input aria-label="UV grid thickness" type="range" min="0.5" max="6" step="0.25" value={value.thickness} onChange={event => update({ thickness: Number(event.target.value) })}/><output>{value.thickness}px</output></label>
       <label><span>Color</span><input aria-label="UV grid color" type="color" value={value.color} onChange={event => update({ color: event.target.value })}/></label>
       <label><span>Opacity</span><input aria-label="UV grid opacity" type="range" min="0" max="1" step="0.05" value={value.opacity} onChange={event => update({ opacity: Number(event.target.value) })}/><output>{Math.round(value.opacity * 100)}%</output></label>
