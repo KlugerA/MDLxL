@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {backgroundThumbnail} from './asset-preload-client.js';
 import {createTextureAssetCache,createTextureLibrarySessions,createThumbnailQueue,createThumbnailLookup,warmTextureLibrarySession} from '../src/texture-library-session.js';
-import {textureFolderTree} from '../src/texture-library-search.js';
+import {textureFolderTree,textureFormatMatches} from '../src/texture-library-search.js';
 import {cachedThumbnail,saveThumbnail,peekThumbnail} from '../src/texture-library-cache.js';
 import {getUVPreviewSelection} from '../src/uv-preview.js';
 import './texture-library.css';
@@ -14,6 +14,8 @@ const thumbnailQueue=createThumbnailQueue({concurrency:4});
 const thumbnailJobs=new Map();
 let sharedWorker=null,searchSerial=0,libraryConsumers=0;
 const warmJobs=new Map();
+function preferredVibe(){try{return localStorage.getItem('mdlvis.texture-library.vibe')!=='false';}catch{return true;}}
+function preferredFormat(){try{return localStorage.getItem('mdlvis.texture-library.blp-only')==='true'?'blp':'all';}catch{return'all';}}
 function libraryWorker(){
   if(!sharedWorker){const created=new Worker(new URL('../src/texture-library-worker.js',import.meta.url),{type:'module'});created.addEventListener('message',({data})=>{if(data.type==='ready')created.warmSignature=data.signature;});created.addEventListener('error',()=>{if(sharedWorker===created){created.terminate();sharedWorker=null;}});sharedWorker=created;}
   return sharedWorker;
@@ -33,8 +35,8 @@ function warmSearch(catalog,options){
 /** Called only after explicit Yes; the browser opens with its search worker/results ready. */
 export function warmTextureLibrary(modelPath){
   const key=String(modelPath||'');if(warmJobs.has(key))return warmJobs.get(key);
-  let vibe=true;try{vibe=localStorage.getItem('mdlvis.texture-library.vibe')!=='false';}catch{}
-  const job=warmTextureLibrarySession({sessions:librarySessions,modelPath,vibe,loadCatalog:()=>window.desktop.textureLibraryCatalog({modelPath}),canWarm:()=>libraryConsumers===0,search:warmSearch});
+  const vibe=preferredVibe(),format=preferredFormat();
+  const job=warmTextureLibrarySession({sessions:librarySessions,modelPath,vibe,format,loadCatalog:()=>window.desktop.textureLibraryCatalog({modelPath}),canWarm:()=>libraryConsumers===0,search:warmSearch});
   warmJobs.set(key,job);job.finally(()=>warmJobs.delete(key)).catch(()=>{});return job;
 }
 async function thumbnail(item,modelPath){
@@ -73,7 +75,7 @@ function FolderBranch({node,selected,onSelect,depth=0}){
 }
 export default function TextureLibrary({model,modelPath,onClose,onAddTexture,onPreviewTexture,previewEnabled=false,previewReason='',selectedGeosets,onOpenMaterials,onSelectTexture,selectLabel='Use in Forge'}){
   const initialCatalog=librarySessions.peek(modelPath);
-  const [catalog,setCatalog]=useState(initialCatalog),[loading,setLoading]=useState(!initialCatalog),[error,setError]=useState(''),[query,setQuery]=useState(''),[vibe,setVibe]=useState(()=>{try{return localStorage.getItem('mdlvis.texture-library.vibe')!=='false';}catch{return true;}}),[folder,setFolder]=useState(''),[variant,setVariant]=useState('classic'),[kind,setKind]=useState('all'),[limit,setLimit]=useState(120),[result,setResult]=useState(()=>librarySessions.result(modelPath,initialCatalog?.signature,{query:'',vibe:(()=>{try{return localStorage.getItem('mdlvis.texture-library.vibe')!=='false';}catch{return true;}})(),folder:'',variant:'classic',kind:'all',limit:120})||{items:[],total:0}),[ready,setReady]=useState(false),[searching,setSearching]=useState(false),[selected,setSelected]=useState(null),[selectedAsset,setSelectedAsset]=useState(null),[selectedImage,setSelectedImage]=useState(null),[selectionError,setSelectionError]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[cacheEpoch,setCacheEpoch]=useState(0);
+  const [catalog,setCatalog]=useState(initialCatalog),[loading,setLoading]=useState(!initialCatalog),[error,setError]=useState(''),[query,setQuery]=useState(''),[vibe,setVibe]=useState(preferredVibe),[format,setFormat]=useState(preferredFormat),[folder,setFolder]=useState(''),[variant,setVariant]=useState('classic'),[kind,setKind]=useState('all'),[limit,setLimit]=useState(120),[result,setResult]=useState(()=>librarySessions.result(modelPath,initialCatalog?.signature,{query:'',vibe:preferredVibe(),folder:'',variant:'classic',kind:'all',format:preferredFormat(),limit:120})||{items:[],total:0}),[ready,setReady]=useState(false),[searching,setSearching]=useState(false),[selected,setSelected]=useState(null),[selectedAsset,setSelectedAsset]=useState(null),[selectedImage,setSelectedImage]=useState(null),[selectionError,setSelectionError]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[cacheEpoch,setCacheEpoch]=useState(0);
   const worker=useRef(),requestId=useRef(0),requestOptions=useRef(null),expectedCatalog=useRef(null),dialog=useRef(),input=useRef();
   const [catalogFresh,setCatalogFresh]=useState(false);
   useEffect(()=>{
@@ -93,19 +95,19 @@ export default function TextureLibrary({model,modelPath,onClose,onAddTexture,onP
     const unsubscribe=window.desktop.onTextureLibraryPreloadProgress?.(status=>{if(['complete','cancelled'].includes(status.state)){setCacheEpoch(value=>value+1);refreshCatalog();}});
     return()=>{active=false;libraryConsumers--;unsubscribe?.();w.removeEventListener('message',onMessage);w.removeEventListener('error',onError);worker.current=null;};
   },[modelPath]);
-  useEffect(()=>{setLimit(120);},[query,vibe,folder,variant,kind]);
+  useEffect(()=>{setLimit(120);},[query,vibe,folder,variant,kind,format]);
   useEffect(()=>{
-    if(!ready)return;const options={query,vibe,folder,variant,kind,limit},id=++searchSerial;requestId.current=id;requestOptions.current=options;
+    if(!ready)return;const options={query,vibe,folder,variant,kind,format,limit},id=++searchSerial;requestId.current=id;requestOptions.current=options;
     const cached=librarySessions.result(modelPath,catalog?.signature,options);if(cached){setResult(cached);setSearching(false);return;}
     setSearching(true);const timer=setTimeout(()=>worker.current?.postMessage({type:'search',id,signature:catalog?.signature,options}),query?100:0);return()=>clearTimeout(timer);
-  },[ready,catalog?.signature,modelPath,query,vibe,folder,variant,kind,limit]);
+  },[ready,catalog?.signature,modelPath,query,vibe,folder,variant,kind,format,limit]);
   useEffect(()=>{
     let active=true;setSelectedAsset(null);setSelectedImage(null);setSelectionError('');setMessage('');if(!selected)return;
     loadAsset(selected,modelPath).then(asset=>{if(active)setSelectedAsset(asset);}).catch(error=>{if(active)setSelectionError(error.message);});
     thumbnail(selected,modelPath).then(url=>{if(active)setSelectedImage(url);}).catch(error=>{if(active)setSelectionError(error.message);});
     return()=>{active=false;};
   },[selected?.cacheKey,modelPath]);
-  const tree=useMemo(()=>textureFolderTree((catalog?.items||[]).filter(item=>variant==='all'||item.variant===variant)),[catalog,variant]);
+  const tree=useMemo(()=>textureFolderTree((catalog?.items||[]).filter(item=>(variant==='all'||item.variant===variant)&&textureFormatMatches(item,format))),[catalog,variant,format]);
   const used=useMemo(()=>new Set((model?.Textures||[]).map(t=>String(t.Image||'').replaceAll('/','\\').toLowerCase())),[model,model?.Textures?.length]);
   const checkedPreview=selectedGeosets==null?null:getUVPreviewSelection(model,selectedGeosets);
   const previewAllowed=previewEnabled&&(!checkedPreview||checkedPreview.enabled),disabledPreviewReason=previewReason||checkedPreview?.reason||'Texture preview is unavailable for this selection.';
@@ -120,6 +122,7 @@ export default function TextureLibrary({model,modelPath,onClose,onAddTexture,onP
     <header className="tl-header"><img src="./classic/wc3-library.png" alt=""/><div><h2>Material &amp; Texture Library</h2><span>Warcraft III textures and textures beside your model</span></div>{onOpenMaterials&&<button type="button" onClick={onOpenMaterials}>Material Manager</button>}<button type="button" aria-label="Close texture library" onClick={onClose} disabled={busy}>✕</button></header>
     <div className="tl-toolbar"><input ref={input} type="search" value={query} placeholder={vibe?'Try rusty chain mail, Nurgle, or a texture name':'Search texture names and paths'} onChange={event=>setQuery(event.target.value)} aria-label="Search textures"/>
       <label title="Search surfaces, colours and kitbash associations"><input type="checkbox" checked={vibe} onChange={event=>{setVibe(event.target.checked);try{localStorage.setItem('mdlvis.texture-library.vibe',String(event.target.checked));}catch{}}}/>Vibe search</label>
+      <label title="Hide DDS and other texture formats"><input aria-label="BLP textures only" type="checkbox" checked={format==='blp'} onChange={event=>{const next=event.target.checked?'blp':'all';setFormat(next);if(next==='blp')setSelected(previous=>textureFormatMatches(previous,next)?previous:null);try{localStorage.setItem('mdlvis.texture-library.blp-only',String(event.target.checked));}catch{}}}/>BLP only</label>
       <select aria-label="Texture source" value={variant} onChange={event=>changeVariant(event.target.value)}><option value="classic">Classic</option><option value="reforged">Reforged</option><option value="custom">Model folder</option><option value="all">All installed</option></select>
       <select aria-label="Texture kind" value={kind} onChange={event=>setKind(event.target.value)}><option value="all">All textures</option><option value="units">Units &amp; characters</option><option value="buildings">Buildings</option><option value="doodads">Doodads</option><option value="terrain">Terrain</option><option value="effects">Effects</option><option value="icons">Icons</option></select>
     </div>

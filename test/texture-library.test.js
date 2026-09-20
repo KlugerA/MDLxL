@@ -60,6 +60,15 @@ test('name search disables descriptive and fantasy matching',()=>{
   const result=searchTextureLibrary(prepared,{query:'Footman',vibe:false});
   assert.ok(result.total>0);assert.ok(result.items.every(item=>/footman/i.test(item.name+' '+item.path)));
 });
+test('BLP-only search filters by the displayed model texture path',()=>{
+  const items=prepareTextureLibrary([
+    {id:'blp',name:'Classic skin',path:'Textures\\Classic.blp',lookupName:'war3.w3mod:textures\\classic.dds',sourcePath:'war3.w3mod:textures\\classic.dds',kinds:['units'],tags:[],variant:'classic'},
+    {id:'dds',name:'HD skin',path:'_hd.w3mod:Textures\\HD.dds',lookupName:'war3.w3mod:_hd.w3mod:textures\\hd.dds',sourcePath:'war3.w3mod:_hd.w3mod:textures\\hd.dds',kinds:['units'],tags:[],variant:'reforged'},
+    {id:'png',name:'Loose skin',path:'Loose.png',sourcePath:'Loose.png',kinds:['other'],tags:[],variant:'custom'},
+  ]);
+  assert.deepEqual(searchTextureLibrary(items,{query:'',variant:'all',format:'blp'}).items.map(item=>item.id),['blp']);
+  assert.equal(searchTextureLibrary(items,{query:'',variant:'all',format:'all'}).total,3);
+});
 test('native folder boundaries preserve module and source hierarchy',()=>{
   assert.equal(folderContains('war3.w3mod:units\\orc\\grunt.dds','war3.w3mod:units\\orc'),true);
   assert.equal(folderContains('war3.w3mod:units\\orcs2\\grunt.dds','war3.w3mod:units\\orc'),false);

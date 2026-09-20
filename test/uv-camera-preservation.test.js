@@ -32,6 +32,7 @@ test('UV opts into restoring its user view before fit, without replaying old pro
   assert.match(preview,/if \(saved && latest.current.preserveCameraView\) \{\s*camera = restorePreviewCamera/);
   assert.match(preview,/camera:camera === ortho \? 'ortho' : 'perspective'/);
   assert.match(preview,/\[props.cameraPresetRequest\?\.revision\]/);
+  assert.match(uv,/<GamePreview[^>]*revision=\{0\}[^>]*preserveCameraView=\{true\}/,'UV-only commits update buffers without rebuilding and resetting the live view');
 });
 
 test('team label stays absent and geosets fill down columns',()=>{

@@ -65,10 +65,10 @@ export function createTextureLibrarySessions({ maxEntries = 4, maxResults = 24 }
 }
 
 /** Explicit preload can prepare the same initial search used by a later library mount. */
-export async function warmTextureLibrarySession({ sessions, modelPath, loadCatalog, search, canWarm = () => true, vibe = true }) {
+export async function warmTextureLibrarySession({ sessions, modelPath, loadCatalog, search, canWarm = () => true, vibe = true, format = 'all' }) {
   const catalog = await sessions.load(modelPath, loadCatalog);
   if (!canWarm()) return catalog;
-  const options = { query:'', vibe, folder:'', variant:catalog.items.some(item => item.variant === 'classic') ? 'classic' : 'all', kind:'all', limit:120 };
+  const options = { query:'', vibe, folder:'', variant:catalog.items.some(item => item.variant === 'classic') ? 'classic' : 'all', kind:'all', format, limit:120 };
   if (!sessions.result(modelPath, catalog.signature, options)) {
     const result = await search(catalog, options);
     sessions.remember(modelPath, catalog.signature, options, result);
