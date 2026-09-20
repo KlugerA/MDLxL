@@ -37,12 +37,13 @@ import { retainedForgeAssets, forgeExportArchive, isForgeAssetPath, missingForge
 import { applyMovementTransform, movementRestricted, constrainMovementVector } from '../src/movement.js';
 import { classicTimelineDomain } from '../src/classic-keyframes.js';
 import { beginUVPreview, applyUVPreviews, revertUVPreviews, uvPreviewModel, restoreUVPreviews, addLibraryTexture, validateUVPreview, captureUVPreviewGuard, validateUVPreviewGuard, getUVPreviewSelection } from '../src/uv-preview.js';
-import { uncoupleUVVertices } from '../src/uv-tools.js';
+import { uncoupleUVStacks } from '../src/uv-tools.js';
 import './modules.css';
 import Settings from './Settings.jsx';
 import { installTextureLibraryDecoder } from './asset-preload-client.js';
 import { WarmKeysProvider } from './WarmKeys.jsx';
 import { normalizePreferences } from '../src/preferences.js';
+import { UV_GRID_SPACING_MAX } from '../src/uv-grid.js';
 import { COMMANDS } from '../src/commands.js';
 import VIEW_MENU from '../src/view-menu.json';
 import { SelectionHistory } from '../src/selection-history.js';
@@ -835,13 +836,14 @@ export default function App() {
       }
     });
   };
-  const uncoupleUVSelection = currentSelection => {
+  const uncoupleUVSelection = (currentSelection, currentDomain, coordId = uvSet) => {
     let nextSelection = { ...validSelection }, nextDomain = { ...uvEntrySelection };
     const result = edit('Uncouple UV vertices', ['Geosets'], current => {
-      for (const [indexText, ids] of Object.entries(currentSelection || {})) {
-        const index = Number(indexText), uncoupled = uncoupleUVVertices(current.Geosets[index], ids);
-        nextSelection[index] = uncoupled.selection;
-        nextDomain[index] = [...new Set([...(nextDomain[index] || []), ...uncoupled.selection])];
+      const uncoupled = uncoupleUVStacks(current, currentSelection, currentDomain, coordId, UV_GRID_SPACING_MAX);
+      for (const [indexText, ids] of Object.entries(uncoupled.selection)) {
+        const index = Number(indexText);
+        nextSelection[index] = ids;
+        nextDomain[index] = [...new Set([...(nextDomain[index] || []), ...ids])];
       }
     });
     if (result !== false) { setSelection(nextSelection); setUVEntrySelection(nextDomain); setLiveUV(null); }

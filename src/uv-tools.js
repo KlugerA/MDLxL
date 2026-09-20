@@ -145,6 +145,74 @@ export function uncoupleUVVertices(geoset, indices) {
   return { added, selection: resultSelection };
 }
 
+const sameUVPoint = (a, b, epsilon = 1e-6) => Math.abs(a[0] - b[0]) <= epsilon && Math.abs(a[1] - b[1]) <= epsilon;
+
+/** UV-wrapper Uncouple: detach shared face corners, include every visible UV
+ * point stacked on the chosen coordinates, then spread each stack just enough
+ * to make its individual points selectable. 3D positions remain untouched. */
+export function uncoupleUVStacks(model, selectionByGeoset, candidateByGeoset, uvSet = 0, separation = 0.02) {
+  const geosets = model?.Geosets || [], seeds = [];
+  for (const [indexText, indices] of Object.entries(selectionByGeoset || {})) {
+    const geosetIndex = Number(indexText), uv = geosets[geosetIndex]?.TVertices?.[uvSet];
+    for (const vertexIndex of uniqueIndices(indices)) {
+      const offset = vertexIndex * 2;
+      if (!uv || offset + 1 >= uv.length) throw Error('Select valid UV vertices first.');
+      seeds.push([uv[offset], uv[offset + 1]]);
+    }
+  }
+  if (!seeds.length) throw Error('Select valid UV vertices first.');
+
+  const targets = {};
+  for (const [indexText, candidates] of Object.entries(candidateByGeoset || selectionByGeoset || {})) {
+    const geosetIndex = Number(indexText), uv = geosets[geosetIndex]?.TVertices?.[uvSet];
+    if (!uv) continue;
+    const matches = uniqueIndices(candidates).filter(vertexIndex => {
+      const offset = vertexIndex * 2;
+      return offset + 1 < uv.length && seeds.some(seed => sameUVPoint(seed, [uv[offset], uv[offset + 1]]));
+    });
+    if (matches.length) targets[geosetIndex] = matches;
+  }
+  for (const [indexText, indices] of Object.entries(selectionByGeoset || {})) {
+    const geosetIndex = Number(indexText);
+    targets[geosetIndex] = uniqueIndices([...(targets[geosetIndex] || []), ...indices]);
+  }
+
+  const selection = {}, references = [];
+  let added = 0;
+  for (const [indexText, indices] of Object.entries(targets)) {
+    const geosetIndex = Number(indexText), result = uncoupleUVVertices(geosets[geosetIndex], indices);
+    selection[geosetIndex] = result.selection; added += result.added;
+    const uv = geosets[geosetIndex].TVertices[uvSet];
+    for (const vertexIndex of result.selection) references.push({ geosetIndex, vertexIndex, uv, point: [uv[vertexIndex * 2], uv[vertexIndex * 2 + 1]] });
+  }
+
+  const groups = [];
+  for (const reference of references) {
+    const group = groups.find(item => sameUVPoint(item[0].point, reference.point));
+    if (group) group.push(reference); else groups.push([reference]);
+  }
+  const distance = Number.isFinite(Number(separation)) && Number(separation) > 0 ? Number(separation) : 0.02;
+  let separated = 0;
+  for (const group of groups) {
+    if (group.length < 2) continue;
+    const [centerU, centerV] = group[0].point, count = group.length;
+    if (count === 2) {
+      group[0].uv[group[0].vertexIndex * 2] = centerU - distance / 2;
+      group[1].uv[group[1].vertexIndex * 2] = centerU + distance / 2;
+      group[0].uv[group[0].vertexIndex * 2 + 1] = group[1].uv[group[1].vertexIndex * 2 + 1] = centerV;
+    } else {
+      const radius = distance / (2 * Math.sin(Math.PI / count));
+      group.forEach((reference, index) => {
+        const angle = -Math.PI / 2 + index * Math.PI * 2 / count, offset = reference.vertexIndex * 2;
+        reference.uv[offset] = centerU + Math.cos(angle) * radius;
+        reference.uv[offset + 1] = centerV + Math.sin(angle) * radius;
+      });
+    }
+    separated += count;
+  }
+  return { added, separated, selection };
+}
+
 const transform4 = (matrix, vector) => [0, 1, 2, 3].map(row => matrix[row] * vector[0] + matrix[4 + row] * vector[1] + matrix[8 + row] * vector[2] + matrix[12 + row] * vector[3]);
 
 /** Planar projection from the exact live-preview camera viewport, matching the
