@@ -1,0 +1,17 @@
+.geoset-repair-screen{height:100%;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);place-items:center;background:var(--app-bg,#d4d0c8);padding:18px;box-sizing:border-box;color:var(--text,#111)}
+.geoset-repair-window{width:min(740px,100%);min-height:0;max-height:calc(100dvh - 36px);box-sizing:border-box;display:flex;flex-direction:column;border:2px outset #eee;background:var(--panel-bg,#efefef);box-shadow:2px 3px 9px #0004;font:14px/1.4 Arial,sans-serif}
+.geoset-repair-window>header,.geoset-repair-window>footer{flex-shrink:0}
+.geoset-repair-window>header{background:var(--title-bg,#000080);color:white;font-weight:bold;padding:8px 12px}
+.geoset-repair-body{padding:4px 16px 12px;overflow:auto;min-height:0}
+.geoset-repair-name{font-weight:bold;overflow-wrap:anywhere}
+.geoset-repair-body fieldset{margin:10px 0;padding:9px 12px;border:1px solid #999}
+.geoset-repair-body label{display:flex;align-items:center;gap:7px;margin:6px 0;flex-wrap:wrap}
+.geoset-repair-body select{flex:1;min-width:180px;padding:4px}
+.geoset-repair-body small{display:block;color:inherit;opacity:.85}
+.geoset-repair-body pre{max-height:180px;overflow:auto;font-size:12px;background:#fff8;padding:8px}
+.geoset-repair-list{max-height:245px;overflow:auto}
+.geoset-repair-classifications{max-height:160px;overflow:auto}
+.geoset-repair-path{overflow-wrap:anywhere;font-family:monospace;font-size:12px;user-select:text}
+.geoset-repair-body [role=alert]{color:#aa180a}
+.geoset-repair-window>footer{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:12px;border-top:1px solid #aaa}
+.geoset-repair-window button{min-height:30px;padding:3px 12px}

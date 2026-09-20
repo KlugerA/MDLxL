@@ -1,0 +1,2023 @@
+{
+  "schema": "mdlxl-paint-assets",
+  "version": 1,
+  "style": "Classic Warcraft III SD hand-painted miniature materials",
+  "resolutions": [
+    256,
+    512
+  ],
+  "logicalAssetCount": 50,
+  "materialCount": 40,
+  "stampCount": 10,
+  "assets": [
+    {
+      "id": "human_fair",
+      "name": "Human Fair Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#c58d72",
+      "accentColor": "#7a493e",
+      "tags": [
+        "skin",
+        "human",
+        "fair",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/human_fair.png",
+        "512": "./paint-assets/512/human_fair.png"
+      },
+      "thumbnail": "./paint-assets/256/human_fair.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/human_fair_value.png",
+        "512": "./paint-assets/512/human_fair_value.png"
+      },
+      "order": 1,
+      "sha256": {
+        "./paint-assets/256/human_fair.png": "2d05726b17b370cc7d1c1826e8dde22959f28c86d66b6ac829a4e3d8ed4e8c45",
+        "./paint-assets/512/human_fair.png": "9c8239178a71a09c52a81d41ef6539b4379c5af37226039b38a5d20e6bcb4cb1",
+        "./paint-assets/256/human_fair_value.png": "69bd9bd78351d491df58849b5d6eb1c0e21799b411ad47657fbb3116f2a1d8cb",
+        "./paint-assets/512/human_fair_value.png": "8d47557d78d5510902c093240ed9ebd7ba1a186c9a7d154dcecfa38e30282b91"
+      }
+    },
+    {
+      "id": "human_tan",
+      "name": "Human Tan Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#a96f4c",
+      "accentColor": "#633928",
+      "tags": [
+        "skin",
+        "human",
+        "tan",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/human_tan.png",
+        "512": "./paint-assets/512/human_tan.png"
+      },
+      "thumbnail": "./paint-assets/256/human_tan.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/human_tan_value.png",
+        "512": "./paint-assets/512/human_tan_value.png"
+      },
+      "order": 2,
+      "sha256": {
+        "./paint-assets/256/human_tan.png": "eac40089cca1c1d64caf2d6f33eff6d4abe6be95101a911342469f9349b30d32",
+        "./paint-assets/512/human_tan.png": "e0f8179b6957b031dec6eae8d4f62335189335ace3c78ca8e30c3834c2e3e736",
+        "./paint-assets/256/human_tan_value.png": "fcb924e23c10defbd8a4d269bc07916c04219d3ebc6e12e4013cacd48b313c36",
+        "./paint-assets/512/human_tan_value.png": "f5d56a81167b2ef7b97e614b6922f78d5899006f0130372cc108617fb64bba84"
+      }
+    },
+    {
+      "id": "human_deep",
+      "name": "Human Deep Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#74452f",
+      "accentColor": "#3b241c",
+      "tags": [
+        "skin",
+        "human",
+        "deep",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/human_deep.png",
+        "512": "./paint-assets/512/human_deep.png"
+      },
+      "thumbnail": "./paint-assets/256/human_deep.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/human_deep_value.png",
+        "512": "./paint-assets/512/human_deep_value.png"
+      },
+      "order": 3,
+      "sha256": {
+        "./paint-assets/256/human_deep.png": "09a3d627184536eb1acd772edff25cd151336e451df0cb225fffd1366ff0173d",
+        "./paint-assets/512/human_deep.png": "be8d1e9fac904e4357f19236c17447546cba519fb658563cf31100f118e1c3d2",
+        "./paint-assets/256/human_deep_value.png": "370fbb1fd2c46958bb20016b995f6986b0cb0a75c2298edfe1938a91a32d28db",
+        "./paint-assets/512/human_deep_value.png": "771797dae969f77439a61b1529e6ff35dd91deeb53bf22ee9444ebfcde4c5caf"
+      }
+    },
+    {
+      "id": "orc_green",
+      "name": "Orc Green Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#718b45",
+      "accentColor": "#35472d",
+      "tags": [
+        "skin",
+        "orc",
+        "green",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/orc_green.png",
+        "512": "./paint-assets/512/orc_green.png"
+      },
+      "thumbnail": "./paint-assets/256/orc_green.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/orc_green_value.png",
+        "512": "./paint-assets/512/orc_green_value.png"
+      },
+      "order": 4,
+      "sha256": {
+        "./paint-assets/256/orc_green.png": "be3547f707efdd1f269af1866b2187ff11eacd45ebf2d35e6f964bed1f8c8459",
+        "./paint-assets/512/orc_green.png": "b0b2cf917453684d57cb2964c6d30f0bbb17cff5cb2ce8abca528b6fcabcce93",
+        "./paint-assets/256/orc_green_value.png": "5e9a7f15d216574533c8b69dcaacd17784b50d4461d77208d5d5dd4df5cecabf",
+        "./paint-assets/512/orc_green_value.png": "8399639d2fbb2edd6daafd84946a548c63491486ae5db13d84962f6e2e1174f9"
+      }
+    },
+    {
+      "id": "orc_olive",
+      "name": "Orc Olive Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#7d7a3f",
+      "accentColor": "#403d25",
+      "tags": [
+        "skin",
+        "orc",
+        "olive",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/orc_olive.png",
+        "512": "./paint-assets/512/orc_olive.png"
+      },
+      "thumbnail": "./paint-assets/256/orc_olive.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/orc_olive_value.png",
+        "512": "./paint-assets/512/orc_olive_value.png"
+      },
+      "order": 5,
+      "sha256": {
+        "./paint-assets/256/orc_olive.png": "b174b44e4d45277c328d3d85e73feafc13990a4922da60b3f373c0ca3aa9f8e0",
+        "./paint-assets/512/orc_olive.png": "f1ffbccb601fad0c6b3371095ea6da179d9d3a488500626a069937d16c7035cd",
+        "./paint-assets/256/orc_olive_value.png": "ed7773404de46b5770e36fbc1fc9fe14f3c87057334c51a97f76554b62da1e81",
+        "./paint-assets/512/orc_olive_value.png": "3450769c06049cbcc8f6c76a859c8ef2875229666d9552f8866ca8ddf4e47cef"
+      }
+    },
+    {
+      "id": "orc_dark",
+      "name": "Orc Dark Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#465b35",
+      "accentColor": "#243120",
+      "tags": [
+        "skin",
+        "orc",
+        "dark",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/orc_dark.png",
+        "512": "./paint-assets/512/orc_dark.png"
+      },
+      "thumbnail": "./paint-assets/256/orc_dark.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/orc_dark_value.png",
+        "512": "./paint-assets/512/orc_dark_value.png"
+      },
+      "order": 6,
+      "sha256": {
+        "./paint-assets/256/orc_dark.png": "f6dc5b8d2cae1e198f8857bd48a61b13a3a31be74438524ded975d9404c95523",
+        "./paint-assets/512/orc_dark.png": "7aafb922a93de29400a5189d2ea8e0f8108ba5efd0178679f2e90f8876322feb",
+        "./paint-assets/256/orc_dark_value.png": "fdb350bc7c3c533076d4a546094c5cadb03196efbf24e34a62912d7bb3686279",
+        "./paint-assets/512/orc_dark_value.png": "f22d1b91f828f129f5203cf27628cd10aa157095f6b5ee3af59148a156745e43"
+      }
+    },
+    {
+      "id": "nightelf_violet",
+      "name": "Night Elf Violet Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#76628e",
+      "accentColor": "#413a61",
+      "tags": [
+        "skin",
+        "night",
+        "elf",
+        "violet",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/nightelf_violet.png",
+        "512": "./paint-assets/512/nightelf_violet.png"
+      },
+      "thumbnail": "./paint-assets/256/nightelf_violet.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/nightelf_violet_value.png",
+        "512": "./paint-assets/512/nightelf_violet_value.png"
+      },
+      "order": 7,
+      "sha256": {
+        "./paint-assets/256/nightelf_violet.png": "679cd845353771608102d97f7b4f65e075539001f2436543725267f7ef3b2705",
+        "./paint-assets/512/nightelf_violet.png": "97999b6af62636ece2092ad5c49d68861a7a3101c0de60cc229a2db469429544",
+        "./paint-assets/256/nightelf_violet_value.png": "70e376ec1543e126a07139a07a83e63773f1273481e417cfeabbbe7184d21e89",
+        "./paint-assets/512/nightelf_violet_value.png": "8fec92a685435eb8a65691bcfa47257054d23772a8db19fefc9b5b589c4fe5b9"
+      }
+    },
+    {
+      "id": "nightelf_dusky",
+      "name": "Night Elf Dusky Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#5e526f",
+      "accentColor": "#302b43",
+      "tags": [
+        "skin",
+        "night",
+        "elf",
+        "dusky",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/nightelf_dusky.png",
+        "512": "./paint-assets/512/nightelf_dusky.png"
+      },
+      "thumbnail": "./paint-assets/256/nightelf_dusky.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/nightelf_dusky_value.png",
+        "512": "./paint-assets/512/nightelf_dusky_value.png"
+      },
+      "order": 8,
+      "sha256": {
+        "./paint-assets/256/nightelf_dusky.png": "91d76058332e9eba73522654c531c8588a06fef68e13e126861bb2c172c669d7",
+        "./paint-assets/512/nightelf_dusky.png": "3b8c410e445bf771a39547657562e36c00a28a86fcb76af36df59dd98f045230",
+        "./paint-assets/256/nightelf_dusky_value.png": "0208f78c0277d27e4183fe0fc9ca550b5fedab64bb3203d2a09a893071a68d54",
+        "./paint-assets/512/nightelf_dusky_value.png": "1bf0f8ebca4449536fb3de24b3fe84fe8b435976043e8d18f588d829d3d9cce5"
+      }
+    },
+    {
+      "id": "highelf_warm",
+      "name": "High Elf Warm Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#d2a17e",
+      "accentColor": "#805745",
+      "tags": [
+        "skin",
+        "high",
+        "elf",
+        "warm",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/highelf_warm.png",
+        "512": "./paint-assets/512/highelf_warm.png"
+      },
+      "thumbnail": "./paint-assets/256/highelf_warm.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/highelf_warm_value.png",
+        "512": "./paint-assets/512/highelf_warm_value.png"
+      },
+      "order": 9,
+      "sha256": {
+        "./paint-assets/256/highelf_warm.png": "c4aba2c58f05dbdd44ae6529f23826cc86abe92332e7026698a885263fa41cd5",
+        "./paint-assets/512/highelf_warm.png": "18cd793d1cee26426133342b68f867247cff43498643df667e9a583e51151c04",
+        "./paint-assets/256/highelf_warm_value.png": "b1834f3b49b74efeea03fa68fed263e287b94cdee50b55f8b32e1bdbd1fb2ff9",
+        "./paint-assets/512/highelf_warm_value.png": "7a51531ac2ab6aa7c9cf1b9f3eda271ce8614c09812b89a5ed9f1a13ed0809f5"
+      }
+    },
+    {
+      "id": "undead_pallid",
+      "name": "Undead Pallid Flesh",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#a6a88c",
+      "accentColor": "#555a4c",
+      "tags": [
+        "skin",
+        "undead",
+        "pallid",
+        "flesh"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/undead_pallid.png",
+        "512": "./paint-assets/512/undead_pallid.png"
+      },
+      "thumbnail": "./paint-assets/256/undead_pallid.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/undead_pallid_value.png",
+        "512": "./paint-assets/512/undead_pallid_value.png"
+      },
+      "order": 10,
+      "sha256": {
+        "./paint-assets/256/undead_pallid.png": "9ef5b903f36de5200f3ccaca98ad2021b8083c4970fe1667b662d59849494eeb",
+        "./paint-assets/512/undead_pallid.png": "ec81684348eb64d2244dd82a279a8ce070ee9e7719d17e80b28f9e50374d7268",
+        "./paint-assets/256/undead_pallid_value.png": "11f7ba99afc7b260a98360fdd83e0dcb1897451e65ab4aac708cdac675b041ac",
+        "./paint-assets/512/undead_pallid_value.png": "64fc7851501be7aedb4bedd13eea1028b12028050d6662880ea1d7545a0c6c7a"
+      }
+    },
+    {
+      "id": "undead_rotted",
+      "name": "Undead Rotted Flesh",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#737552",
+      "accentColor": "#363c31",
+      "tags": [
+        "skin",
+        "undead",
+        "rotted",
+        "flesh"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/undead_rotted.png",
+        "512": "./paint-assets/512/undead_rotted.png"
+      },
+      "thumbnail": "./paint-assets/256/undead_rotted.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/undead_rotted_value.png",
+        "512": "./paint-assets/512/undead_rotted_value.png"
+      },
+      "order": 11,
+      "sha256": {
+        "./paint-assets/256/undead_rotted.png": "8235cc0394a4024fa54c1376455dad0a73f907725d2283f00284a6e1a7ab20c4",
+        "./paint-assets/512/undead_rotted.png": "4afbe682742ea38119b5f901fe7f1a97eecd28c7a10c90046a5aebaa236eace6",
+        "./paint-assets/256/undead_rotted_value.png": "1dc3d12e5e5ad7fead30c3d6a5c9b012399aa34370c2bde940c239a3f5591e76",
+        "./paint-assets/512/undead_rotted_value.png": "791549b983c7ed0942235963f8604739bb1f1d85cc67c9cd7f1458c30fdd832a"
+      }
+    },
+    {
+      "id": "undead_desiccated",
+      "name": "Undead Desiccated Flesh",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#88735c",
+      "accentColor": "#463a31",
+      "tags": [
+        "skin",
+        "undead",
+        "desiccated",
+        "flesh"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/undead_desiccated.png",
+        "512": "./paint-assets/512/undead_desiccated.png"
+      },
+      "thumbnail": "./paint-assets/256/undead_desiccated.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/undead_desiccated_value.png",
+        "512": "./paint-assets/512/undead_desiccated_value.png"
+      },
+      "order": 12,
+      "sha256": {
+        "./paint-assets/256/undead_desiccated.png": "1633d36d738d2b9ba862fd94d9fcdc6ede23dcf4c4d450617cd43301f7af7abc",
+        "./paint-assets/512/undead_desiccated.png": "eb30d04027af7015d425d4acfd1f9e8f16fd9aa8cbbbc4ceb8b3bbf56700a947",
+        "./paint-assets/256/undead_desiccated_value.png": "0e6b7b5fea09b4ab7e8e064da8b80c9140f5d2bbd6f90ff1e980db8fa1eb8542",
+        "./paint-assets/512/undead_desiccated_value.png": "f9ff878b032c6ae4eb9c0d1f1012603262c39b35e408e6716b831094b7f90210"
+      }
+    },
+    {
+      "id": "demon_crimson",
+      "name": "Demon Crimson Flesh",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#8e3d36",
+      "accentColor": "#431f26",
+      "tags": [
+        "skin",
+        "demon",
+        "crimson",
+        "flesh"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/demon_crimson.png",
+        "512": "./paint-assets/512/demon_crimson.png"
+      },
+      "thumbnail": "./paint-assets/256/demon_crimson.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/demon_crimson_value.png",
+        "512": "./paint-assets/512/demon_crimson_value.png"
+      },
+      "order": 13,
+      "sha256": {
+        "./paint-assets/256/demon_crimson.png": "fc2e23fd793d522ac94a987926fc403605e296d5b69351d9c2d8f6f99628801c",
+        "./paint-assets/512/demon_crimson.png": "766d81c1374fa784c93c959f3c8f32e299c94e05c68671077f32d43761603124",
+        "./paint-assets/256/demon_crimson_value.png": "83377f61d4edd5608dda54e0470ddd2a5cdca2e9a59185d7563d650fcd58f878",
+        "./paint-assets/512/demon_crimson_value.png": "bcac6541c56b1beea71f42763d812aa9103aa11361770b9a92e3eaf2b975450c"
+      }
+    },
+    {
+      "id": "demon_charred_fel",
+      "name": "Demon Charred Fel Skin",
+      "category": "skin",
+      "kind": "material",
+      "baseColor": "#443c37",
+      "accentColor": "#172d22",
+      "tags": [
+        "skin",
+        "demon",
+        "charred",
+        "fel",
+        "skin"
+      ],
+      "provenance": {
+        "kind": "cc0-derived",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/reptile-skin",
+        "downloadUrl": "https://opengameart.org/sites/default/files/lizard_skin.png",
+        "author": "RooMan93",
+        "generation": {
+          "method": "palette recolor, resize and seamless-edge normalization",
+          "date": "2026-09-11"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/demon_charred_fel.png",
+        "512": "./paint-assets/512/demon_charred_fel.png"
+      },
+      "thumbnail": "./paint-assets/256/demon_charred_fel.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/demon_charred_fel_value.png",
+        "512": "./paint-assets/512/demon_charred_fel_value.png"
+      },
+      "order": 14,
+      "sha256": {
+        "./paint-assets/256/demon_charred_fel.png": "c2b26459797dea791a53bb660d38ebc9ec7da7c030978f68221a258c7d4566c5",
+        "./paint-assets/512/demon_charred_fel.png": "8b9558a6de36a5654238d6659dc764916ed7e1b30874218b36364a7395512cc2",
+        "./paint-assets/256/demon_charred_fel_value.png": "53075fec10be28c73c0783b067dad88cda064755d9e25993707e873bf988f745",
+        "./paint-assets/512/demon_charred_fel_value.png": "04f3a7e9fce85d052b8c870a369b793c8900c9714caf8da99e348bccfdb5d814"
+      }
+    },
+    {
+      "id": "hair_black_locks",
+      "name": "Black Hair Locks",
+      "category": "hair-fur",
+      "kind": "material",
+      "baseColor": "#25272b",
+      "accentColor": "#08090b",
+      "tags": [
+        "hair-fur",
+        "black",
+        "hair",
+        "locks"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/hair_black_locks.png",
+        "512": "./paint-assets/512/hair_black_locks.png"
+      },
+      "thumbnail": "./paint-assets/256/hair_black_locks.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/hair_black_locks_value.png",
+        "512": "./paint-assets/512/hair_black_locks_value.png"
+      },
+      "order": 15,
+      "sha256": {
+        "./paint-assets/256/hair_black_locks.png": "810c5d64348e64fa4e21a47d8346cac0fa2a63a48c94b48f5f58c8bf1985d136",
+        "./paint-assets/512/hair_black_locks.png": "56ed81a679aad7fd6bedf9895c55022f842438d4a91451253efe340e866b29c3",
+        "./paint-assets/256/hair_black_locks_value.png": "ade6d928df07e32b3170d308057337bcb84e008546d6f5be78bfc62ad7f43815",
+        "./paint-assets/512/hair_black_locks_value.png": "74f95d23ba414327e3d96a8228ac4fe070f515251955d8badd9fffe3a8432d64"
+      }
+    },
+    {
+      "id": "hair_brown_locks",
+      "name": "Brown Hair Locks",
+      "category": "hair-fur",
+      "kind": "material",
+      "baseColor": "#5b3c28",
+      "accentColor": "#241a15",
+      "tags": [
+        "hair-fur",
+        "brown",
+        "hair",
+        "locks"
+      ],
+      "provenance": {
+        "kind": "cc0-derived",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/hair-texture",
+        "downloadUrl": "https://opengameart.org/sites/default/files/hair_0.jpg",
+        "author": "Dugi",
+        "generation": {
+          "method": "palette recolor, resize and seamless-edge normalization",
+          "date": "2026-09-11"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/hair_brown_locks.png",
+        "512": "./paint-assets/512/hair_brown_locks.png"
+      },
+      "thumbnail": "./paint-assets/256/hair_brown_locks.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/hair_brown_locks_value.png",
+        "512": "./paint-assets/512/hair_brown_locks_value.png"
+      },
+      "order": 16,
+      "sha256": {
+        "./paint-assets/256/hair_brown_locks.png": "a5dedc4c44cb133fbec8fe557d566654a1922475f8487f12b1472c2d7831d568",
+        "./paint-assets/512/hair_brown_locks.png": "fdcdc304fcfa837117167a33d7718737aa6d94c364efb57bbffb67a626d00c03",
+        "./paint-assets/256/hair_brown_locks_value.png": "997da36e490ed5c2c934c4b054bb77978f97410e49d33f095767e190913ea788",
+        "./paint-assets/512/hair_brown_locks_value.png": "a8c38df08b3744bf05900a95521b527be5413ae67ab237fc335b264fc4bf4495"
+      }
+    },
+    {
+      "id": "hair_golden_locks",
+      "name": "Golden Hair Locks",
+      "category": "hair-fur",
+      "kind": "material",
+      "baseColor": "#bd8e3f",
+      "accentColor": "#5b3e20",
+      "tags": [
+        "hair-fur",
+        "golden",
+        "hair",
+        "locks"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/hair_golden_locks.png",
+        "512": "./paint-assets/512/hair_golden_locks.png"
+      },
+      "thumbnail": "./paint-assets/256/hair_golden_locks.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/hair_golden_locks_value.png",
+        "512": "./paint-assets/512/hair_golden_locks_value.png"
+      },
+      "order": 17,
+      "sha256": {
+        "./paint-assets/256/hair_golden_locks.png": "32c90a1ee70a239fe0d35b27df3925704eafa2448880cf8a52d06ef13844623e",
+        "./paint-assets/512/hair_golden_locks.png": "9001fc9e89b71655b2e8afb5a3d0d34b6a522962c3014af48585bbe27e50309f",
+        "./paint-assets/256/hair_golden_locks_value.png": "7857d55b6fe87e1525b2158f60e7df9cec8582f8fd6d42be4ee619914c44fab9",
+        "./paint-assets/512/hair_golden_locks_value.png": "80df147223ce59e2813aad10fac81471a868bb6cb5e119366dbb1a26b462a3b3"
+      }
+    },
+    {
+      "id": "hair_silver_locks",
+      "name": "Silver Hair Locks",
+      "category": "hair-fur",
+      "kind": "material",
+      "baseColor": "#b8bdc4",
+      "accentColor": "#555d68",
+      "tags": [
+        "hair-fur",
+        "silver",
+        "hair",
+        "locks"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/hair_silver_locks.png",
+        "512": "./paint-assets/512/hair_silver_locks.png"
+      },
+      "thumbnail": "./paint-assets/256/hair_silver_locks.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/hair_silver_locks_value.png",
+        "512": "./paint-assets/512/hair_silver_locks_value.png"
+      },
+      "order": 18,
+      "sha256": {
+        "./paint-assets/256/hair_silver_locks.png": "2422c38173096c0770b87dc53fdc9b7cdcaf45bb513d3791e6fb82bf524f00d8",
+        "./paint-assets/512/hair_silver_locks.png": "bdedfccabce81e38cc4a093b58e9eb19a795529c282c27affc61b981484e5161",
+        "./paint-assets/256/hair_silver_locks_value.png": "a379af08773f2902c9d5c574c90d8d8750ab083be6f143c8e9ecb1a475bc29c7",
+        "./paint-assets/512/hair_silver_locks_value.png": "95a695aacb79746dcd553aa5d716a8af0aac0277d53b14aeaa0420d1dfa83aa8"
+      }
+    },
+    {
+      "id": "fur_coarse_brown",
+      "name": "Coarse Brown Fur",
+      "category": "hair-fur",
+      "kind": "material",
+      "baseColor": "#6f4b30",
+      "accentColor": "#2e211a",
+      "tags": [
+        "hair-fur",
+        "coarse",
+        "brown",
+        "fur"
+      ],
+      "provenance": {
+        "kind": "cc0-derived",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/4k-seamless-textures-public-domain",
+        "downloadUrl": "https://opengameart.org/sites/default/files/4KSeamlessTextures.zip",
+        "author": "Behrtron",
+        "generation": {
+          "method": "palette recolor, resize and seamless-edge normalization",
+          "date": "2026-09-11"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/fur_coarse_brown.png",
+        "512": "./paint-assets/512/fur_coarse_brown.png"
+      },
+      "thumbnail": "./paint-assets/256/fur_coarse_brown.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/fur_coarse_brown_value.png",
+        "512": "./paint-assets/512/fur_coarse_brown_value.png"
+      },
+      "order": 19,
+      "sha256": {
+        "./paint-assets/256/fur_coarse_brown.png": "9f042b3dfc1c6e1817f4063330c554e372e86c6d3f7f83f3a993aa21fbb430b9",
+        "./paint-assets/512/fur_coarse_brown.png": "7c4d930ca89e4f01887b1b92786c1534d9615c1bf7fa8b36622684a8f7ee83e0",
+        "./paint-assets/256/fur_coarse_brown_value.png": "6e7e8f726b93ba3565528932cf1043fedfc4dff0b629ee9da9ed98864e0673cb",
+        "./paint-assets/512/fur_coarse_brown_value.png": "8a0ac1462df688cc69b3e0e7afbff6cb808e8a19c63f2998f49dab334af2ccb9"
+      }
+    },
+    {
+      "id": "fur_black",
+      "name": "Black Fur",
+      "category": "hair-fur",
+      "kind": "material",
+      "baseColor": "#2b2d31",
+      "accentColor": "#090a0c",
+      "tags": [
+        "hair-fur",
+        "black",
+        "fur"
+      ],
+      "provenance": {
+        "kind": "cc0-derived",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/4k-seamless-textures-public-domain",
+        "downloadUrl": "https://opengameart.org/sites/default/files/4KSeamlessTextures.zip",
+        "author": "Behrtron",
+        "generation": {
+          "method": "palette recolor, resize and seamless-edge normalization",
+          "date": "2026-09-11"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/fur_black.png",
+        "512": "./paint-assets/512/fur_black.png"
+      },
+      "thumbnail": "./paint-assets/256/fur_black.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/fur_black_value.png",
+        "512": "./paint-assets/512/fur_black_value.png"
+      },
+      "order": 20,
+      "sha256": {
+        "./paint-assets/256/fur_black.png": "12cd88e744ac39c2386106170b324f46e4cae340118bc092bd1e633f29ca5266",
+        "./paint-assets/512/fur_black.png": "b78886eca75b5ec252db9800b67e90ecb38c3a19f239da9afd1c8ca7a1647a90",
+        "./paint-assets/256/fur_black_value.png": "fc12569708f2aa7562455ae2c3287d72a7db9fe4269f090dada2b89ae40aed82",
+        "./paint-assets/512/fur_black_value.png": "f9d1f0f7774cefb0c1376624659264162ab86365c7bf3c69aebe4842634a7d9a"
+      }
+    },
+    {
+      "id": "fur_grey_wolf",
+      "name": "Grey Wolf Fur",
+      "category": "hair-fur",
+      "kind": "material",
+      "baseColor": "#7f8589",
+      "accentColor": "#34383e",
+      "tags": [
+        "hair-fur",
+        "grey",
+        "wolf",
+        "fur"
+      ],
+      "provenance": {
+        "kind": "cc0-derived",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/4k-seamless-textures-public-domain",
+        "downloadUrl": "https://opengameart.org/sites/default/files/4KSeamlessTextures.zip",
+        "author": "Behrtron",
+        "generation": {
+          "method": "palette recolor, resize and seamless-edge normalization",
+          "date": "2026-09-11"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/fur_grey_wolf.png",
+        "512": "./paint-assets/512/fur_grey_wolf.png"
+      },
+      "thumbnail": "./paint-assets/256/fur_grey_wolf.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/fur_grey_wolf_value.png",
+        "512": "./paint-assets/512/fur_grey_wolf_value.png"
+      },
+      "order": 21,
+      "sha256": {
+        "./paint-assets/256/fur_grey_wolf.png": "ad21d9373424a6efa3644ebb00a83f3630bde251885f38f2eda06b039a2ab997",
+        "./paint-assets/512/fur_grey_wolf.png": "fe26fd1154b21e20458adf9f20d407698606a9386d95815e34edfcf9874a2ece",
+        "./paint-assets/256/fur_grey_wolf_value.png": "6ae199a1eafcb0f834786a9509698920b6a3fb84675c2e7ce67c1ee68e5f26f7",
+        "./paint-assets/512/fur_grey_wolf_value.png": "ce64e8b1ecd2f6f6e01c751d67b46467f472d0de15252867f5dccb9aaac587d9"
+      }
+    },
+    {
+      "id": "fur_white_winter",
+      "name": "Winter White Fur",
+      "category": "hair-fur",
+      "kind": "material",
+      "baseColor": "#d6d5ca",
+      "accentColor": "#777b7b",
+      "tags": [
+        "hair-fur",
+        "winter",
+        "white",
+        "fur"
+      ],
+      "provenance": {
+        "kind": "cc0-derived",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/4k-seamless-textures-public-domain",
+        "downloadUrl": "https://opengameart.org/sites/default/files/4KSeamlessTextures.zip",
+        "author": "Behrtron",
+        "generation": {
+          "method": "palette recolor, resize and seamless-edge normalization",
+          "date": "2026-09-11"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/fur_white_winter.png",
+        "512": "./paint-assets/512/fur_white_winter.png"
+      },
+      "thumbnail": "./paint-assets/256/fur_white_winter.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/fur_white_winter_value.png",
+        "512": "./paint-assets/512/fur_white_winter_value.png"
+      },
+      "order": 22,
+      "sha256": {
+        "./paint-assets/256/fur_white_winter.png": "c96e318346cef9fa03c043acd2f5b17fce54da28093f50229cac600441a40a77",
+        "./paint-assets/512/fur_white_winter.png": "693b5eea8d175367d11d30048e504c459c52b7c3f362a49a7ef161868555dbf1",
+        "./paint-assets/256/fur_white_winter_value.png": "6c69afbe972efa3066b8ea1847e0bb5e1760f84ebbeabb7c42c793f453286388",
+        "./paint-assets/512/fur_white_winter_value.png": "1beef9d552f411c64d17a0dbd51eb65ba3f53cc2815b0b9f9ea0057a63d0a501"
+      }
+    },
+    {
+      "id": "polished_steel",
+      "name": "Polished Steel",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#9ca9b5",
+      "accentColor": "#394550",
+      "tags": [
+        "metal",
+        "polished",
+        "steel"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/polished_steel.png",
+        "512": "./paint-assets/512/polished_steel.png"
+      },
+      "thumbnail": "./paint-assets/256/polished_steel.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/polished_steel_value.png",
+        "512": "./paint-assets/512/polished_steel_value.png"
+      },
+      "order": 23,
+      "sha256": {
+        "./paint-assets/256/polished_steel.png": "bc17cbcca4cece1be98baf3d63413a4457705d7815e5a46a28595279a4a91213",
+        "./paint-assets/512/polished_steel.png": "9bd0cfc4fdffe100b704b38d2790944ee892d846eb3c91222b91db6d109ef35b",
+        "./paint-assets/256/polished_steel_value.png": "e344eb81a02a6a409a46a5c737c9be0dd1b38400032442b8ed79d1a580f1756a",
+        "./paint-assets/512/polished_steel_value.png": "be11d3c5ab45dba6fa0d601b11a0b12e6d70d1f1f94a1e7c58d4f4594ea17b30"
+      }
+    },
+    {
+      "id": "human_blue_steel",
+      "name": "Human Blue Steel",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#738da8",
+      "accentColor": "#2d4058",
+      "tags": [
+        "metal",
+        "human",
+        "blue",
+        "steel"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/human_blue_steel.png",
+        "512": "./paint-assets/512/human_blue_steel.png"
+      },
+      "thumbnail": "./paint-assets/256/human_blue_steel.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/human_blue_steel_value.png",
+        "512": "./paint-assets/512/human_blue_steel_value.png"
+      },
+      "order": 24,
+      "sha256": {
+        "./paint-assets/256/human_blue_steel.png": "2322be88ab7d5ec31eb8ddc5c6b5eb5dd53eadbaee29cb9b96ffe40da8dbe7bf",
+        "./paint-assets/512/human_blue_steel.png": "4194b7578a2770d17d32e7873c86619a63b4c9d7b40f1ebb3e36ddc4a1ce6a8a",
+        "./paint-assets/256/human_blue_steel_value.png": "088d365b8043ab99d642808c46218b7b4a6e25e2ad4dd1e9451c7fd725ac8b28",
+        "./paint-assets/512/human_blue_steel_value.png": "74900a22543c3827667157e1dd1f27aa7e482228dbafa645b6db7b5e6065909c"
+      }
+    },
+    {
+      "id": "hammered_steel",
+      "name": "Hammered Steel",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#858e96",
+      "accentColor": "#343b42",
+      "tags": [
+        "metal",
+        "hammered",
+        "steel"
+      ],
+      "provenance": {
+        "kind": "cc0-derived",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/texture-pack-seamless-metalpng-0",
+        "downloadUrl": "https://opengameart.org/sites/default/files/metal.png",
+        "author": "Heathal",
+        "generation": {
+          "method": "palette recolor, resize and seamless-edge normalization",
+          "date": "2026-09-11"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/hammered_steel.png",
+        "512": "./paint-assets/512/hammered_steel.png"
+      },
+      "thumbnail": "./paint-assets/256/hammered_steel.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/hammered_steel_value.png",
+        "512": "./paint-assets/512/hammered_steel_value.png"
+      },
+      "order": 25,
+      "sha256": {
+        "./paint-assets/256/hammered_steel.png": "f5683d9b86568e67619df76026d15a9ce7ef4f3e79d42378195b48bbace1dc6c",
+        "./paint-assets/512/hammered_steel.png": "37c40e3495b9ce645ed66b3a4410aa2b0e3c84677c09aad0bb2c5ad37c4b2a63",
+        "./paint-assets/256/hammered_steel_value.png": "3cba024f96fa321d6c36c645cd0fe34ba9602915ceeef84ee1837372fbf6e9ed",
+        "./paint-assets/512/hammered_steel_value.png": "212f835b9206e3c8ad98beb361a2e54bc7f64ce01970c58f3f90b823689dd809"
+      }
+    },
+    {
+      "id": "battered_iron",
+      "name": "Battered Iron",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#62666a",
+      "accentColor": "#26282c",
+      "tags": [
+        "metal",
+        "battered",
+        "iron"
+      ],
+      "provenance": {
+        "kind": "cc0-derived",
+        "license": "CC0 1.0",
+        "sourceUrl": "https://opengameart.org/content/texture-pack-seamless-metalpng-0",
+        "downloadUrl": "https://opengameart.org/sites/default/files/metal.png",
+        "author": "Heathal",
+        "generation": {
+          "method": "palette recolor, resize and seamless-edge normalization",
+          "date": "2026-09-11"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/battered_iron.png",
+        "512": "./paint-assets/512/battered_iron.png"
+      },
+      "thumbnail": "./paint-assets/256/battered_iron.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/battered_iron_value.png",
+        "512": "./paint-assets/512/battered_iron_value.png"
+      },
+      "order": 26,
+      "sha256": {
+        "./paint-assets/256/battered_iron.png": "40519e063b1ffa522510d14598c22453e497732c69be82de5840b4de7990267a",
+        "./paint-assets/512/battered_iron.png": "dabdef3f3b90be7faf07bb8283672bca583a9169fe15d40d57af111be3f26219",
+        "./paint-assets/256/battered_iron_value.png": "7e8532dd59fc5a41df2ade0b3d5243a5d0edc28bccfeb705cb94144d9aab0391",
+        "./paint-assets/512/battered_iron_value.png": "d842990608de1c99912a6da288d20bacc2b11e44a168a6740663b9245098ea94"
+      }
+    },
+    {
+      "id": "orc_black_iron",
+      "name": "Orc Black Iron",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#454844",
+      "accentColor": "#171b18",
+      "tags": [
+        "metal",
+        "orc",
+        "black",
+        "iron"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/orc_black_iron.png",
+        "512": "./paint-assets/512/orc_black_iron.png"
+      },
+      "thumbnail": "./paint-assets/256/orc_black_iron.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/orc_black_iron_value.png",
+        "512": "./paint-assets/512/orc_black_iron_value.png"
+      },
+      "order": 27,
+      "sha256": {
+        "./paint-assets/256/orc_black_iron.png": "af2c3fea2afae707e28d9f949c09da2909ab02bc58ed195971df76e7c0f2fa46",
+        "./paint-assets/512/orc_black_iron.png": "862d5b587be9da641c8c7a41b267ce5bff05318519faa0440f0e6772e821a7d0",
+        "./paint-assets/256/orc_black_iron_value.png": "72d763f5f32d0aeedbedf536bc43ebdab84302af4d1a600ef0999139c60511a5",
+        "./paint-assets/512/orc_black_iron_value.png": "cb33af0f2c02e003f2b8e880c00c2054a0f0d031288d91f1cc44901aeb7dd35b"
+      }
+    },
+    {
+      "id": "undead_rusted_iron",
+      "name": "Undead Rusted Iron",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#76543e",
+      "accentColor": "#2c2926",
+      "tags": [
+        "metal",
+        "undead",
+        "rusted",
+        "iron"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/undead_rusted_iron.png",
+        "512": "./paint-assets/512/undead_rusted_iron.png"
+      },
+      "thumbnail": "./paint-assets/256/undead_rusted_iron.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/undead_rusted_iron_value.png",
+        "512": "./paint-assets/512/undead_rusted_iron_value.png"
+      },
+      "order": 28,
+      "sha256": {
+        "./paint-assets/256/undead_rusted_iron.png": "c0797ab35697fcaf0b55b1218c12f37593de73d0ee02ff178554d15406443135",
+        "./paint-assets/512/undead_rusted_iron.png": "6e27fe98ea02806553602b8381934de8624f24913aeb7d71731e864399862bbf",
+        "./paint-assets/256/undead_rusted_iron_value.png": "197f42d360fb93f6afd0db30292184f3555cddeea2780cf67c1674f03684dee0",
+        "./paint-assets/512/undead_rusted_iron_value.png": "ea814a87f9b42a8952409739a26b45bfb4c9e0eb525eb4875e40637e41011f86"
+      }
+    },
+    {
+      "id": "bronze",
+      "name": "Bronze",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#9a683e",
+      "accentColor": "#4b3428",
+      "tags": [
+        "metal",
+        "bronze"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/bronze.png",
+        "512": "./paint-assets/512/bronze.png"
+      },
+      "thumbnail": "./paint-assets/256/bronze.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/bronze_value.png",
+        "512": "./paint-assets/512/bronze_value.png"
+      },
+      "order": 29,
+      "sha256": {
+        "./paint-assets/256/bronze.png": "fcc0c658762fbd8896b66e3f20e9b9c3008ce1f55c33bf3d084380147b4cff01",
+        "./paint-assets/512/bronze.png": "34a65cebe4689af6ce2238534d0035bacfabfd6e13c85ea58772915471ea71be",
+        "./paint-assets/256/bronze_value.png": "1977fa09873e2f01413fd711242113d537a1add5235a9667b28d2a4c9a0855d9",
+        "./paint-assets/512/bronze_value.png": "edceb5e07ef47aa0525e6bb323972ab3866e1e1e0ac9aae13441bf04400680fe"
+      }
+    },
+    {
+      "id": "antique_gold",
+      "name": "Antique Gold",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#ae8743",
+      "accentColor": "#554322",
+      "tags": [
+        "metal",
+        "antique",
+        "gold"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/antique_gold.png",
+        "512": "./paint-assets/512/antique_gold.png"
+      },
+      "thumbnail": "./paint-assets/256/antique_gold.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/antique_gold_value.png",
+        "512": "./paint-assets/512/antique_gold_value.png"
+      },
+      "order": 30,
+      "sha256": {
+        "./paint-assets/256/antique_gold.png": "dbb993800e51a777de57c0f5cf8a2b2a129b946b3ffa3a0b6fa23c0b896e588d",
+        "./paint-assets/512/antique_gold.png": "9ce2fb42a1b8a4c739865e53eebe0a4eb601ff2b6c808625e71f21824e7cf102",
+        "./paint-assets/256/antique_gold_value.png": "c0689d4432211c9da24a6bbbed233fd20181f9b14ca692451e0a1e78e9b70109",
+        "./paint-assets/512/antique_gold_value.png": "ad0ba3832911fa5894ad3a2ba654a2cb5e63026ea41070892eab861ad865c39b"
+      }
+    },
+    {
+      "id": "elven_moonsilver",
+      "name": "Elven Moonsilver",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#aebcc5",
+      "accentColor": "#536478",
+      "tags": [
+        "metal",
+        "elven",
+        "moonsilver"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/elven_moonsilver.png",
+        "512": "./paint-assets/512/elven_moonsilver.png"
+      },
+      "thumbnail": "./paint-assets/256/elven_moonsilver.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/elven_moonsilver_value.png",
+        "512": "./paint-assets/512/elven_moonsilver_value.png"
+      },
+      "order": 31,
+      "sha256": {
+        "./paint-assets/256/elven_moonsilver.png": "ee0b5b3dff48effee96f539b9fe15fac03d6696659729394290dd3b813a381bf",
+        "./paint-assets/512/elven_moonsilver.png": "878fd45aea2fcf1a07b2b92b564afe023b043cecfaf9a5ac423fd04daf15414d",
+        "./paint-assets/256/elven_moonsilver_value.png": "878d624726a2e88877bec012dd4c2bb6d1a20e47066a9a8311b7d1e37e8e36ad",
+        "./paint-assets/512/elven_moonsilver_value.png": "962bfa76eb8fee97050d3d812dba85ea78277ac44aba75b8236ac76a29440388"
+      }
+    },
+    {
+      "id": "demon_fel_iron",
+      "name": "Demon Fel Iron",
+      "category": "metal",
+      "kind": "material",
+      "baseColor": "#3e5043",
+      "accentColor": "#17261e",
+      "tags": [
+        "metal",
+        "demon",
+        "fel",
+        "iron"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/demon_fel_iron.png",
+        "512": "./paint-assets/512/demon_fel_iron.png"
+      },
+      "thumbnail": "./paint-assets/256/demon_fel_iron.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/demon_fel_iron_value.png",
+        "512": "./paint-assets/512/demon_fel_iron_value.png"
+      },
+      "order": 32,
+      "sha256": {
+        "./paint-assets/256/demon_fel_iron.png": "37e3faee466f32a2b4fe7fe0c141454bc2e928b394a6d829b1a9ec97c8fb297e",
+        "./paint-assets/512/demon_fel_iron.png": "a4b758cfa77274d2fa98bf08e7f1b78360de4d9878ef91da9ef17a71b13d3506",
+        "./paint-assets/256/demon_fel_iron_value.png": "91981a7695fd7dd5d92ba3c44bb37313899d66527f3ae59491a6382b32ebb148",
+        "./paint-assets/512/demon_fel_iron_value.png": "1f9260f6ab4cb3647c4e4cc3689c433c19d65a041360a52c7b3fed966d29d65c"
+      }
+    },
+    {
+      "id": "smooth_brown_leather",
+      "name": "Smooth Brown Leather",
+      "category": "leather-cloth",
+      "kind": "material",
+      "baseColor": "#754b2f",
+      "accentColor": "#38261d",
+      "tags": [
+        "leather-cloth",
+        "smooth",
+        "brown",
+        "leather"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/smooth_brown_leather.png",
+        "512": "./paint-assets/512/smooth_brown_leather.png"
+      },
+      "thumbnail": "./paint-assets/256/smooth_brown_leather.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/smooth_brown_leather_value.png",
+        "512": "./paint-assets/512/smooth_brown_leather_value.png"
+      },
+      "order": 33,
+      "sha256": {
+        "./paint-assets/256/smooth_brown_leather.png": "8ca3a89482468ea0509c49fc4f954c2566b4ac698d7dd4a271302452d95e4613",
+        "./paint-assets/512/smooth_brown_leather.png": "243d478c21fe2fde16ec9bcbde01c7a8ae8582bb5bba402742cb4b338b1ed8b5",
+        "./paint-assets/256/smooth_brown_leather_value.png": "a4a47f959bf2ce7566f92d6c5d46e3b652c1b65301e5d77a39fffc38ae1441c5",
+        "./paint-assets/512/smooth_brown_leather_value.png": "8c2769bd77ffdf6a50fc70945b03a846fac0c79cfe8e61f70995d16801a27957"
+      }
+    },
+    {
+      "id": "cracked_dark_leather",
+      "name": "Cracked Dark Leather",
+      "category": "leather-cloth",
+      "kind": "material",
+      "baseColor": "#46352b",
+      "accentColor": "#1d1816",
+      "tags": [
+        "leather-cloth",
+        "cracked",
+        "dark",
+        "leather"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/cracked_dark_leather.png",
+        "512": "./paint-assets/512/cracked_dark_leather.png"
+      },
+      "thumbnail": "./paint-assets/256/cracked_dark_leather.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/cracked_dark_leather_value.png",
+        "512": "./paint-assets/512/cracked_dark_leather_value.png"
+      },
+      "order": 34,
+      "sha256": {
+        "./paint-assets/256/cracked_dark_leather.png": "9803c582298753798d75f5329651c11422e5d8354f9607f5c8cb9a88852f0e40",
+        "./paint-assets/512/cracked_dark_leather.png": "6625b36be24aa5c2b7a77a055af31ccbde4b80d615c3607f2b92e2847bbb20aa",
+        "./paint-assets/256/cracked_dark_leather_value.png": "875148d8eddfc9b79d0611dae446402cc3d8895493f2d152f669979a82aa2b22",
+        "./paint-assets/512/cracked_dark_leather_value.png": "6bd165e0ed78486626572bd6578ff97c675834e965ee7904336338c44d6777f8"
+      }
+    },
+    {
+      "id": "rawhide_stitched",
+      "name": "Rawhide Stitched Leather",
+      "category": "leather-cloth",
+      "kind": "material",
+      "baseColor": "#a5754f",
+      "accentColor": "#513a2d",
+      "tags": [
+        "leather-cloth",
+        "rawhide",
+        "stitched",
+        "leather"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/rawhide_stitched.png",
+        "512": "./paint-assets/512/rawhide_stitched.png"
+      },
+      "thumbnail": "./paint-assets/256/rawhide_stitched.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/rawhide_stitched_value.png",
+        "512": "./paint-assets/512/rawhide_stitched_value.png"
+      },
+      "order": 35,
+      "sha256": {
+        "./paint-assets/256/rawhide_stitched.png": "df4b53d0dd795d460e0fd77f89f0fe484c41ae011b202ae6bb884e0e5e1b1da1",
+        "./paint-assets/512/rawhide_stitched.png": "646a76845ad43297cf33464ed9a4dc15e28bff41fe7a352eec2e6f06e20d4ad4",
+        "./paint-assets/256/rawhide_stitched_value.png": "79976da0001f3e8386ed37d7f4241de0659ed704531438fffd112f6c80d77ac7",
+        "./paint-assets/512/rawhide_stitched_value.png": "4c94adc0e010cdef4aa8529b0908fe34af7f292718a2bfb01c102f0b021a5aa4"
+      }
+    },
+    {
+      "id": "coarse_linen",
+      "name": "Coarse Linen",
+      "category": "leather-cloth",
+      "kind": "material",
+      "baseColor": "#a99b76",
+      "accentColor": "#5c5545",
+      "tags": [
+        "leather-cloth",
+        "coarse",
+        "linen"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/coarse_linen.png",
+        "512": "./paint-assets/512/coarse_linen.png"
+      },
+      "thumbnail": "./paint-assets/256/coarse_linen.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/coarse_linen_value.png",
+        "512": "./paint-assets/512/coarse_linen_value.png"
+      },
+      "order": 36,
+      "sha256": {
+        "./paint-assets/256/coarse_linen.png": "f8f60b00cc92160c289d347833c90848319289cd071732b34c73944035156445",
+        "./paint-assets/512/coarse_linen.png": "068b0757d2cff95b4bed14bc2c1519a67956ec6de773c8fb4515f1ce87946bb5",
+        "./paint-assets/256/coarse_linen_value.png": "a45c3022e53a116e632869ffd9ed1072e8068a593084f550cd6d8199131a8d04",
+        "./paint-assets/512/coarse_linen_value.png": "cdbc9b34eb46333c0ad44bdede26f5a63a592d92164951e4a58f678f1298eeff"
+      }
+    },
+    {
+      "id": "undead_tattered_cloth",
+      "name": "Undead Tattered Cloth",
+      "category": "leather-cloth",
+      "kind": "material",
+      "baseColor": "#59594a",
+      "accentColor": "#292c27",
+      "tags": [
+        "leather-cloth",
+        "undead",
+        "tattered",
+        "cloth"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/undead_tattered_cloth.png",
+        "512": "./paint-assets/512/undead_tattered_cloth.png"
+      },
+      "thumbnail": "./paint-assets/256/undead_tattered_cloth.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/undead_tattered_cloth_value.png",
+        "512": "./paint-assets/512/undead_tattered_cloth_value.png"
+      },
+      "order": 37,
+      "sha256": {
+        "./paint-assets/256/undead_tattered_cloth.png": "bce0667ccbf295228863cd7687d2ae3a358b295d3adfbc179af11a193f8c5891",
+        "./paint-assets/512/undead_tattered_cloth.png": "8efa2be2ce524683a7a863e610be133801898e8065e225d6477c4888df61da38",
+        "./paint-assets/256/undead_tattered_cloth_value.png": "ba52d3af03c5460be04c7df55beeec2c59c472b23fb4cef6cff59a3045e35320",
+        "./paint-assets/512/undead_tattered_cloth_value.png": "16f3171ea63eed69008679453416dfc05c540377732718980c48c7066ce8c92a"
+      }
+    },
+    {
+      "id": "elven_weave",
+      "name": "Elven Weave",
+      "category": "leather-cloth",
+      "kind": "material",
+      "baseColor": "#526c70",
+      "accentColor": "#293d48",
+      "tags": [
+        "leather-cloth",
+        "elven",
+        "weave"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/elven_weave.png",
+        "512": "./paint-assets/512/elven_weave.png"
+      },
+      "thumbnail": "./paint-assets/256/elven_weave.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/elven_weave_value.png",
+        "512": "./paint-assets/512/elven_weave_value.png"
+      },
+      "order": 38,
+      "sha256": {
+        "./paint-assets/256/elven_weave.png": "74b79fedb810992061dbe9e7c1d54f0b04b4250fce2fbebd93b18042a76e164a",
+        "./paint-assets/512/elven_weave.png": "546fc33ac4ece0fbd29f1f20b9c57e18018f6d37b5a6f661e4bcd8c3df4b3ad1",
+        "./paint-assets/256/elven_weave_value.png": "0410cbe471da8414a575116d719aa98c96c776cab7953754e56cb53971bd4c49",
+        "./paint-assets/512/elven_weave_value.png": "31c06edd26271aab6b78f276d0c2cd8cb11cf9d797350d827f52f12b34770903"
+      }
+    },
+    {
+      "id": "bone_ivory",
+      "name": "Bone and Ivory",
+      "category": "bone-wood",
+      "kind": "material",
+      "baseColor": "#c4b68d",
+      "accentColor": "#665c49",
+      "tags": [
+        "bone-wood",
+        "bone",
+        "and",
+        "ivory"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/bone_ivory.png",
+        "512": "./paint-assets/512/bone_ivory.png"
+      },
+      "thumbnail": "./paint-assets/256/bone_ivory.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/bone_ivory_value.png",
+        "512": "./paint-assets/512/bone_ivory_value.png"
+      },
+      "order": 39,
+      "sha256": {
+        "./paint-assets/256/bone_ivory.png": "119724d13d136752688d80e369b0445dd5cc3fa05810111a3ef8fe65e1e89539",
+        "./paint-assets/512/bone_ivory.png": "6f7cc96acd14913dc3775e65be87b32db49c17bde572f1f00dcdfd4d2c7c56e8",
+        "./paint-assets/256/bone_ivory_value.png": "f800b8c73113b5d142a80b1d41454b68468bc12af995f1630dc8a9db7cec4c82",
+        "./paint-assets/512/bone_ivory_value.png": "ae8a1781c87aef5333983da48439ac5a9a83b06534770bc5fd2081c16bcf7365"
+      }
+    },
+    {
+      "id": "weapon_haft_bow_wood",
+      "name": "Weapon Haft and Bow Wood",
+      "category": "bone-wood",
+      "kind": "material",
+      "baseColor": "#76502e",
+      "accentColor": "#38271b",
+      "tags": [
+        "bone-wood",
+        "weapon",
+        "haft",
+        "and",
+        "bow",
+        "wood"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/weapon_haft_bow_wood.png",
+        "512": "./paint-assets/512/weapon_haft_bow_wood.png"
+      },
+      "thumbnail": "./paint-assets/256/weapon_haft_bow_wood.png",
+      "valueFiles": {
+        "256": "./paint-assets/256/weapon_haft_bow_wood_value.png",
+        "512": "./paint-assets/512/weapon_haft_bow_wood_value.png"
+      },
+      "order": 40,
+      "sha256": {
+        "./paint-assets/256/weapon_haft_bow_wood.png": "f5770c779b311d610f9367cf5a5e73d33fa49e25ddbe7c1d20f5c4df76dbb9b2",
+        "./paint-assets/512/weapon_haft_bow_wood.png": "cf1bd1b23bee08ab85a59a0ca975adc6e5dda6977953d039d6083d8d2913f584",
+        "./paint-assets/256/weapon_haft_bow_wood_value.png": "b0a68b76c3b0a1ed082bcd40e7e4a66529001a2e5dfcb31917a2912dbbac8e57",
+        "./paint-assets/512/weapon_haft_bow_wood_value.png": "019cd96d74ac985e46ee69648fbc9cb20e302e2bec659795f62dc65d9a0a1594"
+      }
+    },
+    {
+      "id": "eyes_human_elf",
+      "name": "Human and Elf Eyes",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#dce7ef",
+      "accentColor": "#25445c",
+      "tags": [
+        "stamp",
+        "human",
+        "and",
+        "elf",
+        "eyes"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/eyes_human_elf.png",
+        "512": "./paint-assets/512/eyes_human_elf.png"
+      },
+      "thumbnail": "./paint-assets/256/eyes_human_elf.png",
+      "valueFiles": null,
+      "order": 41,
+      "sha256": {
+        "./paint-assets/256/eyes_human_elf.png": "13bfc5506d34c44e54a05b3871793d53e0b9eecd173a2d30dff6bdf3d7031a2b",
+        "./paint-assets/512/eyes_human_elf.png": "23ae1522230149130bd1165d2af45359c99d10554d2aea18121833f0779b1309"
+      }
+    },
+    {
+      "id": "eyes_orc",
+      "name": "Orc Eyes",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#e8bd42",
+      "accentColor": "#4c261d",
+      "tags": [
+        "stamp",
+        "orc",
+        "eyes"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/eyes_orc.png",
+        "512": "./paint-assets/512/eyes_orc.png"
+      },
+      "thumbnail": "./paint-assets/256/eyes_orc.png",
+      "valueFiles": null,
+      "order": 42,
+      "sha256": {
+        "./paint-assets/256/eyes_orc.png": "71c453177517896b258c458723606d8fd3e1bae8ae12b0516f357a5ec17f206f",
+        "./paint-assets/512/eyes_orc.png": "b7763713ba22a071cc66d7b9b0b14213837e7d16fbb0f4ce42d44ff4b0f1ddb7"
+      }
+    },
+    {
+      "id": "eyes_nightelf_glow",
+      "name": "Night Elf Glowing Eyes",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#7de4ff",
+      "accentColor": "#2f57a4",
+      "tags": [
+        "stamp",
+        "night",
+        "elf",
+        "glowing",
+        "eyes"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/eyes_nightelf_glow.png",
+        "512": "./paint-assets/512/eyes_nightelf_glow.png"
+      },
+      "thumbnail": "./paint-assets/256/eyes_nightelf_glow.png",
+      "valueFiles": null,
+      "order": 43,
+      "sha256": {
+        "./paint-assets/256/eyes_nightelf_glow.png": "f2f75b63da158896354448fe605f28ffd73706104744a7219b779ddc31a7cc06",
+        "./paint-assets/512/eyes_nightelf_glow.png": "5d8aaa5d3fdf2733eae18ea7f574e761cbfc2e8c71e1e293a96c7ad4b09fb539"
+      }
+    },
+    {
+      "id": "eyes_undead",
+      "name": "Undead Eyes",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#a6ef72",
+      "accentColor": "#344d2c",
+      "tags": [
+        "stamp",
+        "undead",
+        "eyes"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/eyes_undead.png",
+        "512": "./paint-assets/512/eyes_undead.png"
+      },
+      "thumbnail": "./paint-assets/256/eyes_undead.png",
+      "valueFiles": null,
+      "order": 44,
+      "sha256": {
+        "./paint-assets/256/eyes_undead.png": "ff4b71da74a0dfdbab96a0369d22f92ccefcc3fbdf9288dae2dcc012b01bc90a",
+        "./paint-assets/512/eyes_undead.png": "cf478a2187e1866f66a9087cae65d59767c5141e7a8b5f358def43c28ac693db"
+      }
+    },
+    {
+      "id": "eyes_demon_fel",
+      "name": "Demon and Fel Eyes",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#78ff70",
+      "accentColor": "#204b2b",
+      "tags": [
+        "stamp",
+        "demon",
+        "and",
+        "fel",
+        "eyes"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/eyes_demon_fel.png",
+        "512": "./paint-assets/512/eyes_demon_fel.png"
+      },
+      "thumbnail": "./paint-assets/256/eyes_demon_fel.png",
+      "valueFiles": null,
+      "order": 45,
+      "sha256": {
+        "./paint-assets/256/eyes_demon_fel.png": "f10f4c7469839fe8137eab846c8bf3c528d0512176aa90ab4c6acf52b3f04bb1",
+        "./paint-assets/512/eyes_demon_fel.png": "619d00fdadc55a86bba48866df18c68f3d5adeb7b3575f03146fcc1ed1ac66b4"
+      }
+    },
+    {
+      "id": "teeth_tusks_fangs_claws",
+      "name": "Teeth, Tusks, Fangs and Claws",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#d8cba2",
+      "accentColor": "#665848",
+      "tags": [
+        "stamp",
+        "teeth,",
+        "tusks,",
+        "fangs",
+        "and",
+        "claws"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/teeth_tusks_fangs_claws.png",
+        "512": "./paint-assets/512/teeth_tusks_fangs_claws.png"
+      },
+      "thumbnail": "./paint-assets/256/teeth_tusks_fangs_claws.png",
+      "valueFiles": null,
+      "order": 46,
+      "sha256": {
+        "./paint-assets/256/teeth_tusks_fangs_claws.png": "e7a02adc8efd50a10eaa070185cbe33a359711c2f40f525e2a5cdb70f96ae7b7",
+        "./paint-assets/512/teeth_tusks_fangs_claws.png": "26e16145c69ae207acb13519e1757a09e162ccdb775fda3b070071793144ccfb"
+      }
+    },
+    {
+      "id": "scars_wounds",
+      "name": "Scars and Wounds",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#9b4943",
+      "accentColor": "#442026",
+      "tags": [
+        "stamp",
+        "scars",
+        "and",
+        "wounds"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/scars_wounds.png",
+        "512": "./paint-assets/512/scars_wounds.png"
+      },
+      "thumbnail": "./paint-assets/256/scars_wounds.png",
+      "valueFiles": null,
+      "order": 47,
+      "sha256": {
+        "./paint-assets/256/scars_wounds.png": "360c60515a5e9a0df8cf86e039c1bda566b6058bb2f5bf08008eead19914c2ff",
+        "./paint-assets/512/scars_wounds.png": "75a40cb00ae39abd180b49499a6d72cc42fac1eaa42ac7673c190d82a41407ab"
+      }
+    },
+    {
+      "id": "stitches_seams_lacing",
+      "name": "Stitches, Seams and Lacing",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#c1aa82",
+      "accentColor": "#3f3024",
+      "tags": [
+        "stamp",
+        "stitches,",
+        "seams",
+        "and",
+        "lacing"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/stitches_seams_lacing.png",
+        "512": "./paint-assets/512/stitches_seams_lacing.png"
+      },
+      "thumbnail": "./paint-assets/256/stitches_seams_lacing.png",
+      "valueFiles": null,
+      "order": 48,
+      "sha256": {
+        "./paint-assets/256/stitches_seams_lacing.png": "bd90e91c89d44cc8ff310b23ab14a25660fa284288e3262cbdd8c49cb9d826a0",
+        "./paint-assets/512/stitches_seams_lacing.png": "1883cf59944fec91f9541063ce071ec206bff76ada24bac7e63caaf1f0b4d60c"
+      }
+    },
+    {
+      "id": "rivets_dents_plate_edges",
+      "name": "Rivets, Dents and Plate Edges",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#a2a9ad",
+      "accentColor": "#343a3d",
+      "tags": [
+        "stamp",
+        "rivets,",
+        "dents",
+        "and",
+        "plate",
+        "edges"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/rivets_dents_plate_edges.png",
+        "512": "./paint-assets/512/rivets_dents_plate_edges.png"
+      },
+      "thumbnail": "./paint-assets/256/rivets_dents_plate_edges.png",
+      "valueFiles": null,
+      "order": 49,
+      "sha256": {
+        "./paint-assets/256/rivets_dents_plate_edges.png": "f2ba2388ce89a4454143bf8c2ce6d1c619f1e757caf5743e30351a6c96ed013f",
+        "./paint-assets/512/rivets_dents_plate_edges.png": "416b17e7a753de8a22b72812ff646ce64b55b624e9411cbea7fefcc8e7d2ec95"
+      }
+    },
+    {
+      "id": "markings_grime_blood",
+      "name": "Markings, Grime and Blood",
+      "category": "stamp",
+      "kind": "stamp",
+      "baseColor": "#7c302b",
+      "accentColor": "#261c1b",
+      "tags": [
+        "stamp",
+        "markings,",
+        "grime",
+        "and",
+        "blood"
+      ],
+      "provenance": {
+        "kind": "generated-original",
+        "license": "MDLxL project asset",
+        "sourceUrl": null,
+        "author": "MDLxL project",
+        "generation": {
+          "provider": "OpenAI ImageGen",
+          "date": "2026-09-11",
+          "recipe": "warcraft-sd-miniature-material-v1"
+        }
+      },
+      "files": {
+        "256": "./paint-assets/256/markings_grime_blood.png",
+        "512": "./paint-assets/512/markings_grime_blood.png"
+      },
+      "thumbnail": "./paint-assets/256/markings_grime_blood.png",
+      "valueFiles": null,
+      "order": 50,
+      "sha256": {
+        "./paint-assets/256/markings_grime_blood.png": "78cb243793501fc38419334b456c712882a8131fa1ca09b13f14db6831a346d8",
+        "./paint-assets/512/markings_grime_blood.png": "5ff123be7a3520e7471b971d42a64a0fb02be36fa955d38b79d3d0473807c51c"
+      }
+    }
+  ],
+  "generatedAt": "2026-09-11T10:15:26.305Z",
+  "notes": [
+    "Metal entries are hand-painted albedo, not PBR metalness.",
+    "MakeHuman body assets and Queen Neferess are intentionally excluded.",
+    "Source downloads are not redistributed; the eight derived outputs retain their CC0 page and direct-download provenance."
+  ]
+}

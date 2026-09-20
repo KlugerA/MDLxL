@@ -1,0 +1,3 @@
+.warmkeys-sequence-cue{position:fixed;z-index:2100;bottom:35px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:9px 13px;border:1px solid #466b3f;border-radius:3px;background:#edf5e7;color:#264c21;box-shadow:0 2px 8px #0004;pointer-events:none;max-width:calc(100vw - 24px);font:12px Tahoma,Arial,sans-serif}
+.warmkeys-sequence-cue kbd{font:bold 18px monospace;letter-spacing:3px;color:#087a1d;min-width:44px}.warmkeys-sequence-cue span{font-size:11px}
+@media(max-width:520px){.warmkeys-sequence-cue{flex-wrap:wrap;justify-content:center}.warmkeys-sequence-cue span{flex-basis:100%;text-align:center}}
