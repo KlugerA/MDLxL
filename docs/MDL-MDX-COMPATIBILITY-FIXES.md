@@ -47,7 +47,7 @@ Run `pnpm install --frozen-lockfile --ignore-scripts`, then `node --test` (or `p
 
 This is **not a claim of universal compatibility or a tested replacement executable**.
 
-1. This checkout contains `dist/` but lacks the renderer source entry point, full application dependency manifest, and build/package scripts described by its README. The prebuilt renderer and existing executable have **not** been rebuilt or modified. These source changes must be integrated into the full application source and built before they affect the running app.
+1. Resolved for 0.11.1: the renderer source and build/package scripts were restored on `codex/restore-build-source`. The user built, launched, tested, and approved this patch for release. The release rebuilds the renderer so the portable app includes the compatibility changes; this is not a claim that every model or format variant has been exercised.
 2. No real-model corpus is present in this checkout. Warcraft III, RMS, and MDLVis have not been run against these outputs. Those interoperability and visual checks remain required, particularly modern HD models and the color conventions in the supplied references.
 3. Non-triangle GEOS primitives, SNEM sound emitters, ambiguous duplicate chunks/slots, and unrecognized subchunks are not made editable by guessing. Their original files remain available for exact copying.
 4. Some binary data has no documented equivalent in the selected MDL dialect: for example an authored MODL animation filename, nonzero unused header fields, arbitrary unknown flag bits, or camera variant metadata. Conversion that would drop it is rejected. Same-format preservation is the supported path.

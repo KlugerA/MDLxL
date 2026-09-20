@@ -46,7 +46,7 @@ async function dependencyDirectory(name, from) {
   // Use a subpath so a package named "buffer" is not treated as Node's builtin.
   for (const modules of requireFrom.resolve.paths(`${name}/package.json`) || []) {
     const directory = path.join(modules, name);
-    if (await exists(path.join(directory, 'package.json'))) return directory;
+    if (await exists(path.join(directory, 'package.json'))) return fs.realpath(directory);
   }
   throw Error(`Install dependency ${name} before packaging.`);
 }

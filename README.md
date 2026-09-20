@@ -1,14 +1,14 @@
-# MDLxL 0.11.0
+# MDLxL 0.11.1
 
 Warcraft III model editor. This source continues the requested MDLVis rebuild lane, with the MDLxL name and icon.
 
 For the Windows release, extract the whole ZIP and run MDLxL.exe. Keep its resources, Backgrounds, BitsAndParts and Addons folders together.
 
-For source development, use Node.js 20 or newer. Install the pinned dependencies with npm ci, run npm test, then npm run build. Run npm start for Electron or npm run dev for browser development. After building, npm run package creates the Windows package with the MDLxL icon.
+For source development, use Node.js 22.12 or newer and pnpm. Run `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run build`, then `pnpm start` to launch the desktop app directly from the checkout. `pnpm run dev` starts browser development. After building, `pnpm run package` creates the Windows package under `release/MDLxL-win32-x64`. No installer is required.
 
-Checkout note: this packaged checkout currently lacks the renderer entry point and full build/package scripts described above. The parser/save regression suite can be installed with `pnpm install --frozen-lockfile --ignore-scripts` and run with `node --test`. See [the compatibility fix status](docs/MDL-MDX-COMPATIBILITY-FIXES.md) for coverage and the remaining app-release requirements; the existing `dist/` is not rebuilt by these tests.
+Version 0.11.1 restores the complete interface/build source and includes the MDL/MDX preservation fixes. The 56 compatibility regression tests run with `pnpm test`; the restored historical suite runs separately with `pnpm run test:source`. See [the compatibility fix status](docs/MDL-MDX-COMPATIBILITY-FIXES.md) for coverage and limitations. After pulling source changes, rebuild before launching: `pnpm run build`, then `pnpm start`.
 
-The source archive includes docs/MDLxL-Guide.txt and earlier release notes. See THIRD_PARTY_NOTICES.md for component credits.
+See `docs/ADDONS.md` for add-ons and `THIRD_PARTY_NOTICES.md` for component credits.
 
 Version 0.11.0 restores the repeatable F texture/wireframe toggle, corrects animated
 MDX geoset RGB, and lets UV Highlight Select shrink to 25%. Forge now retains
