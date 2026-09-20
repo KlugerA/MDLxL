@@ -7,7 +7,8 @@ export const DEFAULT_UV_GRID = Object.freeze({
   opacity: 0.35,
 });
 
-export const UV_GRID_SPACING_MIN = 0.0001;
+// At the editor's maximum zoom, denser cells than this are no longer useful.
+export const UV_GRID_SPACING_MIN = 0.0006;
 export const UV_GRID_SPACING_MAX = 8;
 
 const record = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};

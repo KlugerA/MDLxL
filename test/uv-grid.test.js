@@ -13,7 +13,7 @@ test('UV grid preferences are bounded, canonical and persist with editor prefere
 });
 
 test('UV grid size slider is logarithmic, fine-grained and reaches tiny spacing', () => {
-  closeTo(uvGridSpacingSliderValue(UV_GRID_SPACING_MIN), -4);
+  closeTo(uvGridSpacingSliderValue(UV_GRID_SPACING_MIN), Math.log10(0.0006));
   closeTo(uvGridSpacingFromSlider(-4), UV_GRID_SPACING_MIN);
   closeTo(uvGridSpacingFromSlider(-1), 0.1);
   assert.ok(uvGridSpacingFromSlider(-1.01) > 0.097 && uvGridSpacingFromSlider(-1.01) < 0.098, 'one slider step changes spacing by only about two percent');
