@@ -474,7 +474,7 @@ export default function GamePreview(inputProps) {
       state.cameraEditing = false; reportProjectionView(); invalidate();
     };
     controls.addEventListener('start', cameraStarted); controls.addEventListener('end', cameraEnded);
-    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target), refreshCursor: () => { canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode, rotating); }, setCameraAngles: values => { if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); cameraChanged(); } } }; runtime.current = state;
+    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target), refreshCursor: () => { canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode, rotating); }, setCameraAngles: values => { if (setEditorCameraAngles(camera, controls.target, values)) { if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); } controls.update(); cameraChanged(); } } }; runtime.current = state;
     observer = new ownerWindow.ResizeObserver(resize); observer.observe(host.current);
     const saved = cameraMemory.current;
     // UV edits may rebuild geometry/materials, but never own the user's view.
@@ -739,7 +739,7 @@ export default function GamePreview(inputProps) {
     if (!props.portraitMode) { current.exitPortrait(); return; }
     const evaluated = evaluateModelCamera(model, model?.Cameras?.[props.portraitCameraIndex], props.time, sequenceIndex, props.time);
     current.enterPortrait(evaluated);
-  }, [props.portraitMode, props.portraitCameraIndex, props.portraitSnapRevision, model, rendererRevision, sequenceIndex]);
+  }, [props.portraitMode, props.portraitCameraIndex, props.portraitSnapRevision, model, rendererRevision]);
   useEffect(() => { if(runtime.current && runtime.current.appliedView !== view) runtime.current.setView(view); }, [view]);
   useEffect(() => { if (props.cameraPresetRequest?.name) runtime.current?.setCameraPreset(props.cameraPresetRequest.name); }, [props.cameraPresetRequest?.revision]);
   useEffect(() => { runtime.current?.refreshCursor(); }, [props.cameraMode, props.transformMode]);

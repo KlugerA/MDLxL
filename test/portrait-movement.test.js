@@ -79,6 +79,7 @@ test('Portrait remains an editable Movement view with gated sequences and no pla
   assert.match(app,/liveMovementRevision\.current = doc\.revision/);
   assert.match(preview,/\[rendererModel, rendererRevision, textureAssets/);
   assert.doesNotMatch(preview,/\[rendererModel, revision, textureAssets/);
-  assert.match(preview,/\[props.portraitMode, props.portraitCameraIndex, props.portraitSnapRevision, model, rendererRevision, sequenceIndex\]/);
+  assert.match(preview,/\[props.portraitMode, props.portraitCameraIndex, props.portraitSnapRevision, model, rendererRevision\]/);
+  assert.doesNotMatch(preview,/props\.portraitSnapRevision, model, rendererRevision, sequenceIndex/);
   assert.doesNotMatch(preview,/camera.fov = snapshot.fieldOfView/);
 });

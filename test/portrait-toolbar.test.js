@@ -85,6 +85,13 @@ test('Movement and Portrait share the complete viewpoint dropdown',()=>{
   assert.match(preview,/state\.portraitActive = true; state\.cameraDetached = false; state\.appliedView = 'perspective';/);
 });
 
+test('switching Portrait sequences preserves the one shared camera view',()=>{
+  const preview=readFileSync(new URL('../app/GamePreview.jsx',import.meta.url),'utf8');
+  assert.match(preview,/current\.enterPortrait\(evaluated\);\s*\}, \[props\.portraitMode, props\.portraitCameraIndex, props\.portraitSnapRevision, model, rendererRevision\]\);/);
+  assert.doesNotMatch(preview,/current\.enterPortrait\(evaluated\);\s*\}, \[[^\]]*sequenceIndex/);
+  assert.match(preview,/setCameraAngles: values => \{ if \(setEditorCameraAngles\(camera, controls\.target, values\)\) \{ if \(state\.portraitActive\) \{ state\.cameraDetached = true;/);
+});
+
 test('snapping restores the native camera projection after temporary viewport navigation without authoring changes',()=>{
   const model=createDemoDocument().model;
   setCameraFromCurrentView(model,-1,view);
