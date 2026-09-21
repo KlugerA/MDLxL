@@ -69,20 +69,49 @@ export function applyEvaluatedModelCamera(camera, controls, evaluated, aspect) {
 export function editorCameraSnapshot(camera, target) {
   const zoom = Math.max(.0001, Number(camera?.zoom) || 1);
   const baseFov = Math.max(.0001, Number(camera?.fov) || 42) * Math.PI / 180;
+  const position = camera.position.clone(), lookTarget = target.clone();
+  const forward = lookTarget.sub(position);
+  if (forward.lengthSq() < 1e-12) camera.getWorldDirection(forward);
+  forward.normalize();
+  const reference = Math.abs(forward.z) > .9999 ? new Vector3(-1, 0, 0) : new Vector3(0, 0, 1);
+  const right = new Vector3().crossVectors(forward, reference).normalize();
+  const levelUp = new Vector3().crossVectors(right, forward).normalize();
+  const viewUp = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+  viewUp.addScaledVector(forward, -viewUp.dot(forward)).normalize();
+  const roll = Math.atan2(forward.dot(new Vector3().crossVectors(levelUp, viewUp)), levelUp.dot(viewUp));
   return {
     position: camera.position.toArray(), target: target.toArray(),
+    roll,
     fieldOfView: 2 * Math.atan(Math.tan(baseFov / 2) / zoom) / MODEL_CAMERA_FOV_FACTOR,
     near: Number(camera.near), far: Number(camera.far),
   };
 }
 
+function shiftCameraRoll(track, delta) {
+  for (const key of track.Keys || []) {
+    key.Vector[0] += delta;
+    if (track.LineType === 3) {
+      if (key.InTan) key.InTan[0] += delta;
+      if (key.OutTan) key.OutTan[0] += delta;
+    }
+  }
+}
+
 /** Write an evaluated editor view back into the camera's static fields without
- * double-applying any animated Translation or TargetTranslation at this time. */
-export function updateModelCameraFromView(model, source, view, frame = 0, sequenceIndex = -1, globalTime = frame, fields = ['position', 'target', 'fieldOfView', 'near', 'far']) {
+ * double-applying animated offsets at this time. Existing roll animation keeps
+ * its motion while the complete curve is re-based onto the visible view. */
+export function updateModelCameraFromView(model, source, view, frame = 0, sequenceIndex = -1, globalTime = frame, fields = ['position', 'target', 'roll', 'fieldOfView', 'near', 'far']) {
   if (!source || !view) return false;
   const samples = modelCameraSamples(model, source, frame, sequenceIndex, globalTime), selected = new Set(fields);
   if (selected.has('position') && finiteVector(view.position)) source.Position = new Float32Array(new Vector3().fromArray(view.position).sub(samples.translation).toArray());
   if (selected.has('target') && finiteVector(view.target)) source.TargetPosition = new Float32Array(new Vector3().fromArray(view.target).sub(samples.targetTranslation).toArray());
+  if (selected.has('roll') && Number.isFinite(Number(view.roll))) {
+    const roll = Number(view.roll);
+    if (source.Rotation?.Keys?.length) {
+      const difference = roll - samples.roll;
+      shiftCameraRoll(source.Rotation, Math.atan2(Math.sin(difference), Math.cos(difference)));
+    } else source.Rotation = { LineType: 0, GlobalSeqId: null, Keys: [{ Frame: Math.round(frame), Vector: Float32Array.of(roll) }] };
+  }
   if (selected.has('fieldOfView') && Number(view.fieldOfView) > 0 && Number(view.fieldOfView) < Math.PI) source.FieldOfView = Number(view.fieldOfView);
   if (selected.has('near') && Number(view.near) > 0 && Number(view.near) < Number(view.far ?? source.FarClip)) source.NearClip = Number(view.near);
   if (selected.has('far') && Number(view.far) > Number(view.near ?? source.NearClip)) source.FarClip = Number(view.far);

@@ -8,13 +8,14 @@ import { evaluateModelCamera, applyEvaluatedModelCamera, PORTRAIT_ASPECT } from 
 import { allNodes } from '../src/animation.js';
 import { clearQuickDisplay } from '../src/display-overlays.js';
 
-const view={position:[25,-200,80],target:[0,0,45],fieldOfView:Math.PI/4,near:1,far:1000};
+const view={position:[25,-200,80],target:[0,0,45],roll:.37,fieldOfView:Math.PI/4,near:1,far:1000};
 test('Set Current View creates once, updates selected camera, recalculates extents and supports undo/save',()=>{
   const doc=createDemoDocument(); doc.model.Cameras=[];
   const before=structuredClone(doc.model);
   const index=doc.apply('Set Current View',['Cameras','Info','Geosets'],model=>setCameraFromCurrentView(model,-1,view));
   assert.equal(index,0); assert.equal(doc.model.Cameras[0].Name,'Camera 01');
   assert.deepEqual(Array.from(doc.model.Cameras[0].Position),view.position);
+  assert.ok(Math.abs(evaluateModelCamera(doc.model,doc.model.Cameras[0],0,-1,0).roll-view.roll)<1e-6);
   assert.ok(doc.model.Info.BoundsRadius>0);
   assert.ok(!allNodes(doc.model).includes(doc.model.Cameras[0]));
   doc.undo(); assert.deepEqual(doc.model,before); doc.redo();
@@ -25,6 +26,7 @@ test('Set Current View creates once, updates selected camera, recalculates exten
     const reopened=openDocument(doc.serialize(format),'camera.'+format);
     assert.equal(reopened.model.Cameras.length,1);
     assert.deepEqual(Array.from(reopened.model.Cameras[0].Position),next.position);
+    assert.ok(Math.abs(evaluateModelCamera(reopened.model,reopened.model.Cameras[0],0,-1,0).roll-view.roll)<1e-6);
   }
   doc.model.Cameras.push({...structuredClone(doc.model.Cameras[0]),Name:'Other camera'});
   const first=structuredClone(doc.model.Cameras[0]);
@@ -63,6 +65,13 @@ test('Snap uses existing camera entry without altering document, playback or seq
     const source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
     assert.doesNotMatch(source,/'Cameras'/);
   }
+});
+
+test('Portrait exposes the same free XYZ camera controls as the Vertices workspace',()=>{
+  const app=readFileSync(new URL('../app/App.jsx',import.meta.url),'utf8');
+  assert.match(app,/const cameraRotating = cameraMode === 'rotate' \|\| cameraGesture;/);
+  assert.doesNotMatch(app,/cameraRotating = .*portraitModeActive/);
+  assert.match(app,/\{cameraRotating && cameraPanel\}/);
 });
 
 test('snapping restores the native camera projection after temporary viewport navigation without authoring changes',()=>{

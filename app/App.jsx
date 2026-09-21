@@ -171,7 +171,7 @@ export default function App() {
   useEffect(()=>setAdjustingInput(null),[mode,settingsTab,dialog?.type]);
   const [animationPanel, setAnimationPanel] = useState('movement'), [selectedNodeIds, setSelectedNodeIds] = useState([]), [movementMode, setMovementMode] = useState('select'), [movementSpace, setMovementSpace] = useState('local'), [showNodes, setShowNodes] = useState(true);
   const portraitModeActive = portraitEnabled && mode === 'animation' && animationPanel === 'movement';
-  const cameraRotating = (cameraMode === 'rotate' || cameraGesture) && !portraitModeActive;
+  const cameraRotating = cameraMode === 'rotate' || cameraGesture;
   const [workplaneEnabled, setWorkplaneEnabled] = useState(true), [multipleNodes, setMultipleNodes] = useState(false);
   const [restrictions, setRestrictions] = useState({translation:false,rotation:false,scaling:false});
   const rigWorkspace = mode === 'bones' || mode === 'animation' && animationPanel === 'movement';
