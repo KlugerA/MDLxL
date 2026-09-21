@@ -1,5 +1,10 @@
-import { blendPaintPixel } from './paint-raster.js';
+import { blendPaintPixel, rgbaColor } from './paint-raster.js';
 import { preparePaintSurface, paintSurfaceTile } from './paint-projection.js';
+
+export function paintDecalTransform(source,brush,dragging=false) {
+  const longest=Math.max(1,source.width,source.height),size=Math.max(1,Number(brush.size)||longest),zoom=Math.max(.01,Math.min(64,Number(brush.zoom)||1)),scale=size/longest*zoom;
+  return {width:source.width*scale,height:source.height*scale,angle:0,flipX:false,flipY:false,opacity:Math.max(0,Math.min(1,Number(brush.opacity)*Number(brush.strength??1)*(dragging?Number(brush.flow):1)))};
+}
 
 function decalSampler(source,center,transform) {
   const width=Math.max(1,transform.width),height=Math.max(1,transform.height),angle=-(transform.angle||0)*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle);
@@ -19,7 +24,8 @@ export function pastePaintDecal(target,source,center,transform,mask=null) {
   }
   return changed;
 }
-export function projectPaintDecal(target,projection,source,center,transform,flags=0) {
+export function projectPaintDecal(target,projection,source,center,transform,flagsOrOptions=0) {
+  const options=typeof flagsOrOptions==='object'?flagsOrOptions:{flags:flagsOrOptions},flags=Number(options.flags)||0,mask=options.mask,tint=rgbaColor(options.filterColor||'#ffffff');
   const {bins,tileSize,columns}=preparePaintSurface(projection,target,flags),sample=decalSampler(source,center,transform),color=[0,0,0,0],radius=Math.hypot(transform.width,transform.height)/2;let changed=0;
   // Mirrored faces and seam filter samples may address one texture pixel many
   // times. A placed cutout is one operation, so blend that pixel only once.
@@ -28,10 +34,15 @@ export function projectPaintDecal(target,projection,source,center,transform,flag
     const points=paintSurfaceTile(projection,target,flags,tx,ty);if(!points)continue;
     for(let i=0;i<points.length;i+=3){
       const offset=sample(points[i],points[i+1]);if(offset<0||!source.data[offset+3])continue;
-      const pixel=points[i+2],distance=(points[i]-center.x)**2+(points[i+1]-center.y)**2,previous=selected.get(pixel);
+      const pixel=points[i+2];if(mask&&!mask[pixel])continue;const distance=(points[i]-center.x)**2+(points[i+1]-center.y)**2,previous=selected.get(pixel);
       if(!previous||source.data[offset+3]>source.data[previous.offset+3]||source.data[offset+3]===source.data[previous.offset+3]&&distance<previous.distance)selected.set(pixel,{offset,distance});
     }
   }
-  for(const [pixel,{offset}] of selected){for(let c=0;c<4;c++)color[c]=source.data[offset+c];if(blendPaintPixel(target.data,pixel*4,color,transform.opacity??1,'paint'))changed++;}
+  for(const [pixel,{offset}] of selected){
+    for(let c=0;c<3;c++)color[c]=Math.round(source.data[offset+c]*tint[c]/255);color[3]=source.data[offset+3];
+    if(blendPaintPixel(target.data,pixel*4,color,(transform.opacity??1)*(mask?mask[pixel]/255:1),options.mode==='erase'?'erase':'paint')){
+      changed++;if(options.dirtyRows){const x=pixel%target.width,row=Math.floor(pixel/target.width)*2;options.dirtyRows[row]=Math.min(options.dirtyRows[row],x);options.dirtyRows[row+1]=Math.max(options.dirtyRows[row+1],x);}
+    }
+  }
   return changed;
 }
