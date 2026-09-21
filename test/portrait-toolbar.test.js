@@ -58,7 +58,7 @@ test('Clear all switches off helper overlays while preserving grid, selections a
 test('Snap uses existing camera entry without altering document, playback or sequence',()=>{
   const app=readFileSync(new URL('../app/App.jsx',import.meta.url),'utf8');
   const preview=readFileSync(new URL('../app/GamePreview.jsx',import.meta.url),'utf8');
-  assert.match(app,/onSnap=\{\(\) => setPortraitSnapRevision\(value => value \+ 1\)\}/);
+  assert.match(app,/onSnap=\{\(\) => \{ setPortraitView\('perspective'\); setPortraitSnapRevision\(value => value \+ 1\); \}\}/);
   assert.match(preview,/current\.enterPortrait\(evaluated\);\s*\}, \[props\.portraitMode, props\.portraitCameraIndex, props\.portraitSnapRevision/);
   assert.doesNotMatch(app,/newPortraitCamera|onPortraitNew/);
   for(const file of ['src/commands.js','electron/menu.cjs']) {
@@ -72,6 +72,17 @@ test('Portrait exposes the same free XYZ camera controls as the Vertices workspa
   assert.match(app,/const cameraRotating = cameraMode === 'rotate' \|\| cameraGesture;/);
   assert.doesNotMatch(app,/cameraRotating = .*portraitModeActive/);
   assert.match(app,/\{cameraRotating && cameraPanel\}/);
+});
+
+test('Movement and Portrait share the complete viewpoint dropdown',()=>{
+  const app=readFileSync(new URL('../app/App.jsx',import.meta.url),'utf8');
+  const preview=readFileSync(new URL('../app/GamePreview.jsx',import.meta.url),'utf8');
+  assert.match(app,/const views = \['orthographic', 'perspective', 'front', 'back', 'left', 'right', 'top', 'bottom'\]/);
+  assert.match(app,/value=\{cameraPortraitActive \? portraitView : view\}/);
+  assert.match(app,/onChange=\{event => cameraPortraitActive \? setPortraitView\(event\.target\.value\) : setView\(event\.target\.value\)\}/);
+  assert.doesNotMatch(preview,/function setView\(next\) \{\s*if \(state\.portraitActive\) return;/);
+  assert.match(preview,/if \(state\.portraitActive\) \{ state\.cameraDetached = true; latest\.current\.onPlayingChange\?\.\(false\); \}/);
+  assert.match(preview,/state\.portraitActive = true; state\.cameraDetached = false; state\.appliedView = 'perspective';/);
 });
 
 test('snapping restores the native camera projection after temporary viewport navigation without authoring changes',()=>{

@@ -415,7 +415,6 @@ export default function GamePreview(inputProps) {
       scheduler?.resize();
     }
     function setView(next) {
-      if (state.portraitActive) return;
       state.appliedView = next;
       const previous = camera;
       camera = next === 'perspective' ? perspective : ortho;
@@ -424,6 +423,7 @@ export default function GamePreview(inputProps) {
         applyViewPreset(camera, next, controls.target, fitRadius() * 4);
       }
       controls.object = camera; controls.enableRotate = true; controls.update(); reportProjectionView(); invalidate();
+      if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); }
     }
     const viewCamera = event => { if (applyModelCamera(perspective, controls, event.detail)) { camera = perspective; state.appliedView = 'perspective'; invalidate(); } };
     window.addEventListener('mdlxl-view-camera', viewCamera);
@@ -450,7 +450,7 @@ export default function GamePreview(inputProps) {
     };
     function enterPortrait(evaluated) {
       if (!portraitBackup) portraitBackup = { perspective: perspective.clone(), ortho: ortho.clone(), target: controls.target.clone(), camera: camera === ortho ? 'ortho' : 'perspective', appliedView: state.appliedView };
-      state.portraitActive = true; state.cameraDetached = false; camera = perspective; controls.object = camera; controls.enableRotate = true;
+      state.portraitActive = true; state.cameraDetached = false; state.appliedView = 'perspective'; camera = perspective; controls.object = camera; controls.enableRotate = true;
       if (evaluated) applyEvaluatedModelCamera(camera, controls, evaluated, PORTRAIT_ASPECT);
       resize(); reportProjectionView(); invalidate();
     }
