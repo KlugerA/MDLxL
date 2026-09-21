@@ -1,5 +1,5 @@
 import { allNodes, sampleTrack } from './animation.js';
-import { animationTargets, animationTrackId, readAnimationTrack } from './animation-tracks.js';
+import { animationTargets, animationTrackId, readAnimationTrack, writeAnimationTrack } from './animation-tracks.js';
 
 const transforms = ['Translation', 'Rotation', 'Scaling'];
 const clone = value => structuredClone(value);
@@ -132,15 +132,11 @@ function editableTrack(model, target, domain, template) {
 }
 function commit(model, prepared) {
   for (const { target, track, enableColor = true } of prepared) {
-    let owner;
-    if (target.kind === 'node') owner = allNodes(model).find(node => node.ObjectId === target.id);
-    else {
-      owner = model.GeosetAnims?.find(item => item.GeosetId === target.id);
-      if (!owner) { owner = { GeosetId: target.id, Flags: 0, Alpha: 1, Color: null }; (model.GeosetAnims ||= []).push(owner); }
-      if (target.property === 'Color' && enableColor) owner.Flags = (owner.Flags || 0) | 2;
-    }
     track.Keys.sort((a, b) => a.Frame - b.Frame);
-    owner[target.property] = track;
+    if (target.kind === 'node' && transforms.includes(target.property)) {
+      const owner = allNodes(model).find(node => node.ObjectId === target.id);
+      owner[target.property] = track;
+    } else writeAnimationTrack(model, target, track, { enableColor });
   }
   if (prepared.some(item => item.target.kind === 'geoset') && model.Info) model.Info.NumGeosetAnims = model.GeosetAnims.length;
   return prepared.reduce((sum, item) => sum + (item.count ?? 1), 0);

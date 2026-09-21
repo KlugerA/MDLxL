@@ -1,7 +1,8 @@
 import { allNodes, sampleTrack, sampleGeosetAnimation } from './animation.js';
+import { rgbTrackToWarcraftColor, warcraftColorTrackToRgb, warcraftColorToRgb } from './warcraft-color.js';
 
-// EditorDocument normalizes MDL and MDX animated colors into RGB order.
-// This editor's text fields deliberately use the same RGB order as its controls.
+// Model values stay in Warcraft MDX channel order. Public editing functions expose
+// human RGB and convert only when values cross the model boundary.
 const NODE_CHANNELS = {
   Attachments: ['Visibility'], ParticleEmitters: ['Visibility'], ParticleEmitters2: ['Visibility'],
   ParticleEmitterPopcorns: ['Visibility', 'Color', 'Alpha'],
@@ -43,6 +44,11 @@ function resolveTarget(model, target, create = false) {
   if (model.Info) model.Info.NumGeosetAnims = model.GeosetAnims.length;
   return anim;
 }
+export function targetUsesWarcraftColorOrder(model, target) {
+  if (target.kind === 'geoset') return target.property === 'Color';
+  if (target.kind !== 'node' || !['Color', 'AmbColor'].includes(target.property)) return false;
+  return !!model.Lights?.some(node => node.ObjectId === target.id);
+}
 export function createGeosetAnimations(model, geosetIds = []) {
   const ids = [...new Set(geosetIds)].filter(id => Number.isInteger(id) && model.Geosets?.[id]);
   if (!ids.length) throw new Error('Check the geosets that need visibility controls.');
@@ -69,13 +75,14 @@ export function animationTargets(model, { geosetIds = [], nodeIds = [] } = {}) {
   return targets;
 }
 export function readAnimationTrack(model, target) {
-  return resolveTarget(model, target)?.[target.property] ?? fallback(target.property);
+  const value = resolveTarget(model, target)?.[target.property] ?? fallback(target.property);
+  return targetUsesWarcraftColorOrder(model, target) ? warcraftColorTrackToRgb(value) : value;
 }
 export function sampleAnimationProperty(model, target, frame, sequenceIndex) {
   if (target.kind === 'geoset') {
     resolveTarget(model, target);
     const evaluated = sampleGeosetAnimation(model, target.id, frame, sequenceIndex);
-    return target.property === 'Color' ? evaluated.color : evaluated.alpha;
+    return target.property === 'Color' ? warcraftColorToRgb(evaluated.color) : evaluated.alpha;
   }
   return sampleTrack(readAnimationTrack(model, target), frame, { interval: model.Sequences?.[sequenceIndex]?.Interval, globalSequences: model.GlobalSequences, fallback: fallback(target.property) });
 }
@@ -106,11 +113,13 @@ function trackForEdit(model, target) {
   for (const seq of model.Sequences || []) if (seq.Interval) putKey(track, validFrame(seq.Interval[0]), value);
   return track;
 }
-function commitTrack(model, target, track) {
+function commitTrack(model, target, track, enableColor = true) {
   const owner = resolveTarget(model, target, true);
-  if (track === undefined) delete owner[target.property]; else owner[target.property] = track;
-  if (target.kind === 'geoset' && target.property === 'Color') owner.Flags = (owner.Flags || 0) | 2;
+  const stored = targetUsesWarcraftColorOrder(model, target) && track !== undefined ? rgbTrackToWarcraftColor(track) : track;
+  if (stored === undefined) delete owner[target.property]; else owner[target.property] = stored;
+  if (enableColor && target.kind === 'geoset' && target.property === 'Color') owner.Flags = (owner.Flags || 0) | 2;
 }
+export function writeAnimationTrack(model, target, track, { enableColor = true } = {}) { commitTrack(model, target, track, enableColor); }
 function applyPrepared(model, prepared) {
   // All parsing/validation happens before the first model mutation, including
   // resolving every target. EditorDocument then makes the whole edit undoable.

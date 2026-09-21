@@ -1,6 +1,7 @@
 import {Vector3} from 'three';
 import {parseMDL} from 'war3-model';
 import {sampleNodeMatrices,sampleTrack} from './animation.js';
+import {warcraftColorToRgb} from './warcraft-color.js';
 
 export const WC3_DNC_ENVIRONMENTS=['Lordaeron','Ashenvale','Dalaran','Dungeon','Felwood','Underground'];
 export const wc3DncPath=name=>`Environment\\DNC\\DNC${name}\\DNC${name}Unit\\DNC${name}Unit.mdx`;
@@ -64,7 +65,7 @@ export function sampleWarcraftDnc(model,hour=12) {
   return model.Lights.map(light=>{
     const sample=(key,fallback)=>sampleTrack(light[key],frame,{...options,fallback}),matrix=matrices.get(light.ObjectId);
     const position=new Vector3().fromArray(light.PivotPoint||[0,0,0]),direction=new Vector3(0,0,1);if(matrix){position.applyMatrix4(matrix);direction.transformDirection(matrix);}
-    const visibility=sample('Visibility',1),rgb=key=>Array.from(sample(key,[1,1,1])).reverse();
+    const visibility=sample('Visibility',1),rgb=key=>warcraftColorToRgb(sample(key,[1,1,1]));
     return {type:light.LightType,position:position.toArray(),direction:direction.toArray(),color:rgb('Color').map(c=>Math.max(0,c*sample('Intensity',1)*visibility)),ambient:rgb('AmbColor').map(c=>Math.max(0,c*sample('AmbIntensity',0)*visibility)),start:sample('AttenuationStart',80),end:sample('AttenuationEnd',200)};
   });
 }

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDemoDocument, createNode, openDocument } from '../src/editor-document.js';
+import { rgbToWarcraftColor } from '../src/warcraft-color.js';
 import {
   timelineTracks, timelineScope, timelineDomain, timelineReadTrack, timelineKeys, timelineSample,
   selectTimelineRange, copyTimelineKeys, copyTimelinePose, pasteTimelineKeys, pasteTimelinePose,
@@ -15,8 +16,8 @@ const close = (actual, expected) => Array.from(actual).forEach((number, i) => as
 function fixture() {
   const head = { ObjectId: 0, Name: 'Head', Rotation: track([key(1000, [0, 0, 0, 1]), key(1500, [0, 0, 1, 0]), key(3000, [0, 0, 0, 1])]), Translation: track([key(1000, [1, 2, 3], true), key(1200, [4, 5, 6], true), key(1400, [7, 8, 9], true), key(1500, [2, 3, 4], true), key(3000, [10, 20, 30], true)], 2) };
   return { Info: {}, Nodes: [head], Bones: [head, { ObjectId: 1, Name: 'Hand', Rotation: track([key(1200, [0, 0, 0, 1])]) }],
-    Lights: [{ ObjectId: 2, Name: 'Light', Color: new Float32Array([.2, .3, .4]), Visibility: track([key(0, [1]), key(500, [0])], 0, 0), Intensity: track([key(1000, [1])]) }],
-    Geosets: [{}, {}], GeosetAnims: [{ GeosetId: 0, Flags: 3, Alpha: .4, Color: new Float32Array([.1, .2, .3]) }],
+    Lights: [{ ObjectId: 2, Name: 'Light', Color: rgbToWarcraftColor([.2, .3, .4]), Visibility: track([key(0, [1]), key(500, [0])], 0, 0), Intensity: track([key(1000, [1])]) }],
+    Geosets: [{}, {}], GeosetAnims: [{ GeosetId: 0, Flags: 3, Alpha: .4, Color: rgbToWarcraftColor([.1, .2, .3]) }],
     Sequences: [{ Name: 'Stand', Interval: new Uint32Array([1000, 2000]) }, { Name: 'Attack', Interval: new Uint32Array([3000, 4000]) }], GlobalSequences: [500, 800],
     Materials: [{ Layers: [{ Alpha: track([key(1000, [1])]) }] }],
   };

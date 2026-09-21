@@ -1,6 +1,7 @@
 import { ensureDummyBone } from './forge.js';
 import { recalculateExtents } from './editor-document.js';
 import { sampleTrack } from './animation.js';
+import { rgbToWarcraftColor, warcraftColorToRgb } from './warcraft-color.js';
 
 const TEXTURE_SLOTS = ['TextureID', 'NormalTextureID', 'ORMTextureID', 'EmissiveTextureID', 'TeamColorTextureID', 'ReflectionsTextureID'];
 export const partPathKey = value => String(value || '').replaceAll('/', '\\').toLowerCase();
@@ -43,7 +44,7 @@ export function resolvePartColor(model, { sequenceIndex, recordIndex, frame }) {
   if (!sequence || !partColorSources(model, sequenceIndex).some(item => item.recordIndex === recordIndex)) throw Error('Choose an available source animation and geoset color.');
   if (!Number.isFinite(frame) || frame < sequence.Interval[0] || frame > sequence.Interval[1]) throw Error('Choose a sample frame inside the source animation.');
   const color = sampleTrack(model.GeosetAnims[recordIndex].Color, frame, { interval: sequence.Interval, globalSequences: model.GlobalSequences, globalTime: frame, fallback: [NaN, NaN, NaN] });
-  const rgb = Array.from(color);
+  const rgb = Array.from(warcraftColorToRgb(color));
   if (rgb.length !== 3 || rgb.some(value => !Number.isFinite(value))) throw Error('This source sample has no usable RGB value.');
   return rgb.map(value => Math.max(0, Math.min(1, value)));
 }
@@ -71,9 +72,9 @@ export function applyPartColor(model, geosetIndices, rgb) {
   for (const animation of model.GeosetAnims) if (indices.has(animation.GeosetId)) {
     // Replacing only Color removes source color keys while preserving alpha,
     // flags unrelated to color, and all unrelated channels.
-    animation.Color = new Float32Array(rgb); animation.Flags = (animation.Flags || 0) | 2; seen.add(animation.GeosetId);
+    animation.Color = rgbToWarcraftColor(rgb); animation.Flags = (animation.Flags || 0) | 2; seen.add(animation.GeosetId);
   }
-  for (const index of indices) if (!seen.has(index)) model.GeosetAnims.push({ GeosetId: index, Flags: 2, Alpha: 1, Color: new Float32Array(rgb) });
+  for (const index of indices) if (!seen.has(index)) model.GeosetAnims.push({ GeosetId: index, Flags: 2, Alpha: 1, Color: rgbToWarcraftColor(rgb) });
 }
 
 /** Isolated bind-pose geometry preview. No destination role is created. */

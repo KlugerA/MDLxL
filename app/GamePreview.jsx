@@ -14,7 +14,7 @@ import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatric
 import { applyMovementTransform, movementRestricted } from '../src/movement.js';
 import { drawMovementOverlay, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from './movement-overlay.js';
 import { applyRestPoseMatrices, isUVOnlyPreviewChange, portraitBlankDragRotatesCamera, restorePreviewCamera } from './game-preview-data.js';
-import { installWarcraftPreviewAdapter, resetPreviewEffects } from './warcraft-preview-adapter.js';
+import { installWarcraftPreviewAdapter, prepareWarcraftPreviewColors, resetPreviewEffects } from './warcraft-preview-adapter.js';
 import { composePreviewCapture, drawPreviewBackground, previewPlaybackStep } from './game-preview-capture.js';
 import { createGLPreviewBackground } from './game-preview-background-gl.js';
 import { createAnimatedPreviewBackground } from './animated-preview-background.js';
@@ -177,7 +177,7 @@ export default function GamePreview(inputProps) {
     if (!gl) { setError('This preview needs WebGL 2. The geometry editor remains available.'); canvas.remove(); backgroundCanvas.remove(); return; }
     let native, disposed = false, observer, scheduler, hoverCanvas, nodeCanvas, geometryCanvas, cameraCanvas, nodePoints = [], nodeHandles = [], nodeGesture = null, selectionGesture = null, posedGeosets = [], rotating = false, portraitBackup = null, cameraGestureStart = null;
     const invalidate = () => scheduler?.invalidate();
-    const ownedModel = structuredClone(rendererModel);
+    const ownedModel = prepareWarcraftPreviewColors(structuredClone(rendererModel));
     ownedModel.Nodes = []; for (const node of allNodes(ownedModel)) ownedModel.Nodes[node.ObjectId] = node;
     // Marker categories retain emitter membership even when effect simulation is
     // disabled; the shared node objects still receive the same live poses.

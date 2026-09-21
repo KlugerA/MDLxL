@@ -6,18 +6,19 @@ import {
   sampleAnimationProperty, updateAnimationKey,
 } from '../src/animation-tracks.js';
 import { createDemoDocument, createNode, openDocument } from '../src/editor-document.js';
+import { rgbToWarcraftColor } from '../src/warcraft-color.js';
 
 const geo = (id = 0, property = 'Alpha') => ({ kind: 'geoset', id, property });
 const key = (Frame, ...Vector) => ({ Frame, Vector: new Float32Array(Vector) });
 function fixture() {
   return {
     Info: {}, Geosets: [{}, {}, {}], GeosetAnims: [
-      { GeosetId: 0, Flags: 1, Alpha: 0.4, Color: new Float32Array([0.2, 0.3, 0.4]) },
+      { GeosetId: 0, Flags: 1, Alpha: 0.4, Color: rgbToWarcraftColor([0.2, 0.3, 0.4]) },
       { GeosetId: 1, Flags: 0, Alpha: { LineType: 0, GlobalSeqId: null, Keys: [key(100, 1), key(160, 0), key(1000, 0.7)] }, Color: null },
     ],
     Sequences: [{ Name: 'Stand', Interval: new Uint32Array([100, 200]) }, { Name: 'Attack', Interval: new Uint32Array([1000, 1300]) }],
     GlobalSequences: [500], Bones: [{ ObjectId: 0, Name: 'Bone' }],
-    Lights: [{ ObjectId: 1, Name: 'Light', Color: new Float32Array([1, 0, 0]) }],
+    Lights: [{ ObjectId: 1, Name: 'Light', Color: rgbToWarcraftColor([1, 0, 0]) }],
     ParticleEmitters2: [{ ObjectId: 2, Name: 'Sparks', SegmentColor: [new Float32Array([1, 0, 0])] }],
     Attachments: [{ ObjectId: 3, Name: 'Weapon' }], RibbonEmitters: [{ ObjectId: 4, Name: 'Trail', Color: new Float32Array([0, 0, 1]) }],
   };
@@ -36,12 +37,13 @@ test('visibility key edits only selected geosets and preserve static values in o
   assert.equal(model.GeosetAnims[0].Flags, 1);
 });
 
-test('RGB keys use internal RGB order, preserve shadow flag, and enable geoset color', () => {
+test('RGB keys expose human RGB while preserving Warcraft storage, shadow flag, and color enablement', () => {
   const model = fixture();
   model.GeosetAnims[0].Flags = 3;
   setAnimationKey(model, [geo(0, 'Color')], 150, [1, 0.1, 0.8], 0);
   assert.equal(model.GeosetAnims[0].Flags, 3);
   close(readAnimationTrack(model, geo(0, 'Color')).Keys.find(k => k.Frame === 150).Vector, [1, 0.1, 0.8]);
+  close(model.GeosetAnims[0].Color.Keys.find(k => k.Frame === 150).Vector, rgbToWarcraftColor([1, 0.1, 0.8]));
   close(sampleAnimationProperty(model, geo(0, 'Color'), 1200, 1), [0.2, 0.3, 0.4]);
 });
 
@@ -73,7 +75,7 @@ test('RGB Set All affects all sequences of checked geosets without changing thei
     const anim = model.GeosetAnims.find(item => item.GeosetId === id);
     assert.equal(anim.Flags & 2, 2);
     assert.deepEqual(frames(anim.Color), [100, 200, 1000, 1300]);
-    for (const key of anim.Color.Keys) close(key.Vector, [0.8, 0.4, 0.1]);
+    for (const key of anim.Color.Keys) close(key.Vector, rgbToWarcraftColor([0.8, 0.4, 0.1]));
   }
   assert.deepEqual(model.GeosetAnims[0].Alpha, alphas[0]);
   assert.deepEqual(model.GeosetAnims[1], unrelated);
@@ -111,7 +113,7 @@ test('Bake parses all pending text atomically and does not depend on currently s
   drafts[1].text = '100: 1, 0, 0\n200: 0, 0.2, 1';
   assert.equal(bakeAnimationTracks(model, drafts), 2);
   assert.deepEqual(frames(model.GeosetAnims.find(a => a.GeosetId === 2).Alpha), [100, 200]);
-  close(model.GeosetAnims[0].Color.Keys[1].Vector, [0, 0.2, 1]);
+  close(model.GeosetAnims[0].Color.Keys[1].Vector, rgbToWarcraftColor([0, 0.2, 1]));
 });
 
 test('text parser validates duplicates, shape, ranges, times and timing, and preserves spline tangents', () => {
@@ -144,7 +146,7 @@ test('supported node channels exclude bone visibility and Particle2 lifecycle co
   assert.ok(targets.some(t => t.id === 1 && t.property === 'AmbColor'));
   const light = targets.find(t => t.id === 1 && t.property === 'Color');
   setAnimationKey(model, [light], 150, [0.1, 0.4, 0.9], 0);
-  close(model.Lights[0].Color.Keys.find(k => k.Frame === 150).Vector, [0.1, 0.4, 0.9]);
+  close(model.Lights[0].Color.Keys.find(k => k.Frame === 150).Vector, rgbToWarcraftColor([0.1, 0.4, 0.9]));
   assert.equal(model.ParticleEmitters2[0].SegmentColor[0][0], 1);
 });
 
@@ -185,26 +187,24 @@ test('Bake is one undoable edit and preserves RGB/visibility through in-memory M
     const opened = openDocument(doc.serialize(format), `synthetic.${format}`);
     assert.equal(opened.readOnly, false);
     assert.deepEqual(opened.diagnostics.filter(d => d.severity === 'error'), []);
-    close(opened.model.GeosetAnims[0].Color.Keys[0].Vector, [1, 0.2, 0.4]);
+    close(readAnimationTrack(opened.model, geo(0, 'Color')).Keys[0].Vector, [1, 0.2, 0.4]);
     assert.equal(opened.model.GeosetAnims[0].Flags & 2, 2, `${format} must retain the enabled color`);
-    close(opened.model.Lights.find(n => n.ObjectId === lightId).Color.Keys[0].Vector, [0.1, 0.2, 0.8]);
+    close(readAnimationTrack(opened.model, { kind: 'node', id: lightId, property: 'Color' }).Keys[0].Vector, [0.1, 0.2, 0.8]);
     close(opened.model.RibbonEmitters.find(n => n.ObjectId === ribbonId).Alpha.Keys[0].Vector, [0.2]);
     assert.equal(opened.model.ParticleEmitters2.find(n => n.ObjectId === particleId).Visibility.Keys[0].Vector[0], 0);
   }
 });
 
-test('disabled colors remain disabled in MDL export while MDX preserves their cached RGB values', () => {
+test('MDL conversion rejects disabled cached colors while MDX preserves them', () => {
   const doc = createDemoDocument();
   doc.apply('Static geoset tint', ['GeosetAnims'], model => {
-    const anim = model.GeosetAnims[0]; anim.Color = new Float32Array([0.2, 0.5, 0.8]); anim.Flags = 1;
+    const anim = model.GeosetAnims[0]; anim.Color = rgbToWarcraftColor([0.2, 0.5, 0.8]); anim.Flags = 1;
   });
-  const mdl = openDocument(doc.serialize('mdl'), 'synthetic.mdl');
-  assert.equal(mdl.model.GeosetAnims[0].Flags, 1);
-  assert.equal(mdl.model.GeosetAnims[0].Color, null);
+  assert.throws(() => doc.serialize('mdl'), /GeosetAnims\[0\]\.Color/);
   const mdx = openDocument(doc.serialize('mdx'), 'synthetic.mdx');
   assert.equal(mdx.model.GeosetAnims[0].Flags, 1);
-  close(mdx.model.GeosetAnims[0].Color, [0.2, 0.5, 0.8]);
-  close(doc.model.GeosetAnims[0].Color, [0.2, 0.5, 0.8]);
+  close(mdx.model.GeosetAnims[0].Color, rgbToWarcraftColor([0.2, 0.5, 0.8]));
+  close(doc.model.GeosetAnims[0].Color, rgbToWarcraftColor([0.2, 0.5, 0.8]));
 });
 
 test('direct key edits retime one selected track, preserve cubic tangents, and reject collisions atomically', () => {

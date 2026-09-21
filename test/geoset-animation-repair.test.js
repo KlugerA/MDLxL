@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStarterDocument } from '../src/starter-model.js';
 import { createNode, openDocument } from '../src/editor-document.js';
-import { scanGeosetAnimationDuplicates, repairGeosetAnimations, classifyVisibilityGeoset } from '../src/geoset-animation-repair.js';
+import { scanGeosetAnimationDuplicates, repairGeosetAnimations, classifyVisibilityGeoset, describeGeosetTint, geosetTintForDisplay } from '../src/geoset-animation-repair.js';
+import { rgbToWarcraftColor } from '../src/warcraft-color.js';
 import { readAnimationTrack } from '../src/animation-tracks.js';
 
 const track = (frames = [[100, 1], [200, 0]], extra = {}) => ({ LineType: 1, GlobalSeqId: null, Keys: frames.map(([Frame, value]) => ({ Frame, Vector: new Float32Array(Array.isArray(value) ? value : [value]) })), ...extra });
@@ -16,6 +17,13 @@ function fixture() {
   return doc;
 }
 const repair = (doc, options) => doc.apply('Repair', ['GeosetAnims', 'Bones', 'Geosets', 'Info'], model => repairGeosetAnimations(model, options));
+
+test('repair review reports Warcraft stored tints as human RGB without mutating them', () => {
+  const stored = rgbToWarcraftColor([0.2, 0.5, 0.8]), before = Array.from(stored);
+  assert.equal(describeGeosetTint(stored), 'static RGB (0.2, 0.5, 0.8)');
+  Array.from(geosetTintForDisplay(stored)).forEach((value, index) => assert.ok(Math.abs(value - [0.2, 0.5, 0.8][index]) < 1e-6));
+  assert.deepEqual(Array.from(stored), before);
+});
 const values = animation => animation.Alpha.Keys.map(key => key.Vector[0]);
 
 test('duplicate preflight detects the render failure without weakening strict track editing', () => {

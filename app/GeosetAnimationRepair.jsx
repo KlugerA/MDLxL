@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { classifyVisibilityGeoset, describeGeosetTint } from '../src/geoset-animation-repair.js';
+import { classifyVisibilityGeoset, describeGeosetTint, geosetTintForDisplay } from '../src/geoset-animation-repair.js';
 import './geoset-repair.css';
 
 export default function GeosetAnimationRepair({ model, name, groups, receipt, busy, unavailable, status, onRepair, onUndo, onAccept, onOpen, onSave }) {
@@ -45,7 +45,7 @@ export default function GeosetAnimationRepair({ model, name, groups, receipt, bu
           {tint === 'preserve' && group.colorConflict ? <label>Conflicting tints — choose one <select aria-label={`Tint source for geoset ${group.geosetId + 1}`} value={colors[group.geosetId] ?? ''} onChange={event => setColors({ ...colors, [group.geosetId]: event.target.value === '' ? null : Number(event.target.value) })}>
             <option value="">Choose the tint to keep…</option>{group.colorSources.map(index => <option key={index} value={index}>#{index + 1} — {describeGeosetTint(model.GeosetAnims[index].Color)}</option>)}
           </select></label> : tint === 'preserve' && group.suggestedColor != null ? <small>Tint retained from animation #{group.suggestedColor + 1}.</small> : null}
-          {tint === 'preserve' && group.colorConflict && <details><summary>Inspect conflicting tint values</summary>{group.colorSources.map(index => <div key={index}><strong>Animation #{index + 1}</strong><pre>{JSON.stringify(model.GeosetAnims[index].Color, (_, value) => ArrayBuffer.isView(value) ? Array.from(value) : value, 2)}</pre></div>)}</details>}
+          {tint === 'preserve' && group.colorConflict && <details><summary>Inspect conflicting tint values</summary>{group.colorSources.map(index => <div key={index}><strong>Animation #{index + 1}</strong><pre>{JSON.stringify(geosetTintForDisplay(model.GeosetAnims[index].Color), (_, value) => ArrayBuffer.isView(value) ? Array.from(value) : value, 2)}</pre></div>)}</details>}
         </fieldset>)}</div>
         <label><input type="checkbox" checked={rebuildVisibility} disabled={busy} onChange={event => setRebuild(event.target.checked)}/> Also rebuild visibility using Decay / Portrait rules</label>
         {rebuildVisibility && <>
