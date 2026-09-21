@@ -4,7 +4,7 @@ import {paintMessage as msg} from '../src/paint-messages.js';
 /** A texture/UV view of the current paint target. Pixel edits share the 3D
  * painter's coats and history; UV edits are owned by the portable preset.
  */
-export default function PaintTextureCanvas({canvas,version,geoset,coordId=0,brush,brushPreview,decal,disabled,onStart,onMove,onEnd,onCancel,onDrop,onUVChange,onSave}) {
+export default function PaintTextureCanvas({canvas,version,geoset,coordId=0,brush,brushPreview,textureSmoothing=false,decal,disabled,onStart,onMove,onEnd,onCancel,onDrop,onUVChange,onSave}) {
   const display=useRef(),image=useRef(),cursor=useRef(),gesture=useRef(null);
   const [zoom,setZoom]=useState(1),[mesh,setMesh]=useState(true),[tool,setTool]=useState('paint'),[draft,setDraft]=useState(null),[angle,setAngle]=useState(0),[scale,setScale]=useState(100);
   const size=canvas?.width||256,uv=draft||geoset?.TVertices?.[coordId]||geoset?.TVertices?.[0];
@@ -26,7 +26,7 @@ export default function PaintTextureCanvas({canvas,version,geoset,coordId=0,brus
   return <div className="paint-texture-view"><div className="paint-texture-toolbar"><button aria-pressed={tool==='paint'} onClick={()=>setTool('paint')}>{msg('paint.paint')}</button><button aria-pressed={tool==='moveUV'} onClick={()=>setTool('moveUV')}>{msg('paint.moveUV')}</button><label><input type="checkbox" checked={mesh} onChange={e=>setMesh(e.target.checked)}/>{msg('paint.uvMesh')}</label><label>{msg('paint.zoom')}<select value={zoom} onChange={e=>setZoom(+e.target.value)}>{[.5,1,1.5,2,3,4,6,8].map(v=><option key={v} value={v}>{v*100}%</option>)}</select></label></div>
     {tool==='moveUV'&&<div className="paint-texture-toolbar"><label>{msg('paint.scale')}<input type="number" min="1" value={scale} onChange={e=>setScale(+e.target.value)}/>%</label><label>{msg('paint.angle')}<input type="number" value={angle} onChange={e=>setAngle(+e.target.value)}/>°</label><button onClick={transform}>{msg('paint.applyUV')}</button><small>{msg('paint.uvEditHelp')}</small></div>}
     <div className="paint-texture-scroll"><div ref={image} className="paint-texture-image" style={{width:size*zoom,height:size*zoom,cursor:tool==='moveUV'?'move':'crosshair'}} onPointerDown={down} onPointerMove={move} onPointerUp={end} onPointerCancel={()=>{gesture.current=null;setDraft(null);onCancel();}} onPointerLeave={()=>{if(cursor.current)cursor.current.style.display='none';}} onDragOver={e=>{if(decal)e.preventDefault();}} onDrop={e=>{if(!decal||disabled)return;e.preventDefault();onDrop(hit(e));}}>
-      <canvas ref={display}/>{mesh&&uv&&<svg viewBox={`0 0 ${size} ${size}`}><path d={uvPath}/></svg>}
+      <canvas ref={display} style={{imageRendering:textureSmoothing?'auto':'pixelated'}}/>{mesh&&uv&&<svg viewBox={`0 0 ${size} ${size}`}><path d={uvPath}/></svg>}
       <div ref={cursor} className="paint-texture-cursor" style={{width:(decal?.width||brush.size)*zoom,height:(decal?.height||brush.size)*zoom,transform:`translate(-50%,-50%) rotate(${decal?.angle||0}deg)`}}>{decal?<img src={decal.url} style={{opacity:decal.opacity,transform:`scale(${decal.flipX?-1:1},${decal.flipY?-1:1})`}}/>:<img src={brushPreview}/>}</div>
     </div></div>
   </div>;

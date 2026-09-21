@@ -1,4 +1,4 @@
-import { Color, LinearFilter, LinearMipmapLinearFilter, Vector3 } from 'three';
+import { Color, LinearFilter, LinearMipmapLinearFilter, NearestFilter, Vector3 } from 'three';
 
 // The native SD shader consumes encoded colors; Three materials consume linear.
 export const nativeTeamColor = hex => { const value = new Color(hex).getHex(); return [value >> 16 & 255, value >> 8 & 255, value & 255].map(channel => channel / 255); };
@@ -10,6 +10,16 @@ export function configureEditorTexture(texture, anisotropy = 1) {
   texture.minFilter = LinearMipmapLinearFilter;
   texture.generateMipmaps = true;
   texture.anisotropy = Math.max(1, Math.min(16, anisotropy));
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** Live paint can show exact texel edges or the existing soft, filtered view.
+ * This is preview sampling only: source pixels and exported mipmaps are intact. */
+export function configurePaintTexture(texture, smoothing = true) {
+  texture.magFilter = texture.minFilter = smoothing ? LinearFilter : NearestFilter;
+  texture.generateMipmaps = false;
+  texture.anisotropy = 1;
   texture.needsUpdate = true;
   return texture;
 }

@@ -49,6 +49,8 @@ export const PAINT_MESSAGES = Object.freeze({
   'paint.brushZoom': 'Brush Zoom',
   'paint.hardness': 'Hardness',
   'paint.opacity': 'Opacity',
+  'paint.bleed': 'Bleed',
+  'paint.bleedHelp': 'Preview smoothing: off shows sharp texture pixels; on blends their edges. Does not change painted pixels or Warcraft texture filtering.',
   'paint.flow': 'Flow',
   'paint.spacing': 'Spacing',
   'paint.strength': 'Strength',

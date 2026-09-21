@@ -11,7 +11,7 @@ import { previewPresentationProps, previewOverlaySettings } from './preview-pres
 import { drawMovementOverlay, projectMovementNodes } from './movement-overlay.js';
 import { samplePreviewMatrices } from './preview-pose.js';
 import { projectPreviewGeosets, pickPreviewGeoset } from './preview-selection.js';
-import { configureEditorTexture, cameraLeftLight, viewportPixelRatio } from './viewport-quality.js';
+import { configureEditorTexture, configurePaintTexture, cameraLeftLight, viewportPixelRatio } from './viewport-quality.js';
 import { createRigMarkersGL } from './rig-markers-gl.js';
 import { drawModelCameraOverlay } from './model-camera-overlay.js';
 import { TGALoader } from 'three/addons/loaders/TGALoader.js';
@@ -906,7 +906,8 @@ export default function Viewport(inputProps) {
       const path = normalizedPath(texture.Image);
       const asset = normalized.get(path) || normalized.get(path.split('\\').at(-1));
       const override = overrides.get(index) || overrides.get(String(index));
-      const key = override ? `paint|${texture.Flags}` : `${path}|${texture.Flags}|${texture.ReplaceableId}`, previous = state.textureSources.get(index);
+      const smoothing=props.paintTextureSmoothing!==false;
+      const key = override ? `paint|${texture.Flags}|${smoothing}` : `${path}|${texture.Flags}|${texture.ReplaceableId}`, previous = state.textureSources.get(index);
       if (override?.canvas && previous?.canvas === override.canvas && previous.key === key && state.textures.has(index)) {
         if (previous.revision !== override.revision) { previous.revision = override.revision; const loaded=state.textures.get(index);loaded.clearUpdateRanges();if(!override.fullUpload)for(const range of paintRowRanges(override.uploadRows,override.raster.width))loaded.addUpdateRange(range.start,range.count);loaded.needsUpdate=true;state.scheduler?.invalidate(); } return;
       }
@@ -916,9 +917,7 @@ export default function Viewport(inputProps) {
       if (override?.canvas) {
         const loaded = override.raster?new THREE.DataTexture(override.raster.data,override.raster.width,override.raster.height,THREE.RGBAFormat):new THREE.CanvasTexture(override.canvas);
         loaded.flipY=false;loaded.colorSpace=THREE.NoColorSpace;loaded.wrapS=texture.Flags&1?THREE.RepeatWrapping:THREE.ClampToEdgeWrapping;loaded.wrapT=texture.Flags&2?THREE.RepeatWrapping:THREE.ClampToEdgeWrapping;
-        // Live paint uses linear filtering without regenerating mipmaps after
-        // each stroke preview. Export still produces the full Warcraft mip chain.
-        loaded.magFilter=THREE.LinearFilter;loaded.minFilter=THREE.LinearFilter;loaded.generateMipmaps=false;loaded.anisotropy=1;loaded.needsUpdate=true;
+        configurePaintTexture(loaded,smoothing);
         if(override.raster)loaded.onUpdate=()=>acknowledgePaintUpload(override);
         state.textures.set(index,loaded);state.scheduler?.invalidate();return;
       }
@@ -932,7 +931,7 @@ export default function Viewport(inputProps) {
     });
     Promise.all(jobs).then(() => { if (!cancelled && failures.length) setTextureMessage(failures.join('; ')); });
     return () => { cancelled = true; };
-  }, [textureSignature, textureAssets, texturesNeeded, graphics.textures, graphics.antialias, props.paintTextureOverrides, props.paintTextureRevision]);
+  }, [textureSignature, textureAssets, texturesNeeded, graphics.textures, graphics.antialias, props.paintTextureOverrides, props.paintTextureRevision, props.paintTextureSmoothing]);
 
   useEffect(() => { if(runtime.current && runtime.current.appliedView !== view) runtime.current.setView(view); }, [view, graphics.antialias]);
   useEffect(() => { if (props.cameraAnglesRequest) runtime.current?.setCameraAngles(props.cameraAnglesRequest); }, [props.cameraAnglesRequest]);

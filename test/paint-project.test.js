@@ -50,6 +50,20 @@ test('projects enforce v1 resolution and stroke history is bounded, branch-safe,
   markPaintProjectSaved(project);assert.equal(project.dirty,false);
 });
 
+test('both Bleed choices survive saving a preset without modifying its painted image',async()=>{
+  const project=createPaintProject({sourceMode:'primer'});
+  addPaintProjectTarget(project,paintTarget(),createPaintRaster(256,256,[40,50,60,255]));
+  paintProjectCoat(project).raster.data.set([180,90,20,255],(60*256+45)*4);
+  const before=compositePaintTarget(project);
+  for(const textureSmoothing of [false,true]){
+    project.viewSettings={textureSmoothing};
+    const archive=await paintProjectArchive(project,{modelBytes:new Uint8Array([1,2,3])});
+    const restored=await restorePaintProject(new Uint8Array(await archive.arrayBuffer()),decodeOwnPng);
+    assert.equal(restored.project.viewSettings.textureSmoothing,textureSmoothing);
+    assert.deepEqual(compositePaintTarget(restored.project),before);
+  }
+});
+
 test('one free-paint gesture across materials is one undo and redo step',()=>{
   const project=createPaintProject({sourceMode:'primer'}),first=addPaintProjectTarget(project,{...paintTarget([0]),id:'first'},createPaintRaster(256)),second=addPaintProjectTarget(project,{...paintTarget([1]),id:'second',textureId:1},createPaintRaster(256));
   const firstCoat=paintProjectCoat(project,first.id),secondCoat=paintProjectCoat(project,second.id),firstBefore=clonePaintRaster(firstCoat.raster),secondBefore=clonePaintRaster(secondCoat.raster);
