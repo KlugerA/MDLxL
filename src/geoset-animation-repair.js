@@ -1,6 +1,5 @@
 import { directlyBoundBoneIds } from './binding-inspection.js';
 import { recalculateExtents } from './editor-document.js';
-import { warcraftColorTrackToRgb } from './warcraft-color.js';
 
 const track = value => value && Array.isArray(value.Keys);
 const signature = value => JSON.stringify(value, (_, item) => ArrayBuffer.isView(item) ? Array.from(item) : item);
@@ -8,13 +7,9 @@ const alphaCount = animation => track(animation.Alpha) ? animation.Alpha.Keys.le
 const constantOne = value => !track(value) && (value == null || Number(value) === 1);
 const hasTint = animation => !!(animation.Flags & 2) && animation.Color != null;
 const white = value => !track(value) && Array.from(value || []).length === 3 && Array.from(value).every(n => n === 1);
-export const geosetTintForDisplay = value => warcraftColorTrackToRgb(value);
-export const describeGeosetTint = value => {
-  const rgb = geosetTintForDisplay(value);
-  return track(rgb)
-    ? `${rgb.Keys.length} RGB keys, ${['step', 'linear', 'Hermite', 'Bezier'][rgb.LineType] || 'unknown'}${rgb.GlobalSeqId != null ? `, global sequence ${rgb.GlobalSeqId + 1}` : ''}`
-    : `static RGB (${Array.from(rgb || []).map(n => Number(n.toFixed(3))).join(', ')})`;
-};
+export const describeGeosetTint = value => track(value)
+  ? `${value.Keys.length} RGB keys, ${['step', 'linear', 'Hermite', 'Bezier'][value.LineType] || 'unknown'}${value.GlobalSeqId != null ? `, global sequence ${value.GlobalSeqId + 1}` : ''}`
+  : `static RGB (${Array.from(value || []).map(n => Number(n.toFixed(3))).join(', ')})`;
 
 /** Suggestions, not proof of corruption. Always present the selected owners before committing. */
 export function scanGeosetAnimationDuplicates(model) {

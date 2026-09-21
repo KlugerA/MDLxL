@@ -4,7 +4,6 @@
  */
 import { booleanContours, exteriorFrame, triangulateContours } from './forge-geometry.js';
 import { createNode, recalculateNormals, recalculateExtents } from './editor-document.js';
-import { rgbToWarcraftColor } from './warcraft-color.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const finite = (v, name, min = 0) => { if (!Number.isFinite(v) || v < min) throw Error(`${name} is outside the allowed range.`); return v; };
@@ -278,7 +277,7 @@ export function commitForge(model, mesh, { texturePath, trimColor = [0.8, 0.65, 
     if (model.Version >= 900) g.LevelOfDetail = 0;
     if (hd) { g.SkinWeights = new (model.Version >= 1400 ? Uint16Array : Uint8Array)(g.Vertices.length / 3 * 8); for (let v = 0; v < g.Vertices.length / 3; v++) g.SkinWeights.set([bone.ObjectId, 0, 0, 0, 255, 0, 0, 0], v * 8); g.Tangents = forgeTangents(g); }
     model.Geosets.push(g); geosetIndices.push(index);
-    if (i) model.GeosetAnims.push({ GeosetId: index, Flags: 2, Alpha: 1, Color: rgbToWarcraftColor(trimColor) });
+    if (i) model.GeosetAnims.push({ GeosetId: index, Flags: 2, Alpha: 1, Color: new Float32Array(trimColor) });
   }
   recalculateExtents(model);
   for (const i of geosetIndices) model.Geosets[i].Anims = (model.Sequences || []).map(() => ({ MinimumExtent: model.Geosets[i].MinimumExtent.slice(), MaximumExtent: model.Geosets[i].MaximumExtent.slice(), BoundsRadius: model.Geosets[i].BoundsRadius }));

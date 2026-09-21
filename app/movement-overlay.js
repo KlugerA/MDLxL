@@ -4,7 +4,6 @@ import { movementNodeCategories } from './preview-overlays.js';
 import { samplePreviewMatrices } from './preview-pose.js';
 import { visualOptions } from '../src/preferences.js';
 import { boneHighlightColors } from './rig-markers-gl.js';
-import { warcraftColorToRgb } from '../src/warcraft-color.js';
 
 const COLORS = { X: '#fa4343', Y: '#34cf59', Z: '#3588ff' };
 const AXES = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] };
@@ -19,7 +18,7 @@ export function projectMovementNodes(model, frame, sequenceIndex, camera, width,
     const matrix = matrices.get(node.ObjectId); if (matrix) world.applyMatrix4(matrix);
     const screen = world.clone().project(camera);
     const rotation = new Quaternion(); matrix?.decompose(new Vector3(), rotation, new Vector3());
-    const rgb = lightIds.has(node.ObjectId) ? warcraftColorToRgb(sampleTrack(node.Color, frame, { interval: model.Sequences?.[sequenceIndex]?.Interval, globalSequences: model.GlobalSequences, globalTime, fallback: [1, 1, 1] })) : null;
+    const rgb = lightIds.has(node.ObjectId) ? sampleTrack(node.Color, frame, { interval: model.Sequences?.[sequenceIndex]?.Interval, globalSequences: model.GlobalSequences, globalTime, fallback: [1, 1, 1] }) : null;
     const displayColor = rgb ? `rgb(${Array.from(rgb, value => Math.round(Math.max(0, Math.min(1, value)) * 255)).join(',')})` : null;
     const refNode = (model.Attachments || []).some(item => item.ObjectId === node.ObjectId);
     const helperNode = (model.Helpers || []).some(item => item.ObjectId === node.ObjectId);

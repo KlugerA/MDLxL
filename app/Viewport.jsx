@@ -20,7 +20,6 @@ import { needsSolidDepthPrepass } from './preview-depth.js';
 import { vertexRgbPreviewState } from './vertex-rgb-preview.js';
 import { decodeBLP, getBLPImageData } from 'war3-model';
 import { advanceSequence, allNodes, sampleGeosetAnimation, sampleNodeMatrices, sampleTrack, skinGeoset, skinGeosetNormals } from '../src/animation.js';
-import { warcraftColorToRgb } from '../src/warcraft-color.js';
 import { decodeDds } from '../src/dds.js';
 import { decodeBlp2 } from '../src/blp2.js';
 import { applySelection, dragScale, insideTriangle, marqueeContainsPoint, planeAxes } from './classic-gestures.js';
@@ -649,9 +648,8 @@ export default function Viewport(inputProps) {
             const sampled = sampleGeosetAnimation(p.model, index, rgbState.frame, rgbState.sequenceIndex, rgbState.globalTime);
             // RGB preview is a tint, including for the untextured Team Color
             // layer. Starting from white here discarded the selected team.
-            const rgb = warcraftColorToRgb(sampled.color);
-            if (p.rgbPreview) material.color.set(textureInfo?.ReplaceableId === 1 || textureInfo?.ReplaceableId === 2 ? p.teamColor : 0xffffff).multiply(new THREE.Color(...rgb));
-            else material.userData.geosetTint.value.fromArray(rgb);
+            if (p.rgbPreview) material.color.set(textureInfo?.ReplaceableId === 1 || textureInfo?.ReplaceableId === 2 ? p.teamColor : 0xffffff).multiply(new THREE.Color(...sampled.color));
+            else material.userData.geosetTint.value.fromArray(sampled.color);
           }
           material.opacity = textured ? Math.max(0, Math.min(1, alpha * sampleTrack(layer.Alpha, rgbState.frame, { ...animOptions, fallback: 1 }))) : 1;
           const transparent = textured && ((layer.FilterMode || 0) >= 2 || material.opacity < 1);

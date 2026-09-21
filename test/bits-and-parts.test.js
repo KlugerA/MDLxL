@@ -9,13 +9,12 @@ import { buildForgeMesh, commitForge } from '../src/forge.js';
 import { applyPartColor, commitPart, partColorSamples, partColorSources, partTextureIndices, partTextureKey, previewPart, resolvePartColor } from '../src/bits-and-parts.js';
 import { sampleGeosetAnimation } from '../src/animation.js';
 import { retainedForgeAssets } from '../src/forge-assets.js';
-import { rgbToWarcraftColor, warcraftColorToRgb } from '../src/warcraft-color.js';
 const require = createRequire(import.meta.url), { BitsAndPartsLibrary } = require('../electron/bits-and-parts.cjs'), { saveForgeAssets } = require('../electron/forge-assets.cjs');
 const colors = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1]];
 function sword() {
   const model = structuredClone(createDemoDocument().model);
   model.Sequences = colors.map((_, index) => ({ ...model.Sequences[0], Name: `Color ${index + 1}`, Interval: new Uint32Array([index * 1000, index * 1000 + 900]) }));
-  const keys = colors.flatMap((color, index) => [index * 1000, index * 1000 + 900].map(Frame => ({ Frame, Vector: rgbToWarcraftColor(color) })));
+  const keys = colors.flatMap((color, index) => [index * 1000, index * 1000 + 900].map(Frame => ({ Frame, Vector: new Float32Array(color) })));
   model.GeosetAnims = [{ GeosetId: 0, Flags: 3, Color: { LineType: 1, GlobalSeqId: null, Keys: keys }, Alpha: { LineType: 1, GlobalSeqId: null, Keys: [{ Frame: 0, Vector: new Float32Array([.25]) }, { Frame: 900, Vector: new Float32Array([.75]) }] } }];
   if (model.Geosets.length < 2) model.Geosets.push(structuredClone(model.Geosets[0]));
   return model;
@@ -32,15 +31,15 @@ test('five-animation sword requires explicit animation, record and frame and pre
     const preview = previewPart(source, rgb);
     assert.equal(preview.Bones.length, 0);
     assert.equal(preview.GeosetAnims.length, preview.Geosets.length);
-    for (let gi = 0; gi < preview.Geosets.length; gi++) assert.deepEqual(Array.from(warcraftColorToRgb(sampleGeosetAnimation(preview, gi, 4000, 4).color)), rgb);
+    for (let gi = 0; gi < preview.Geosets.length; gi++) assert.deepEqual(sampleGeosetAnimation(preview, gi, 4000, 4).color, rgb);
   }
   assert.throws(() => resolvePartColor(source, { sequenceIndex: 0, recordIndex: 0 }), /sample frame/);
   assert.throws(() => resolvePartColor(source, { sequenceIndex: 0, recordIndex: 0, frame: 2000 }), /sample frame/);
   assert.deepEqual(source, before); assert.deepEqual(target.serialize(), targetBefore);
 });
 test('time-varying and per-geoset color selection uses the requested channel and interpolated frame', () => {
-  const source = sword(); source.GeosetAnims[0].Color.Keys[1].Vector = rgbToWarcraftColor([0, 0, 1]);
-  source.GeosetAnims.push({ GeosetId: 1, Flags: 2, Color: rgbToWarcraftColor([.5, .25, 1]), Alpha: 1 });
+  const source = sword(); source.GeosetAnims[0].Color.Keys[1].Vector = new Float32Array([0, 0, 1]);
+  source.GeosetAnims.push({ GeosetId: 1, Flags: 2, Color: new Float32Array([.5, .25, 1]), Alpha: 1 });
   assert.equal(partColorSources(source, 0).length, 2);
   assert.deepEqual(resolvePartColor(source, { sequenceIndex: 0, recordIndex: 0, frame: 450 }), [.5, 0, .5]);
   assert.deepEqual(resolvePartColor(source, { sequenceIndex: 0, recordIndex: 1, frame: 450 }), [.5, .25, 1]);
@@ -56,7 +55,7 @@ test('two import colors share equivalent dependencies and one Forge anchor; pres
     assert.deepEqual(doc.model.Geosets[gi].Groups, [[first.boneId]]);
     const animation = doc.model.GeosetAnims.find(item => item.GeosetId === gi);
     assert.equal(animation.Color.Keys, undefined);
-    assert.deepEqual(Array.from(warcraftColorToRgb(sampleGeosetAnimation(doc.model, gi, 0, 0).color)), rgb);
+    assert.deepEqual(sampleGeosetAnimation(doc.model, gi, 0, 0).color, rgb);
   }
   assert.deepEqual(doc.model.GeosetAnims.find(item => item.GeosetId === first.geosetIndices[0]).Alpha, source.GeosetAnims[0].Alpha);
   assert.equal(doc.model.GeosetAnims.find(item => item.GeosetId === first.geosetIndices[0]).Flags, 3);
@@ -81,7 +80,7 @@ test('imports are atomic and undo/redo plus MDL/MDX roundtrip preserve chosen RG
   const doc = createDemoDocument(), source = sword(), before = doc.serialize();
   const result = doc.apply('Import sword', [], model => commitPart(model, source, { rgb: colors[4] }));
   assert.equal(doc.undo(), true); assert.deepEqual(doc.serialize(), before); assert.equal(doc.redo(), true);
-  for (const format of ['mdl', 'mdx']) { const reopened = openDocument(doc.serialize(format)); assert.equal(reopened.readOnly, false); for (const gi of result.geosetIndices) assert.deepEqual(Array.from(warcraftColorToRgb(sampleGeosetAnimation(reopened.model, gi, 1000, 0).color)), colors[4]); assert.deepEqual(validateModel(reopened.model).filter(issue => issue.severity === 'error'), []); }
+  for (const format of ['mdl', 'mdx']) { const reopened = openDocument(doc.serialize(format)); assert.equal(reopened.readOnly, false); for (const gi of result.geosetIndices) assert.deepEqual(sampleGeosetAnimation(reopened.model, gi, 1000, 0).color, colors[4]); assert.deepEqual(validateModel(reopened.model).filter(issue => issue.severity === 'error'), []); }
   const frozen = structuredClone(doc.model); source.Geosets[0].MaterialID = 999;
   assert.throws(() => commitPart(doc.model, source), /missing material/); assert.deepEqual(doc.model, frozen);
 });
@@ -99,7 +98,7 @@ test('RGB overrides every existing record and creates only required missing reco
   const source = sword(); source.GeosetAnims.push(structuredClone(source.GeosetAnims[0]));
   const existing = source.GeosetAnims.length; applyPartColor(source, source.Geosets.map((_, index) => index), colors[2]);
   assert.equal(source.GeosetAnims.length, existing + source.Geosets.length - 1);
-  for (const animation of source.GeosetAnims) assert.deepEqual([...animation.Color], [...rgbToWarcraftColor(colors[2])]);
+  for (const animation of source.GeosetAnims) assert.deepEqual([...animation.Color], colors[2]);
 });
 test('library provisions exact folder, retains nested models and case variants, filters nonmodels, and prevents escaping', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'mdlxl-parts-')); t.after(() => fs.rm(directory, { recursive: true, force: true }));

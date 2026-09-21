@@ -22,7 +22,6 @@ import { needsSolidDepthPrepass } from './preview-depth.js';
 import { decodeBLP, getBLPImageData } from 'war3-model';
 import { decodePaintBlp } from '../src/paint-blp.js';
 import { advanceSequence, allNodes, sampleGeosetAnimation, sampleNodeMatrices, sampleTrack, skinGeoset, skinGeosetNormals } from '../src/animation.js';
-import { warcraftColorToRgb } from '../src/warcraft-color.js';
 import { decodeDds } from '../src/dds.js';
 import { decodeBlp2 } from '../src/blp2.js';
 import { applySelection, dragScale, insideTriangle, marqueeContainsPoint, planeAxes } from './classic-gestures.js';
@@ -715,9 +714,8 @@ export default function Viewport(inputProps) {
             const rgbSequence = p.rgbPreview ? p.rgbPreviewSequenceIndex : p.sequenceIndex;
             const rgbTime = p.rgbPreview ? (p.model?.Sequences?.[rgbSequence]?.Interval?.[0] ?? 0) : state.frame;
             const sampled = sampleGeosetAnimation(p.model, index, rgbTime, rgbSequence, p.rgbPreview ? rgbTime : state.globalTime);
-            const rgb = warcraftColorToRgb(sampled.color);
-            if (p.rgbPreview) material.color.set(0xffffff).multiply(new THREE.Color(...rgb));
-            else material.userData.geosetTint.value.fromArray(rgb);
+            if (p.rgbPreview) material.color.set(0xffffff).multiply(new THREE.Color(...sampled.color));
+            else material.userData.geosetTint.value.fromArray(sampled.color);
           }
           material.opacity = textured ? Math.max(0, Math.min(1, alpha * sampleTrack(layer.Alpha, state.frame, { ...animOptions, fallback: 1 }))) : 1;
           const transparent = textured && ((layer.FilterMode || 0) >= 2 || material.opacity < 1);

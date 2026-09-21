@@ -12,7 +12,6 @@ import { prepareMdlEventObject, restoreMdxEventGlobalSequences, writeMdlEventGlo
 import { prepareMdlPopcornColors, restoreMdlPopcornRotations } from './popcorn-rotation-codec.js';
 import { writeMdlUVSets } from './uv-coordinate-codec.js';
 import { convertMdxGeosetColorTracks } from './geoset-color-codec.js';
-import { rgbToWarcraftColor } from './warcraft-color.js';
 
 const V3 = (x = 0, y = 0, z = 0) => new Float32Array([x, y, z]);
 const clone = (value) => structuredClone(value);
@@ -594,17 +593,17 @@ export function createNode(model, type = 'Bone') {
   if (type === 'Attachment') Object.assign(node, { AttachmentID: Math.max(-1, ...(model.Attachments || []).map((n) => n.AttachmentID || 0)) + 1, Path: '' });
   if (type === 'EventObject') node.EventTrack = new Uint32Array([0]);
   if (type === 'CollisionShape') Object.assign(node, { Shape: 2, Vertices: V3(), BoundsRadius: 16 });
-  if (type === 'Light') Object.assign(node, { LightType: 0, AttenuationStart: 80, AttenuationEnd: 200, Color: rgbToWarcraftColor([0.2, 0.8, 1]), Intensity: 1, AmbColor: rgbToWarcraftColor([1, 1, 1]), AmbIntensity: 0 });
+  if (type === 'Light') Object.assign(node, { LightType: 0, AttenuationStart: 80, AttenuationEnd: 200, Color: V3(0.2, 0.8, 1), Intensity: 1, AmbColor: V3(1, 1, 1), AmbIntensity: 0 });
   if (type === 'ParticleEmitter2') Object.assign(node, {
     Speed: 10, Variation: 0, Latitude: 20, Gravity: 0, LifeSpan: 1, EmissionRate: 10, Width: 4, Length: 4,
     FilterMode: 1, Rows: 1, Columns: 1, FrameFlags: 1, TailLength: 0, Time: 0.5,
-    SegmentColor: [[0.2, 0.7, 1], [0.3, 0.9, 1], [0.1, 0.3, 1]].map(rgbToWarcraftColor), Alpha: new Uint8Array([255, 200, 0]), ParticleScaling: V3(1, 1, 0),
+    SegmentColor: [V3(0.2, 0.7, 1), V3(0.3, 0.9, 1), V3(0.1, 0.3, 1)], Alpha: new Uint8Array([255, 200, 0]), ParticleScaling: V3(1, 1, 0),
     LifeSpanUVAnim: new Uint32Array([0, 0, 1]), DecayUVAnim: new Uint32Array([0, 0, 1]), TailUVAnim: new Uint32Array([0, 0, 1]), TailDecayUVAnim: new Uint32Array([0, 0, 1]),
     TextureID: model.Textures?.length ? 0 : null, ReplaceableId: 0, PriorityPlane: 0,
   });
   if (type === 'RibbonEmitter') {
     if (!model.Materials?.length) throw new Error('Create a material before adding a ribbon emitter.');
-    Object.assign(node, { HeightAbove: 4, HeightBelow: 4, Alpha: 1, Color: rgbToWarcraftColor([0.3, 0.8, 1]), LifeSpan: 0.5, TextureSlot: 0, EmissionRate: 10, Rows: 1, Columns: 1, MaterialID: 0, Gravity: 0 });
+    Object.assign(node, { HeightAbove: 4, HeightBelow: 4, Alpha: 1, Color: V3(0.3, 0.8, 1), LifeSpan: 0.5, TextureSlot: 0, EmissionRate: 10, Rows: 1, Columns: 1, MaterialID: 0, Gravity: 0 });
   }
   if (type === 'ParticleEmitter') Object.assign(node, { EmissionRate: 10, Gravity: 0, Longitude: 0, Latitude: 0, Path: '', LifeSpan: 1, InitVelocity: 0 });
   if (type === 'ParticleEmitterPopcorn') {
@@ -935,7 +934,7 @@ export function createDemoDocument() {
     prism([[0, 104], [5, 127], [0, 151], [-5, 127]], 5.6, 3, rune.ObjectId),
   ];
   const colors = [[0.70, 0.82, 0.92], [0.70, 0.44, 0.12], [0.15, 0.18, 0.25], [0.78, 0.52, 0.16], [0.16, 0.82, 1]];
-  model.GeosetAnims = model.Geosets.map((_, i) => ({ GeosetId: i, Alpha: i === 4 ? { LineType: 1, Keys: [0, 1000, 2000].map((Frame, k) => ({ Frame, Vector: new Float32Array([k === 1 ? 0.5 : 1]) })) } : 1, Color: rgbToWarcraftColor(colors[i]), Flags: 2 }));
+  model.GeosetAnims = model.Geosets.map((_, i) => ({ GeosetId: i, Alpha: i === 4 ? { LineType: 1, Keys: [0, 1000, 2000].map((Frame, k) => ({ Frame, Vector: new Float32Array([k === 1 ? 0.5 : 1]) })) } : 1, Color: new Float32Array(colors[i]), Flags: 2 }));
   recalculateExtents(model);
   const extent = { MinimumExtent: V3(-58, -20, 5), MaximumExtent: V3(58, 20, 211), BoundsRadius: 124 };
   model.Sequences = [{ Name: 'Stand', Interval: new Uint32Array([0, 2000]), NonLooping: false, MoveSpeed: 0, Rarity: 0, ...clone(extent) }];

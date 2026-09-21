@@ -158,7 +158,7 @@ export function localSequenceAtFrame(model, frame, excludedIndex = -1) {
   return (model?.Sequences || []).findIndex((sequence, index) => index !== excludedIndex && sequence?.Interval && frame >= sequence.Interval[0] && frame <= sequence.Interval[1]);
 }
 
-/** Sample authored geoset channels without changing Warcraft MDX storage order. */
+/** Shared preview color in editor RGB order; EditorDocument normalizes MDX KGAC. */
 export function sampleGeosetAnimation(model, geosetId, frame, sequenceIndex, globalTime = frame) {
   const animation = model.GeosetAnims?.find(item => item.GeosetId === geosetId);
   const options = { interval: model.Sequences?.[sequenceIndex]?.Interval, globalSequences: model.GlobalSequences, globalTime };

@@ -1,13 +1,5 @@
 import { sampleTrack, sampleGeosetAnimation } from '../src/animation.js';
 import { previewLighting } from '../src/preview-lighting.js';
-import { warcraftColorToRgb, warcraftColorTrackToRgb } from '../src/warcraft-color.js';
-
-/** Convert only the private preview clone. Authored model arrays remain untouched. */
-export function prepareWarcraftPreviewColors(model) {
-  for (const emitter of model.ParticleEmitters2 || []) emitter.SegmentColor = (emitter.SegmentColor || []).map(warcraftColorToRgb);
-  for (const ribbon of model.RibbonEmitters || []) if (ribbon.Color != null) ribbon.Color = warcraftColorTrackToRgb(ribbon.Color);
-  return model;
-}
 
 /** war3-model 4.0.1 omits geoset RGB and fractional alpha in its mesh shader. */
 export function patchWarcraftMeshFragmentShader(source) {
@@ -58,7 +50,7 @@ export function patchWarcraftMeshVertexShader(source) {
 
 export function previewGeosetTint(model, geosetIndex, layer, frame, sequenceIndex, globalTime = frame) {
   const options = { interval: model.Sequences?.[sequenceIndex]?.Interval, globalSequences: model.GlobalSequences, globalTime };
-  const evaluated = sampleGeosetAnimation(model, geosetIndex, frame, sequenceIndex, globalTime), rgb = warcraftColorToRgb(evaluated.color);
+  const evaluated = sampleGeosetAnimation(model, geosetIndex, frame, sequenceIndex, globalTime), rgb = evaluated.color;
   const alpha = Math.max(0, Math.min(1, evaluated.alpha * sampleTrack(layer?.Alpha, frame, { ...options, fallback: 1 })));
   return [...Array.from(rgb, value => Math.max(0, Math.min(1, value)) * (layer?.FilterMode === 3 ? alpha : 1)), alpha];
 }
