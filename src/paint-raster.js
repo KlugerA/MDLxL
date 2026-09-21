@@ -17,6 +17,15 @@ export function clonePaintRaster(raster) {
   return { width: raster.width, height: raster.height, data: new Uint8ClampedArray(raster.data) };
 }
 
+/** Paint sources created from Warcraft textures are colour swatches, not model
+ * material layers. Keep every decoded RGB pixel, but discard the source
+ * material's cutout/team-colour alpha before applying the user's own crop. */
+export function flattenPaintRasterAlpha(raster) {
+  const result = clonePaintRaster(raster);
+  for (let offset = 3; offset < result.data.length; offset += 4) result.data[offset] = 255;
+  return result;
+}
+
 /** Recombine only dirty rows into a reusable preview. Export calls omit output/rows.
  * Preserve byte-exact layer rounding and source/eraser alpha semantics. */
 export function compositePaintRasters(base, coats, {preserveSourceAlpha=true,alphaMask=null,output=null,rows=null}={}) {

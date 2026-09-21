@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {shapeSelection,magicSelection,combineSelection,featherSelection,extractPaintCutout} from '../src/paint-selection.js';
 import {pastePaintDecal,projectPaintDecal} from '../src/paint-decal.js';
-import {createPaintRaster} from '../src/paint-raster.js';
+import {createPaintRaster,flattenPaintRasterAlpha} from '../src/paint-raster.js';
 import {prepareTexturePaintProjection} from '../src/paint-projection.js';
 
 test('rectangle, ellipse and closed freehand masks preserve cropped alpha and source pixels',()=>{
@@ -12,6 +12,13 @@ test('rectangle, ellipse and closed freehand masks preserve cropped alpha and so
   const polygon=shapeSelection(8,8,'lasso',[{x:2,y:2},{x:6,y:2},{x:6,y:6},{x:2,y:6}]);assert.deepEqual(polygon,rectangle);
   const cut=extractPaintCutout(raster,rectangle);assert.deepEqual([cut.width,cut.height],[4,4]);assert.equal(cut.data[3],128);assert.deepEqual(raster.data,original);
   assert.ok(featherSelection(rectangle,8,8,1)[1*8+1]>0);assert.throws(()=>extractPaintCutout(raster,new Uint8Array(64)),/Select a visible/);
+});
+test('native texture alpha cannot punch holes inside the selected brush shape',()=>{
+  const source=createPaintRaster(8,8,[90,100,110,255]);source.data[(4*8+4)*4+3]=0;
+  const circle=shapeSelection(8,8,'ellipse',[{x:1,y:1},{x:7,y:7}]);
+  const cut=extractPaintCutout(flattenPaintRasterAlpha(source),circle);
+  assert.ok(cut.data[(3*cut.width+3)*4+3]>0,'the selected centre is controlled by the circle mask');
+  assert.equal(source.data[(4*8+4)*4+3],0,'the decoded native texture remains unchanged');
 });
 test('magic wand isolates connected colour, supports global match, tolerance, and mask operations',()=>{
   const raster=createPaintRaster(5,1,[20,30,40,255]);raster.data.set([200,100,50,255],8);

@@ -16,9 +16,9 @@ import {usePreviewBackgrounds} from './usePreviewBackgrounds.js';
 import {paintBrushPreview} from './paint-brush-preview.js';
 import {paintMessage as msg} from '../src/paint-messages.js';
 import {addPaintProjectTarget,compositePaintTarget,createPaintProject,paintProjectCoat,paintProjectTarget,recordPaintStroke,recordPaintStrokeGroup,recordPaintUV,travelPaintHistory} from '../src/paint-project.js';
-import {buildSmartPaintMasks,interpolatePaintStroke,preparePaintProjection,prepareTexturePaintProjection,stampProjectedBrush} from '../src/paint-projection.js';
+import {buildSmartPaintMasks,fillPaintMask,interpolatePaintStroke,preparePaintProjection,prepareTexturePaintProjection,stampProjectedBrush} from '../src/paint-projection.js';
 import {paintGeosetMask,paintGeosetTarget,paintHalfModel,paintPartCenter,paintProjectModel,paintStandHidden} from '../src/paint-view.js';
-import {blendPaintPixel,clonePaintRaster,resizePaintRaster,rgbaColor} from '../src/paint-raster.js';
+import {clonePaintRaster,resizePaintRaster} from '../src/paint-raster.js';
 import {enumeratePaintTargets,findTextureAsset,preferredPaintTarget} from '../src/paint-targets.js';
 import {createFreshPaintAtlas} from '../src/paint-uv-atlas.js';
 import {BRUSH_PRESETS,PAINT_COATS,normalizeBrushSettings} from '../src/paint-types.js';
@@ -210,8 +210,8 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   function fillGeoset(){
     if(!geosetReady||!activeCoat)return;endStroke();const layer=brush.mode==='erase'?paintProjectCoat(project,activeTarget.id,'__alpha'):activeCoat;
     if(layer.visible===false){onStatus?.(msg('paint.hiddenCoat'));return;}
-    const before=clonePaintRaster(layer.raster),mask=paintGeosetMask(displayModel,paintGeosetTarget(activeTarget,activeGeoset),project.resolution),options=brushOptions(activeTarget,activeGeoset),color=rgbaColor(brush.color),raster=options.materialRaster;
-    for(let pixel=0;pixel<mask.length;pixel++){if(!mask[pixel])continue;const offset=pixel*4;if(raster)for(let channel=0;channel<4;channel++)color[channel]=raster.data[offset+channel];blendPaintPixel(layer.raster.data,offset,color,brush.opacity*brush.strength*(options.mask?options.mask[pixel]/255:1),brush.mode==='erase'?'erase':'paint');}
+    const before=clonePaintRaster(layer.raster),mask=paintGeosetMask(displayModel,paintGeosetTarget(activeTarget,activeGeoset),project.resolution),options=brushOptions(activeTarget,activeGeoset);
+    fillPaintMask(layer.raster,mask,brush,options);
     if(recordPaintStroke(project,activeTarget.id,layer.id,before,msg('paint.fillPart'),brush)){markPaintMaterialEdited(project,activeTarget);notify();onStatus?.(msg('paint.filled',{number:activeGeoset+1}));}
   }
   function travel(redo){if(readOnly||busy)return;endStroke();if(travelPaintHistory(project,redo))notify();}
