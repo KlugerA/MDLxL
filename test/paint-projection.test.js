@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSmartPaintMasks, interpolatePaintStroke, preparePaintProjection, prepareTexturePaintProjection, projectPaintVertex, samplePaintSource, stampProjectedBrush } from '../src/paint-projection.js';
+import { buildSmartPaintMasks, fillPaintMask, interpolatePaintStroke, preparePaintProjection, prepareTexturePaintProjection, projectPaintVertex, samplePaintSource, stampProjectedBrush } from '../src/paint-projection.js';
 import { createPaintRaster } from '../src/paint-raster.js';
 import { IDENTITY_MATRIX, paintFixtureModel, paintTarget, squareSeamGeoset, triangleGeoset } from './fixtures/paint-fixtures.js';
 
@@ -83,6 +83,17 @@ test('brush diameter changes coverage without changing texture scale; zoom chang
   assert.ok(painted(large)>painted(small)*5);assert.equal(painted(small),painted(zoomed));
   assert.equal(large.data[(30*128+30)*4+3],0,'a texture dab must not stamp rectangular corners');
   assert.ok(large.data[(94*128+64)*4+3]>0,'a wide source must not squash the brush footprint');
+});
+
+test('geoset fill tiles any-size texture sources and applies brush zoom',()=>{
+  const source=createPaintRaster(2,1);source.data.set([255,0,0,255,0,0,255,255]);
+  const mask=new Uint8ClampedArray(8).fill(255),settings={...brush,zoom:1,filterColor:'#ffffff'};
+  const normal=createPaintRaster(4,2),zoomed=createPaintRaster(4,2);
+  assert.equal(fillPaintMask(normal,mask,settings,{materialRaster:source}),8);
+  assert.equal(fillPaintMask(zoomed,mask,{...settings,zoom:2},{materialRaster:source}),8);
+  const colors=raster=>Array.from({length:4},(_,x)=>Array.from(raster.data.slice(x*4,x*4+3)));
+  assert.deepEqual(colors(normal),[[255,0,0],[0,0,255],[255,0,0],[0,0,255]]);
+  assert.deepEqual(colors(zoomed),[[191,0,64],[191,0,64],[64,0,191],[64,0,191]]);
 });
 
 test('model units do not set brush scale when screen framing is unchanged',()=>{

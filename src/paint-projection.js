@@ -124,6 +124,27 @@ export function samplePaintSource(material,dx,dy,{zoom=1,filterColor='#ffffff',m
   return [Math.round(total[0]/samples*tint[0]/255),Math.round(total[1]/samples*tint[1]/255),Math.round(total[2]/samples*tint[2]/255),Math.round(total[3]/samples)];
 }
 
+/** Fill a UV mask with the same repeating, zoom-aware source used by brush
+ * strokes. Anchor the pattern at the texture's top-left so arbitrary source
+ * dimensions (including WC3 library textures and crops) tile predictably. */
+export function fillPaintMask(raster,mask,brush,{materialRaster=null,mask:techniqueMask=null}={}){
+  if(!mask||mask.length!==raster.width*raster.height)throw Error('The paint mask does not match this texture.');
+  if(techniqueMask&&techniqueMask.length!==mask.length)throw Error('The smart paint mask does not match this texture.');
+  const flatColor=rgbaColor(brush.color),zoom=Math.max(.01,Math.min(64,Number(brush.zoom)||1));let changed=0;
+  const opacity=Math.max(0,Math.min(1,Number(brush.opacity)*Number(brush.strength??1)));
+  for(let pixel=0;pixel<mask.length;pixel++){
+    if(!mask[pixel])continue;
+    let color=flatColor;
+    if(materialRaster?.data?.length){
+      const x=pixel%raster.width,y=Math.floor(pixel/raster.width);
+      color=samplePaintSource(materialRaster,x+.5-materialRaster.width*zoom/2,y+.5-materialRaster.height*zoom/2,{zoom,filterColor:brush.filterColor});
+    }
+    const amount=opacity*mask[pixel]/255*(techniqueMask?techniqueMask[pixel]/255:1);
+    if(blendPaintPixel(raster.data,pixel*4,color,amount,brush.mode==='erase'?'erase':'paint'))changed++;
+  }
+  return changed;
+}
+
 /** Project visible texel centers once per camera/part/size, then bin them in
  * 32px screen tiles. Dabs visit only nearby samples, with no triangle scans or
  * barycentric allocations. The caller retains one projection between strokes.

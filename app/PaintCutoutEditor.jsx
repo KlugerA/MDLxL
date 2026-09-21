@@ -1,11 +1,12 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {shapeSelection,magicSelection,combineSelection,featherSelection,extractPaintCutout} from '../src/paint-selection.js';
+import {flattenPaintRasterAlpha} from '../src/paint-raster.js';
 import {paintRasterCanvas} from './paint-raster.js';
 import {paintMessage as msg} from '../src/paint-messages.js';
 
 /** Selection tools operate on a copyable mask. Closing never changes the source asset. */
 export default function PaintCutoutEditor({source,onClose,onUse,onSave}) {
-  const {raster,name}=source,canvas=useRef(),maskCanvas=useRef(),drag=useRef(null);
+  const {name}=source,raster=useMemo(()=>source.nativeSource?flattenPaintRasterAlpha(source.raster):source.raster,[source]),canvas=useRef(),maskCanvas=useRef(),drag=useRef(null);
   const [tool,setTool]=useState('rectangle'),[operation,setOperation]=useState('replace'),[tolerance,setTolerance]=useState(32),[contiguous,setContiguous]=useState(true),[feather,setFeather]=useState(0),[zoom,setZoom]=useState(1);
   const [mask,setMask]=useState(()=>new Uint8ClampedArray(raster.width*raster.height).fill(255)),[points,setPoints]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const history=useRef([]),redo=useRef([]),[square,setSquare]=useState(false);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyRasterDelta, blendPaintPixel, compositePaintRasters, createPaintRaster, fillRasterMask, rasterRegionDelta, resizePaintRaster } from '../src/paint-raster.js';
+import { applyRasterDelta, blendPaintPixel, compositePaintRasters, createPaintRaster, fillRasterMask, flattenPaintRasterAlpha, rasterRegionDelta, resizePaintRaster } from '../src/paint-raster.js';
 
 test('coat compositing preserves source alpha until an explicit alpha mask erases it',()=>{
   const base=createPaintRaster(2,2,[10,20,30,77]),coat={visible:true,opacity:1,raster:createPaintRaster(2,2,[210,80,40,255])};
@@ -29,4 +29,11 @@ test('mask strength, erasing, and deterministic nearest resize retain RGBA bound
   assert.deepEqual([...raster.data.slice(0,8)],[255,0,0,128,0,0,0,0]);
   blendPaintPixel(raster.data,0,[0,0,0,0],1,'erase');assert.equal(raster.data[3],0);
   const enlarged=resizePaintRaster(raster,4,4);assert.equal(enlarged.width,4);assert.deepEqual([...enlarged.data.slice(0,4)],[255,0,0,0]);
+});
+
+test('flattened Warcraft paint sources retain RGB but discard authored alpha without mutating the decoded texture',()=>{
+  const source=createPaintRaster(2,1);source.data.set([20,40,60,0,80,100,120,127]);
+  const flat=flattenPaintRasterAlpha(source);
+  assert.deepEqual([...flat.data],[20,40,60,255,80,100,120,255]);
+  assert.deepEqual([...source.data],[20,40,60,0,80,100,120,127]);
 });
