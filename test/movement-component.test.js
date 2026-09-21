@@ -15,6 +15,7 @@ async function component(file) {
   return module.exports.default;
 }
 const Movement=await component('MovementControllerRecomp.jsx');
+const Animation=await component('AnimationController.jsx');
 const Setup=await component('PortraitSetup.jsx');
 const Toolbar=await component('PortraitToolbar.jsx');
 const QuickDisplay=await component('QuickDisplay.jsx');
@@ -37,6 +38,12 @@ test('actual Movement component renders normal and Portrait mode without excepti
     assert.match(html,/aria-label="Move"/);assert.match(html,/aria-label="Rotate"/);assert.match(html,/aria-label="Scale"/);
     assert.doesNotMatch(html,/Portrait Camera|Set Current View|>Create<\/button>/);
   }
+});
+test('Animations remains editable with no selected vertices or checked geosets',()=>{
+  const html=renderToStaticMarkup(React.createElement(Animation,{model:fixture(),sequenceIndex:0,time:0,selectedGeosets:[]}));
+  assert.match(html,/Bake Sequence RGB/);assert.match(html,/Bake All RGB/);
+  assert.doesNotMatch(html,/<input[^>]*aria-label="Animation R"[^>]*disabled/);
+  assert.doesNotMatch(html,/<button[^>]*disabled[^>]*>Bake All RGB<\/button>/);
 });
 test('actual setup dialog renders every missing-requirement combination',()=>{
   for(const [missingSequence,missingCamera]of [[true,false],[false,true],[true,true]]) {

@@ -646,7 +646,9 @@ export default function Viewport(inputProps) {
             const rgbSequence = p.rgbPreview ? p.rgbPreviewSequenceIndex : p.sequenceIndex;
             const rgbTime = p.rgbPreview ? (p.model?.Sequences?.[rgbSequence]?.Interval?.[0] ?? 0) : state.frame;
             const sampled = sampleGeosetAnimation(p.model, index, rgbTime, rgbSequence, p.rgbPreview ? rgbTime : state.globalTime);
-            if (p.rgbPreview) material.color.set(0xffffff).multiply(new THREE.Color(...sampled.color));
+            // RGB preview is a tint, including for the untextured Team Color
+            // layer. Starting from white here discarded the selected team.
+            if (p.rgbPreview) material.color.set(textureInfo?.ReplaceableId === 1 || textureInfo?.ReplaceableId === 2 ? p.teamColor : 0xffffff).multiply(new THREE.Color(...sampled.color));
             else material.userData.geosetTint.value.fromArray(sampled.color);
           }
           material.opacity = textured ? Math.max(0, Math.min(1, alpha * sampleTrack(layer.Alpha, state.frame, { ...animOptions, fallback: 1 }))) : 1;
