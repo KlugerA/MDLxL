@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   animationTargets, createGeosetAnimations, sampleAnimationProperty,
-  setAnimationKey, setAnimationSequences,
+  readAnimationTrack, setAnimationInlineValues, setAnimationKey, setAnimationSequences,
 } from '../src/animation-tracks.js';
 import { setSequenceOptions } from '../src/animation.js';
 import { clampAlphaPercentText } from '../src/animation-controller-inputs.js';
@@ -48,6 +48,8 @@ export default function AnimationController({
   const targets = animationTargets(model, { geosetIds });
   const alphaTargets = targets.filter(target => target.property === 'Alpha');
   const colorTargets = targets.filter(target => target.property === 'Color');
+  const inlineColorTargets = colorTargets.filter(target => !readAnimationTrack(model, target)?.Keys);
+  const keyedColorTargets = colorTargets.filter(target => !inlineColorTargets.includes(target));
   const sampledAlpha = geosetIds.length ? commonValue(model, alphaTargets, frame, sequenceIndex) : null;
   const sampledColor = geosetIds.length ? commonValue(model, colorTargets, frame, sequenceIndex) : null;
   const alphaStamp = JSON.stringify(sampledAlpha), colorStamp = JSON.stringify(sampledColor);
@@ -162,7 +164,10 @@ export default function AnimationController({
     if (!sequence || !geosetIds.length) return;
     let value;
     try { value = rgbValue(); } catch (failure) { setError(failure.message); setNotice(''); return; }
-    commit('Set geoset RGB keyframe', ['GeosetAnims', 'Info'], current => setAnimationKey(current, colorTargets, frame, value, sequenceIndex), 'Color tint keyframe updated.');
+    commit('Set geoset RGB', ['GeosetAnims', 'Info'], current => {
+      if (inlineColorTargets.length) setAnimationInlineValues(current, inlineColorTargets, value);
+      if (keyedColorTargets.length) setAnimationKey(current, keyedColorTargets, frame, value, sequenceIndex);
+    }, inlineColorTargets.length ? 'Inline color tint updated.' : 'Color tint keyframe updated.');
   }
 
   function bakeRgb(all) {
