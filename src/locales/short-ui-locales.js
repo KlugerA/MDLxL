@@ -19,8 +19,29 @@ const rows = [
   ['English', 'Inglés', '英语', 'Lengua común'], ['Russian', 'Ruso', '俄语', 'Lengua de los hombres'], ['Spanish', 'Español', '西班牙语', 'Lengua del sur'], ['Chinese', 'Chino', '中文', 'Lengua del este'], ['The Language of Mordor', 'La lengua de Mordor', '魔多语', 'La Lengua Negra de Mordor'], ['Language', 'Idioma', '语言', 'Lengua'],
 ];
 
+const chineseOverrides = {
+  'Open...': '打开', 'Open model': '打开', 'New model': '新建模型', 'Recovery...': '恢复', 'Recovery': '恢复', 'Exit': '退出', 'Exit MDLxL': '退出',
+  'Paste special...': '选择性粘贴…', 'Special paste...': '选择性粘贴…', 'Special paste': '选择性粘贴…', 'Indo cache...': '输入缓存…', 'Undo cache...': '撤销缓存…', 'undo cache...': '撤销缓存…', 'Undo cache': '撤销缓存…', 'Undo cache settings': '撤销缓存…',
+  'Keyframes': '关键帧', 'Vertex editor': '顶点编辑器', 'Vertex editor (F1)': '顶点编辑器（F1）', 'Uv-maps': 'UV贴图', 'UV-maps': 'UV贴图', 'UV maps': 'UV贴图', 'UV editor': 'UV贴图',
+  'Animaitons: cishilitu and RGB': '动画：透明度与RGB', 'Animations: visibility and RGB': '动画：透明度与RGB',
+  'Material Manager...': '材质管理器…', 'Material Manager': '材质管理器', 'Texture Manager...': '纹理管理器…', 'Texture Manager': '纹理管理器',
+  'Geoset Manager...': '几何体集管理器…', 'Geoset Manager': '几何体集管理器', 'Geoset Animation Manager...': '几何体集动画管理器…', 'Geoset Animation Manager': '几何体集动画管理器',
+  'Camera Manager...': '相机管理器…', 'Camera Manager': '相机管理器', 'texture Animation Manager...': '纹理动画管理器…', 'Texture Animation Manager...': '纹理动画管理器…', 'Texture Animation Manager': '纹理动画管理器',
+  'Global Sequence Manager...': '全局序列管理器…', 'Global Sequence Manager': '全局序列管理器', 'Mouse and general...': '鼠标与常规…', 'Mouse and general…': '鼠标与常规…', 'Mouse and general settings': '鼠标与常规…',
+  'Kegboard Shortcuts...': '键盘快捷键…', 'Keyboard Shortcuts...': '键盘快捷键…', 'Keyboard Shortcuts…': '键盘快捷键…', 'Keyboard Shortcuts': '键盘快捷键',
+  'Graphical settings...': '图形设置…', 'Graphical settings…': '图形设置…', 'Graphical settings': '图形设置…', 'Appearance...': '外观…', 'Appearance…': '外观…', 'Appearance settings': '外观…',
+  'Configjration...': '配置…', 'Configuration...': '配置…', 'Configuration…': '配置…', 'Configuration settings': '配置…', 'Warcraft III': '魔兽争霸 III', 'Warcraft III...': '魔兽争霸 III', 'Warcraft III…': '魔兽争霸 III', 'Warcraft III settings': '魔兽争霸 III',
+  'Rescan game data': '重新扫描游戏数据', 'Search for Warcraft III game archives again': '重新扫描游戏数据', 'Hotkeys': '快捷键', 'Check model': '检查模型', 'Scroll': '滚动',
+  'Orthographic': '正交视图', 'Orthographic view': '正交视图', 'Perspective': '透视图', 'Perspective view': '透视图', 'Front': '前视图', 'Front view': '前视图', 'Back': '后视图', 'Back view': '后视图', 'Left': '左视图', 'Left view': '左视图', 'Right': '右视图', 'Right view': '右视图', 'Top': '顶视图', 'Top view': '顶视图', 'Bottom': '底视图', 'Bottom view': '底视图',
+  'Invert': '反转', 'Selected': '已选中', 'Hidden': '已隐藏', 'Triangles': '三角面', 'Citadel Paint': '城堡漆', 'BitsAndParts / Clockwork': 'BitsAndParts（零件组件）/ Clockwork（机械传动）',
+  'Texture size': '贴图尺寸', '256 × 256 (fast)': '256 × 256（快速）', 'Open preset...': '打开预设...', 'Open preset…': '打开预设...', 'Begin': '开始',
+  ...Object.fromEntries([
+    ['Red', '红色'], ['Blue', '蓝色'], ['Teal', '青色'], ['Purple', '紫色'], ['Yellow', '黄色'], ['Orange', '橙色'], ['Green', '绿色'], ['Pink', '粉红色'], ['Grey', '灰色'], ['Light Blue', '淡蓝色'], ['Dark Green', '暗绿色'], ['Brown', '棕色'], ['Maroon', '栗色'], ['Navy', '海军蓝'], ['Aqua', '青绿色'], ['Violet', '紫罗兰色'], ['Wheat', '小麦色'], ['Peach', '桃红色'], ['Mint', '薄荷色'], ['Lavender', '薰衣草色'], ['Coal', '碳色'], ['Snow', '雪白'], ['Emerald', '祖母绿'], ['Peanut', '花生色'],
+  ].flatMap(([source, translation], index) => [[source, translation], [`${index} · ${source}`, `${index} ${translation}`]])),
+};
+
 function make(index) { return Object.freeze(Object.fromEntries(rows.map(([source, ...translations]) => [source, translations[index]]))); }
 
 export const spanish = make(0);
-export const chinese = make(1);
+export const chinese = Object.freeze({ ...make(1), ...chineseOverrides });
 export const mordor = make(2);

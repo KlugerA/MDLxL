@@ -57,8 +57,19 @@ const rows = [
   ['No matching textures. Try a material, a Warcraft unit name, or a broader folder.', 'No hay texturas coincidentes. Pruebe un material, un nombre de unidad de Warcraft o una carpeta más amplia.', '没有匹配的纹理。请尝试材质、Warcraft 单位名称或更广的文件夹。', 'No hay texturas que el Ojo reconozca. Prueba un material, nombre de unidad de Warcraft o carpeta más amplia.'],
 ];
 
+const chineseOverrides = {
+  'Start a paint preset': '开始一个涂装预设',
+  'Paint Current Skin': '使用当前皮肤贴图',
+  'Keep the model texture as the first coat.': '将模型现有贴图作为第一层底漆。',
+  'New basecoat': '新建底漆层',
+  'Create new textures on a clean neutral miniature.': '在干净的中性微缩模型上创建全新贴图。',
+  'Save a preset to keep editable coats. Use paint on model opens Vertices with your texture already assigned.': '保存预设以保留可编辑漆层。对模型使用涂装功能时，会打开已分配贴图的顶点。',
+  'Error: This model has no paintable image layer.': '错误：该模型不存在可绘制图像图层。',
+  'This model has no paintable image layer.': '该模型不存在可绘制图像图层。',
+};
+
 function make(index) { return Object.freeze(Object.fromEntries(rows.map(([source, ...translations]) => [source, translations[index]]))); }
 
 export const broadSpanish = make(0);
-export const broadChinese = make(1);
+export const broadChinese = Object.freeze({ ...make(1), ...chineseOverrides });
 export const broadMordor = make(2);
