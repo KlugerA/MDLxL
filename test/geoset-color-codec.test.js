@@ -4,7 +4,7 @@ import {createDemoDocument, openDocument} from '../src/editor-document.js';
 import {sampleGeosetAnimation} from '../src/animation.js';
 
 const vector = values => new Float32Array(values);
-test('MDX KGAC stores BGR keys/tangents while editor, static GEOA and MDL remain RGB', () => {
+test('MDX GEOA colors retain authored channel order through load and save', () => {
   const doc=createDemoDocument();
   doc.apply('RGB fixture',['GeosetAnims'],model=>{
     model.GeosetAnims[0].Color={LineType:2,GlobalSeqId:null,Keys:[{Frame:0,Vector:vector([1,.25,0]),InTan:vector([.75,.5,.125]),OutTan:vector([.875,.375,.25])}]};
@@ -14,9 +14,9 @@ test('MDX KGAC stores BGR keys/tangents while editor, static GEOA and MDL remain
   assert(tag>0);
   // Independent byte-level assertions: do not rely only on writer/reader agreement.
   const triplet=offset=>[0,4,8].map(n=>bytes.readFloatLE(offset+n));
-  assert.deepEqual(triplet(tag+20),[0,.25,1]);
-  assert.deepEqual(triplet(tag+32),[.125,.5,.75]);
-  assert.deepEqual(triplet(tag+44),[.25,.375,.875]);
+  assert.deepEqual(triplet(tag+20),[1,.25,0]);
+  assert.deepEqual(triplet(tag+32),[.75,.5,.125]);
+  assert.deepEqual(triplet(tag+44),[.875,.375,.25]);
   const reopened=openDocument(bytes,'fixture.mdx');
   assert.deepEqual([...reopened.model.GeosetAnims[0].Color.Keys[0].Vector],[1,.25,0]);
   assert.deepEqual([...reopened.model.GeosetAnims[1].Color],[1,.25,0]);
@@ -27,5 +27,5 @@ test('MDX KGAC stores BGR keys/tangents while editor, static GEOA and MDL remain
   assert.deepEqual([...openDocument(mdl,'fixture.mdl').model.GeosetAnims[0].Color.Keys[0].Vector],[1,.25,0]);
   reopened.apply('Edit alpha',['GeosetAnims'],m=>{m.GeosetAnims[0].Alpha=.5;});
   const changed=Buffer.from(reopened.serialize('mdx')),changedTag=changed.indexOf(Buffer.from('KGAC'));
-  assert.deepEqual([0,4,8].map(n=>changed.readFloatLE(changedTag+20+n)),[0,.25,1]);
+  assert.deepEqual([0,4,8].map(n=>changed.readFloatLE(changedTag+20+n)),[1,.25,0]);
 });
