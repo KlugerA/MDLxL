@@ -45,6 +45,11 @@ test('Animations remains editable with no selected vertices or checked geosets',
   assert.doesNotMatch(html,/<input[^>]*aria-label="Animation R"[^>]*disabled/);
   assert.doesNotMatch(html,/<button[^>]*disabled[^>]*>Bake All RGB<\/button>/);
 });
+test('Animations exposes inline RGB fields on All line',()=>{
+  const html=renderToStaticMarkup(React.createElement(Animation,{model:fixture(),sequenceIndex:-1,time:0,selectedGeosets:[0]}));
+  assert.doesNotMatch(html,/<input[^>]*aria-label="Animation R"[^>]*disabled/);
+  assert.match(html,/aria-label="Animation R"[^>]*value="179"/);
+});
 test('actual setup dialog renders every missing-requirement combination',()=>{
   for(const [missingSequence,missingCamera]of [[true,false],[false,true],[true,true]]) {
     const html=renderToStaticMarkup(React.createElement(Setup,{model:fixture(),missingSequence,missingCamera,sourceIndex:0}));
