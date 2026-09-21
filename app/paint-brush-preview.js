@@ -1,16 +1,28 @@
-import { paintRasterCanvas } from './paint-raster.js';
+import {samplePaintSource} from '../src/paint-projection.js';
 
-/** Cached by the caller when brush settings change, never during pointer movement. */
+/** Outline only, with a thin stroke even for a very large brush. */
 export function paintBrushPreview(brush, tip, material, color='#ffffff') {
-  const rgb=[parseInt(color.slice(1,3),16),parseInt(color.slice(3,5),16),parseInt(color.slice(5,7),16)];
-  const size=128,alpha=new Uint8Array(size*size),pixels=new Uint8ClampedArray(size*size*4),inner=Math.min(.995,brush.hardness);
-  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-    const u=(x+.5)/size,v=(y+.5)/size,r=Math.hypot(u*2-1,v*2-1);if(r>1)continue;
-    let value=r<=inner?1:1-(r-inner)/(1-inner);value=value*value*(3-2*value);
-    if(tip)value*=tip.data[(Math.min(tip.height-1,Math.floor(v*tip.height))*tip.width+Math.min(tip.width-1,Math.floor(u*tip.width)))*4+3]/255;
-    if(material&&brush.mode==='stamp')value*=material.data[(Math.floor(v*material.height)*material.width+Math.floor(u*material.width))*4+3]/255;
-    alpha[y*size+x]=value>.08?1:0;
+  const size=128,mask=new Uint8Array(size*size);
+  const shaped=!!tip||!!material?.data?.some((value,index)=>index%4===3&&value<255);
+  let shape='<circle cx="64" cy="64" r="63"/>';
+  if(shaped){
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+      const u=(x+.5)/size,v=(y+.5)/size,dx=u*2-1,dy=v*2-1;
+      if(dx*dx+dy*dy>1)continue;
+      let alpha=material?samplePaintSource(material,dx*brush.size/2,dy*brush.size/2,{zoom:brush.zoom})[3]/255:1;
+      if(tip)alpha*=tip.data[(Math.min(tip.height-1,Math.floor(v*tip.height))*tip.width+Math.min(tip.width-1,Math.floor(u*tip.width)))*4+3]/255;
+      mask[y*size+x]=alpha>.08?1:0;
+    }
+    const edges=[];
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(mask[y*size+x]){
+      if(!x||!mask[y*size+x-1])edges.push(`M${x} ${y}v1`);
+      if(x===size-1||!mask[y*size+x+1])edges.push(`M${x+1} ${y}v1`);
+      if(!y||!mask[(y-1)*size+x])edges.push(`M${x} ${y}h1`);
+      if(y===size-1||!mask[(y+1)*size+x])edges.push(`M${x} ${y+1}h1`);
+    }
+    shape=`<path d="${edges.join('')}"/>`;
   }
-  for(let y=0;y<size;y++)for(let x=0;x<size;x++){const i=y*size+x;if(alpha[i]&&(!x||!y||x===size-1||y===size-1||!alpha[i-1]||!alpha[i+1]||!alpha[i-size]||!alpha[i+size]))pixels.set([...rgb,255],i*4);}
-  return paintRasterCanvas({width:size,height:size,data:pixels}).toDataURL();
+  const outline=/^#[0-9a-f]{6}$/i.test(color)?color:'#ffffff';
+  const stroke=(value,width)=>shape.replace('/>',` fill="none" stroke="${value}" stroke-width="${width}" vector-effect="non-scaling-stroke"/>`);
+  return 'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">${stroke('#000000',3)}${stroke(outline,1)}</svg>`);
 }

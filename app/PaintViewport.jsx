@@ -276,7 +276,7 @@ export default function Viewport(inputProps) {
       }
       scene.background = background.texture;
     }
-    state.refreshCursor = () => { renderer.domElement.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating); };
+    state.refreshCursor = () => { const p=latest.current;renderer.domElement.style.cursor=p.paintMode&&!p.paintSelectOnly&&!p.paintDisabled&&p.cameraMode==='work'&&!rotating?'none':viewportCursor(p.cameraMode,p.rotationNormals?'rotateNormals':p.transformMode,rotating); };
     state.setCameraAngles = values => { if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); invalidate(); } };
     controls.addEventListener('change', invalidate);
     const unbindScroll = bindScrollSensitivity(renderer.domElement, {
@@ -397,7 +397,7 @@ export default function Viewport(inputProps) {
       host.current?.focus();if(latest.current.paintWorkspace)latest.current.onPaintInteractionChange?.(true);
       const action = cameraAction(event);
       rotating = action === 'rotate'; latest.current.onCameraGestureChange?.(rotating);
-      renderer.domElement.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating);
+      state.refreshCursor();
       controls.enabled = true;
       controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(latest.current.preferences?.pointerSensitivity);
       const binding = cameraBindings(latest.current.preferences), mouseAction = value => value === 'pan' ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
@@ -452,7 +452,7 @@ export default function Viewport(inputProps) {
     function pointerMove(event) {
       if (latest.current.paintMode && paintCursor.current) {
         const cursor = point(event), decal=latest.current.paintDecal, width=decal?.width||Math.max(1,Number(latest.current.paintBrushSize)||1),height=decal?.height||width;
-        Object.assign(paintCursor.current.style, { display: latest.current.paintSelectOnly || latest.current.paintDisabled ? 'none' : 'block', left: `${cursor.x}px`, top: `${cursor.y}px`, width: `${width}px`, height: `${height}px`,transform:`translate(-50%,-50%) rotate(${decal?.angle||0}deg)` });
+        Object.assign(paintCursor.current.style, { display: latest.current.paintSelectOnly || latest.current.paintDisabled || latest.current.cameraMode!=='work' || event.buttons>1 ? 'none' : 'block', left: `${cursor.x}px`, top: `${cursor.y}px`, width: `${width}px`, height: `${height}px`,transform:`translate(-50%,-50%) rotate(${decal?.angle||0}deg)` });
       }
       if (!down) {
         return;
@@ -507,7 +507,7 @@ export default function Viewport(inputProps) {
     function pointerUp(event) {
       if(latest.current.paintWorkspace)latest.current.onPaintInteractionChange?.(false);
       rotating = false; latest.current.onCameraGestureChange?.(false);
-      renderer.domElement.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode);
+      state.refreshCursor();
       const start = down; down = null; setBox(null); controls.enabled = true;
       if (!start) return;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
@@ -630,7 +630,7 @@ export default function Viewport(inputProps) {
           }
         }
       }
-      renderer.domElement.style.cursor = viewportCursor(p.cameraMode, p.rotationNormals ? 'rotateNormals' : p.transformMode, rotating);
+      state.refreshCursor();
       syncViewportBackground(appearance);
       ambient.visible = key.visible = renderGraphics.lighting;
       if (p.sequenceIndex !== state.sequenceIndex || !p.playing || !state.wasPlaying || (p.time !== state.lastExternalTime && Math.abs(p.time - (state.lastReportedFrame ?? -Infinity)) > 1)) state.frame = p.time || 0;
