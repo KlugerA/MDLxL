@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { PerspectiveCamera, Vector3 } from 'three';
+import { OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
 import { setEditorCameraAngles } from '../app/editor-camera-controls.js';
 import { HUMAN_FRAME_CROP, HUMAN_FRAME_SIZE, HUMAN_TILE_LAYOUT, MODEL_CAMERA_FOV_FACTOR, PORTRAIT_ASPECT, PORTRAIT_RECT, applyEvaluatedModelCamera, editorCameraSnapshot, evaluateModelCamera, firstPortraitSequenceIndex, portraitCaptureLayout, updateModelCameraFromView } from '../app/portrait-view.js';
 
@@ -62,6 +62,25 @@ test('view writeback reverses the WC3 FOV conversion, including dolly zoom', () 
   const controls = {target:new Vector3(),update(){}};
   applyEvaluatedModelCamera(camera,controls,{...view,roll:0},PORTRAIT_ASPECT);
   assert.ok(Math.abs(Math.tan(camera.fov*Math.PI/360)-Math.tan(33.75*Math.PI/360)/2)<1e-9);
+});
+
+test('orthographic front and side views export as equivalent Warcraft perspective cameras', () => {
+  const target = new Vector3(3,-4,120), ortho = new OrthographicCamera(-80,80,100,-100,.2,1000);
+  ortho.position.set(800,-500,420); ortho.up.set(0,0,1); ortho.zoom=4; ortho.lookAt(target); ortho.updateMatrixWorld(); ortho.updateProjectionMatrix();
+  // Even a previously damaged embedded camera must not poison a clean axis view.
+  const perspective = new PerspectiveCamera(.0749595*.75*180/Math.PI,PORTRAIT_ASPECT,790,2972);
+  const view = editorCameraSnapshot(ortho,target,perspective);
+  assert.ok(Math.abs(view.fieldOfView-Math.PI/4)<1e-9);
+  assert.ok(view.near<new Vector3().fromArray(view.position).distanceTo(target));
+  assert.ok(view.far>new Vector3().fromArray(view.position).distanceTo(target));
+  const source={Position:view.position,TargetPosition:view.target,FieldOfView:view.fieldOfView,NearClip:view.near,FarClip:view.far,
+    Rotation:{LineType:0,GlobalSeqId:null,Keys:[{Frame:0,Vector:Float32Array.of(view.roll)}]}};
+  const restored=new PerspectiveCamera(), controls={target:new Vector3(),object:null,update(){}};
+  applyEvaluatedModelCamera(restored,controls,evaluateModelCamera({},source),PORTRAIT_ASPECT);
+  const point=target.clone().add(new Vector3(0,1,0).applyQuaternion(ortho.quaternion).multiplyScalar(10));
+  const orthoPoint=point.clone().project(ortho), restoredPoint=point.clone().project(restored);
+  assert.ok(Math.abs(orthoPoint.y-restoredPoint.y)<1e-6);
+  assert.ok(restored.quaternion.angleTo(ortho.quaternion)<1e-7);
 });
 
 test('Set Current View round-trips an arbitrary free camera angle exactly', () => {

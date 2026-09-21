@@ -409,8 +409,9 @@ export default function GamePreview(inputProps) {
       const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1), pixelRatio = viewportPixelRatio(graphicsOptions(latest.current.preferences), ownerWindow.devicePixelRatio);
       canvas.height = Math.round(height * pixelRatio); canvas.width = latest.current.portraitMode ? Math.round(canvas.height * PORTRAIT_ASPECT) : Math.round(width * pixelRatio); gl.viewport(0, 0, canvas.width, canvas.height);
       perspective.aspect = latest.current.portraitMode ? PORTRAIT_ASPECT : width / height; perspective.updateProjectionMatrix();
-      const half = orthographicHalfHeight(fitRadius(), width / height);
-      ortho.left = -half * width / height; ortho.right = -ortho.left; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
+      const aspect = latest.current.portraitMode ? PORTRAIT_ASPECT : width / height;
+      const half = orthographicHalfHeight(fitRadius(), aspect);
+      ortho.left = -half * aspect; ortho.right = -ortho.left; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
       drawBackground(); reportProjectionView();
       scheduler?.resize();
     }
@@ -474,7 +475,7 @@ export default function GamePreview(inputProps) {
       state.cameraEditing = false; reportProjectionView(); invalidate();
     };
     controls.addEventListener('start', cameraStarted); controls.addEventListener('end', cameraEnded);
-    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target), refreshCursor: () => { canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode, rotating); }, setCameraAngles: values => { if (setEditorCameraAngles(camera, controls.target, values)) { if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); } controls.update(); cameraChanged(); } } }; runtime.current = state;
+    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode, rotating); }, setCameraAngles: values => { if (setEditorCameraAngles(camera, controls.target, values)) { if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); } controls.update(); cameraChanged(); } } }; runtime.current = state;
     observer = new ownerWindow.ResizeObserver(resize); observer.observe(host.current);
     const saved = cameraMemory.current;
     // UV edits may rebuild geometry/materials, but never own the user's view.

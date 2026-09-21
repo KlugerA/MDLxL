@@ -6,6 +6,7 @@ export const PORTRAIT_ASPECT = 0.0835 / 0.085;
 // path using * .75, not passed directly to a vertical-FOV camera. See
 // WarsmashModEngine/handlers/w3x/camera/PortraitCameraManager.java.
 export const MODEL_CAMERA_FOV_FACTOR = .75;
+export const DEFAULT_MODEL_CAMERA_FOV = Math.PI / 4;
 export const HUMAN_FRAME_SIZE = 184;
 export const PORTRAIT_RECT = Object.freeze({ x: 8, y: 9, width: 167, height: 170 });
 export const HUMAN_TILE_LAYOUT = Object.freeze([
@@ -66,9 +67,14 @@ export function applyEvaluatedModelCamera(camera, controls, evaluated, aspect) {
   controls.object = camera; controls.update(); return true;
 }
 
-export function editorCameraSnapshot(camera, target) {
-  const zoom = Math.max(.0001, Number(camera?.zoom) || 1);
-  const baseFov = Math.max(.0001, Number(camera?.fov) || 42) * Math.PI / 180;
+export function editorCameraSnapshot(camera, target, perspectiveCamera = camera) {
+  const orthographic = !!camera?.isOrthographicCamera, projectionCamera = orthographic ? perspectiveCamera : camera;
+  // An axis view has no FOV. Encode it with the conventional WC3 model-camera
+  // FOV and solve distance from its visible height instead of inheriting a
+  // stale or already-corrupted camera projection.
+  const zoom = orthographic ? 1 : Math.max(.0001, Number(projectionCamera?.zoom) || 1);
+  const baseFov = orthographic ? DEFAULT_MODEL_CAMERA_FOV * MODEL_CAMERA_FOV_FACTOR : Math.max(.0001, Number(projectionCamera?.fov) || 42) * Math.PI / 180;
+  const effectiveFov = 2 * Math.atan(Math.tan(baseFov / 2) / zoom);
   const position = camera.position.clone(), lookTarget = target.clone();
   const forward = lookTarget.sub(position);
   if (forward.lengthSq() < 1e-12) camera.getWorldDirection(forward);
@@ -79,11 +85,20 @@ export function editorCameraSnapshot(camera, target) {
   const viewUp = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
   viewUp.addScaledVector(forward, -viewUp.dot(forward)).normalize();
   const roll = Math.atan2(forward.dot(new Vector3().crossVectors(levelUp, viewUp)), levelUp.dot(viewUp));
+  if (orthographic) {
+    const halfHeight = Math.abs(Number(camera.top) - Number(camera.bottom)) / (2 * Math.max(.0001, Number(camera.zoom) || 1));
+    const distance = halfHeight / Math.max(.000001, Math.tan(effectiveFov / 2));
+    position.copy(target).addScaledVector(forward, -distance);
+  }
+  const distance = position.distanceTo(target);
+  let near = Number(projectionCamera?.near), far = Number(projectionCamera?.far);
+  if (!(near > 0) || near >= distance) near = Math.max(.1, distance * .01);
+  if (!(far > near) || far <= distance) far = Math.max(1000, distance * 10, near + 1);
   return {
-    position: camera.position.toArray(), target: target.toArray(),
+    position: position.toArray(), target: target.toArray(),
     roll,
-    fieldOfView: 2 * Math.atan(Math.tan(baseFov / 2) / zoom) / MODEL_CAMERA_FOV_FACTOR,
-    near: Number(camera.near), far: Number(camera.far),
+    fieldOfView: effectiveFov / MODEL_CAMERA_FOV_FACTOR,
+    near, far,
   };
 }
 
@@ -97,6 +112,28 @@ function shiftCameraRoll(track, delta) {
   }
 }
 
+function portraitIntervals(model) {
+  return (model?.Sequences || []).filter(sequence => /portrait/i.test(String(sequence?.Name || '')) && sequence?.Interval?.length >= 2)
+    .map(sequence => [Number(sequence.Interval[0]), Number(sequence.Interval[1])]).filter(interval => interval.every(Number.isFinite));
+}
+
+function sharedPortraitRoll(model, source, roll) {
+  const intervals = portraitIntervals(model);
+  if (!intervals.length) return false;
+  const prior = source.Rotation?.Keys ? source.Rotation : null, lineType = Number(prior?.LineType) || 0;
+  const insidePortrait = frame => intervals.some(([start, end]) => frame >= start && frame <= end);
+  const keys = prior?.GlobalSeqId == null ? (prior?.Keys || []).filter(key => !insidePortrait(key.Frame)) : [];
+  const additions = new Map();
+  for (const [start, end] of intervals) for (const Frame of new Set([start, end])) {
+    const key = { Frame, Vector: Float32Array.of(roll) };
+    if (lineType === 2) key.InTan = key.OutTan = Float32Array.of(0);
+    if (lineType === 3) key.InTan = key.OutTan = Float32Array.of(roll);
+    additions.set(Frame, key);
+  }
+  source.Rotation = { ...(prior || {}), LineType: lineType, GlobalSeqId: null, Keys: [...keys.filter(key => !additions.has(key.Frame)), ...additions.values()].sort((a, b) => a.Frame - b.Frame) };
+  return true;
+}
+
 /** Write an evaluated editor view back into the camera's static fields without
  * double-applying animated offsets at this time. Existing roll animation keeps
  * its motion while the complete curve is re-based onto the visible view. */
@@ -107,7 +144,10 @@ export function updateModelCameraFromView(model, source, view, frame = 0, sequen
   if (selected.has('target') && finiteVector(view.target)) source.TargetPosition = new Float32Array(new Vector3().fromArray(view.target).sub(samples.targetTranslation).toArray());
   if (selected.has('roll') && Number.isFinite(Number(view.roll))) {
     const roll = Number(view.roll);
-    if (source.Rotation?.Keys?.length) {
+    if (sharedPortraitRoll(model, source, roll)) {
+      // Warcraft cameras have no static roll field. Matching keys in every
+      // Portrait interval make this one authored view shared by all variants.
+    } else if (source.Rotation?.Keys?.length) {
       const difference = roll - samples.roll;
       shiftCameraRoll(source.Rotation, Math.atan2(Math.sin(difference), Math.cos(difference)));
     } else source.Rotation = { LineType: 0, GlobalSeqId: null, Keys: [{ Frame: Math.round(frame), Vector: Float32Array.of(roll) }] };

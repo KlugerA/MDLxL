@@ -45,6 +45,28 @@ test('Set Current View preserves existing camera animation when updating the eva
   assert.equal(model.Cameras[0].Translation.Keys.length,1);
 });
 
+test('Set Current View authors one identical camera roll for every Portrait variant',()=>{
+  const doc=createDemoDocument();
+  const sequence=doc.model.Sequences[0];
+  doc.model.Sequences=[
+    {...structuredClone(sequence),Name:'Stand',Interval:new Uint32Array([0,99])},
+    {...structuredClone(sequence),Name:'Portrait - 1',Interval:new Uint32Array([100,199])},
+    {...structuredClone(sequence),Name:'Portrait Talk - 1',Interval:new Uint32Array([300,399])},
+  ];
+  doc.model.Cameras=[];
+  setCameraFromCurrentView(doc.model,-1,view,300,2);
+  const source=doc.model.Cameras[0];
+  for(const [frame,index] of [[100,1],[150,1],[300,2],[350,2]]) {
+    assert.ok(Math.abs(evaluateModelCamera(doc.model,source,frame,index,frame).roll-view.roll)<1e-6);
+  }
+  assert.deepEqual(source.Rotation.Keys.map(key=>key.Frame),[100,199,300,399]);
+  for(const format of ['mdl','mdx']) {
+    const reopened=openDocument(doc.serialize(format),'shared-camera.'+format), camera=reopened.model.Cameras[0];
+    assert.ok(Math.abs(evaluateModelCamera(reopened.model,camera,150,1,150).roll-view.roll)<1e-6);
+    assert.ok(Math.abs(evaluateModelCamera(reopened.model,camera,350,2,350).roll-view.roll)<1e-6);
+  }
+});
+
 test('Clear all switches off helper overlays while preserving grid, selections and other workspaces',()=>{
   const state={vertices:{grid:true},bones:{grid:true},animation:{grid:true,vertices:true,wires:true,bones:true,nodes:true,attachments:true,particles:true},uv:{vertices:true}};
   const before=structuredClone(state),next=clearQuickDisplay(state,'animation');
