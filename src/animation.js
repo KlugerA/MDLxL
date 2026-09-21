@@ -163,10 +163,22 @@ export function sampleGeosetAnimation(model, geosetId, frame, sequenceIndex, glo
   const animation = model.GeosetAnims?.find(item => item.GeosetId === geosetId);
   const options = { interval: model.Sequences?.[sequenceIndex]?.Interval, globalSequences: model.GlobalSequences, globalTime };
   const unit = value => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
-  const color = animation?.Flags & 2 ? sampleTrack(animation.Color, frame, { ...options, fallback: [1, 1, 1] }) : [1, 1, 1];
+  // MDX stores a static base beside an animated track. Retera's Unanimated
+  // view uses that base; sampling the first key instead applies an arbitrary
+  // sequence tint to the bind-pose model. The compatibility reader retains
+  // these otherwise hidden fields in _MdxDefaults.
+  const unanimated = !options.interval;
+  const color = animation?.Flags & 2
+    ? unanimated && animation.Color?.Keys
+      ? animation._MdxDefaults?.Color ?? [1, 1, 1]
+      : sampleTrack(animation.Color, frame, { ...options, fallback: [1, 1, 1] })
+    : [1, 1, 1];
+  const alpha = unanimated && animation?.Alpha?.Keys
+    ? animation._MdxDefaults?.Alpha ?? 1
+    : sampleTrack(animation?.Alpha, frame, { ...options, fallback: 1 });
   return {
     color: Array.from(color, unit),
-    alpha: unit(sampleTrack(animation?.Alpha, frame, { ...options, fallback: 1 })),
+    alpha: unit(alpha),
   };
 }
 

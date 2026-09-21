@@ -50,6 +50,23 @@ test('shared geoset evaluator matches controls and native preview across sequenc
   close(sampleGeosetAnimation(model, 0, 550, 1).color, [1, 1, 1]);
 });
 
+test('Unanimated geosets use MDX static bases instead of the first RGB and alpha keys', () => {
+  const model = {
+    Geosets: [{}], Sequences: [{ Interval: [333, 666] }], GlobalSequences: [],
+    GeosetAnims: [{
+      GeosetId: 0, Flags: 2,
+      Alpha: { LineType: 1, Keys: [key(333, [0.25]), key(666, [0.75])] },
+      Color: { LineType: 1, Keys: [key(333, [0.72549, 1, 0.215686]), key(666, [1, 1, 1])] },
+      _MdxDefaults: { Alpha: 1, Color: new Float32Array([1, 1, 1]) },
+    }],
+  };
+  const unanimated = sampleGeosetAnimation(model, 0, 0, -1);
+  close(unanimated.color, [1, 1, 1]); assert.equal(unanimated.alpha, 1);
+  const animated = sampleGeosetAnimation(model, 0, 333, 0);
+  close(animated.color, [0.72549, 1, 0.215686]); assert.equal(animated.alpha, 0.25);
+  close(previewGeosetTint(model, 0, { Alpha: 1 }, 0, -1), [1, 1, 1, 1]);
+});
+
 test('static RGB codec paths preserve channel order and evaluated appearance', () => {
   const doc = createDemoDocument();
   doc.apply('Set static RGB', ['GeosetAnims'], m => Object.assign(m.GeosetAnims[0], { Flags: 3, Alpha: 0.75, Color: new Float32Array([0.8, 0.2, 0.4]) }));
