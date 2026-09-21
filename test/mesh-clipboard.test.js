@@ -73,6 +73,48 @@ test('paste selects loose new geometry, moves only the paste, and supports undo/
   doc.undo(); assert.deepEqual(doc.model, pasted); doc.redo();
 });
 
+test('same-model paste stays in a matching geoset and reuses its original bone attachments', () => {
+  const doc = createDemoDocument(), sourceIndex = 4, before = structuredClone(doc.model);
+  const copied = captureMeshSelection(doc.model, {}, new Set([sourceIndex]));
+  const originalVertexCount = before.Geosets[sourceIndex].Vertices.length / 3;
+  const result = doc.apply('Paste same geoset', sections, model => importGeosets(model, copied.model, copied.indices, null, { sameModel: true, targetGeoset: sourceIndex }));
+  const pasted = doc.model.Geosets[sourceIndex], pastedVertices = result.selection[sourceIndex];
+
+  assert.deepEqual(result.geosetIndices, [sourceIndex]);
+  assert.deepEqual(pastedVertices, Array.from({ length: originalVertexCount }, (_, index) => originalVertexCount + index));
+  assert.equal(doc.model.Geosets.length, before.Geosets.length);
+  assert.equal(doc.model.GeosetAnims.length, before.GeosetAnims.length);
+  assert.equal(doc.model.Materials.length, before.Materials.length);
+  assert.equal(doc.model.Nodes.filter(Boolean).length, before.Nodes.filter(Boolean).length);
+  assert.deepEqual(result.nodeMap, { 0: 0, 1: 1 });
+  assert.deepEqual(pasted.Groups, before.Geosets[sourceIndex].Groups);
+  assert.deepEqual(Array.from(pasted.Faces.slice(before.Geosets[sourceIndex].Faces.length)), Array.from(before.Geosets[sourceIndex].Faces, index => index + originalVertexCount));
+
+  const originalVertices = pasted.Vertices.slice(0, originalVertexCount * 3);
+  doc.apply('Move same-model paste', ['Geosets'], model => transformVertices(model.Geosets[sourceIndex], pastedVertices, [4, 5, 6]));
+  assert.deepEqual(doc.model.Geosets[sourceIndex].Vertices.slice(0, originalVertexCount * 3), originalVertices);
+  for (const format of ['mdl', 'mdx']) {
+    const reopened = openDocument(doc.serialize(format), `same-model.${format}`);
+    assert.equal(reopened.diagnostics.filter(item => item.severity === 'error').length, 0);
+    assert.equal(reopened.model.Geosets.length, before.Geosets.length);
+    assert.equal(reopened.model.Nodes.filter(Boolean).length, before.Nodes.filter(Boolean).length);
+    assert.deepEqual(reopened.model.Geosets[sourceIndex].Groups, before.Geosets[sourceIndex].Groups);
+  }
+});
+
+test('same-model paste targets another selected geoset when the material matches', () => {
+  const doc = createDemoDocument(), sourceIndex = 1, targetIndex = 3, before = structuredClone(doc.model);
+  const copied = captureMeshSelection(doc.model, {}, new Set([sourceIndex]));
+  const targetCount = before.Geosets[targetIndex].Vertices.length / 3;
+  const result = doc.apply('Paste matching material', sections, model => importGeosets(model, copied.model, copied.indices, null, { sameModel: true, targetGeoset: targetIndex }));
+  assert.deepEqual(result.geosetIndices, [targetIndex]);
+  assert.deepEqual(result.selection[targetIndex], Array.from({ length: before.Geosets[sourceIndex].Vertices.length / 3 }, (_, index) => targetCount + index));
+  assert.equal(doc.model.Geosets.length, before.Geosets.length);
+  assert.equal(doc.model.Materials.length, before.Materials.length);
+  assert.equal(doc.model.Nodes.filter(Boolean).length, before.Nodes.filter(Boolean).length);
+  assert.deepEqual(doc.model.Geosets[targetIndex].Groups, before.Geosets[targetIndex].Groups);
+});
+
 test('three copied loose vertices make a valid T triangle and keep imported material/skin data', () => {
   const doc = createDemoDocument();
   // These positions are not one of the demo's original complete triangles.

@@ -730,14 +730,54 @@ export function transformGeoset(geoset, { translation = [0, 0, 0], rotation = [0
   return geoset;
 }
 
+function appendGeosetGeometry(target, source) {
+  const targetCount = target.Vertices.length / 3, sourceCount = source.Vertices.length / 3;
+  if (targetCount + sourceCount > 65536) throw new Error('Pasted geometry would exceed the geoset 16-bit vertex limit.');
+  if (target.TVertices.length !== source.TVertices.length) throw new Error('Pasted geometry must have the same UV set count as its destination geoset.');
+  if (!!target.Tangents?.length !== !!source.Tangents?.length) throw new Error('Pasted geometry must use the same tangent format as its destination geoset.');
+  if (!!target.SkinWeights?.length !== !!source.SkinWeights?.length) throw new Error('Pasted geometry must use the same skin-weight format as its destination geoset.');
+
+  const append = (left, right) => {
+    const output = new left.constructor(left.length + right.length);
+    output.set(left); output.set(right, left.length);
+    return output;
+  };
+  const groups = target.Groups.map((group) => [...group]);
+  const vertexGroups = new target.VertexGroup.constructor(source.VertexGroup.length);
+  for (let vertex = 0; vertex < source.VertexGroup.length; vertex++) {
+    const sourceGroup = source.Groups[source.VertexGroup[vertex]];
+    if (!sourceGroup) throw new Error('Pasted geometry references a missing matrix group.');
+    let mapped = groups.findIndex((group) => group.length === sourceGroup.length && group.every((id, index) => id === sourceGroup[index]));
+    if (mapped < 0) mapped = groups.push([...sourceGroup]) - 1;
+    if (mapped > 255) throw new Error('Pasted geometry would exceed the geoset matrix-group limit.');
+    vertexGroups[vertex] = mapped;
+  }
+  const faces = new target.Faces.constructor(target.Faces.length + source.Faces.length);
+  faces.set(target.Faces);
+  for (let index = 0; index < source.Faces.length; index++) faces[target.Faces.length + index] = source.Faces[index] + targetCount;
+
+  target.Vertices = append(target.Vertices, source.Vertices);
+  target.Normals = append(target.Normals, source.Normals);
+  target.Faces = faces;
+  target.TVertices = target.TVertices.map((values, index) => append(values, source.TVertices[index]));
+  target.VertexGroup = append(target.VertexGroup, vertexGroups);
+  target.Groups = groups;
+  target.TotalGroupsCount = groups.reduce((total, group) => total + group.length, 0);
+  if (target.Tangents?.length) target.Tangents = append(target.Tangents, source.Tangents);
+  if (target.SkinWeights?.length) target.SkinWeights = append(target.SkinWeights, source.SkinWeights);
+  Object.assign(target, bounds(target.Vertices));
+  return Array.from({ length: sourceCount }, (_, index) => targetCount + index);
+}
+
 /** Append selected geometry with its required rig, textures and animation dependencies. */
-export function importGeosets(target, source, selectedIndices = source.Geosets.map((_, i) => i), anchor = null) {
+export function importGeosets(target, source, selectedIndices = source.Geosets.map((_, i) => i), anchor = null, { sameModel = false, targetGeoset = null } = {}) {
   if (source.Version !== target.Version) throw new Error('Geoset import currently requires matching format versions to preserve SD/HD data.');
   if (source.BindPoses?.length || target.BindPoses?.length) throw new Error('Geoset import with bind-pose matrices is not supported yet.');
   if (anchor && typeof anchor === 'object') anchor = anchor.ObjectId;
   if (anchor != null && !target.Nodes?.[anchor]) throw new Error('The destination anchor node does not exist.');
+  const reuseExisting = sameModel && anchor == null;
   const indices = [...new Set(selectedIndices)];
-  if (!indices.length) return { geosetIndices: [], nodeMap: {}, materialMap: {}, textureMap: {}, warnings: [] };
+  if (!indices.length) return { geosetIndices: [], selection: {}, nodeMap: {}, materialMap: {}, textureMap: {}, warnings: [] };
   for (const index of indices) if (!source.Geosets?.[index]) throw new Error(`Source geoset ${index} does not exist.`);
   const neededNodes = new Set(); const visiting = new Set();
   function requireNode(id) {
@@ -754,6 +794,7 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
     for (let i = 0; i < (g.SkinWeights?.length || 0); i += 8) for (let k = 0; k < 4; k++) if (g.SkinWeights[i + 4 + k]) requireNode(g.SkinWeights[i + k]);
   }
   const maps = { textures: new Map(), materials: new Map(), textureAnims: new Map(), globals: new Map(), nodes: new Map(), geosets: new Map(), geosetAnims: new Map() };
+  const createdNodes = new Set(), createdGeosets = new Set(), selections = new Map();
   const globalRef = (value) => {
     if (!value || typeof value !== 'object' || ArrayBuffer.isView(value)) return;
     if (value.GlobalSeqId != null && value.GlobalSeqId !== -1) {
@@ -775,6 +816,11 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
   const materialRef = (old) => {
     if (!source.Materials[old]) throw new Error(`Source geoset references missing material ${old}.`);
     if (!maps.materials.has(old)) {
+      if (reuseExisting) {
+        const original = fingerprint(target.Materials[old]) === fingerprint(source.Materials[old]) ? old : -1;
+        const existing = original >= 0 ? original : target.Materials.findIndex((material) => fingerprint(material) === fingerprint(source.Materials[old]));
+        if (existing >= 0) { maps.materials.set(old, existing); return existing; }
+      }
       const material = clone(source.Materials[old]);
       for (const layer of material.Layers) {
         for (const slot of TEXTURE_SLOTS) if (typeof layer[slot] === 'number') layer[slot] = textureRef(layer[slot]);
@@ -792,10 +838,16 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
     return maps.materials.get(old);
   };
   for (const id of neededNodes) {
+    if (reuseExisting) {
+      if (!target.Nodes?.[id]) throw new Error(`The original pasted bone or node ${id} no longer exists in this model.`);
+      maps.nodes.set(id, id);
+      continue;
+    }
     const original = source.Nodes[id];
     const type = Object.keys(NODE_TYPES).find((name) => source[NODE_TYPES[name][0]]?.some((n) => n.ObjectId === id));
     const created = createNode(target, type);
     maps.nodes.set(id, created.ObjectId);
+    createdNodes.add(id);
     const newID = created.ObjectId;
     Object.assign(created, clone(original), { ObjectId: newID, Parent: original.Parent == null || original.Parent === -1 ? anchor : maps.nodes.get(original.Parent), Name: `${original.Name}_import` });
     created.PivotPoint = clone(source.PivotPoints[id] || original.PivotPoint || V3()); target.PivotPoints[newID] = created.PivotPoint;
@@ -815,19 +867,32 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
         g.SkinWeights[i + k] = mapped;
       } else g.SkinWeights[i + k] = 0;
     }
-    maps.geosets.set(index, target.Geosets.push(g) - 1);
+    const requestedTarget = indices.length === 1 && Number.isInteger(targetGeoset) && targetGeoset >= 0 ? targetGeoset : index;
+    const destination = reuseExisting && target.Geosets[requestedTarget]?.MaterialID === g.MaterialID ? requestedTarget : null;
+    if (destination != null) {
+      const added = appendGeosetGeometry(target.Geosets[destination], g);
+      maps.geosets.set(index, destination);
+      selections.set(destination, [...(selections.get(destination) || []), ...added]);
+    } else {
+      const added = target.Geosets.push(g) - 1;
+      maps.geosets.set(index, added); createdGeosets.add(index);
+      selections.set(added, Array.from({ length: g.Vertices.length / 3 }, (_, vertex) => vertex));
+    }
   }
-  for (const [index, anim] of source.GeosetAnims.entries()) if (maps.geosets.has(anim.GeosetId)) {
+  for (const [index, anim] of source.GeosetAnims.entries()) if (createdGeosets.has(anim.GeosetId)) {
     const copy = clone(anim); copy.GeosetId = maps.geosets.get(anim.GeosetId); globalRef(copy);
     maps.geosetAnims.set(index, target.GeosetAnims.push(copy) - 1);
   }
-  for (const [old, id] of maps.nodes) {
+  for (const old of createdNodes) {
+    const id = maps.nodes.get(old);
     const original = source.Nodes[old], node = target.Nodes[id];
     if ('GeosetId' in original) node.GeosetId = maps.geosets.get(original.GeosetId) ?? null;
     if ('GeosetAnimId' in original) node.GeosetAnimId = maps.geosetAnims.get(original.GeosetAnimId) ?? null;
   }
   normalizeModel(target); updateCounts(target); recalculateExtents(target);
-  return { geosetIndices: [...maps.geosets.values()], nodeMap: Object.fromEntries(maps.nodes), materialMap: Object.fromEntries(maps.materials), textureMap: Object.fromEntries(maps.textures), warnings: ['Imported animation keys retain their source frame times. Destination sequence definitions are unchanged; align intervals when needed.', ...(anchor != null ? ['Imported roots are parented to the anchor; its transforms now affect the imported rig.'] : [])] };
+  const warnings = reuseExisting && !maps.textureAnims.size ? [] : ['Imported animation keys retain their source frame times. Destination sequence definitions are unchanged; align intervals when needed.'];
+  if (anchor != null) warnings.push('Imported roots are parented to the anchor; its transforms now affect the imported rig.');
+  return { geosetIndices: [...new Set(maps.geosets.values())], selection: Object.fromEntries(selections), nodeMap: Object.fromEntries(maps.nodes), materialMap: Object.fromEntries(maps.materials), textureMap: Object.fromEntries(maps.textures), warnings };
 }
 
 function makeGeoset(vertices, faces, material, bone = 0) {
