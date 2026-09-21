@@ -12,6 +12,12 @@ export function isUVOnlyPreviewChange(before, after) {
   return true;
 }
 
+/** In Portrait Movement, an empty node selection gives blank-space left drag
+ * exclusively to the camera. Selecting a node gives Work back to the rig. */
+export function portraitBlankDragRotatesCamera(props, event = {}) {
+  return !!props?.portraitMode && (props.cameraMode ?? 'work') === 'work' && !event.altKey && !(props.selectedNodeIds?.length);
+}
+
 /** Renderer replacement is not a user camera gesture. Restore both projections
  * and the active camera before drawing the rebuilt UV preview. */
 export function restorePreviewCamera(saved, perspective, ortho, controls) {

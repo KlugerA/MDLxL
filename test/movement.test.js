@@ -5,7 +5,7 @@ import { applyMovementTransform, deleteMovementControllers, deleteMovementKeys, 
 import { sampleNodeMatrices, skinGeoset } from '../src/animation.js';
 import { createDemoDocument, openDocument } from '../src/editor-document.js';
 import { MOVEMENT_GIZMO_SCALE, boneConnectionAppearance, boneConnectionEndpoints, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementMarkerRadius, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from '../app/movement-overlay.js';
-import { applyRestPoseMatrices, isUVOnlyPreviewChange } from '../app/game-preview-data.js';
+import { applyRestPoseMatrices, isUVOnlyPreviewChange, portraitBlankDragRotatesCamera } from '../app/game-preview-data.js';
 import { patchWarcraftMeshFragmentShader, previewGeosetTint } from '../app/warcraft-preview-adapter.js';
 
 const near = (a, b, epsilon = 1e-5) => assert.ok(Math.abs(a - b) < epsilon, `${a} != ${b}`);
@@ -253,6 +253,13 @@ test('UV fast path accepts UV overlays and rejects topology, material, and node 
   assert.equal(isUVOnlyPreviewChange(model, { ...overlay, Materials: [...model.Materials] }), false);
   assert.equal(isUVOnlyPreviewChange(model, { ...overlay, Geosets: overlay.Geosets.map((geo, i) => i ? geo : { ...geo, Faces: new Uint16Array(geo.Faces) }) }), false);
   assert.equal(isUVOnlyPreviewChange(model, { ...overlay, Bones: [...model.Bones] }), false);
+});
+
+test('portrait blank drag rotates only the camera until a bone is selected', () => {
+  assert.equal(portraitBlankDragRotatesCamera({ portraitMode: true, cameraMode: 'work', workplaneEnabled: false, selectedNodeIds: [] }), true);
+  assert.equal(portraitBlankDragRotatesCamera({ portraitMode: true, cameraMode: 'work', workplaneEnabled: false, selectedNodeIds: [2] }), false);
+  assert.equal(portraitBlankDragRotatesCamera({ portraitMode: false, cameraMode: 'work', selectedNodeIds: [] }), false);
+  assert.equal(portraitBlankDragRotatesCamera({ portraitMode: true, cameraMode: 'rotate', selectedNodeIds: [] }), false);
 });
 
 test('bind pose reuses the live renderer and animated updates can overwrite its temporary identity matrices', () => {
