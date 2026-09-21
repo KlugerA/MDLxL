@@ -7,6 +7,7 @@ import {createPaintMaterial,repairPaintMaterials,validatePaintAssignments} from 
 import {paintProjectModel} from '../src/paint-view.js';
 import {createDemoDocument,openDocument} from '../src/editor-document.js';
 import {paintFixtureModel,triangleGeoset} from './fixtures/paint-fixtures.js';
+import {forEachPaintUVTexel,paintUVFilterCoverage} from '../src/paint-uv-coverage.js';
 
 function bounds(uv){const u=[],v=[];for(let i=0;i<uv.length;i+=2){u.push(uv[i]);v.push(uv[i+1]);}return [Math.min(...u),Math.min(...v),Math.max(...u),Math.max(...v)];}
 function overlaps(a,b){return a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1];}
@@ -85,4 +86,23 @@ test('fresh basecoat repair keeps geosets that had no source UV channel',()=>{
   const atlas=createFreshPaintAtlas(original,[0],256),project=createPaintProject({sourceMode:'primer'});project.generatedUVSets=atlas.coordIds;project.paintAtlasVersion=1;
   createPaintMaterial(project,atlas.model,{name:'Material 1',raster:raster(),geosets:[0],basecoat:true,generatedUV:true,sourceModel:original});project.paintMaterialsVersion=undefined;
   assert.equal(repairPaintMaterials(project,original,atlas.model),true);assert.deepEqual(project.targets[0].geosetIndices,[0]);assert.equal(project.targets[0].flags,0);validatePaintAssignments(project,atlas.model);
+});
+
+test('a detailed fresh model keeps useful texel density rather than spending its atlas on gutters',()=>{
+  // Separate triangle islands reproduce a detailed low-poly warrior without
+  // depending on a private model fixture. The old padding leaves sub-texel faces.
+  const faces=[],vertices=[];
+  for(let i=0;i<1200;i++){const x=i%40*2,y=Math.floor(i/40)*2;vertices.push(x,y,0,x+1,y,0,x,y+1,0);faces.push(i*3,i*3+1,i*3+2);}
+  const geoset={Vertices:new Float32Array(vertices),Faces:new Uint16Array(faces),TVertices:[]},model=paintFixtureModel([geoset]);
+  const areas=[];
+  for(const resolution of [256,512]){
+    const atlas=createFreshPaintAtlas(model,[0],resolution),uv=atlas.model.Geosets[0].TVertices[0];let area=0;
+    for(let i=0;i<faces.length;i+=3){const a=faces[i]*2,b=faces[i+1]*2,c=faces[i+2]*2;area+=Math.abs((uv[b]-uv[a])*(uv[c+1]-uv[a+1])-(uv[b+1]-uv[a+1])*(uv[c]-uv[a]))*resolution**2/2;}
+    assert.ok(area>resolution**2*.17,`only ${area} useful texels in ${resolution} atlas`);areas.push(area);
+    const triangle=i=>[0,1,2].map(k=>({x:uv[faces[i+k]*2],y:uv[faces[i+k]*2+1]}));
+    const painted=new Set();forEachPaintUVTexel(triangle(0),resolution,resolution,0,(x,y)=>painted.add(y*resolution+x),Math.SQRT2);
+    const others=paintUVFilterCoverage(Array.from({length:1199},(_,i)=>triangle((i+1)*3)),resolution,resolution);
+    for(const pixel of painted)assert.equal(others[pixel],0,'painting a gutter must not colour an unrelated island');
+  }
+  assert.ok(areas[1]>areas[0]*4,'higher resolution must provide real detail instead of larger gutters');
 });

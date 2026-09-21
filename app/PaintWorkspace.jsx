@@ -41,7 +41,7 @@ function Range({id,value,min=0,max=1,step=.01,percent=true,editable=false,onChan
  * composite/upload the changed target once per frame.
  */
 export default function PaintWorkspace({model,originalModel=model,revision,modelName,modelPath,textureAssets,project,activeGeoset,onGeosetChange,onProjectChange,onWorkingModelChange,onEnsureTarget,onSaveProject,onOpenProject,onExport,onApply,onExit,onStatus,preferences,cameraProps={},cameraMode='work',view='perspective',teamColor='#ff0303',readOnly=false,onInteractionChange}){
-  const [resolution,setResolution]=useState(256),[sourceMode,setSourceMode]=useState('primer'),[busy,setBusy]=useState(false);
+  const [resolution,setResolution]=useState(512),[sourceMode,setSourceMode]=useState('primer'),[busy,setBusy]=useState(false);
   const [brush,setBrush]=useState(()=>normalizeBrushSettings({id:'normal',color:'#718b45',filterColor:'#ffffff'})),[material,setMaterial]=useState(null),[targetMode,setTargetMode]=useState('free');
   const [paintRevision,setPaintRevision]=useState(0),[pickPart,setPickPart]=useState(false),[isolate,setIsolate]=useState(false),[showHelpers,setShowHelpers]=useState(false);
   const [outline,setOutline]=useState({visible:true,color:'#35d9ff',thickness:2}),[halfHidden,setHalfHidden]=useState(false),[mirrorAxis,setMirrorAxis]=useState('y'),[mirrorSide,setMirrorSide]=useState(1),[cutPosition,setCutPosition]=useState(0),[lowPower,setLowPower]=useState(false);

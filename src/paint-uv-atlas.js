@@ -192,7 +192,10 @@ export function createFreshPaintAtlas(model, geosetIndices, resolution = 256) {
     charts.push(...chartsForGeoset(geoset, index));
   }
   if (!charts.length) throw Error('This model has no paintable triangles.');
-  const padding = resolution === 512 ? 4 : 2, packed = packCharts(charts, resolution, padding), Geosets = [...model.Geosets], coordIds = {}, chartsByGeoset = new Map(); let addedVertices = 0;
+  // A one-texel gutter on each chart leaves two texels between UV interiors,
+  // enough for the painter's bilinear filter taps. Scaling this border with
+  // image size spends nearly the entire atlas on gutters on detailed models.
+  const padding = 1, packed = packCharts(charts, resolution, padding), Geosets = [...model.Geosets], coordIds = {}, chartsByGeoset = new Map(); let addedVertices = 0;
   for (const chart of charts) { let list = chartsByGeoset.get(chart.geosetIndex); if (!list) chartsByGeoset.set(chart.geosetIndex, list = []); list.push(chart); }
   for (const index of indices) { const result = applyAtlasToGeoset(model.Geosets[index], chartsByGeoset.get(index), packed, resolution, padding); Geosets[index] = result.geoset; coordIds[index] = result.coordId; addedVertices += result.addedVertices; }
   return { model: { ...model, Geosets }, coordIds, chartCount: charts.length, addedVertices, padding };
