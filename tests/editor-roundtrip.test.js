@@ -56,12 +56,12 @@ test('v1100 reads sparse reordered slots and writes animated slots by their expl
   const p=payload(out,'MTLS');assert.equal(p.readUInt32LE(20+64),1);assert.equal(p.readUInt32LE(20+60),0);assert.equal(p.readUInt32LE(20+12),7);
   assert.deepEqual(load(out).model.Materials[0].Layers[0].NormalTextureID,l.NormalTextureID);
 });
-test('static GEOA colors decode BGR to editor RGB and retain BGR on save',()=>{
+test('static GEOA colors remain RGB on load and save',()=>{
   const b=alter(fixture(),'GEOA',p=>{p.writeFloatLE(0.125,12);p.writeFloatLE(0.25,16);p.writeFloatLE(0.875,20);return p;});
-  const d=load(b);assert.deepEqual(d.model.GeosetAnims[0].Color,f(0.875,0.25,0.125));
+  const d=load(b);assert.deepEqual(d.model.GeosetAnims[0].Color,f(0.125,0.25,0.875));
   d.apply('alpha',['GeosetAnims'],m=>{m.GeosetAnims[1].Alpha=0.5;});const out=Buffer.from(d.serialize());
   assert.deepEqual(payload(out,'GEOA').subarray(12,24),payload(b,'GEOA').subarray(12,24));
-  const mdl=load(out).serialize('mdl');assert.deepEqual(load(mdl).model.GeosetAnims[0].Color,f(0.875,0.25,0.125));
+  const mdl=load(out).serialize('mdl');assert.deepEqual(load(mdl).model.GeosetAnims[0].Color,f(0.125,0.25,0.875));
 });
 test('negative event times and global sequence survive both format conversions',()=>{
   const d=createDemoDocument();d.apply('event',['EventObjects','GlobalSequences'],m=>{m.GlobalSequences.push(1000);const e=createNode(m,'EventObject');e.EventTrack=Int32Array.of(-20,0,42);e.GlobalSeqId=0;});
