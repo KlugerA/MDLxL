@@ -28,7 +28,7 @@
  * @property {{x:number,y:number,width:number,height:number,before:Uint8ClampedArray,after:Uint8ClampedArray,byteLength:number}} delta
  */
 
-/** @typedef {{id:string,messageId:string,mode:'paint'|'wash'|'drybrush'|'texture'|'stamp'|'erase',size:number,hardness:number,opacity:number,flow:number,spacing:number}} BrushPresetV1 */
+/** @typedef {{id:string,messageId:string,mode:'paint'|'wash'|'drybrush'|'erase',size:number,zoom:number,hardness:number,opacity:number,flow:number,spacing:number}} BrushPresetV1 */
 /** @typedef {{schema:'mdlxl-paint-assets',version:1,logicalAssetCount:number,assets:object[]}} PaintAssetManifestV1 */
 /** @typedef {{schema:'mdlxl-paint-project',version:1,resolution:256|512,sourceMode:'current'|'primer',targets:PaintTextureTarget[],history:{undo:PaintStroke[],redo:PaintStroke[],usedBytes:number,budgetBytes:number,maxSteps:number}}} PaintProjectV1 */
 /** @typedef {{geosetIndex:number,materialId:number,layerIndex:number,triangle:number,barycentric:number[],uv:number[],worldPosition:number[],normal:number[],depth:number,textureId:number|null,textureTarget:{textureId:number|null,texturePath:string,flags:number}}} PaintHit */
@@ -48,14 +48,10 @@ export const PAINT_COATS = Object.freeze([
 ]);
 
 export const BRUSH_PRESETS = Object.freeze([
-  Object.freeze({ id: 'round', messageId: 'paint.brush.round', name: 'Round', size: 28, hardness: .82, opacity: 1, flow: .72, spacing: .18, mode: 'paint' }),
-  Object.freeze({ id: 'soft', messageId: 'paint.brush.soft', name: 'Soft', size: 42, hardness: .18, opacity: .55, flow: .3, spacing: .12, mode: 'paint' }),
-  Object.freeze({ id: 'basecoat', messageId: 'paint.brush.basecoat', name: 'Basecoat', size: 54, hardness: .7, opacity: 1, flow: .9, spacing: .14, mode: 'paint', tipId: 'painted_bristle' }),
-  Object.freeze({ id: 'wash', messageId: 'paint.brush.wash', name: 'Wash', size: 62, hardness: .08, opacity: .48, flow: .22, spacing: .1, mode: 'wash' }),
-  Object.freeze({ id: 'drybrush', messageId: 'paint.brush.drybrush', name: 'Drybrush', size: 48, hardness: .62, opacity: .42, flow: .25, spacing: .2, mode: 'drybrush', tipId: 'painted_scumble' }),
-  Object.freeze({ id: 'texture', messageId: 'paint.brush.texture', name: 'Texture', size: 44, hardness: .5, opacity: .7, flow: .5, spacing: .24, mode: 'texture', tipId: 'fine_grain' }),
-  Object.freeze({ id: 'stamp', messageId: 'paint.brush.stamp', name: 'Stamp', size: 58, hardness: .9, opacity: 1, flow: 1, spacing: .8, mode: 'stamp', tipId: 'chipped_paint' }),
-  Object.freeze({ id: 'eraser', messageId: 'paint.brush.eraser', name: 'Eraser', size: 34, hardness: .75, opacity: 1, flow: .8, spacing: .16, mode: 'erase' }),
+  Object.freeze({ id: 'normal', messageId: 'paint.brush.normal', name: 'Normal', size: 54, zoom: 1, hardness: .82, opacity: 1, flow: .3, spacing: .06, mode: 'paint' }),
+  Object.freeze({ id: 'drybrush', messageId: 'paint.brush.drybrush', name: 'Drybrush', size: 48, zoom: 1, hardness: .62, opacity: .42, flow: .25, spacing: .12, mode: 'drybrush' }),
+  Object.freeze({ id: 'wash', messageId: 'paint.brush.wash', name: 'Wash', size: 62, zoom: 1, hardness: .08, opacity: .48, flow: .22, spacing: .08, mode: 'wash' }),
+  Object.freeze({ id: 'eraser', messageId: 'paint.brush.eraser', name: 'Eraser', size: 34, zoom: 1, hardness: .75, opacity: 1, flow: .6, spacing: .08, mode: 'erase' }),
 ]);
 
 export function isPaintResolution(value) { return PAINT_RESOLUTIONS.includes(Number(value)); }
@@ -70,13 +66,15 @@ export function normalizeBrushSettings(value = {}) {
     messageId: preset.messageId,
     name: preset.name,
     mode: preset.mode,
-    size: bound(value.size, 1, 240, preset.size),
+    size: bound(value.size, 1, 2048, preset.size),
+    zoom: bound(value.zoom, .01, 64, preset.zoom || 1),
     hardness: bound(value.hardness, 0, 1, preset.hardness),
     opacity: bound(value.opacity, 0, 1, preset.opacity),
     flow: bound(value.flow, .01, 1, preset.flow),
     spacing: bound(value.spacing, .03, 2, preset.spacing),
     strength: bound(value.strength, 0, 1, 1),
     color: /^#[0-9a-f]{6}$/i.test(value.color) ? value.color.toLowerCase() : '#8f9f54',
+    filterColor: /^#[0-9a-f]{6}$/i.test(value.filterColor) ? value.filterColor.toLowerCase() : '#ffffff',
     materialId: typeof value.materialId === 'string' ? value.materialId : null,
     tipId: value.tipId === null || typeof value.tipId === 'string' ? value.tipId : preset.tipId || null,
   };

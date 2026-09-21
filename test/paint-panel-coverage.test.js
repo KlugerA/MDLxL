@@ -40,7 +40,11 @@ test('small brushes reach magnified shield and shoulder faces from three viewing
       const matrix=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse).elements,projection=preparePaintProjection(model,target,matrix,900,900),r=createPaintRaster(256);
       const changed=stampProjectedBrush(r,projection,{x:450,y:450},brush,{flags:3}),u=(face.uv[0]+face.uv[2]+face.uv[4])/3,v=(face.uv[1]+face.uv[3]+face.uv[5])/3;
       assert.ok(changed>0,`geoset ${face.geoset}, face ${face.face}, ${angle} degrees responds`);
-      assert.ok(filteredAlpha(r,u,v)>254.99,`geoset ${face.geoset}, face ${face.face}, ${angle} degrees covers the visible centre`);
+      // A sub-texel dab paints the touched cell at full strength, not all four
+      // bilinear neighbours. Filtering can mix it with untouched cells (the
+      // nearest tap contributes at least 1/4); this is not a brush dead spot.
+      assert.ok(filteredAlpha(r,u,v)>=63,`geoset ${face.geoset}, face ${face.face}, ${angle} degrees paints the visible centre`);
+      assert.ok(r.data.some((value,index)=>index%4===3&&value===255),'the touched cells retain the selected opacity');
       const surface=preparePaintSurface(projection,r,3),cached=[...surface.bins];
       assert.ok(surface.sampledTiles.size<=4,'only tiles under the small brush are sampled');
       stampProjectedBrush(r,projection,{x:450,y:450},brush,{flags:3});

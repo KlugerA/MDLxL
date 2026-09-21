@@ -99,9 +99,29 @@ function sampleDepth(depth, x, y) {
   return nearest;
 }
 
-function noise(x, y, seed = 0) {
-  let value = Math.imul((x + 374761393) | 0, 668265263) ^ Math.imul((y + seed + 1442695041) | 0, 2246822519);
-  value = Math.imul(value ^ value >>> 13, 1274126177); return ((value ^ value >>> 16) >>> 0) / 4294967295;
+function sourcePixel(material,u,v,output){
+  if(!material?.data?.length||u<0||v<0||u>1||v>1){output.fill(0);return output;}
+  const x=u*material.width-.5,y=v*material.height-.5,ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
+  const x0=(ix+material.width)%material.width,y0=(iy+material.height)%material.height,x1=(x0+1)%material.width,y1=(y0+1)%material.height;
+  for(let channel=0;channel<4;channel++){
+    const a=material.data[(y0*material.width+x0)*4+channel]*(1-fx)+material.data[(y0*material.width+x1)*4+channel]*fx;
+    const b=material.data[(y1*material.width+x0)*4+channel]*(1-fx)+material.data[(y1*material.width+x1)*4+channel]*fx;
+    output[channel]=Math.round(a*(1-fy)+b*fy);
+  }
+  return output;
+}
+
+/** Source scale is measured in screen pixels, independently of brush diameter,
+ * model units and destination UVs. At 100%, one source pixel is one screen
+ * pixel. A larger brush reveals more of the repeating source, never stretches it. */
+export function samplePaintSource(material,dx,dy,{zoom=1,filterColor='#ffffff',motion=null}={}){
+  const scale=Math.max(.01,Math.min(64,Number(zoom)||1)),tint=rgbaColor(filterColor),samples=motion&&Math.hypot(motion.x||0,motion.y||0)>.001?5:1,total=[0,0,0,0],pixel=[0,0,0,0];
+  const wrap=value=>((value%1)+1)%1;
+  for(let index=0;index<samples;index++){
+    const amount=samples===1?0:index/(samples-1),u=wrap((dx-(motion?.x||0)*amount)/(material.width*scale)+.5),v=wrap((dy-(motion?.y||0)*amount)/(material.height*scale)+.5);
+    sourcePixel(material,u,v,pixel);for(let channel=0;channel<4;channel++)total[channel]+=pixel[channel];
+  }
+  return [Math.round(total[0]/samples*tint[0]/255),Math.round(total[1]/samples*tint[1]/255),Math.round(total[2]/samples*tint[2]/255),Math.round(total[3]/samples)];
 }
 
 /** Project visible texel centers once per camera/part/size, then bin them in
@@ -111,12 +131,12 @@ function noise(x, y, seed = 0) {
 export function preparePaintSurface(projection, raster, flags = 0) {
   const key = `${raster.width}:${raster.height}:${flags}`;
   if (projection.surface?.key === key) return projection.surface;
-  const tileSize = 32, columns = Math.ceil(projection.width / tileSize), bins = new Map();
+  const tileSize = 32, columns = Math.ceil(projection.width / tileSize), bins = new Map(), cellSamples = new Map();
   const coverage=paintUVCoverage(projection.uvCoverage||projection.triangles.map(t=>t.uv),raster.width,raster.height,flags);
   const selectedCoverage=paintUVFilterCoverage(projection.triangles.map(t=>t.uv),raster.width,raster.height,flags);
-  const addSample=(sx,sy,sz,pixel)=>{
+  const addSample=(sx,sy,sz,pixel,cellSample=1)=>{
     if(sx<0||sy<0||sx>=projection.width||sy>=projection.height||sz< -1||sz>1||sz>sampleDepth(projection.depth,sx,sy)+1e-7)return;
-    const bin=Math.floor(sy/tileSize)*columns+Math.floor(sx/tileSize);let values=bins.get(bin);if(!values)bins.set(bin,values=[]);values.push(sx,sy,pixel);
+    const bin=Math.floor(sy/tileSize)*columns+Math.floor(sx/tileSize);let values=bins.get(bin);if(!values){bins.set(bin,values=[]);cellSamples.set(bin,[]);}values.push(sx,sy,pixel);cellSamples.get(bin).push(cellSample);
   };
   for(const triangle of projection.triangles){
     const [p,q,r]=triangle.screen;
@@ -124,7 +144,9 @@ export function preparePaintSurface(projection, raster, flags = 0) {
       const pixel=y*raster.width+x;if(gutter&&coverage[pixel]&&!selectedCoverage[pixel])return;
       const clipW=u*p.w+v*q.w+w*r.w;if(clipW<=1e-9)return;
       const sx=(u*p.x*p.w+v*q.x*q.w+w*r.x*r.w)/clipW,sy=(u*p.y*p.w+v*q.y*q.w+w*r.y*r.w)/clipW,sz=(u*p.z*p.w+v*q.z*q.w+w*r.z*r.w)/clipW;
-      addSample(sx,sy,sz,pixel);
+      // Interior pixels use their own face projection, not a neighbouring
+      // triangle's padded edge. Keep actual island gutters for seam filtering.
+      addSample(sx,sy,sz,pixel,gutter&&coverage[pixel]?0:1);
     },Math.SQRT2);
   }
   if(projection.seams?.length){
@@ -136,12 +158,14 @@ export function preparePaintSurface(projection, raster, flags = 0) {
         const sx=(first*a.x+last*b.x)/w,sy=(first*a.y+last*b.y)/w,sz=(first*a.z+last*b.z)/w;
         const dx=(endFirst*a.x+endLast*b.x)/endW-sx,dy=(endFirst*a.y+endLast*b.y)/endW-sy,dz=(endFirst*a.z+endLast*b.z)/endW-sz;
         const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/.75));
-        for(let step=0;step<=steps;step++){const t=step/steps;addSample(sx+dx*t,sy+dy*t,sz+dz*t,pixel);}
+        // These extended filter intervals are retained for the smart tools and
+        // decals. Normal/eraser use texel cells, including the gutters above.
+        for(let step=0;step<=steps;step++){const t=step/steps;addSample(sx+dx*t,sy+dy*t,sz+dz*t,pixel,0);}
       });
     }
   }
-  for (const [bin, values] of bins) bins.set(bin, new Float32Array(values));
-  return projection.surface = { key, tileSize, columns, bins, sampledTiles:new Set() };
+  for (const [bin, values] of bins) {bins.set(bin, new Float32Array(values));cellSamples.set(bin,new Uint8Array(cellSamples.get(bin)));}
+  return projection.surface = { key, tileSize, columns, bins, cellSamples, sampledTiles:new Set() };
 }
 
 /** Resolve magnified texture pixels where the brush actually touches the face.
@@ -153,7 +177,7 @@ export function paintSurfaceTile(projection,raster,flags,tx,ty){
   const surface=preparePaintSurface(projection,raster,flags),{tileSize,columns,bins,sampledTiles}=surface,key=ty*columns+tx;
   if(!sampledTiles||sampledTiles.has(key))return bins.get(key);
   sampledTiles.add(key);
-  const x0=tx*tileSize,y0=ty*tileSize,x1=Math.min(projection.width,x0+tileSize),y1=Math.min(projection.height,y0+tileSize),points=Array.from(bins.get(key)||[]);
+  const x0=tx*tileSize,y0=ty*tileSize,x1=Math.min(projection.width,x0+tileSize),y1=Math.min(projection.height,y0+tileSize),points=Array.from(bins.get(key)||[]),cellSamples=Array.from(surface.cellSamples.get(key)||[]);
   const address=(value,size,wrap)=>wrap?(value%size+size)%size:Math.max(0,Math.min(size-1,value));
   for(const triangle of projection.triangles){
     const [a,b,c]=triangle.screen,denominator=(b.y-c.y)*(a.x-c.x)+(c.x-b.x)*(a.y-c.y);
@@ -161,18 +185,25 @@ export function paintSurfaceTile(projection,raster,flags,tx,ty){
     const left=Math.max(x0,Math.floor(Math.min(a.x,b.x,c.x))),right=Math.min(x1-1,Math.ceil(Math.max(a.x,b.x,c.x))),top=Math.max(y0,Math.floor(Math.min(a.y,b.y,c.y))),bottom=Math.min(y1-1,Math.ceil(Math.max(a.y,b.y,c.y)));
     if(left>right||top>bottom)continue;
     const [p,q,r]=triangle.uv;
+    const collapsedUV=Math.abs((q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x))<1e-12;
     for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
       const sx=x+.5,sy=y+.5,u=((b.y-c.y)*(sx-c.x)+(c.x-b.x)*(sy-c.y))/denominator,v=((c.y-a.y)*(sx-c.x)+(a.x-c.x)*(sy-c.y))/denominator,w=1-u-v;
       if(u<0||v<0||w<0)continue;
       const z=u*a.z+v*b.z+w*c.z;if(z< -1||z>1||z>sampleDepth(projection.depth,sx,sy)+1e-7)continue;
       const iw=u/a.w+v/b.w+w/c.w,tu=(u*p.x/a.w+v*q.x/b.w+w*r.x/c.w)/iw*raster.width-.5,tv=(u*p.y/a.w+v*q.y/b.w+w*r.y/c.w)/iw*raster.height-.5,ix=Math.floor(tu),iy=Math.floor(tv);
       for(let j=0;j<2;j++)for(let i=0;i<2;i++){
-        if((i?tu-ix:1-tu+ix)*(j?tv-iy:1-tv+iy)<1e-7)continue;
+        const weight=(i?tu-ix:1-tu+ix)*(j?tv-iy:1-tv+iy);if(weight<1e-7)continue;
         points.push(sx,sy,address(iy+j,raster.height,flags&2)*raster.width+address(ix+i,raster.width,flags&1));
+        // Normal deposits into the texel cell, not the larger bilinear display
+        // footprint. A touched cell receives the chosen brush opacity; display
+        // filtering must not enlarge the dab to all four neighbouring cells.
+        // Collapsed UVs have no separable surface pixels; retain their shared
+        // colour behaviour when editing an existing texture.
+        cellSamples.push(collapsedUV||i===Math.round(tu)-ix&&j===Math.round(tv)-iy?1:0);
       }
     }
   }
-  if(points.length)bins.set(key,new Float32Array(points));
+  if(points.length){bins.set(key,new Float32Array(points));surface.cellSamples.set(key,new Uint8Array(cellSamples));}
   return bins.get(key);
 }
 
@@ -187,44 +218,44 @@ export function prepareTexturePaintProjection(size) {
 export function stampProjectedBrush(raster, projection, center, brush, options = {}) {
   const radius = Math.max(.5, Number(brush.size) / 2), color = rgbaColor(brush.color), inner = Math.max(0, Math.min(.995, Number(brush.hardness))) * radius;
   const mask = options.mask, material = options.materialRaster, tip = options.tipRaster;
+  const radiusX=radius,radiusY=radius;
   const surface = preparePaintSurface(projection, raster, options.flags), { tileSize, columns, bins } = surface;
-  const minTileX = Math.max(0, Math.floor((center.x - radius) / tileSize)), maxTileX = Math.min(columns - 1, Math.floor((center.x + radius) / tileSize));
-  const minTileY = Math.max(0, Math.floor((center.y - radius) / tileSize)), maxTileY = Math.min(Math.ceil(projection.height / tileSize) - 1, Math.floor((center.y + radius) / tileSize));
-  const sampledColor = [0, 0, 0, 0], opacity = Number(brush.opacity) * Number(brush.flow) * Number(brush.strength ?? 1);
+  const minTileX = Math.max(0, Math.floor((center.x - radiusX) / tileSize)), maxTileX = Math.min(columns - 1, Math.floor((center.x + radiusX) / tileSize));
+  const minTileY = Math.max(0, Math.floor((center.y - radiusY) / tileSize)), maxTileY = Math.min(Math.ceil(projection.height / tileSize) - 1, Math.floor((center.y + radiusY) / tileSize));
+  const opacity = Number(brush.opacity) * (options.dragging?Number(brush.flow):1) * Number(brush.strength ?? 1);
   // Shared/mirrored triangles must not apply the same dab repeatedly to a
   // texel. Keep its strongest sample, including the gutter, then blend once.
-  const scratch=surface.scratch||= {amount:new Float32Array(raster.width*raster.height),materialPixel:new Int32Array(raster.width*raster.height),pixels:[]};
+  const scratch=surface.scratch||= {amount:new Float32Array(raster.width*raster.height),source:new Uint8ClampedArray(raster.width*raster.height*4),pixels:[]};
   const touched=scratch.pixels;touched.length=0;
   let changed = 0;
   for (let ty = minTileY; ty <= maxTileY; ty++) for (let tx = minTileX; tx <= maxTileX; tx++) {
     const samples = paintSurfaceTile(projection,raster,options.flags,tx,ty); if (!samples) continue;
+    const cellSamples=brush.mode==='paint'||brush.mode==='erase'?surface.cellSamples?.get(ty*columns+tx):null;
     for (let i = 0; i < samples.length; i += 3) {
-      const dx = samples[i] - center.x, dy = samples[i + 1] - center.y, distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared > radius * radius) continue;
-      const distance = Math.sqrt(distanceSquared), pixel = samples[i + 2], x = pixel % raster.width, y = Math.floor(pixel / raster.width);
-      let falloff = distance <= inner ? 1 : 1 - (distance - inner) / Math.max(.001, radius - inner); falloff = falloff * falloff * (3 - 2 * falloff);
-      if (brush.mode === 'texture') falloff *= .28 + noise(x, y, options.seed) * .72;
-      const localX = dx / radius, localY = dy / radius;
-      if (brush.mode === 'stamp') falloff *= Math.max(0, 1 - Math.abs(localX * localY) * 1.8) * (.65 + .35 * noise(Math.round(localX * 31), Math.round(localY * 31), options.seed));
-      if (tip?.data?.length) {
+      if(cellSamples&&!cellSamples[i/3])continue;
+      const dx = samples[i] - center.x, dy = samples[i + 1] - center.y,localX=dx/radiusX,localY=dy/radiusY;
+      if(Math.abs(localX)>1||Math.abs(localY)>1)continue;
+      const pixel = samples[i + 2],distanceSquared=dx*dx+dy*dy;
+      if(distanceSquared>radius*radius)continue;
+      const distance=Math.sqrt(distanceSquared);
+      let falloff=distance<=inner?1:1-(distance-inner)/Math.max(.001,radius-inner),source=null;
+      falloff=falloff*falloff*(3-2*falloff);
+      if(material?.data?.length){
+        source=samplePaintSource(material,dx,dy,{zoom:brush.zoom,filterColor:brush.filterColor,motion:options.motion});
+        if(!source[3])continue;
+      }
+      if (!material?.data?.length&&tip?.data?.length) {
         const tipX = Math.max(0, Math.min(tip.width - 1, Math.floor((localX * .5 + .5) * tip.width))), tipY = Math.max(0, Math.min(tip.height - 1, Math.floor((localY * .5 + .5) * tip.height)));
         falloff *= tip.data[(tipY * tip.width + tipX) * 4 + 3] / 255;
       }
       if (mask) falloff *= mask[pixel] / 255;
-      let materialPixel = pixel;
-      if (material?.data?.length && brush.mode === 'stamp') {
-        const sampleX = Math.max(0, Math.min(material.width - 1, Math.floor((localX * .5 + .5) * material.width))), sampleY = Math.max(0, Math.min(material.height - 1, Math.floor((localY * .5 + .5) * material.height)));
-        materialPixel = sampleY * material.width + sampleX;
-      }
       const amount=opacity*falloff;if(amount<=0)continue;
       if(!scratch.amount[pixel])touched.push(pixel);
-      if(amount>scratch.amount[pixel]){scratch.amount[pixel]=amount;scratch.materialPixel[pixel]=materialPixel;}
+      if(amount>scratch.amount[pixel]){scratch.amount[pixel]=amount;if(source)scratch.source.set(source,pixel*4);}
     }
   }
   for(const pixel of touched){
-    const materialOffset=scratch.materialPixel[pixel]*4;
-    if(material?.data?.length>=materialOffset+4)for(let channel=0;channel<4;channel++)sampledColor[channel]=material.data[materialOffset+channel];
-    const appliedColor=material?.data?.length>=materialOffset+4?sampledColor:color;
+    const appliedColor=material?.data?.length?scratch.source.subarray(pixel*4,pixel*4+4):color;
     if(blendPaintPixel(raster.data,pixel*4,appliedColor,scratch.amount[pixel],brush.mode==='erase'?'erase':'paint')){
       changed++;if(options.dirtyRows){const x=pixel%raster.width,row=Math.floor(pixel/raster.width)*2;options.dirtyRows[row]=Math.min(options.dirtyRows[row],x);options.dirtyRows[row+1]=Math.max(options.dirtyRows[row+1],x);}
     }

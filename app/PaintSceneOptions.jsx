@@ -3,7 +3,7 @@ import React,{useRef,useState} from 'react';
 import {WC3_DNC_ENVIRONMENTS} from '../src/warcraft-dnc.js';
 import {paintMessage as msg} from '../src/paint-messages.js';
 
-export const DEFAULT_PAINT_SCENE={background:'',backgroundColor:'#cccccc',customBackground:'',backgroundDisplay:'fill',lighting:'flat',environment:'Lordaeron',hour:12,lamps:[],showLamps:true};
+export const DEFAULT_PAINT_SCENE={background:'',backgroundColor:'#cccccc',customBackground:'',backgroundDisplay:'fill',lighting:'flat',environment:'Lordaeron',hour:12,lamps:[],showLamps:true,textureSmoothing:false};
 export default function PaintSceneOptions({selectedLampId,onSelectedLamp,value,onChange,backgrounds,onClose,onMove,onPlace,onCamera,dncStatus,onDncFile}) {
   const [selected,setSelected]=useState(()=>Math.max(0,value.lamps.findIndex(l=>l.id===selectedLampId))),backgroundFile=useRef(),dncFile=useRef(),lamp=value.lamps[selected];
   const set=(key,next)=>onChange({...value,[key]:next}),editLamp=change=>set('lamps',value.lamps.map((item,index)=>index===selected?{...item,...change}:item));

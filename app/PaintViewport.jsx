@@ -11,7 +11,7 @@ import { previewPresentationProps, previewOverlaySettings } from './preview-pres
 import { drawMovementOverlay, projectMovementNodes } from './movement-overlay.js';
 import { samplePreviewMatrices } from './preview-pose.js';
 import { projectPreviewGeosets, pickPreviewGeoset } from './preview-selection.js';
-import { configureEditorTexture, cameraLeftLight, viewportPixelRatio } from './viewport-quality.js';
+import { configureEditorTexture, configurePaintTexture, cameraLeftLight, viewportPixelRatio } from './viewport-quality.js';
 import { createRigMarkersGL } from './rig-markers-gl.js';
 import { drawModelCameraOverlay } from './model-camera-overlay.js';
 import { TGALoader } from 'three/addons/loaders/TGALoader.js';
@@ -276,7 +276,7 @@ export default function Viewport(inputProps) {
       }
       scene.background = background.texture;
     }
-    state.refreshCursor = () => { renderer.domElement.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating); };
+    state.refreshCursor = () => { const p=latest.current;renderer.domElement.style.cursor=p.paintMode&&!p.paintSelectOnly&&!p.paintDisabled&&p.cameraMode==='work'&&!rotating?'none':viewportCursor(p.cameraMode,p.rotationNormals?'rotateNormals':p.transformMode,rotating); };
     state.setCameraAngles = values => { if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); invalidate(); } };
     controls.addEventListener('change', invalidate);
     const unbindScroll = bindScrollSensitivity(renderer.domElement, {
@@ -397,7 +397,7 @@ export default function Viewport(inputProps) {
       host.current?.focus();if(latest.current.paintWorkspace)latest.current.onPaintInteractionChange?.(true);
       const action = cameraAction(event);
       rotating = action === 'rotate'; latest.current.onCameraGestureChange?.(rotating);
-      renderer.domElement.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating);
+      state.refreshCursor();
       controls.enabled = true;
       controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(latest.current.preferences?.pointerSensitivity);
       const binding = cameraBindings(latest.current.preferences), mouseAction = value => value === 'pan' ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
@@ -452,7 +452,7 @@ export default function Viewport(inputProps) {
     function pointerMove(event) {
       if (latest.current.paintMode && paintCursor.current) {
         const cursor = point(event), decal=latest.current.paintDecal, width=decal?.width||Math.max(1,Number(latest.current.paintBrushSize)||1),height=decal?.height||width;
-        Object.assign(paintCursor.current.style, { display: latest.current.paintSelectOnly || latest.current.paintDisabled ? 'none' : 'block', left: `${cursor.x}px`, top: `${cursor.y}px`, width: `${width}px`, height: `${height}px`,transform:`translate(-50%,-50%) rotate(${decal?.angle||0}deg)` });
+        Object.assign(paintCursor.current.style, { display: latest.current.paintSelectOnly || latest.current.paintDisabled || latest.current.cameraMode!=='work' || event.buttons>1 ? 'none' : 'block', left: `${cursor.x}px`, top: `${cursor.y}px`, width: `${width}px`, height: `${height}px`,transform:`translate(-50%,-50%) rotate(${decal?.angle||0}deg)` });
       }
       if (!down) {
         return;
@@ -507,7 +507,7 @@ export default function Viewport(inputProps) {
     function pointerUp(event) {
       if(latest.current.paintWorkspace)latest.current.onPaintInteractionChange?.(false);
       rotating = false; latest.current.onCameraGestureChange?.(false);
-      renderer.domElement.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode);
+      state.refreshCursor();
       const start = down; down = null; setBox(null); controls.enabled = true;
       if (!start) return;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
@@ -630,7 +630,7 @@ export default function Viewport(inputProps) {
           }
         }
       }
-      renderer.domElement.style.cursor = viewportCursor(p.cameraMode, p.rotationNormals ? 'rotateNormals' : p.transformMode, rotating);
+      state.refreshCursor();
       syncViewportBackground(appearance);
       ambient.visible = key.visible = renderGraphics.lighting;
       if (p.sequenceIndex !== state.sequenceIndex || !p.playing || !state.wasPlaying || (p.time !== state.lastExternalTime && Math.abs(p.time - (state.lastReportedFrame ?? -Infinity)) > 1)) state.frame = p.time || 0;
@@ -906,7 +906,8 @@ export default function Viewport(inputProps) {
       const path = normalizedPath(texture.Image);
       const asset = normalized.get(path) || normalized.get(path.split('\\').at(-1));
       const override = overrides.get(index) || overrides.get(String(index));
-      const key = override ? `paint|${texture.Flags}` : `${path}|${texture.Flags}|${texture.ReplaceableId}`, previous = state.textureSources.get(index);
+      const smoothing=props.paintTextureSmoothing!==false;
+      const key = override ? `paint|${texture.Flags}|${smoothing}` : `${path}|${texture.Flags}|${texture.ReplaceableId}`, previous = state.textureSources.get(index);
       if (override?.canvas && previous?.canvas === override.canvas && previous.key === key && state.textures.has(index)) {
         if (previous.revision !== override.revision) { previous.revision = override.revision; const loaded=state.textures.get(index);loaded.clearUpdateRanges();if(!override.fullUpload)for(const range of paintRowRanges(override.uploadRows,override.raster.width))loaded.addUpdateRange(range.start,range.count);loaded.needsUpdate=true;state.scheduler?.invalidate(); } return;
       }
@@ -916,9 +917,7 @@ export default function Viewport(inputProps) {
       if (override?.canvas) {
         const loaded = override.raster?new THREE.DataTexture(override.raster.data,override.raster.width,override.raster.height,THREE.RGBAFormat):new THREE.CanvasTexture(override.canvas);
         loaded.flipY=false;loaded.colorSpace=THREE.NoColorSpace;loaded.wrapS=texture.Flags&1?THREE.RepeatWrapping:THREE.ClampToEdgeWrapping;loaded.wrapT=texture.Flags&2?THREE.RepeatWrapping:THREE.ClampToEdgeWrapping;
-        // Live paint uses linear filtering without regenerating mipmaps after
-        // each stroke preview. Export still produces the full Warcraft mip chain.
-        loaded.magFilter=THREE.LinearFilter;loaded.minFilter=THREE.LinearFilter;loaded.generateMipmaps=false;loaded.anisotropy=1;loaded.needsUpdate=true;
+        configurePaintTexture(loaded,smoothing);
         if(override.raster)loaded.onUpdate=()=>acknowledgePaintUpload(override);
         state.textures.set(index,loaded);state.scheduler?.invalidate();return;
       }
@@ -932,7 +931,7 @@ export default function Viewport(inputProps) {
     });
     Promise.all(jobs).then(() => { if (!cancelled && failures.length) setTextureMessage(failures.join('; ')); });
     return () => { cancelled = true; };
-  }, [textureSignature, textureAssets, texturesNeeded, graphics.textures, graphics.antialias, props.paintTextureOverrides, props.paintTextureRevision]);
+  }, [textureSignature, textureAssets, texturesNeeded, graphics.textures, graphics.antialias, props.paintTextureOverrides, props.paintTextureRevision, props.paintTextureSmoothing]);
 
   useEffect(() => { if(runtime.current && runtime.current.appliedView !== view) runtime.current.setView(view); }, [view, graphics.antialias]);
   useEffect(() => { if (props.cameraAnglesRequest) runtime.current?.setCameraAngles(props.cameraAnglesRequest); }, [props.cameraAnglesRequest]);

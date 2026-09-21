@@ -30,6 +30,10 @@
 .paint-range{display:grid;grid-template-columns:53px minmax(0,1fr) 32px;align-items:center;gap:4px}
 .paint-range input{width:100%;min-width:0}
 .paint-range output{text-align:right;font-variant-numeric:tabular-nums}
+.paint-range-editable{grid-template-columns:53px minmax(0,1fr) 62px}
+.paint-range-value{display:flex;align-items:center;gap:2px}
+.paint-range-value input{appearance:textfield;border:1px solid var(--ui-border);background:var(--ui-field);color:var(--ui-text);padding:2px;text-align:right}
+.paint-range-value input::-webkit-inner-spin-button{appearance:none}
 .paint-color{display:flex;justify-content:space-between;align-items:center;gap:6px}
 .paint-color input{width:46px;height:25px;padding:1px}
 .paint-history{display:flex;gap:4px}

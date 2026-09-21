@@ -57,6 +57,13 @@ export function paintProjectModel(model, project, originalModel = null) {
     model={...model,Geosets:model.Geosets.map((g,i)=>excluded.has(i)&&originalModel.Geosets[i]?{...g,MaterialID:originalModel.Geosets[i].MaterialID}:g)};
   }
   model=applyPaintMaterials(model,project);
+  // A fresh Citadel material replaces the model's authored surface colour.
+  // Keep visibility/drop-shadow animation, but do not multiply the new paint
+  // by the old skin's RGB track in either the viewport or the saved model.
+  const freshGeosets=new Set((project?.targets||[]).filter(target=>target.basecoat&&target.generatedUV).flatMap(target=>(target.bindings||[]).map(binding=>binding.geosetIndex)));
+  if(freshGeosets.size&&(model.GeosetAnims||[]).some(animation=>freshGeosets.has(animation.GeosetId)&&((animation.Flags||0)&2||animation.Color!=null))){
+    model={...model,GeosetAnims:model.GeosetAnims.map(animation=>freshGeosets.has(animation.GeosetId)?{...animation,Flags:(animation.Flags||0)&~2,Color:null}:animation)};
+  }
   const edits = project?.uvEdits;
   if (!edits || !Object.keys(edits).length) return model;
   return { ...model, Geosets: model.Geosets.map((geo, index) => {
