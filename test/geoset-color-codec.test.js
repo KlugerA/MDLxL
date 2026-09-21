@@ -21,7 +21,8 @@ test('MDX GEOA colors retain authored channel order through load and save', () =
   assert.deepEqual([...reopened.model.GeosetAnims[0].Color.Keys[0].Vector],[1,.25,0]);
   assert.deepEqual([...reopened.model.GeosetAnims[1].Color],[1,.25,0]);
   assert.deepEqual(Buffer.from(reopened.serialize('mdx')),bytes,'unchanged file bytes are preserved');
-  assert.deepEqual(sampleGeosetAnimation(reopened.model,0,0,-1).color,[1,.25,0]);
+  assert.deepEqual(sampleGeosetAnimation(reopened.model,0,0,-1).color,[1,1,1],'Unanimated uses the MDX static base');
+  assert.deepEqual(sampleGeosetAnimation(reopened.model,0,0,0).color,[1,.25,0],'the selected sequence uses its RGB key');
   const mdl=Buffer.from(reopened.serialize('mdl')).toString('utf8');
   assert.match(mdl,/0:\s*\{\s*0,\s*0\.25,\s*1\s*\}/);
   assert.deepEqual([...openDocument(mdl,'fixture.mdl').model.GeosetAnims[0].Color.Keys[0].Vector],[1,.25,0]);
