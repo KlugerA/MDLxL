@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   animationTargets, createGeosetAnimations, sampleAnimationProperty,
-  setAnimationKey, setAnimationSequences,
+  readAnimationTrack, setAnimationInlineValues, setAnimationKey, setAnimationSequences,
 } from '../src/animation-tracks.js';
 import { setSequenceOptions } from '../src/animation.js';
 import { clampAlphaPercentText } from '../src/animation-controller-inputs.js';
@@ -37,15 +37,27 @@ export default function AnimationController({
   const globalDomain = Number.isInteger(globalSeqId) && globalSeqId >= 0 && model.GlobalSequences?.[globalSeqId] > 0;
   const sequence = globalDomain ? null : model.Sequences?.[sequenceIndex];
   const frame = Math.round(time);
-  const geosetIds = useMemo(() => [...new Set(selectedGeosets)].filter(id => model.Geosets?.[id]), [selectedGeosets.join(','), model.Geosets?.length]);
+  // The animation editor is model-level. A cleared vertex/geoset selection
+  // must not leave its controls unusable: use the whole model until a scope is
+  // explicitly checked again.
+  const geosetIds = useMemo(() => {
+    const selected = [...new Set(selectedGeosets)].filter(id => model.Geosets?.[id]);
+    return selected.length ? selected : (model.Geosets || []).map((_, id) => id);
+  }, [selectedGeosets.join(','), model.Geosets?.length]);
   const missingGeosets = geosetIds.filter(id => !(model.GeosetAnims || []).some(animation => animation.GeosetId === id));
-  const allHaveAnimation = geosetIds.length > 0 && missingGeosets.length === 0;
   const targets = animationTargets(model, { geosetIds });
   const alphaTargets = targets.filter(target => target.property === 'Alpha');
   const colorTargets = targets.filter(target => target.property === 'Color');
-  const sampledAlpha = allHaveAnimation ? commonValue(model, alphaTargets, frame, sequenceIndex) : null;
-  const sampledColor = allHaveAnimation ? commonValue(model, colorTargets, frame, sequenceIndex) : null;
-  const alphaStamp = JSON.stringify(sampledAlpha), colorStamp = JSON.stringify(sampledColor);
+  const inlineColorTargets = colorTargets.filter(target => !readAnimationTrack(model, target)?.Keys);
+  const keyedColorTargets = colorTargets.filter(target => !inlineColorTargets.includes(target));
+  const sampledAlpha = geosetIds.length ? commonValue(model, alphaTargets, frame, sequenceIndex) : null;
+  const sampledColor = geosetIds.length ? commonValue(model, colorTargets, frame, sequenceIndex) : null;
+  // "All line" is the authored static-property view.  It must show the
+  // inline Color value itself, not a sampled keyframe from a local sequence.
+  const inlineColor = geosetIds.length && !sequence && !globalDomain
+    ? commonValue(model, colorTargets, 0, -1) : null;
+  const displayedColor = inlineColor || sampledColor;
+  const alphaStamp = JSON.stringify(sampledAlpha), colorStamp = JSON.stringify(displayedColor);
   const [alpha, setAlpha] = useState(''), [rgb, setRgb] = useState(['', '', '']);
   const [startText, setStartText] = useState(''), [endText, setEndText] = useState('');
   const [moveSpeedText, setMoveSpeedText] = useState('');
@@ -64,7 +76,7 @@ export default function AnimationController({
     return () => owner.removeEventListener('pointerdown', release, true);
   }, []);
   useEffect(() => setAlpha(sampledAlpha ? String(Math.round(sampledAlpha[0] * 100)) : ''), [alphaStamp, frame, geosetIds.join(','), revision]);
-  useEffect(() => setRgb(sampledColor ? sampledColor.map(value => String(Math.round(value * 255))) : ['', '', '']), [colorStamp, frame, geosetIds.join(','), revision]);
+  useEffect(() => setRgb(displayedColor ? displayedColor.map(value => String(Math.round(value * 255))) : ['', '', '']), [colorStamp, frame, geosetIds.join(','), revision]);
   useEffect(() => {
     if (globalDomain) { setStartText('0'); setEndText(String(model.GlobalSequences[globalSeqId])); }
     else if (sequence?.Interval) { setStartText(String(sequence.Interval[0])); setEndText(String(sequence.Interval[1])); }
@@ -140,7 +152,7 @@ export default function AnimationController({
   }
 
   function commitAlpha() {
-    if (!sequence || !allHaveAnimation || alpha === '') return;
+    if (!sequence || !geosetIds.length || alpha === '') return;
     const numeric = Number(alpha);
     if (!Number.isFinite(numeric)) { setError('Alpha must be a number from 0 to 100.'); setNotice(''); return; }
     const value = Math.max(0, Math.min(100, numeric));
@@ -154,10 +166,18 @@ export default function AnimationController({
   }
 
   function commitRgb() {
-    if (!sequence || !allHaveAnimation) return;
+    if (!geosetIds.length) return;
     let value;
     try { value = rgbValue(); } catch (failure) { setError(failure.message); setNotice(''); return; }
-    commit('Set geoset RGB keyframe', ['GeosetAnims', 'Info'], current => setAnimationKey(current, colorTargets, frame, value, sequenceIndex), 'Color tint keyframe updated.');
+    if (!sequence) {
+      if (inlineColorTargets.length !== colorTargets.length) return;
+      commit('Set inline geoset RGB', ['GeosetAnims', 'Info'], current => setAnimationInlineValues(current, colorTargets, value), 'Inline color tint updated.');
+      return;
+    }
+    commit('Set geoset RGB', ['GeosetAnims', 'Info'], current => {
+      if (inlineColorTargets.length) setAnimationInlineValues(current, inlineColorTargets, value);
+      if (keyedColorTargets.length) setAnimationKey(current, keyedColorTargets, frame, value, sequenceIndex);
+    }, inlineColorTargets.length ? 'Inline color tint updated.' : 'Color tint keyframe updated.');
   }
 
   function bakeRgb(all) {
@@ -201,7 +221,12 @@ export default function AnimationController({
 
   const noLocalSequence = disabled || !sequence || globalDomain;
   const moveApplied = !globalDomain && !!sequence && Number(sequence.MoveSpeed) > 0;
-  const colorBlocked = noLocalSequence || !allHaveAnimation;
+  // setAnimationKey/setAnimationSequences create a missing geoset animation
+  // and convert inline RGB to keys. Do not make that capability depend on a
+  // pre-existing animation record.
+  const colorBlocked = noLocalSequence || !geosetIds.length;
+  const inlineRgbEditable = !sequence && !globalDomain && inlineColorTargets.length === colorTargets.length;
+  const rgbBlocked = disabled || !geosetIds.length || globalDomain || (!sequence && !inlineRgbEditable);
   const alphaNumber = alpha === '' ? NaN : Number(alpha);
   const visibleChecked = Number.isFinite(alphaNumber) && alphaNumber > 0;
   const mixedOrPartial = alpha === '' || Number.isFinite(alphaNumber) && alphaNumber !== 0 && alphaNumber !== 100;
@@ -230,10 +255,10 @@ export default function AnimationController({
       <div className="ac-visibility"><span>Visibility:</span>{missingGeosets.length ? <button className="ac-create-visibility" disabled={disabled || !geosetIds.length} onClick={createVisibility}>Create Visibility</button> : <label><input type="checkbox" aria-label="Visible at current frame" checked={visibleChecked} ref={input => { if (input) input.indeterminate = mixedOrPartial; }} disabled={colorBlocked} onChange={event => setVisibility(event.target.checked)}/>On</label>}
         <label className="ac-alpha">Alpha:<input aria-label="Visibility alpha percent" type="number" min="0" max="100" step="1" placeholder={geosetIds.length ? 'Mixed' : ''} disabled={colorBlocked} value={alpha} onChange={event => setAlpha(clampAlphaPercentText(event.target.value))} onBlur={commitAlpha} onKeyDown={enterBlurs}/></label>
       </div>
-      <div className="ac-color"><span>Color Tint:</span><div className="ac-rgb">{['R', 'G', 'B'].map((label, index) => <label className={`channel-${label.toLowerCase()}`} key={label}>{label}<input aria-label={`Animation ${label}`} type="number" min="0" max="255" step="1" placeholder={geosetIds.length ? 'Mixed' : ''} disabled={colorBlocked} value={rgb[index]} onChange={event => setRgb(previous => previous.map((value, i) => i === index ? event.target.value : value))} onBlur={commitRgb} onKeyDown={enterBlurs}/></label>)}</div></div>
+      <div className="ac-color"><span>Color Tint:</span><div className="ac-rgb">{['R', 'G', 'B'].map((label, index) => <label className={`channel-${label.toLowerCase()}`} key={label}>{label}<input aria-label={`Animation ${label}`} type="number" min="0" max="255" step="1" placeholder={geosetIds.length ? 'Mixed' : ''} disabled={rgbBlocked} value={rgb[index]} onChange={event => setRgb(previous => previous.map((value, i) => i === index ? event.target.value : value))} onBlur={commitRgb} onKeyDown={enterBlurs}/></label>)}</div></div>
     </div>
     <button disabled={colorBlocked} onClick={() => bakeRgb(false)}>Bake Sequence RGB</button>
-    <button disabled={disabled || globalDomain || !model.Sequences?.length || !allHaveAnimation} onClick={() => bakeRgb(true)}>Bake All RGB</button>
+    <button disabled={disabled || globalDomain || !model.Sequences?.length || !geosetIds.length} onClick={() => bakeRgb(true)}>Bake All RGB</button>
     {error && <p className="ac-error" role="alert">{error}</p>}{notice && <p className="ac-notice" role="status">{notice}</p>}
   </section>;
 }

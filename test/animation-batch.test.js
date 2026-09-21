@@ -54,6 +54,19 @@ test('ALL applies both settings across every animation while retaining gap keys 
   assert.deepEqual(model.Lights, before.Lights);
 });
 
+test('ALL converts inline RGB and creates missing geoset animation records', () => {
+  const model = fixture().model;
+  model.GeosetAnims = model.GeosetAnims.filter(animation => animation.GeosetId !== 2);
+  bakeGeosetAnimationSettings(model, settings);
+  for (const id of settings.geosetIds) {
+    const animation = model.GeosetAnims.find(entry => entry.GeosetId === id);
+    assert.ok(animation, `geoset ${id + 1} gets an animation record`);
+    assert.ok(animation.Flags & 2, `geoset ${id + 1} enables RGB`);
+    assert.ok(Array.isArray(animation.Color?.Keys), `geoset ${id + 1} has keyed RGB`);
+    for (const [sequenceIndex, frame] of [[0, 1000], [1, 3500]]) close(sampleAnimationProperty(model, target(id, 'Color'), frame, sequenceIndex), settings.color);
+  }
+});
+
 test('combined BAKE and ALL are each one undo transaction and serialize both channels', () => {
   for (const sequenceIndices of [[0], null]) {
     const doc = fixture(), before = structuredClone(doc.model), count = doc.historyStats.undoSteps;

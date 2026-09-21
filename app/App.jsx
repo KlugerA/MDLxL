@@ -326,6 +326,7 @@ export default function App() {
       localStorage.setItem('mdlvis-display-overlays', JSON.stringify(next));
       return next;
     });
+    if (panel === 'movement' && !selectedNodeIds.length && model.Nodes?.length) setSelectedNodeIds([model.Nodes[0].ObjectId]);
     setAnimationPanel(panel);
     await selectMode('animation');
   };

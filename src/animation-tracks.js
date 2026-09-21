@@ -137,6 +137,15 @@ export function setAnimationKey(model, targets, frame, value, sequenceIndex) {
     return { target, track };
   }));
 }
+
+/** Update authored inline values without converting them into keyframe tracks. */
+export function setAnimationInlineValues(model, targets, value) {
+  return applyPrepared(model, targets.map(target => {
+    const original = readAnimationTrack(model, target);
+    if (isTrack(original)) throw new Error('This animation channel has keyframes. Edit it at the current frame or use Set Sequence / Set All.');
+    return { target, track: vectorValue(value, target.property) };
+  }));
+}
 export function deleteAnimationKey(model, targets, frame, sequenceIndex) {
   const prepared = [];
   for (const target of targets) {
