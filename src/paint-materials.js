@@ -38,7 +38,11 @@ function updateTargetBindings(target,bindings){
   target.bindings=bindings;target.geosetIndices=bindings.map(b=>b.geosetIndex);target.materialIds=materialEntries(target).map(m=>m.materialId);target.sharedUV=bindings.length>1;
 }
 function sourceFor(model,sourceModel,index){return sourceModel?.Geosets?.[index]?sourceModel:model;}
-export function paintableGeosets(model){
+export function paintableGeosets(model,{requireUV=true}={}){
+  if(!requireUV)return model.Geosets.map((g,i)=>{
+    const layers=model.Materials?.[g.MaterialID]?.Layers||[],teamGlowOnly=layers.length&&layers.every(l=>model.Textures?.[l.TextureID]?.ReplaceableId===2);
+    return !teamGlowOnly&&g.Vertices?.length&&g.Faces?.length?i:-1;
+  }).filter(i=>i>=0);
   const imageParts=new Set(enumeratePaintTargets(model).flatMap(t=>t.geosetIndices));
   // Solid team-colour geometry can receive a new basecoat too. Team-glow
   // billboard planes (replaceable 2) are view helpers, never the miniature.
@@ -48,9 +52,9 @@ export function paintableGeosets(model){
 /** Older primer presets accidentally painted replaceable helper planes and
  * inherited the skin's transparent overlay. Repair assignments, never pixels.
  * Classification always uses the original materials, before Citadel remaps them. */
-export function repairPaintMaterials(project,sourceModel){
+export function repairPaintMaterials(project,sourceModel,validationModel=sourceModel){
   if(!project?.materialMode||project.paintMaterialsVersion===3)return false;
-  const eligible=new Set(paintableGeosets(sourceModel));
+  const eligible=new Set(paintableGeosets(sourceModel,{requireUV:!project.paintAtlasVersion}));
   const staged={...project,targets:project.targets.map(target=>({...target,bindings:target.bindings.filter(b=>eligible.has(b.geosetIndex)),materialVariants:[]}))};
   for(const target of staged.targets){
     target.basecoat??=project.sourceMode==='primer'&&!target.nativeSource&&!target.sourcePath;
@@ -58,13 +62,13 @@ export function repairPaintMaterials(project,sourceModel){
     target.revision=(target.revision||0)+1;
     const first=target.bindings[0]?.geosetIndex;
     target.material=materialTemplate(sourceModel,first,target.textureId,target.basecoat);
-    if(target.basecoat){const source=layerFor(sourceModel,first);target.flags=Number(sourceModel.Textures?.[source.TextureID]?.Flags)||0;}
+    if(target.basecoat){const source=layerFor(sourceModel,first);target.flags=target.generatedUV?0:Number(sourceModel.Textures?.[source.TextureID]?.Flags)||0;}
     updateTargetBindings(target,target.bindings.map(binding=>{
       const entry=bindingMaterial(staged,sourceModel,target,materialTemplate(sourceModel,binding.geosetIndex,target.textureId,target.basecoat));
       return {...binding,materialId:entry.materialId,layerIndex:entry.material.Layers.length-1,coordId:0,sourceCoordId:binding.sourceCoordId??binding.coordId??0};
     }));
   }
-  validatePaintAssignments(staged,sourceModel);
+  validatePaintAssignments(staged,validationModel);
   for(let i=0;i<project.targets.length;i++)Object.assign(project.targets[i],staged.targets[i]);
   project.excludedGeosets=sourceModel.Geosets.map((_,i)=>i).filter(i=>!eligible.has(i));
   project.paintMaterialsVersion=3;touch(project);return true;
@@ -100,7 +104,7 @@ export function assignPaintMaterial(project,model,targetId,indices,sourceModel=m
   const target=project.targets.find(t=>t.id===targetId);if(!target)throw Error('Choose a texture first.');
   const selected=[...new Set(indices)],sources=new Map();
   for(const index of selected){
-    const geo=model.Geosets[index],previous=project.targets.flatMap(t=>t.bindings).find(b=>b.geosetIndex===index),sourceCoordId=previous?.sourceCoordId??(layerFor(sourceFor(model,sourceModel,index),index).CoordId||0);
+    const geo=model.Geosets[index],sourceCoordId=target.generatedUV?project.generatedUVSets?.[index]:(layerFor(sourceFor(model,sourceModel,index),index).CoordId||0);
     if(!geo||!geo.TVertices?.[sourceCoordId]||geo.TVertices[sourceCoordId].length!==geo.Vertices.length/3*2)throw Error('This geoset has no usable UV map.');
     sources.set(index,sourceCoordId);
   }
@@ -114,11 +118,11 @@ export function assignPaintMaterial(project,model,targetId,indices,sourceModel=m
   for(let i=0;i<project.targets.length;i++)Object.assign(project.targets[i],staged.targets[i]);
   project.activeTargetId=target.id;touch(project);return target;
 }
-export function createPaintMaterial(project,model,{name='Texture',raster,geosets=[],nativeSource=false,sourcePath='',sourceLayer=null,sourceModel=model,basecoat=project.sourceMode==='primer'}={}){
+export function createPaintMaterial(project,model,{name='Texture',raster,geosets=[],nativeSource=false,sourcePath='',sourceLayer=null,sourceModel=model,basecoat=project.sourceMode==='primer',generatedUV=false}={}){
   if(!raster||raster.width!==project.resolution||raster.height!==project.resolution||raster.data?.length!==project.resolution**2*4)throw Error('The imported texture could not be prepared.');
   const textureId=nextIndex(project,model,'textureId','Textures'),materialId=nextIndex(project,model,'materialId','Materials');
   const context=sourceFor(model,sourceModel,geosets[0]),paintName=uniquePaintTextureName(project,name),layer=sourceLayer||layerFor(context,geosets[0]);
-  const descriptor={id:'paint:'+crypto.randomUUID(),textureId,materialId,paintName,label:paintName,texturePath:nativeSource?sourcePath:'Textures\\'+paintName+'.blp',nativeSource,sourcePath,citadelCopy:false,basecoat:!!basecoat,preserveSourceAlpha:false,flags:Number(context.Textures?.[layer.TextureID]?.Flags)||0,bindings:[],geosetIndices:[],materialIds:[materialId],materialVariants:[],sharedUV:false,
+  const descriptor={id:'paint:'+crypto.randomUUID(),textureId,materialId,paintName,label:paintName,texturePath:nativeSource?sourcePath:'Textures\\'+paintName+'.blp',nativeSource,sourcePath,citadelCopy:false,basecoat:!!basecoat,generatedUV:!!generatedUV,preserveSourceAlpha:false,flags:generatedUV?0:Number(context.Textures?.[layer.TextureID]?.Flags)||0,bindings:[],geosetIndices:[],materialIds:[materialId],materialVariants:[],sharedUV:false,
     material:materialTemplate(context,geosets[0],textureId,basecoat,sourceLayer)};
   // Allocation happens on a staged project; no half-created target on failure.
   const staged={...project,targets:[...project.targets]},entry=addPaintProjectTarget(staged,descriptor,raster);
@@ -159,7 +163,7 @@ export function applyPaintMaterials(model,project){
   const Textures=[...(model.Textures||[])],Materials=[...(model.Materials||[])],Geosets=[...model.Geosets];
   for(const target of project.targets){
     Textures[target.textureId]={Image:target.texturePath,ReplaceableId:0,Flags:target.flags||0};for(const entry of materialEntries(target))Materials[entry.materialId]=entry.material;
-    for(const binding of target.bindings){const geo=Geosets[binding.geosetIndex];if(!geo)throw Error('A texture refers to a missing geoset.');const coord=binding.sourceCoordId||0,TVertices=coord?[geo.TVertices[coord],...geo.TVertices.slice(1)]:geo.TVertices;Geosets[binding.geosetIndex]={...geo,MaterialID:binding.materialId,TVertices};}
+    for(const binding of target.bindings){const geo=Geosets[binding.geosetIndex];if(!geo)throw Error('A texture refers to a missing geoset.');const coord=binding.sourceCoordId||0,TVertices=coord?[geo.TVertices[coord],...geo.TVertices.filter((_,set)=>set!==coord)]:geo.TVertices;Geosets[binding.geosetIndex]={...geo,MaterialID:binding.materialId,TVertices};}
   }
   return {...model,Textures,Materials,Geosets};
 }

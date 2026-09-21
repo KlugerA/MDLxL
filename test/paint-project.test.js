@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addPaintProjectTarget, compositePaintTarget, createPaintProject, markPaintProjectSaved, paintProjectArchive, paintProjectCoat, readStoredZip, recordPaintStroke, recordPaintUV, replacePaintTexture, restorePaintProject, travelPaintHistory } from '../src/paint-project.js';
+import { addPaintProjectTarget, compositePaintTarget, createPaintProject, markPaintProjectSaved, paintProjectArchive, paintProjectCoat, readStoredZip, recordPaintStroke, recordPaintStrokeGroup, recordPaintUV, replacePaintTexture, restorePaintProject, travelPaintHistory } from '../src/paint-project.js';
 import { clonePaintRaster, createPaintRaster } from '../src/paint-raster.js';
 import { paintTarget,paintFixtureModel,triangleGeoset } from './fixtures/paint-fixtures.js';
 import {enablePaintMaterials,validatePaintAssignments} from '../src/paint-materials.js';
@@ -50,8 +50,32 @@ test('projects enforce v1 resolution and stroke history is bounded, branch-safe,
   markPaintProjectSaved(project);assert.equal(project.dirty,false);
 });
 
+test('both Bleed choices survive saving a preset without modifying its painted image',async()=>{
+  const project=createPaintProject({sourceMode:'primer'});
+  addPaintProjectTarget(project,paintTarget(),createPaintRaster(256,256,[40,50,60,255]));
+  paintProjectCoat(project).raster.data.set([180,90,20,255],(60*256+45)*4);
+  const before=compositePaintTarget(project);
+  for(const textureSmoothing of [false,true]){
+    project.viewSettings={textureSmoothing};
+    const archive=await paintProjectArchive(project,{modelBytes:new Uint8Array([1,2,3])});
+    const restored=await restorePaintProject(new Uint8Array(await archive.arrayBuffer()),decodeOwnPng);
+    assert.equal(restored.project.viewSettings.textureSmoothing,textureSmoothing);
+    assert.deepEqual(compositePaintTarget(restored.project),before);
+  }
+});
+
+test('one free-paint gesture across materials is one undo and redo step',()=>{
+  const project=createPaintProject({sourceMode:'primer'}),first=addPaintProjectTarget(project,{...paintTarget([0]),id:'first'},createPaintRaster(256)),second=addPaintProjectTarget(project,{...paintTarget([1]),id:'second',textureId:1},createPaintRaster(256));
+  const firstCoat=paintProjectCoat(project,first.id),secondCoat=paintProjectCoat(project,second.id),firstBefore=clonePaintRaster(firstCoat.raster),secondBefore=clonePaintRaster(secondCoat.raster);
+  firstCoat.raster.data.set([220,30,10,255],0);secondCoat.raster.data.set([10,40,230,255],0);
+  assert.equal(recordPaintStrokeGroup(project,[{targetId:first.id,coatId:firstCoat.id,before:firstBefore},{targetId:second.id,coatId:secondCoat.id,before:secondBefore}],'Free Paint',{id:'normal'}),true);
+  assert.equal(project.history.undo.length,1);travelPaintHistory(project);assert.deepEqual([...firstCoat.raster.data.slice(0,4)],[0,0,0,0]);assert.deepEqual([...secondCoat.raster.data.slice(0,4)],[0,0,0,0]);
+  travelPaintHistory(project,true);assert.deepEqual([...firstCoat.raster.data.slice(0,4)],[220,30,10,255]);assert.deepEqual([...secondCoat.raster.data.slice(0,4)],[10,40,230,255]);
+});
+
 test('portable project ZIP restores source/coat/alpha pixels, both model copies, texture sources, and provenance',async()=>{
   const project=createPaintProject({modelName:'Hero.mdx',resolution:256,sourceMode:'current'}),target=addPaintProjectTarget(project,paintTarget(),createPaintRaster(256,256,[11,22,33,44]));
+  project.generatedUVSets={0:1};project.paintAtlasVersion=1;target.generatedUV=true;
   target.coats[2].raster.data.set([90,80,70,200],(9*256+7)*4);target.alphaMask.data[(4*256+3)*4+3]=61;project.activeCoatId='detail';
   const original=new Uint8Array([1,2,3,4]),working=new Uint8Array([9,8,7]),source=new Uint8Array([6,5,4]);
   const blob=await paintProjectArchive(project,{modelBytes:original,workingModelBytes:working,modelName:'Hero.mdx',sourceTextures:[{name:'Textures\\Fixture.blp',bytes:source}],assetManifest:{schema:'mdlxl-paint-assets',version:1,logicalAssetCount:50}}),bytes=new Uint8Array(await blob.arrayBuffer()),files=readStoredZip(bytes);
@@ -60,7 +84,7 @@ test('portable project ZIP restores source/coat/alpha pixels, both model copies,
   assert.deepEqual(restored.originalModelBytes,original);assert.deepEqual(restored.workingModelBytes,working);assert.deepEqual(restored.sourceTextures[0].bytes,source);
   assert.deepEqual([...restoredTarget.base.data.slice(0,4)],[11,22,33,44]);
   assert.deepEqual([...restoredTarget.coats[2].raster.data.slice((9*256+7)*4,(9*256+7)*4+4)],[90,80,70,200]);
-  assert.equal(restoredTarget.alphaMask.data[(4*256+3)*4+3],61);assert.equal(restored.project.dirty,false);assert.equal(restored.project.history.undo.length,0);
+  assert.equal(restoredTarget.alphaMask.data[(4*256+3)*4+3],61);assert.equal(restoredTarget.generatedUV,true);assert.deepEqual(restored.project.generatedUVSets,{0:1});assert.equal(restored.project.paintAtlasVersion,1);assert.equal(restored.project.dirty,false);assert.equal(restored.project.history.undo.length,0);
 });
 
 test('stored project reader rejects traversal and truncated payloads',()=>{

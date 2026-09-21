@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPaintRaster,clonePaintRaster,compositePaintRasters} from '../src/paint-raster.js';
 import {createPaintDirtyRows,markPaintPixel,paintRowRanges,createPaintPreview,updatePaintPreview,acknowledgePaintUpload} from '../src/paint-preview.js';
-import {viewportPixelRatio} from '../app/viewport-quality.js';
+import {configurePaintTexture,configureEditorTexture,viewportPixelRatio} from '../app/viewport-quality.js';
+import {DataTexture,NearestFilter,LinearFilter,LinearMipmapLinearFilter} from 'three';
 
 // Previous compositor, kept as an independent pixel-equivalence oracle.
 function reference(base,coats,mask){const out=clonePaintRaster(base);for(const coat of coats){if(coat.visible===false)continue;for(let i=0;i<out.data.length;i+=4){const sa=coat.raster.data[i+3]/255*coat.opacity;if(sa<=0)continue;const da=out.data[i+3]/255,a=sa+da*(1-sa);for(let c=0;c<3;c++)out.data[i+c]=Math.round((coat.raster.data[i+c]*sa+out.data[i+c]*da*(1-sa))/a);out.data[i+3]=Math.round(a*255);}}for(let i=3;i<out.data.length;i+=4)out.data[i]=Math.round(base.data[i]*mask.data[i]/255);return out;}
@@ -24,4 +25,23 @@ test('preview upload ranges accumulate across coalesced frames and reset only on
 });
 test('Citadel low-power resolution obeys its limit without changing main-editor physical-pixel mode',()=>{
   for(const device of [1,1.25,1.5,2]){assert.equal(viewportPixelRatio({antialias:false,pixelRatio:1},device,true),1);assert.equal(viewportPixelRatio({antialias:false,pixelRatio:1},device),device);}
+});
+
+test('Bleed switches only live texture sampling, retaining pixels, dimensions and upload invalidation',()=>{
+  const raster=createPaintRaster(16,16,[40,50,60,255]);raster.data.set([200,120,40,255],(8*16+8)*4);
+  const before=raster.data.slice(),texture=new DataTexture(raster.data,16,16);
+  for(const smoothing of [false,true,false]){
+    const version=texture.version;
+    assert.equal(configurePaintTexture(texture,smoothing),texture);
+    assert.equal(texture.magFilter,smoothing?LinearFilter:NearestFilter);
+    assert.equal(texture.minFilter,smoothing?LinearFilter:NearestFilter);
+    assert.equal(texture.generateMipmaps,false);assert.equal(texture.anisotropy,1);assert.ok(texture.version>version);
+    assert.equal(texture.image.data,raster.data);assert.deepEqual(raster.data,before);
+    assert.equal(texture.image.width,16);assert.equal(texture.image.height,16);
+  }
+  // The general model editor's Warcraft-style filtering remains unchanged.
+  configureEditorTexture(texture,8);
+  assert.equal(texture.magFilter,LinearFilter);assert.equal(texture.minFilter,LinearMipmapLinearFilter);
+  assert.equal(texture.generateMipmaps,true);assert.equal(texture.anisotropy,8);
+  texture.dispose();
 });

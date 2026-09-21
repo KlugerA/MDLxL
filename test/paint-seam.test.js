@@ -61,7 +61,7 @@ function bentUVSeam(){return {
   TVertices:[new Float32Array([.1,.1,.4,.1,.4,.9,.1,.9,.6,.1,.9,.1,.9,.9,.6,.9])],MaterialID:0,
 };}
 
-test('turning a folded surface paints both UV seam edges, including inside filter taps of magnified texels',()=>{
+test('a small dab crosses a folded UV seam without filling untouched filter neighbours',()=>{
   const model=paintFixtureModel([bentUVSeam()]),target=paintTarget(),raster=createPaintRaster(32);
   for(const angle of [-35,0,35]){
     raster.data.fill(0);
@@ -69,9 +69,18 @@ test('turning a folded surface paints both UV seam edges, including inside filte
     const matrix=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse).elements;
     const projection=preparePaintProjection(model,target,matrix,960,960),center=new Vector3(0,0,0).project(camera);
     stampProjectedBrush(raster,projection,{x:(center.x+1)*480,y:(1-center.y)*480},{...brush,size:18});
-    assert.equal(filteredAlpha(raster,.4,.5),255,`left seam at ${angle} degrees`);
-    assert.equal(filteredAlpha(raster,.6,.5),255,`right seam at ${angle} degrees`);
+    // At this magnification the dab fits inside the nearest texel columns.
+    // Each opaque column contributes 70% to the filtered seam colour. Forcing
+    // 100% here requires painting the untouched column and inflates the dab.
+    assert.ok(Math.abs(filteredAlpha(raster,.4,.5)-255*.7)<1e-6,`left seam at ${angle} degrees`);
+    assert.ok(Math.abs(filteredAlpha(raster,.6,.5)-255*.7)<1e-6,`right seam at ${angle} degrees`);
+    assert.equal(alpha(raster,12,16),255);assert.equal(alpha(raster,19,16),255);
+    assert.equal(alpha(raster,13,16),0);assert.equal(alpha(raster,18,16),0);
     assert.equal(filteredAlpha(raster,.2,.5),0,'the dab remains local to the seam');
+    raster.data.fill(0);
+    stampProjectedBrush(raster,projection,{x:(center.x+1)*480,y:(1-center.y)*480},{...brush,size:64});
+    assert.equal(filteredAlpha(raster,.4,.5),255,'a wider brush still paints the complete left seam');
+    assert.equal(filteredAlpha(raster,.6,.5),255,'a wider brush still paints the complete right seam');
   }
 });
 
