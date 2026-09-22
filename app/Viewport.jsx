@@ -32,7 +32,7 @@ import { applyViewPreset, applyModelCamera, gridDepthExtent, gridFrameRadius, or
 import { createViewportGrid } from './viewport-grid.js';
 import { visualOptions, viewportAppearanceOptions, gridOptions, cameraBindings } from '../src/preferences.js';
 import { backgroundImageRect } from '../src/viewport-appearance.js';
-import { QUAD_VIEWS, QUAD_VIEW_OPTIONS, viewWorkplane, viewportRects } from './quad-view.js';
+import { QUAD_VIEWS, viewWorkplane, viewportRects } from './quad-view.js';
 import { viewportPointDepth, viewportPointIndices } from './viewport-point-selection.js';
 
 const COLORS = [0xa9b6c1, 0x8caca8, 0xb9aa94, 0x939bb5, 0xb499a6, 0x9eac8b];
@@ -259,15 +259,11 @@ export default function Viewport(inputProps) {
       if (down && pane !== activePane) return;
       bindPane(pane); activePane = pane;
       for (const item of panes) item.surface.classList.toggle('active', quad && item === pane);
-      latest.current.onActivePaneChange?.(quad ? { id: pane.id, view: pane.view, workplane: viewWorkplane(pane.view) } : null);
+      latest.current.onActivePaneChange?.(quad ? { id: pane.id, view: pane.view, workplane: pane.workplane } : null);
       invalidate();
     }
     const invalidate = () => {
       if (boundPane !== activePane) { state.scheduler?.invalidate(); return; }
-      if (quad && rotating && camera.isOrthographicCamera && boundPane.view !== 'orthographic') {
-        rememberView('orthographic');
-        latest.current.onActivePaneChange?.({ id: boundPane.id, view: boundPane.view, workplane: null });
-      }
       const nextCompassAxes = projectCompassAxes(camera.quaternion);
       setCompassAxes(previous => sameCompassAxes(previous, nextCompassAxes) ? previous : nextCompassAxes);
       latest.current.onCameraAnglesChange?.(editorCameraAngles(camera)); state.scheduler?.invalidate();
@@ -301,7 +297,7 @@ export default function Viewport(inputProps) {
       scene.background = background.texture;
     }
     state.refreshCursor = () => { surface.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating); };
-    state.setCameraAngles = values => { if (setEditorCameraAngles(camera, controls.target, values)) { if (quad && camera.isOrthographicCamera) rememberView('orthographic'); controls.update(); activatePane(activePane); } };
+    state.setCameraAngles = values => { if (quad && boundPane.workplane) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); activatePane(activePane); } };
     function bindInput(pane) {
       const element = pane.surface;
       const activate = () => activatePane(pane);
@@ -378,10 +374,12 @@ export default function Viewport(inputProps) {
     };
     function rememberView(next) {
       state.appliedView = boundPane.view = next;
-      const select = surface.querySelector('.quad-pane-view');
-      if (select) select.value = next;
+      const label = surface.querySelector('.quad-pane-label');
+      if (label) label.textContent = next === 'right' ? 'Side' : next[0].toUpperCase() + next.slice(1);
     }
     function setPaneView(next) {
+      // A quad pane owns a fixed world plane, independent of view commands.
+      if (quad && boundPane !== singlePane && (boundPane.workplane ? viewWorkplane(next) !== boundPane.workplane : next !== 'perspective')) return;
       rememberView(next);
       if (next === 'perspective') camera = perspective;
       else if (next === 'orthographic') {
@@ -392,11 +390,17 @@ export default function Viewport(inputProps) {
         const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
         camera = ortho; applyViewPreset(camera, next, controls.target, framed * 4);
       }
-      controls.object = camera; controls.enableRotate = true;
+      controls.object = camera; controls.enableRotate = !(quad && boundPane.workplane);
       state.camera = camera; boundPane.view = next; boundPane.camera = camera; controls.update(); invalidate();
     }
     state.setView = next => {
-      cancelGesture(); setPaneView(next);
+      cancelGesture();
+      if (quad) {
+        const plane = viewWorkplane(next);
+        if (!plane && next !== 'perspective') return;
+        activatePane(panes.slice(1).find(pane => pane.workplane === plane));
+      }
+      setPaneView(next);
       if (quad) activatePane(activePane);
     };
     state.setQuad = enabled => {
@@ -406,23 +410,17 @@ export default function Viewport(inputProps) {
         for (const definition of QUAD_VIEWS) {
           const element = document.createElement('div'); element.className = 'viewport-input quad-pane'; element.tabIndex = 0;
           element.dataset.viewport = definition.id; element.setAttribute('aria-label', definition.label + ' viewport');
-          const select = document.createElement('select'); select.className = 'quad-pane-view'; select.setAttribute('aria-label', definition.label + ' pane viewpoint');
-          for (const [value, label] of QUAD_VIEW_OPTIONS) { const option = document.createElement('option'); option.value = value; option.textContent = label; select.appendChild(option); }
-          select.value = definition.view; element.appendChild(select); host.current.appendChild(element);
+          const label = document.createElement('span'); label.className = 'quad-pane-label'; label.textContent = definition.label;
+          element.appendChild(label); host.current.appendChild(element);
           const perspective = singlePane.perspective.clone(), ortho = singlePane.ortho.clone();
           const camera = definition.view === 'perspective' ? perspective : ortho;
           const paneControls = new EditorCameraControls(camera, element); paneControls.enableDamping = false; paneControls.target.copy(singlePane.controls.target);
-          const pane = { ...definition, surface: element, perspective, ortho, camera, controls: paneControls, grid: createViewportGrid(), center: singlePane.center.clone(), radius: singlePane.radius, floor: singlePane.floor };
+          const pane = { ...definition, workplane: viewWorkplane(definition.view), surface: element, perspective, ortho, camera, controls: paneControls, grid: createViewportGrid(), center: singlePane.center.clone(), radius: singlePane.radius, floor: singlePane.floor };
           scene.add(pane.grid);
-          select.addEventListener('pointerdown', event => event.stopPropagation());
-          select.addEventListener('keydown', event => event.stopPropagation());
-          select.addEventListener('wheel', event => event.stopPropagation());
-          select.addEventListener('focus', () => activatePane(pane));
-          select.addEventListener('change', () => { activatePane(pane); state.setView(select.value); surface.focus(); });
           panes.push(pane); bindInput(pane); bindPane(pane);
           const saved = cameraMemory.current?.panes?.find(item => item.id === pane.id);
-          setPaneView(saved?.view || definition.view);
-          if (saved) { perspective.copy(saved.perspective); ortho.copy(saved.ortho); controls.target.copy(saved.target); state.center.copy(saved.center); state.radius = saved.radius; controls.update(); }
+          if (saved) { perspective.copy(saved.perspective); ortho.copy(saved.ortho); controls.target.copy(saved.target); state.center.copy(saved.center); state.radius = saved.radius; }
+          setPaneView(saved && viewWorkplane(saved.view) === pane.workplane ? saved.view : definition.view);
         }
       }
       activePane = quad ? panes[1] : singlePane;
@@ -472,13 +470,13 @@ export default function Viewport(inputProps) {
     function cameraAction(event) {
       const p = latest.current;
       const binding = cameraBindings(p.preferences);
-      if (event.button === 2 || event.button === 1) { const action = event.button === 2 ? binding.right : binding.middle; return action === 'pan' ? 'move' : action; }
-      if (event.altKey) return 'rotate';
-      return p.cameraMode;
+      let action = event.button === 2 ? binding.right : event.button === 1 ? binding.middle : event.altKey ? 'rotate' : p.cameraMode;
+      if (action === 'pan' || quad && boundPane.workplane && action === 'rotate') action = 'move';
+      return action;
     }
     // OrbitControls is used only for navigation. Capture configures it before its handler runs.
     function pointerDown(event) {
-      if (down || event.target.closest?.('select')) return;
+      if (down) return;
       clearHoveredGeoset();
       surface.focus();
       const action = cameraAction(event);
@@ -486,7 +484,7 @@ export default function Viewport(inputProps) {
       surface.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating);
       controls.enabled = true;
       controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(latest.current.preferences?.pointerSensitivity);
-      const binding = cameraBindings(latest.current.preferences), mouseAction = value => value === 'pan' ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
+      const binding = cameraBindings(latest.current.preferences), mouseAction = value => value === 'pan' || value === 'rotate' && quad && boundPane.workplane ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
       controls.mouseButtons.RIGHT = mouseAction(binding.right); controls.mouseButtons.MIDDLE = mouseAction(binding.middle);
       controls.mouseButtons.LEFT = action === 'move' ? THREE.MOUSE.PAN : action === 'rotate' ? THREE.MOUSE.ROTATE : null;
       if (event.shiftKey && action !== 'work') controls.rotateSpeed = controls.panSpeed *= latest.current.preferences?.fineSensitivity ?? .2;
@@ -513,7 +511,8 @@ export default function Viewport(inputProps) {
       const anchor = p.zoomAnchor, anchorIndices = anchor && selectedMap[anchor.geosetIndex];
       if (anchorIndices?.includes(anchor.vertexIndex)) pivot.fromArray(snapshots[anchor.geosetIndex], anchor.vertexIndex * 3);
       down.pivotScreen = screenPosition(pivot, start);
-      state.drag = { ...down, selections: selectedMap, snapshots, pivot, workplane: quad && viewWorkplane(boundPane.view) || p.workplane, workplaneEnabled: quad && camera.isOrthographicCamera ? !!viewWorkplane(boundPane.view) : p.workplaneEnabled !== false, payload: null };
+      const lockedPlane = quad && boundPane.workplane;
+      state.drag = { ...down, selections: selectedMap, snapshots, pivot, workplane: lockedPlane || p.workplane, workplaneEnabled: !!lockedPlane || p.workplaneEnabled !== false, payload: null };
     }
     function translateInPlane(start, end, drag, constrain) {
       if (!drag.workplaneEnabled) return screenPlaneTranslation(camera, drag.pivot, end.width, end.height, end.x - start.x, end.y - start.y, constrain);
@@ -553,17 +552,10 @@ export default function Viewport(inputProps) {
         let angle = a.length() > 12 && b.length() > 12 ? Math.atan2(a.x * b.y - a.y * b.x, a.dot(b)) : dx * .01;
         const axis = [0, 1, 2].find(i => !planeAxes(drag.workplane).includes(i));
         const normal = new THREE.Vector3().setComponent(axis, 1), viewDirection = camera.position.clone().sub(controls.target);
-        const freePlane = quad && camera.isOrthographicCamera && !drag.workplaneEnabled;
-        if (!freePlane && normal.dot(viewDirection) > 0) angle = -angle;
+        if (normal.dot(viewDirection) > 0) angle = -angle;
         if (event.shiftKey) angle = Math.round(angle / (Math.PI / 12)) * Math.PI / 12;
-        if (freePlane) {
-          // The existing Euler payload also represents rotation about a free view's normal.
-          rotation.setFromQuaternion(new THREE.Quaternion().setFromAxisAngle(camera.getWorldDirection(new THREE.Vector3()), angle));
-          payload.rotation = [rotation.x, rotation.y, rotation.z].map(THREE.MathUtils.radToDeg);
-        } else {
-          const degrees = [0, 0, 0]; degrees[axis] = THREE.MathUtils.radToDeg(angle); payload.rotation = degrees;
-          rotation.set(degrees[0] * Math.PI / 180, degrees[1] * Math.PI / 180, degrees[2] * Math.PI / 180);
-        }
+        const degrees = [0, 0, 0]; degrees[axis] = THREE.MathUtils.radToDeg(angle); payload.rotation = degrees;
+        rotation.set(degrees[0] * Math.PI / 180, degrees[1] * Math.PI / 180, degrees[2] * Math.PI / 180);
       }
       const vertex = new THREE.Vector3();
       for (const [key, indices] of Object.entries(drag.selections)) {

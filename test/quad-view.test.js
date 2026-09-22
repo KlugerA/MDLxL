@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OrthographicCamera, Vector3 } from 'three';
 import { QUAD_VIEWS, QUAD_VIEW_OPTIONS, viewWorkplane, viewportRects } from '../app/quad-view.js';
-import { VIEW_PRESETS, applyViewPreset, projectedPlaneTranslation, screenPlaneTranslation } from '../app/viewport-math.js';
+import { VIEW_PRESETS, applyViewPreset, projectedPlaneTranslation } from '../app/viewport-math.js';
 import { quadGridLayout } from '../app/quad-grid.js';
 import { BUILT_IN_VIEWPORT_PRESETS, normalizeViewportAppearance } from '../src/viewport-appearance.js';
 import { exportConfiguration, importConfiguration } from '../src/portable-settings.js';
@@ -18,7 +18,7 @@ test('quad editing planes follow Warcraft view presets, including reverse views'
 });
 
 test('existing plane solver and transform commit preserve exact depth in all orthographic panes', () => {
-  for (const {view} of QUAD_VIEWS.slice(0, 3)) {
+  for (const [view] of QUAD_VIEW_OPTIONS.filter(([view]) => viewWorkplane(view))) {
     const camera = new OrthographicCamera(-200,200,130,-130,.1,2000), pivot = new Vector3(17,29,43);
     applyViewPreset(camera,view,new Vector3(),600);
     const plane = viewWorkplane(view), axes = planeAxes(plane), depth = [0,1,2].find(axis => !axes.includes(axis));
@@ -46,17 +46,16 @@ test('quad rectangles tile odd window sizes without gaps or overlaps', () => {
   }
 });
 
-test('every preset, including eight UV angles, supports horizontal and vertical Shift drags', () => {
-  assert.equal(QUAD_VIEW_OPTIONS.length,16);
-  assert.equal(Object.keys(VIEW_PRESETS).filter(view=>view.includes('-')).length,8);
-  for(const view of Object.keys(VIEW_PRESETS)) {
+test('quad commands expose only the fixed planes and perspective, with horizontal and vertical Shift drags', () => {
+  assert.deepEqual(QUAD_VIEW_OPTIONS.map(([view])=>view),['front','back','right','left','top','bottom','perspective']);
+  for(const [view] of QUAD_VIEW_OPTIONS.filter(([view])=>viewWorkplane(view))) {
     const camera=new OrthographicCamera(-200,200,130,-130,.1,4000),pivot=new Vector3(17,29,43);
     applyViewPreset(camera,view,new Vector3(),600);
     const project=p=>{const q=p.clone().project(camera);return [(q.x+1)*400,(1-q.y)*260];};
     const center=project(pivot),plane=viewWorkplane(view);
     for(const [dx,dy] of [[30,11],[-30,-11],[11,30],[-11,-30]]){
-      const basis=plane&&planeAxes(plane).map(axis=>{const p=pivot.clone();p.setComponent(axis,p.getComponent(axis)+1);return project(p).map((v,i)=>v-center[i]);});
-      const delta=plane?new Vector3().fromArray(projectedPlaneTranslation(plane,basis,dx,dy,true)):screenPlaneTranslation(camera,pivot,800,520,dx,dy,true);
+      const basis=planeAxes(plane).map(axis=>{const p=pivot.clone();p.setComponent(axis,p.getComponent(axis)+1);return project(p).map((v,i)=>v-center[i]);});
+      const delta=new Vector3().fromArray(projectedPlaneTranslation(plane,basis,dx,dy,true));
       const moved=project(pivot.clone().add(delta)),locked=Math.abs(dx)>Math.abs(dy)?1:0;
       assert.ok(Math.abs(moved[locked]-center[locked])<1e-8,view+' screen lock');
       assert.ok(Math.abs(delta.dot(camera.getWorldDirection(new Vector3())))<1e-8,view+' depth');

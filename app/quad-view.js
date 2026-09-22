@@ -17,8 +17,8 @@ export const QUAD_VIEWS = Object.freeze([
 ]);
 
 export const QUAD_VIEW_OPTIONS = Object.freeze([
-  ['perspective', 'Perspective'], ['orthographic', 'Orthographic · Free orbit'],
-  ...Object.keys(VIEW_PRESETS).map(view => [view, view.split('-').map(word => word[0].toUpperCase() + word.slice(1)).join(' ')]),
+  ...Object.keys(VIEW_PRESETS).filter(view => viewWorkplane(view)).map(view => [view, view[0].toUpperCase() + view.slice(1)]),
+  ['perspective', 'Perspective'],
 ]);
 
 export function viewportRects(width, height, quad) {
