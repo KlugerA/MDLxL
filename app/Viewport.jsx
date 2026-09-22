@@ -22,7 +22,7 @@ import { decodeBLP, getBLPImageData } from 'war3-model';
 import { advanceSequence, allNodes, sampleGeosetAnimation, sampleNodeMatrices, sampleTrack, skinGeoset, skinGeosetNormals } from '../src/animation.js';
 import { decodeDds } from '../src/dds.js';
 import { decodeBlp2 } from '../src/blp2.js';
-import { applySelection, dragScale, insideTriangle, marqueeContainsPoint, planeAxes } from './classic-gestures.js';
+import { applySelection, dragScale, insideTriangle, marqueeContainsPoint, moveDragPoint, planeAxes } from './classic-gestures.js';
 import { bindScrollSensitivity, createRenderScheduler, graphicsOptions, pointerDragPoint, pointerSensitivityValue, sensitivityIndicatorStyle, sensitivityIndicatorText } from './viewport-performance.js';
 import { viewportOverlayOptions } from './viewport-overlays.js';
 import { projectCompassAxes } from './viewport-compass.js';
@@ -512,7 +512,7 @@ export default function Viewport(inputProps) {
       if (anchorIndices?.includes(anchor.vertexIndex)) pivot.fromArray(snapshots[anchor.geosetIndex], anchor.vertexIndex * 3);
       down.pivotScreen = screenPosition(pivot, start);
       const lockedPlane = quad && boundPane.workplane;
-      state.drag = { ...down, selections: selectedMap, snapshots, pivot, workplane: lockedPlane || p.workplane, workplaneEnabled: !!lockedPlane || p.workplaneEnabled !== false, payload: null };
+      state.drag = { ...down, selections: selectedMap, snapshots, pivot, workplane: lockedPlane || p.workplane, workplaneEnabled: !!lockedPlane || p.workplaneEnabled !== false, payload: null, move: { pointer: start, point: start, shift: event.shiftKey, axis: null } };
     }
     function translateInPlane(start, end, drag, constrain) {
       if (!drag.workplaneEnabled) return screenPlaneTranslation(camera, drag.pivot, end.width, end.height, end.x - start.x, end.y - start.y, constrain);
@@ -545,7 +545,7 @@ export default function Viewport(inputProps) {
       const drag = state.drag; if (!drag) return;
       const payload = { selections: drag.selections, geosetIndex: latest.current.selectedGeoset, indices: drag.selections[latest.current.selectedGeoset] || [], pivot: drag.pivot.toArray() };
       const rotation = new THREE.Euler(), scale = new THREE.Vector3(1, 1, 1), translation = new THREE.Vector3();
-      if (drag.action === 'translate') { translation.copy(translateInPlane(down, end, drag, event.shiftKey)); payload.translation = translation.toArray(); }
+      if (drag.action === 'translate') { translation.copy(translateInPlane(down, moveDragPoint(drag.move, end, event.shiftKey), drag, false)); payload.translation = translation.toArray(); }
       if (drag.action === 'scale') { scale.fromArray(dragScale(dx, drag.workplane, event.shiftKey)); payload.scale = scale.toArray(); payload.allowSingularScale = true; }
       if (drag.action === 'rotate') {
         const a = new THREE.Vector2(down.x, down.y).sub(drag.pivotScreen), b = new THREE.Vector2(end.x, end.y).sub(drag.pivotScreen);
@@ -566,7 +566,7 @@ export default function Viewport(inputProps) {
         }
         position.needsUpdate = true; entry.geometry.computeBoundingSphere(); updateWideWireGeometry(entry);
       }
-      drag.payload = payload; drag.moved = Math.hypot(dx, dy) > 1;
+      drag.payload = payload; drag.moved = drag.action === 'translate' ? Math.hypot(drag.move.point.x - down.x, drag.move.point.y - down.y) > 1 : Math.hypot(dx, dy) > 1;
       invalidate();
     }
     function pointerUp(event) {
@@ -645,14 +645,18 @@ export default function Viewport(inputProps) {
     const frameModel = event => { cancelGesture(); state.fit(event.detail?.selection === true); };
     const viewCamera = event => { cancelGesture(); if (quad) activatePane(panes.find(pane => pane.id === 'perspective')); if (applyModelCamera(perspective, controls, event.detail)) { camera = perspective; state.camera = camera; state.appliedView = 'perspective'; invalidate(); } };
     window.addEventListener('mdlxl-view-camera', viewCamera);
-    const cancelKey = event => { if (event.key === 'Escape' && down) { cancelGesture(); event.preventDefault(); event.stopPropagation(); } };
+    const gestureKey = event => {
+      if (event.key === 'Escape' && event.type === 'keydown' && down) { cancelGesture(); event.preventDefault(); event.stopPropagation(); }
+      // Modifier transitions must reset the latch even if the mouse is still.
+      if (event.key === 'Shift' && state.drag?.action === 'translate') moveDragPoint(state.drag.move, state.drag.move.pointer, event.shiftKey);
+    };
     // WarmKeys consumes Escape before viewport key listeners. Its Clear command
     // gives an in-progress drag first refusal through this cancelable event.
     const cancelCommand = event => { if (down) { cancelGesture(); event.preventDefault(); } };
     const contextMenu = event => event.preventDefault();
     const pointerLeave = () => { if (!down) clearHoveredGeoset(); };
     bindInput(singlePane);
-    window.addEventListener('mdlvis-frame', frameModel); window.addEventListener('keydown', cancelKey, true);
+    window.addEventListener('mdlvis-frame', frameModel); window.addEventListener('keydown', gestureKey, true); window.addEventListener('keyup', gestureKey, true);
     window.addEventListener('mdlxl-cancel-gesture', cancelCommand);
     const contextLost = event => { event.preventDefault(); state.scheduler?.dispose(); setError('The graphics context was lost. Reload the editor to restore the viewport. Save your work first.'); };
     renderer.domElement.addEventListener('webglcontextlost', contextLost);
@@ -863,7 +867,7 @@ export default function Viewport(inputProps) {
       cameraMemory.current = { ...remember(singlePane), panes: panes.slice(1).map(remember) };
       state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); resizeObserver.disconnect(); panes.forEach(pane => { pane.dispose(); pane.grid.dispose(); });
       renderer.domElement.removeEventListener('webglcontextlost', contextLost);
-      window.removeEventListener('mdlvis-frame', frameModel); window.removeEventListener('mdlxl-view-camera', viewCamera); window.removeEventListener('keydown', cancelKey, true);
+      window.removeEventListener('mdlvis-frame', frameModel); window.removeEventListener('mdlxl-view-camera', viewCamera); window.removeEventListener('keydown', gestureKey, true); window.removeEventListener('keyup', gestureKey, true);
       window.removeEventListener('mdlxl-cancel-gesture', cancelCommand);
       cameraCanvas?.remove(); normalCanvas?.remove(); nodeCanvas?.remove(); previewCanvas?.remove(); anchorCanvas?.remove(); rigMarkers.dispose(); platform.dispose(); clearGroup(modelGroup); state.textures.forEach(texture => texture.dispose()); state.markerTextures.forEach(texture => texture.dispose()); state.background.texture.dispose(); state.checker.dispose(); state.teamGlow.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); runtime.current = null;
     };

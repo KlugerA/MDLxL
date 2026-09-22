@@ -60,7 +60,11 @@ function sameOrientation(actual, expected, message) {
     const single=await page.evaluate(()=>cameraState());
     await page.getByLabel('Workplane',{exact:true}).uncheck();
     const toggle=()=>page.getByRole('button',{name:'Quad View',exact:true}).click();
+    const toolbarOrder=()=>page.locator('.classic-view-label').evaluate(el=>Array.from(el.children,item=>item.getAttribute('aria-label')||Array.from(item.childNodes).filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent).join('').trim()));
+    const expectedToolbar=['View direction','Render mode','Quad View','Fit','Fit selection'];
+    assert.deepEqual(await toolbarOrder(),expectedToolbar);
     await page.evaluate(()=>{draws={};});await toggle();await idle();
+    assert.deepEqual(await toolbarOrder(),expectedToolbar);
     assert.equal(await page.locator('.quad-pane:visible').count(),4);
     assert.equal(await page.locator('[aria-label="3D model viewport"] > canvas').count(),1);
     assert.equal(Object.keys(await page.evaluate(()=>draws)).length,4);
@@ -171,6 +175,49 @@ function sameOrientation(actual, expected, message) {
       assert.equal(await page.evaluate(()=>viewportState().controls.enableRotate),false);
       await planeDrag(view,28,-19,false);await planeDrag(view,28,9,true);await planeDrag(view,9,-28,true);
     }
+    // Keep one mouse drag alive across multiple Shift holds, including a
+    // release/repress without pointer movement and a return to its start.
+    const latchMetrics=[];
+    async function shiftLatchDrag(label,host,depthAxis){
+      await page.keyboard.press('m');
+      await page.evaluate(()=>{draws={};});
+      const before=await page.evaluate(()=>({coordinates:coordinates(),point:vertexPoint()}));
+      const r=await host.boundingBox(),x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2);
+      const sample=async()=>{await idle();return page.evaluate(()=>({coordinates:Array.from(viewportState().entries[0].geometry.attributes.position.array.slice(0,3)),point:vertexPoint()}));};
+      const samePoint=(a,b,key)=>assert.ok(Math.abs(a.point[key]-b.point[key])<1e-3,label+' '+key+' stays locked');
+      await page.mouse.move(x,y);await page.keyboard.down('Shift');await page.mouse.down();
+      await page.mouse.move(x-25,y);const horizontal=await sample();
+      samePoint(horizontal,before,'y');assert.ok(horizontal.point.x<before.point.x-2);
+      await page.mouse.move(x-25,y-65);assert.deepEqual((await sample()).coordinates,horizontal.coordinates,label+' perpendicular motion cannot switch the latch');
+      await page.keyboard.up('Shift');assert.deepEqual((await sample()).coordinates,horizontal.coordinates,label+' release does not jump');
+      await page.keyboard.down('Shift');assert.deepEqual((await sample()).coordinates,horizontal.coordinates,label+' repress does not jump');
+      await page.mouse.move(x-25,y-85);const vertical=await sample();
+      samePoint(vertical,horizontal,'x');assert.ok(vertical.point.y<horizontal.point.y-2);
+      await page.mouse.move(x+35,y-85);assert.deepEqual((await sample()).coordinates,vertical.coordinates,label+' new vertical latch ignores horizontal motion');
+      await page.keyboard.up('Shift');await page.mouse.move(x+40,y-78);const free=await sample();
+      assert.ok(Math.abs(free.point.x-vertical.point.x-5)<1e-3,label+' released movement continues horizontally');
+      assert.ok(Math.abs(free.point.y-vertical.point.y-7)<1e-3,label+' released movement continues vertically');
+      // Return the physical pointer to the drag start while preserving a
+      // nonzero effective move. This must still commit as one undo action.
+      await page.keyboard.down('Shift');await page.mouse.move(x+40,y);await page.mouse.move(x,y);const final=await sample();
+      assert.notDeepEqual(final.coordinates,before.coordinates);
+      if(depthAxis!==undefined)assert.equal(final.coordinates[depthAxis],before.coordinates[depthAxis],label+' exact hidden depth');
+      assert.deepEqual(await page.evaluate(()=>coordinates()),before.coordinates,'live preview waits for mouse-up');
+      for(const draw of Object.values(await page.evaluate(()=>draws)))assert.deepEqual(draw.vertices.slice(0,3),final.coordinates,label+' shared live geometry');
+      await page.mouse.up();await page.keyboard.up('Shift');await idle();
+      assert.deepEqual(await page.evaluate(()=>coordinates()),final.coordinates,label+' effective displacement commits even when pointer returns to start');
+      await page.keyboard.press('Control+z');await idle();assert.deepEqual(await page.evaluate(()=>coordinates()),before.coordinates);
+      await page.keyboard.press('Control+y');await idle();assert.deepEqual(await page.evaluate(()=>coordinates()),final.coordinates);
+      await page.keyboard.press('Control+z');await idle();
+      latchMetrics.push({view:label,before:before.coordinates,after:final.coordinates});
+    }
+    for(const [view,[id,depthAxis]] of Object.entries(planeViews)){
+      await dropdown.selectOption(view);await activate(id);
+      await shiftLatchDrag(view,page.locator(`[data-viewport="${id}"]`),depthAxis);
+    }
+    await toggle();await idle();await page.evaluate(()=>{draws={};});
+    await shiftLatchDrag('single perspective',page.locator('[aria-label="3D model viewport"]'));
+    await toggle();await idle();
     await dropdown.selectOption('front');await activate('front');
     const fr=await page.locator('[data-viewport="front"]').boundingBox(),cx=fr.x+fr.width/2,cy=fr.y+fr.height/2;
     await page.screenshot({path:path.join(out,'quad-locked-planes.png')});
@@ -203,8 +250,8 @@ function sameOrientation(actual, expected, message) {
     await page.getByRole('button',{name:'Done',exact:true}).click();await idle();await page.screenshot({path:path.join(out,'quad-custom-appearance.png')});
     assert.deepEqual(errors,[]);assert.deepEqual(await page.locator('[role="alert"]').allTextContents(),[]);
     assert.ok(fs.readFileSync(fixture).equals(original),'input file stays unchanged');
-    fs.writeFileSync(path.join(out,'metrics.json'),JSON.stringify({metrics,shiftMetrics,sizes,errors},null,2));
-    console.log('PASS',JSON.stringify({metrics,sizes,lockedPlaneDrags:shiftMetrics.length,checks:'shared live preview, exact depth, undo/redo, cancel, selection, marquee, independent cameras, perspective orbit, toggle restore, resize, input preservation, permanent planes, disabled global workplane override, blocked orthographic orbit/angles, Shift H/V, adaptive zoom, appearance bundles'}));
+    fs.writeFileSync(path.join(out,'metrics.json'),JSON.stringify({metrics,shiftMetrics,latchMetrics,sizes,errors},null,2));
+    console.log('PASS',JSON.stringify({metrics,sizes,lockedPlaneDrags:shiftMetrics.length,shiftLatchDrags:latchMetrics.length,checks:'shared live preview, exact depth, undo/redo, cancel, selection, marquee, independent cameras, perspective orbit, toggle restore, resize, input preservation, permanent planes, disabled global workplane override, blocked orthographic orbit/angles, Shift H/V, per-hold direction latch, continuous release/repress, effective displacement commit, toolbar order, adaptive zoom, appearance bundles'}));
   } catch(error) {
     console.error(error);
     const page=await app.firstWindow();await page.screenshot({path:path.join(out,'failure.png')});
