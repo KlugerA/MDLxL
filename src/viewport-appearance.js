@@ -4,12 +4,22 @@ const number = (value, min, max, fallback) => value !== null && value !== '' && 
 const choice = (value, choices, fallback) => choices.includes(value) ? value : fallback;
 const record = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 
+// New and older appearance bundles get a Quadview palette derived from their
+// own background, rather than importing another editor's colors.
+function quadDefaults(background) {
+  const rgb = [1, 3, 5].map(i => parseInt(background.color.slice(i, i + 2), 16));
+  const contrast = rgb.reduce((a, b) => a + b, 0) > 384 ? 0 : 255;
+  const mix = amount => '#' + rgb.map(value => Math.round(value + (contrast - value) * amount).toString(16).padStart(2, '0')).join('');
+  return { background: { ...background }, grid: { enabled: true, spacing: 24, majorEvery: 4, thickness: 1, opacity: .55, majorOpacity: .85, minorColor: mix(.25), majorColor: mix(.45), axisColor: mix(.7) } };
+}
+
 const profile = value => Object.freeze({
   selectedGeoset: Object.freeze({ ...value.selectedGeoset }),
   otherGeoset: Object.freeze({ ...value.otherGeoset }),
   selectedVertex: Object.freeze({ ...value.selectedVertex }),
   unselectedVertex: Object.freeze({ ...value.unselectedVertex }),
   background: Object.freeze({ ...value.background }),
+  quadView: Object.freeze({ background: Object.freeze({ ...value.background }), grid: Object.freeze(quadDefaults(value.background).grid) }),
   xrayVertices: value.xrayVertices === true,
 });
 
@@ -118,12 +128,28 @@ function normalizeBackground(value, fallback) {
 
 export function normalizeViewportAppearance(value, fallback = DEFAULT_VIEWPORT_APPEARANCE) {
   const input = record(value), base = record(fallback);
+  const background = normalizeBackground(input.background, base.background || DEFAULT_VIEWPORT_APPEARANCE.background);
+  const quad = record(input.quadView), grid = record(quad.grid), defaults = quadDefaults(background);
   return {
     selectedGeoset: normalizeWire(input.selectedGeoset, base.selectedGeoset || DEFAULT_VIEWPORT_APPEARANCE.selectedGeoset),
     otherGeoset: normalizeWire(input.otherGeoset, base.otherGeoset || DEFAULT_VIEWPORT_APPEARANCE.otherGeoset),
     selectedVertex: normalizeVertex(input.selectedVertex, base.selectedVertex || DEFAULT_VIEWPORT_APPEARANCE.selectedVertex),
     unselectedVertex: normalizeVertex(input.unselectedVertex, base.unselectedVertex || DEFAULT_VIEWPORT_APPEARANCE.unselectedVertex),
-    background: normalizeBackground(input.background, base.background || DEFAULT_VIEWPORT_APPEARANCE.background),
+    background,
+    quadView: {
+      background: normalizeBackground(quad.background, defaults.background),
+      grid: {
+        enabled: typeof grid.enabled === 'boolean' ? grid.enabled : true,
+        spacing: number(grid.spacing, 12, 96, defaults.grid.spacing),
+        majorEvery: Math.round(number(grid.majorEvery, 2, 10, defaults.grid.majorEvery)),
+        thickness: number(grid.thickness, .5, 4, defaults.grid.thickness),
+        opacity: number(grid.opacity, 0, 1, defaults.grid.opacity),
+        majorOpacity: number(grid.majorOpacity, 0, 1, defaults.grid.majorOpacity),
+        minorColor: color(grid.minorColor, defaults.grid.minorColor),
+        majorColor: color(grid.majorColor, defaults.grid.majorColor),
+        axisColor: color(grid.axisColor, defaults.grid.axisColor),
+      },
+    },
     xrayVertices: typeof input.xrayVertices === 'boolean' ? input.xrayVertices : base.xrayVertices === true,
   };
 }

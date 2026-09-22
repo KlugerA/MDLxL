@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { constrainedAxis, planeAxes } from './classic-gestures.js';
+import { planeAxes } from './classic-gestures.js';
 import { applyEvaluatedModelCamera, evaluateModelCamera } from './portrait-view.js';
 
 // Warcraft models face +X and use +Z as up. Top view faces down the screen.
@@ -85,15 +85,15 @@ export function applyModelCamera(camera, controls, source, options = {}) {
   return applyEvaluatedModelCamera(camera, controls, evaluated, options.aspect);
 }
 
-/** Solve an axis directly BEFORE solving the plane: a near edge-on plane must
- * never amplify its almost-zero determinant into a huge constrained move. */
+/** Shift follows the dominant screen direction in either direction. The plane
+ * solver still preserves its hidden world axis and rejects edge-on amplification. */
 export function projectedPlaneTranslation(workplane, basis, dx, dy, constrain = false) {
+  if (constrain) { if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0; }
   const axes = planeAxes(workplane), out = [0, 0, 0];
   const projection = i => {
     const [x, y] = basis[i], lengthSq = x * x + y * y;
     return lengthSq > 1e-4 ? (dx * x + dy * y) / lengthSq : 0;
   };
-  if (constrain) { const axis = constrainedAxis(workplane); out[axis] = projection(axes.indexOf(axis)); return out; }
   const [[ax, ay], [bx, by]] = basis, determinant = ax * by - ay * bx;
   const product = Math.hypot(ax, ay) * Math.hypot(bx, by);
   if (product > 1e-4 && Math.abs(determinant) / product > .04) {

@@ -16,6 +16,11 @@ export const QUAD_VIEWS = Object.freeze([
   { id: 'perspective', label: 'Perspective', view: 'perspective' },
 ]);
 
+export const QUAD_VIEW_OPTIONS = Object.freeze([
+  ['perspective', 'Perspective'], ['orthographic', 'Orthographic · Free orbit'],
+  ...Object.keys(VIEW_PRESETS).map(view => [view, view.split('-').map(word => word[0].toUpperCase() + word.slice(1)).join(' ')]),
+]);
+
 export function viewportRects(width, height, quad) {
   if (!quad) return [{ left: 0, top: 0, width, height }];
   const x = Math.floor(width / 2), y = Math.floor(height / 2);

@@ -32,7 +32,7 @@ import { applyViewPreset, applyModelCamera, gridDepthExtent, gridFrameRadius, or
 import { createViewportGrid } from './viewport-grid.js';
 import { visualOptions, viewportAppearanceOptions, gridOptions, cameraBindings } from '../src/preferences.js';
 import { backgroundImageRect } from '../src/viewport-appearance.js';
-import { QUAD_VIEWS, viewWorkplane, viewportRects } from './quad-view.js';
+import { QUAD_VIEWS, QUAD_VIEW_OPTIONS, viewWorkplane, viewportRects } from './quad-view.js';
 import { viewportPointDepth, viewportPointIndices } from './viewport-point-selection.js';
 
 const COLORS = [0xa9b6c1, 0x8caca8, 0xb9aa94, 0x939bb5, 0xb499a6, 0x9eac8b];
@@ -231,7 +231,7 @@ export default function Viewport(inputProps) {
     const key = new THREE.DirectionalLight(0xffeed7, 2.8); key.position.set(200, -280, 350); scene.add(key);
     scene.add(key.target);
     let cameraCanvas, normalCanvas, nodeCanvas, previewCanvas, anchorCanvas, rotating = false;
-    const grid = createViewportGrid(); scene.add(grid);
+    let grid = createViewportGrid(); scene.add(grid);
     const rigMarkers = createRigMarkersGL(renderer.getContext()); renderer.resetState();
     const platform = createPreviewPlatform(() => invalidate()); scene.add(platform);
     const backgroundCanvas = document.createElement('canvas'), backgroundTexture = new THREE.CanvasTexture(backgroundCanvas);
@@ -241,7 +241,7 @@ export default function Viewport(inputProps) {
     state.teamGlow = makeTeamGlow();
     state.globalTime = 0;
     state.textureSources = new Map();
-    const singlePane = { id: 'single', surface, perspective, ortho, camera, controls, view: latest.current.view, center: state.center, radius: state.radius };
+    const singlePane = { id: 'single', surface, perspective, ortho, camera, controls, grid, view: latest.current.view, center: state.center, radius: state.radius };
     const panes = [singlePane];
     let boundPane = singlePane, activePane = singlePane, quad = false;
     // Only camera/input/overlay state is per pane. Scene, geometry, selection,
@@ -251,8 +251,9 @@ export default function Viewport(inputProps) {
     }
     function bindPane(pane) {
       savePane(); boundPane = pane;
-      ({ surface, perspective, ortho, camera, controls, cameraCanvas, normalCanvas, nodeCanvas, previewCanvas, anchorCanvas } = pane);
-      Object.assign(state, { perspective, ortho, camera, controls, appliedView: pane.view, center: pane.center, radius: pane.radius, floor: pane.floor });
+      ({ surface, perspective, ortho, camera, controls, grid, cameraCanvas, normalCanvas, nodeCanvas, previewCanvas, anchorCanvas } = pane);
+      for (const item of panes) item.grid.visible = item === pane;
+      Object.assign(state, { perspective, ortho, camera, controls, grid, appliedView: pane.view, center: pane.center, radius: pane.radius, floor: pane.floor });
     }
     function activatePane(pane) {
       if (down && pane !== activePane) return;
@@ -263,6 +264,10 @@ export default function Viewport(inputProps) {
     }
     const invalidate = () => {
       if (boundPane !== activePane) { state.scheduler?.invalidate(); return; }
+      if (quad && rotating && camera.isOrthographicCamera && boundPane.view !== 'orthographic') {
+        rememberView('orthographic');
+        latest.current.onActivePaneChange?.({ id: boundPane.id, view: boundPane.view, workplane: null });
+      }
       const nextCompassAxes = projectCompassAxes(camera.quaternion);
       setCompassAxes(previous => sameCompassAxes(previous, nextCompassAxes) ? previous : nextCompassAxes);
       latest.current.onCameraAnglesChange?.(editorCameraAngles(camera)); state.scheduler?.invalidate();
@@ -273,7 +278,7 @@ export default function Viewport(inputProps) {
       return state.markerTextures.get(style);
     };
     function syncViewportBackground(appearance) {
-      const config = appearance.background, background = state.background;
+      const config = quad ? appearance.quadView.background : appearance.background, background = state.background;
       if (background.data !== config.imageData) {
         background.data = config.imageData; background.image = null; background.drawKey = ''; setBackgroundMessage('');
         if (config.imageData) {
@@ -296,7 +301,7 @@ export default function Viewport(inputProps) {
       scene.background = background.texture;
     }
     state.refreshCursor = () => { surface.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating); };
-    state.setCameraAngles = values => { if (quad && viewWorkplane(boundPane.view)) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); invalidate(); } };
+    state.setCameraAngles = values => { if (setEditorCameraAngles(camera, controls.target, values)) { if (quad && camera.isOrthographicCamera) rememberView('orthographic'); controls.update(); activatePane(activePane); } };
     function bindInput(pane) {
       const element = pane.surface;
       const activate = () => activatePane(pane);
@@ -327,7 +332,7 @@ export default function Viewport(inputProps) {
     function resizePane() {
       const width = Math.max(1, surface.clientWidth), height = Math.max(1, surface.clientHeight);
       perspective.aspect = width / height; perspective.updateProjectionMatrix();
-      const p = latest.current, gridVisible = p.overlays?.grid ?? !!p.showGrid;
+      const p = latest.current, gridVisible = !quad && (p.overlays?.grid ?? !!p.showGrid);
       const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
       const half = orthographicHalfHeight(framed, width / height); ortho.left = -half * width / height; ortho.right = half * width / height; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
     }
@@ -363,7 +368,7 @@ export default function Viewport(inputProps) {
       if (bounds.isEmpty()) bounds.set(new THREE.Vector3(-50, -50, 0), new THREE.Vector3(50, 50, 100));
       bounds.getCenter(state.center); state.radius = Math.max(1, bounds.getSize(new THREE.Vector3()).length() / 2);
       state.floor = bounds.min.z;
-      const gridVisible = p.overlays?.grid ?? !!p.showGrid;
+      const gridVisible = !quad && (p.overlays?.grid ?? !!p.showGrid);
       const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
       const direction = perspective.position.clone().sub(controls.target).normalize();
       const width = Math.max(1, surface.clientWidth), height = Math.max(1, surface.clientHeight);
@@ -371,29 +376,28 @@ export default function Viewport(inputProps) {
       controls.target.copy(state.center); perspective.zoom = ortho.zoom = 1;
       resizePane(); setPaneView(quad ? boundPane.view : latest.current.view || 'front');
     };
+    function rememberView(next) {
+      state.appliedView = boundPane.view = next;
+      const select = surface.querySelector('.quad-pane-view');
+      if (select) select.value = next;
+    }
     function setPaneView(next) {
-      state.appliedView = next;
+      rememberView(next);
       if (next === 'perspective') camera = perspective;
       else if (next === 'orthographic') {
         const previous = camera; camera = ortho; camera.position.copy(previous.position); camera.quaternion.copy(previous.quaternion); camera.up.copy(previous.up);
       }
       else {
-        const p = latest.current, gridVisible = p.overlays?.grid ?? !!p.showGrid;
+        const p = latest.current, gridVisible = !quad && (p.overlays?.grid ?? !!p.showGrid);
         const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
         camera = ortho; applyViewPreset(camera, next, controls.target, framed * 4);
       }
-      controls.object = camera; controls.enableRotate = !quad || !viewWorkplane(next);
-      const label = surface.querySelector('.quad-pane-label');
-      if (label) label.textContent = next === 'right' ? 'Side' : next[0].toUpperCase() + next.slice(1);
+      controls.object = camera; controls.enableRotate = true;
       state.camera = camera; boundPane.view = next; boundPane.camera = camera; controls.update(); invalidate();
     }
     state.setView = next => {
-      if (!quad) { setPaneView(next); return; }
-      const plane = viewWorkplane(next);
-      const pane = plane ? panes.slice(1).find(item => viewWorkplane(item.view) === plane) : panes.find(item => item.id === 'perspective');
-      activatePane(pane);
-      if (plane) setPaneView(next);
-      activatePane(pane);
+      cancelGesture(); setPaneView(next);
+      if (quad) activatePane(activePane);
     };
     state.setQuad = enabled => {
       if (quad === !!enabled) return;
@@ -402,11 +406,19 @@ export default function Viewport(inputProps) {
         for (const definition of QUAD_VIEWS) {
           const element = document.createElement('div'); element.className = 'viewport-input quad-pane'; element.tabIndex = 0;
           element.dataset.viewport = definition.id; element.setAttribute('aria-label', definition.label + ' viewport');
-          const label = document.createElement('span'); label.className = 'quad-pane-label'; label.textContent = definition.label; element.appendChild(label); host.current.appendChild(element);
+          const select = document.createElement('select'); select.className = 'quad-pane-view'; select.setAttribute('aria-label', definition.label + ' pane viewpoint');
+          for (const [value, label] of QUAD_VIEW_OPTIONS) { const option = document.createElement('option'); option.value = value; option.textContent = label; select.appendChild(option); }
+          select.value = definition.view; element.appendChild(select); host.current.appendChild(element);
           const perspective = singlePane.perspective.clone(), ortho = singlePane.ortho.clone();
           const camera = definition.view === 'perspective' ? perspective : ortho;
           const paneControls = new EditorCameraControls(camera, element); paneControls.enableDamping = false; paneControls.target.copy(singlePane.controls.target);
-          const pane = { ...definition, surface: element, perspective, ortho, camera, controls: paneControls, center: singlePane.center.clone(), radius: singlePane.radius, floor: singlePane.floor };
+          const pane = { ...definition, surface: element, perspective, ortho, camera, controls: paneControls, grid: createViewportGrid(), center: singlePane.center.clone(), radius: singlePane.radius, floor: singlePane.floor };
+          scene.add(pane.grid);
+          select.addEventListener('pointerdown', event => event.stopPropagation());
+          select.addEventListener('keydown', event => event.stopPropagation());
+          select.addEventListener('wheel', event => event.stopPropagation());
+          select.addEventListener('focus', () => activatePane(pane));
+          select.addEventListener('change', () => { activatePane(pane); state.setView(select.value); surface.focus(); });
           panes.push(pane); bindInput(pane); bindPane(pane);
           const saved = cameraMemory.current?.panes?.find(item => item.id === pane.id);
           setPaneView(saved?.view || definition.view);
@@ -466,16 +478,15 @@ export default function Viewport(inputProps) {
     }
     // OrbitControls is used only for navigation. Capture configures it before its handler runs.
     function pointerDown(event) {
-      if (down) return;
+      if (down || event.target.closest?.('select')) return;
       clearHoveredGeoset();
       surface.focus();
-      let action = cameraAction(event);
-      if (quad && viewWorkplane(boundPane.view) && action === 'rotate') action = 'move';
+      const action = cameraAction(event);
       rotating = action === 'rotate'; latest.current.onCameraGestureChange?.(rotating);
       surface.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating);
       controls.enabled = true;
       controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(latest.current.preferences?.pointerSensitivity);
-      const binding = cameraBindings(latest.current.preferences), mouseAction = value => value === 'pan' || quad && viewWorkplane(boundPane.view) && value === 'rotate' ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
+      const binding = cameraBindings(latest.current.preferences), mouseAction = value => value === 'pan' ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
       controls.mouseButtons.RIGHT = mouseAction(binding.right); controls.mouseButtons.MIDDLE = mouseAction(binding.middle);
       controls.mouseButtons.LEFT = action === 'move' ? THREE.MOUSE.PAN : action === 'rotate' ? THREE.MOUSE.ROTATE : null;
       if (event.shiftKey && action !== 'work') controls.rotateSpeed = controls.panSpeed *= latest.current.preferences?.fineSensitivity ?? .2;
@@ -502,7 +513,7 @@ export default function Viewport(inputProps) {
       const anchor = p.zoomAnchor, anchorIndices = anchor && selectedMap[anchor.geosetIndex];
       if (anchorIndices?.includes(anchor.vertexIndex)) pivot.fromArray(snapshots[anchor.geosetIndex], anchor.vertexIndex * 3);
       down.pivotScreen = screenPosition(pivot, start);
-      state.drag = { ...down, selections: selectedMap, snapshots, pivot, workplane: quad && viewWorkplane(boundPane.view) || p.workplane, workplaneEnabled: quad && !!viewWorkplane(boundPane.view) || p.workplaneEnabled !== false, payload: null };
+      state.drag = { ...down, selections: selectedMap, snapshots, pivot, workplane: quad && viewWorkplane(boundPane.view) || p.workplane, workplaneEnabled: quad && camera.isOrthographicCamera ? !!viewWorkplane(boundPane.view) : p.workplaneEnabled !== false, payload: null };
     }
     function translateInPlane(start, end, drag, constrain) {
       if (!drag.workplaneEnabled) return screenPlaneTranslation(camera, drag.pivot, end.width, end.height, end.x - start.x, end.y - start.y, constrain);
@@ -542,10 +553,17 @@ export default function Viewport(inputProps) {
         let angle = a.length() > 12 && b.length() > 12 ? Math.atan2(a.x * b.y - a.y * b.x, a.dot(b)) : dx * .01;
         const axis = [0, 1, 2].find(i => !planeAxes(drag.workplane).includes(i));
         const normal = new THREE.Vector3().setComponent(axis, 1), viewDirection = camera.position.clone().sub(controls.target);
-        if (normal.dot(viewDirection) > 0) angle = -angle;
+        const freePlane = quad && camera.isOrthographicCamera && !drag.workplaneEnabled;
+        if (!freePlane && normal.dot(viewDirection) > 0) angle = -angle;
         if (event.shiftKey) angle = Math.round(angle / (Math.PI / 12)) * Math.PI / 12;
-        const degrees = [0, 0, 0]; degrees[axis] = THREE.MathUtils.radToDeg(angle); payload.rotation = degrees;
-        rotation.set(degrees[0] * Math.PI / 180, degrees[1] * Math.PI / 180, degrees[2] * Math.PI / 180);
+        if (freePlane) {
+          // The existing Euler payload also represents rotation about a free view's normal.
+          rotation.setFromQuaternion(new THREE.Quaternion().setFromAxisAngle(camera.getWorldDirection(new THREE.Vector3()), angle));
+          payload.rotation = [rotation.x, rotation.y, rotation.z].map(THREE.MathUtils.radToDeg);
+        } else {
+          const degrees = [0, 0, 0]; degrees[axis] = THREE.MathUtils.radToDeg(angle); payload.rotation = degrees;
+          rotation.set(degrees[0] * Math.PI / 180, degrees[1] * Math.PI / 180, degrees[2] * Math.PI / 180);
+        }
       }
       const vertex = new THREE.Vector3();
       for (const [key, indices] of Object.entries(drag.selections)) {
@@ -677,7 +695,7 @@ export default function Viewport(inputProps) {
       const overlays = viewportOverlayOptions(p);
       const showMarkers = overlays.bones || overlays.nodes || overlays.attachments || overlays.particles;
       const clipRadius = modelClipRadius(p.model, state.center, state.radius);
-      grid.update(p.preferences, p.workplane, overlays.grid, overlays.axes, surface.clientWidth, surface.clientHeight);
+      grid.update(p.preferences, p.workplane, overlays.grid, overlays.axes, surface.clientWidth, surface.clientHeight, quad ? { camera, target: controls.target, settings: appearance.quadView.grid } : null);
       platform.update(p.preferences, state.center, state.radius, state.floor || 0);
       const selectedMap = selections(p), active = editableGeosets(p);
       const selectionKey = `${JSON.stringify(selectedMap, (_, value) => value instanceof Set ? [...value] : value)}|${[...active].join(',')}|${JSON.stringify(p.hiddenVertices, (_, value) => value instanceof Set ? [...value] : value)}|${p.mode}|${p.sequenceIndex}|${p.transformMode}|${JSON.stringify(visual)}`;
@@ -782,7 +800,7 @@ export default function Viewport(inputProps) {
       }
       state.selectionKey = selectionKey;
       controls.update();
-      updateDepthClipping(camera, state.center, clipRadius, gridDepthExtent(state.center, gridOptions(p.preferences).extent));
+      updateDepthClipping(camera, state.center, clipRadius, quad ? grid.userData.extent : gridDepthExtent(state.center, gridOptions(p.preferences).extent));
       const light = cameraLeftLight(camera, controls.target, state.radius);
       key.position.copy(light.position); key.target.position.copy(controls.target);
       ambient.position.copy(light.direction);
@@ -851,11 +869,11 @@ export default function Viewport(inputProps) {
       savePane();
       const remember = pane => ({ id: pane.id, view: pane.view, perspective: pane.perspective.clone(), ortho: pane.ortho.clone(), target: pane.controls.target.clone(), center: pane.center.clone(), radius: pane.radius });
       cameraMemory.current = { ...remember(singlePane), panes: panes.slice(1).map(remember) };
-      state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); resizeObserver.disconnect(); panes.forEach(pane => pane.dispose());
+      state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); resizeObserver.disconnect(); panes.forEach(pane => { pane.dispose(); pane.grid.dispose(); });
       renderer.domElement.removeEventListener('webglcontextlost', contextLost);
       window.removeEventListener('mdlvis-frame', frameModel); window.removeEventListener('mdlxl-view-camera', viewCamera); window.removeEventListener('keydown', cancelKey, true);
       window.removeEventListener('mdlxl-cancel-gesture', cancelCommand);
-      cameraCanvas?.remove(); normalCanvas?.remove(); nodeCanvas?.remove(); previewCanvas?.remove(); anchorCanvas?.remove(); rigMarkers.dispose(); platform.dispose(); clearGroup(modelGroup); state.textures.forEach(texture => texture.dispose()); state.markerTextures.forEach(texture => texture.dispose()); state.background.texture.dispose(); state.checker.dispose(); state.teamGlow.dispose(); grid.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); runtime.current = null;
+      cameraCanvas?.remove(); normalCanvas?.remove(); nodeCanvas?.remove(); previewCanvas?.remove(); anchorCanvas?.remove(); rigMarkers.dispose(); platform.dispose(); clearGroup(modelGroup); state.textures.forEach(texture => texture.dispose()); state.markerTextures.forEach(texture => texture.dispose()); state.background.texture.dispose(); state.checker.dispose(); state.teamGlow.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); runtime.current = null;
     };
   }, [graphics.antialias]);
 

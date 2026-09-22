@@ -17,9 +17,10 @@ function sameCamera(actual, expected, message) {
   });
   const fixture=path.join(out,'quad-test.mdx');fs.writeFileSync(fixture,Buffer.from(doc.serialize('mdx')));
   const original=fs.readFileSync(fixture), errors=[];
-  const app=await _electron.launch({executablePath:path.resolve('node_modules/electron/dist/electron.exe'),args:[process.cwd(),fixture],env:{...process.env,MDLXL_PROFILE:path.join(out,'profile-'+Date.now())},timeout:60000});
+  const app=await _electron.launch({executablePath:path.resolve('node_modules/electron/dist/electron.exe'),args:['--disable-backgrounding-occluded-windows',process.cwd(),fixture],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:path.join(out,'profile-'+Date.now())},timeout:60000});
   try {
     const page=await app.firstWindow();page.setDefaultTimeout(10000);page.on('pageerror',e=>errors.push(e.message));
+    await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.webContents.setBackgroundThrottling(false);w.setPosition(-3000,0);w.showInactive();});
     await page.getByRole('button',{name:'Quad View',exact:true}).waitFor({timeout:60000});
     await page.waitForFunction(()=>document.querySelector('.classic-counts')?.textContent.includes('Vertices: 8'));
     // Read existing React runtime refs for assertions; no production test API.
@@ -45,11 +46,12 @@ function sameCamera(actual, expected, message) {
       };
       window.coordinates=()=>Array.from(viewportState().entries[0].geoset.Vertices.slice(0,3));
       window.cameraState=()=>{const s=viewportState();return{position:s.camera.position.toArray(),quaternion:s.camera.quaternion.toArray(),zoom:s.camera.zoom,target:s.controls.target.toArray()};};
+      window.pointerLog=[];for(const type of ['pointerdown','pointermove','pointerup'])document.addEventListener(type,event=>{pointerLog.push({type,x:event.clientX,y:event.clientY,target:event.target.className});if(pointerLog.length>20)pointerLog.shift();},true);
     });
     await page.getByLabel('View direction',{exact:true}).selectOption('perspective');
     await page.locator('[data-warmkey="select"]').click();
     const clickVertex=async()=>{const p=await page.evaluate(()=>vertexPoint());await page.mouse.click(p.x,p.y);};
-    const idle=()=>page.waitForTimeout(120);
+    const idle=()=>page.waitForTimeout(150);
     await idle();await clickVertex();await idle();
     assert.deepEqual(await page.evaluate(()=>Array.from(viewportState().entries[0].selectedPoints.geometry.index.array)),[0]);
     const single=await page.evaluate(()=>cameraState());
@@ -64,10 +66,12 @@ function sameCamera(actual, expected, message) {
     for(const [id,depth,plane] of [['front',0,'YZ'],['side',1,'ZX'],['top',2,'XY']]){
       await activate(id);assert.equal(await page.getByLabel(plane+' workplane',{exact:true}).isChecked(),true);
       await page.keyboard.press('a');await clickVertex();await idle();
+      await page.waitForFunction(()=>viewportState().entries[0].selectedPoints.geometry.index?.count===1);
       assert.equal(await page.evaluate(()=>viewportState().entries[0].selectedPoints.geometry.index.count),1);
       await page.keyboard.press('m');
       const before=await page.evaluate(()=>coordinates()),p=await page.evaluate(()=>vertexPoint());
       await page.evaluate(()=>{draws={};});await page.mouse.move(p.x,p.y);await page.mouse.down();await page.mouse.move(p.x+26,p.y-17,{steps:5});await idle();
+      await page.waitForFunction(()=>Object.keys(draws).length===4&&Object.values(draws).every(draw=>draw.vertices.slice(0,3).every((value,index)=>value===viewportState().entries[0].geometry.attributes.position.array[index])));
       const live=await page.evaluate(()=>({source:coordinates(),draws}));
       assert.deepEqual(live.source,before,'document must wait for mouse-up');
       assert.equal(Object.keys(live.draws).length,4,'all panes render during drag');
@@ -96,7 +100,7 @@ function sameCamera(actual, expected, message) {
     await clickVertex();await idle();
     await page.mouse.move(r.x+r.width/2,r.y+r.height/2);await page.mouse.wheel(0,-220);await idle();
     assert.notEqual((await page.evaluate(()=>cameraState())).zoom,cameras.front.zoom);
-    await page.keyboard.down('Alt');await page.mouse.down();await page.mouse.move(r.x+r.width/2+35,r.y+r.height/2+12);await page.mouse.up();await page.keyboard.up('Alt');await idle();
+    await page.mouse.down({button:'right'});await page.mouse.move(r.x+r.width/2+35,r.y+r.height/2+12);await page.mouse.up({button:'right'});await idle();
     assert.deepEqual((await page.evaluate(()=>cameraState())).quaternion,cameras.front.quaternion,'Front remains axis-aligned');
     for(const id of ['top','side','perspective']){await activate(id);sameCamera(await page.evaluate(()=>cameraState()),cameras[id],id+' camera independent');}
     // Perspective orbit remains available.
@@ -116,9 +120,74 @@ function sameCamera(actual, expected, message) {
     assert.equal(sizes.length,4);assert.ok(sizes.every(r=>r.w>200&&r.h>150));
     assert.ok(Math.abs(sizes[0].w-sizes[1].w)<=1);assert.ok(Math.abs(sizes[0].h-sizes[2].h)<=1);
     await page.screenshot({path:path.join(out,'quad-resized.png')});
+    // Each pane owns its dropdown; Shift chooses either screen axis at every angle.
+    await activate('front');await page.getByRole('button',{name:'Fit',exact:true}).click();await idle();
+    const dropdown=page.getByLabel('Front pane viewpoint',{exact:true});
+    const options=await dropdown.locator('option').evaluateAll(items=>items.map(item=>item.value));
+    assert.equal(options.length,16);
+    const unchanged=await page.locator('.quad-pane-view').evaluateAll(items=>items.slice(1).map(item=>item.value));
+    const shiftMetrics=[];
+    async function shiftDrag(view,dx,dy){
+      await page.keyboard.press('m');
+      const before=await page.evaluate(()=>({coordinates:coordinates(),point:vertexPoint(),normal:viewportState().camera.getWorldDirection(viewportState().controls.target.clone()).toArray()}));
+      const r=await page.locator('[data-viewport="front"]').boundingBox(),x=r.x+r.width/2,y=r.y+r.height/2;
+      await page.mouse.move(x,y);await page.keyboard.down('Shift');await page.mouse.down();await page.mouse.move(x+dx,y+dy,{steps:3});await page.mouse.up();await page.keyboard.up('Shift');await idle();
+      const after=await page.evaluate(()=>({coordinates:coordinates(),point:vertexPoint()})),delta=after.coordinates.map((v,i)=>v-before.coordinates[i]);
+      const depth=delta.reduce((sum,v,i)=>sum+v*before.normal[i],0),locked=Math.abs(dx)>Math.abs(dy)?'y':'x',moving=locked==='x'?'y':'x';
+      assert.ok(Math.abs(depth)<1e-4,view+' depth '+depth);
+      assert.ok(Math.abs(after.point[locked]-before.point[locked])<1e-3,view+' '+locked+' locked');
+      assert.ok(Math.abs(after.point[moving]-before.point[moving])>2,view+' moves');
+      shiftMetrics.push({view,dx,dy,depth});
+      await page.keyboard.press('Control+z');await idle();assert.deepEqual(await page.evaluate(()=>coordinates()),before.coordinates);
+    }
+    for(const view of options.filter(value=>!['perspective','orthographic'].includes(value))){
+      await dropdown.selectOption(view);await page.waitForFunction(value=>viewportState().appliedView===value,view);await idle();
+      assert.equal(await page.getByLabel('View direction',{exact:true}).inputValue(),view);
+      assert.deepEqual(await page.locator('.quad-pane-view').evaluateAll(items=>items.slice(1).map(item=>item.value)),unchanged);
+      await shiftDrag(view,28,9);await shiftDrag(view,9,-28);
+    }
+    // Orbit a named orthographic view into a free camera plane and keep editing.
+    await dropdown.selectOption('front');await idle();const beforeOrbit=await page.evaluate(()=>cameraState());
+    const fr=await page.locator('[data-viewport="front"]').boundingBox(),cx=fr.x+fr.width/2,cy=fr.y+fr.height/2;
+    await page.mouse.move(cx,cy);await page.keyboard.down('Alt');await page.mouse.down();await page.mouse.move(cx+73,cy+47,{steps:5});await page.mouse.up();await page.keyboard.up('Alt');await idle();
+    assert.equal(await dropdown.inputValue(),'orthographic');assert.notDeepEqual((await page.evaluate(()=>cameraState())).quaternion,beforeOrbit.quaternion);
+    await shiftDrag('free orbit',28,9);await shiftDrag('free orbit',9,-28);
+    await page.screenshot({path:path.join(out,'quad-free-orbit.png')});
+    const coarse=await page.evaluate(()=>viewportState().grid.userData.spacing);
+    await page.mouse.move(cx,cy);for(let n=0;n<3;n++){await page.mouse.wheel(0,-350);await idle();}
+    assert.ok(await page.evaluate(()=>viewportState().grid.userData.spacing)<coarse,'zoom reveals finer grid');
+    await page.getByRole('button',{name:'Fit',exact:true}).click();await idle();
+    // Appearance presets, custom edits, and their saved bundle reach the actual renderer.
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('menu','appearanceSettings'));
+    await page.getByLabel('Quadview appearance',{exact:true}).waitFor();
+    const {BUILT_IN_VIEWPORT_PRESETS}=await import('../src/viewport-appearance.js');
+    for(const preset of Object.values(BUILT_IN_VIEWPORT_PRESETS)){
+      await page.getByLabel('Viewport appearance preset',{exact:true}).selectOption(preset.id);await idle();
+      assert.equal(await page.getByLabel('Quadview background color',{exact:true}).inputValue(),preset.appearance.quadView.background.color);
+      assert.equal(await page.evaluate(()=>viewportState().scene.background.getHexString()),preset.appearance.quadView.background.color.slice(1));
+      const colors=await page.evaluate(()=>viewportState().grid.children.map(item=>item.material.color.getHexString()));
+      assert.ok(colors.includes(preset.appearance.quadView.grid.minorColor.slice(1)),preset.id+' grid palette');
+    }
+    await page.getByLabel('Quadview background color',{exact:true}).fill('#203040');
+    await page.getByLabel('Quadview minor grid color',{exact:true}).fill('#6789ab');
+    await page.getByLabel('Quadview minimum cell size',{exact:true}).fill('36');await idle();
+    assert.equal(await page.evaluate(()=>viewportState().scene.background.getHexString()),'203040');
+    assert.ok(await page.evaluate(()=>viewportState().grid.children.some(item=>item.material.color.getHexString()==='6789ab')));
+    await page.getByLabel('Custom viewport preset name',{exact:true}).fill('Quad test appearance');await page.getByRole('button',{name:'Save as custom preset',exact:true}).click();
+    const custom=await page.getByLabel('Viewport appearance preset',{exact:true}).inputValue();assert.ok(custom.startsWith('custom-'));
+    await page.getByLabel('Viewport appearance preset',{exact:true}).selectOption('mdlvis-vanilla');await page.getByLabel('Viewport appearance preset',{exact:true}).selectOption(custom);await idle();
+    assert.equal(await page.getByLabel('Quadview minimum cell size',{exact:true}).inputValue(),'36');
+    assert.equal(await page.evaluate(()=>viewportState().scene.background.getHexString()),'203040');
+    await page.getByLabel('Quadview appearance',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'quad-appearance-settings.png')});
+    await page.getByRole('button',{name:'Done',exact:true}).click();await idle();await page.screenshot({path:path.join(out,'quad-custom-appearance.png')});
     assert.deepEqual(errors,[]);assert.deepEqual(await page.locator('[role="alert"]').allTextContents(),[]);
     assert.ok(fs.readFileSync(fixture).equals(original),'input file stays unchanged');
-    fs.writeFileSync(path.join(out,'metrics.json'),JSON.stringify({metrics,sizes,errors},null,2));
-    console.log('PASS',JSON.stringify({metrics,sizes,checks:'shared live preview, exact depth, undo/redo, cancel, selection, marquee, independent cameras, orbit, toggle restore, resize, input preservation'}));
+    fs.writeFileSync(path.join(out,'metrics.json'),JSON.stringify({metrics,shiftMetrics,sizes,errors},null,2));
+    console.log('PASS',JSON.stringify({metrics,sizes,shiftDrags:shiftMetrics.length,checks:'shared live preview, exact depth, undo/redo, cancel, selection, marquee, independent cameras, orbit, toggle restore, resize, input preservation, all viewpoints, Shift H/V, adaptive zoom, appearance bundles'}));
+  } catch(error) {
+    console.error(error);
+    const page=await app.firstWindow();await page.screenshot({path:path.join(out,'failure.png')});
+    console.error('Runtime',await page.evaluate(()=>({view:viewportState().appliedView,camera:cameraState(),point:vertexPoint(),coords:coordinates(),selection:Array.from(viewportState().entries[0].selectedPoints.geometry.index?.array||[]),pointerLog})));
+    throw error;
   } finally {await app.evaluate(({app})=>app.exit(0));}
 })().catch(e=>{console.error(e);process.exitCode=1;});
