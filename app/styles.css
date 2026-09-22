@@ -70,3 +70,11 @@
 .portrait-setup { display: grid; gap: 12px; max-width: 460px; }
 .portrait-setup p { margin: 0; }
 .portrait-setup label { display: grid; grid-template-columns: 145px minmax(0, 1fr); align-items: center; gap: 8px; }
+
+/* One shared WebGL scene, independent input/camera regions. */
+.viewport-input{position:absolute;outline:none;touch-action:none;overflow:hidden}
+.quad-pane{box-shadow:inset 0 0 0 1px #777}
+.quad-pane.active{box-shadow:inset 0 0 0 2px #215e9e}
+.quad-pane-label{position:absolute;top:4px;left:6px;padding:2px 5px;background:#e7e7e7d9;color:#222;font-weight:bold;pointer-events:none;z-index:3}
+.quad-pane.active>.quad-pane-label{background:#215e9e;color:white}
+.quad-workspace .classic-view-label{position:relative;left:0;top:0;flex:none;height:26px;padding:2px 3px;background:#d4d0c8}
