@@ -22,7 +22,7 @@ import { decodeBLP, getBLPImageData } from 'war3-model';
 import { advanceSequence, allNodes, sampleGeosetAnimation, sampleNodeMatrices, sampleTrack, skinGeoset, skinGeosetNormals } from '../src/animation.js';
 import { decodeDds } from '../src/dds.js';
 import { decodeBlp2 } from '../src/blp2.js';
-import { applySelection, dragScale, insideTriangle, marqueeContainsPoint, planeAxes } from './classic-gestures.js';
+import { applySelection, dragScale, insideTriangle, marqueeContainsPoint, moveDragPoint, planeAxes } from './classic-gestures.js';
 import { bindScrollSensitivity, createRenderScheduler, graphicsOptions, pointerDragPoint, pointerSensitivityValue, sensitivityIndicatorStyle, sensitivityIndicatorText } from './viewport-performance.js';
 import { viewportOverlayOptions } from './viewport-overlays.js';
 import { projectCompassAxes } from './viewport-compass.js';
@@ -32,6 +32,7 @@ import { applyViewPreset, applyModelCamera, gridDepthExtent, gridFrameRadius, or
 import { createViewportGrid } from './viewport-grid.js';
 import { visualOptions, viewportAppearanceOptions, gridOptions, cameraBindings } from '../src/preferences.js';
 import { backgroundImageRect } from '../src/viewport-appearance.js';
+import { QUAD_VIEWS, viewWorkplane, viewportRects } from './quad-view.js';
 import { viewportPointDepth, viewportPointIndices } from './viewport-point-selection.js';
 
 const COLORS = [0xa9b6c1, 0x8caca8, 0xb9aa94, 0x939bb5, 0xb499a6, 0x9eac8b];
@@ -214,12 +215,14 @@ export default function Viewport(inputProps) {
     host.current.appendChild(renderer.domElement);
     const scene = new THREE.Scene(), modelGroup = new THREE.Group();
     scene.add(modelGroup);
-    const perspective = new THREE.PerspectiveCamera(42, 1, .2, 1000);
+    let perspective = new THREE.PerspectiveCamera(42, 1, .2, 1000);
     perspective.up.set(0, 0, 1); perspective.position.set(180, -260, 170);
-    const ortho = new THREE.OrthographicCamera(-100, 100, 100, -100, .2, 1000);
+    let ortho = new THREE.OrthographicCamera(-100, 100, 100, -100, .2, 1000);
     ortho.up.set(0, 0, 1);
     let camera = perspective;
-    const controls = new EditorCameraControls(camera, renderer.domElement);
+    let surface = document.createElement('div');
+    surface.className = 'viewport-input'; surface.tabIndex = 0; host.current.appendChild(surface);
+    let controls = new EditorCameraControls(camera, surface);
     controls.enableDamping = false;
     controls.mouseButtons = { LEFT: null, MIDDLE: null, RIGHT: THREE.MOUSE.PAN };
     controls.target.set(0, 0, 45); controls.update();
@@ -228,7 +231,7 @@ export default function Viewport(inputProps) {
     const key = new THREE.DirectionalLight(0xffeed7, 2.8); key.position.set(200, -280, 350); scene.add(key);
     scene.add(key.target);
     let cameraCanvas, normalCanvas, nodeCanvas, previewCanvas, anchorCanvas, rotating = false;
-    const grid = createViewportGrid(); scene.add(grid);
+    let grid = createViewportGrid(); scene.add(grid);
     const rigMarkers = createRigMarkersGL(renderer.getContext()); renderer.resetState();
     const platform = createPreviewPlatform(() => invalidate()); scene.add(platform);
     const backgroundCanvas = document.createElement('canvas'), backgroundTexture = new THREE.CanvasTexture(backgroundCanvas);
@@ -238,7 +241,29 @@ export default function Viewport(inputProps) {
     state.teamGlow = makeTeamGlow();
     state.globalTime = 0;
     state.textureSources = new Map();
+    const singlePane = { id: 'single', surface, perspective, ortho, camera, controls, grid, view: latest.current.view, center: state.center, radius: state.radius };
+    const panes = [singlePane];
+    let boundPane = singlePane, activePane = singlePane, quad = false;
+    // Only camera/input/overlay state is per pane. Scene, geometry, selection,
+    // drag snapshots, textures and the document commit path stay shared.
+    function savePane() {
+      Object.assign(boundPane, { camera, view: state.appliedView, center: state.center, radius: state.radius, floor: state.floor, cameraCanvas, normalCanvas, nodeCanvas, previewCanvas, anchorCanvas });
+    }
+    function bindPane(pane) {
+      savePane(); boundPane = pane;
+      ({ surface, perspective, ortho, camera, controls, grid, cameraCanvas, normalCanvas, nodeCanvas, previewCanvas, anchorCanvas } = pane);
+      for (const item of panes) item.grid.visible = item === pane;
+      Object.assign(state, { perspective, ortho, camera, controls, grid, appliedView: pane.view, center: pane.center, radius: pane.radius, floor: pane.floor });
+    }
+    function activatePane(pane) {
+      if (down && pane !== activePane) return;
+      bindPane(pane); activePane = pane;
+      for (const item of panes) item.surface.classList.toggle('active', quad && item === pane);
+      latest.current.onActivePaneChange?.(quad ? { id: pane.id, view: pane.view, workplane: pane.workplane } : null);
+      invalidate();
+    }
     const invalidate = () => {
+      if (boundPane !== activePane) { state.scheduler?.invalidate(); return; }
       const nextCompassAxes = projectCompassAxes(camera.quaternion);
       setCompassAxes(previous => sameCompassAxes(previous, nextCompassAxes) ? previous : nextCompassAxes);
       latest.current.onCameraAnglesChange?.(editorCameraAngles(camera)); state.scheduler?.invalidate();
@@ -249,7 +274,7 @@ export default function Viewport(inputProps) {
       return state.markerTextures.get(style);
     };
     function syncViewportBackground(appearance) {
-      const config = appearance.background, background = state.background;
+      const config = quad ? appearance.quadView.background : appearance.background, background = state.background;
       if (background.data !== config.imageData) {
         background.data = config.imageData; background.image = null; background.drawKey = ''; setBackgroundMessage('');
         if (config.imageData) {
@@ -260,7 +285,7 @@ export default function Viewport(inputProps) {
         } else background.status = 'idle';
       }
       if (config.type !== 'image' || !background.image) { scene.background = new THREE.Color(config.color); return; }
-      const width = Math.max(1, renderer.domElement.width), height = Math.max(1, renderer.domElement.height);
+      const width = Math.max(1, Math.round(surface.clientWidth * renderer.getPixelRatio())), height = Math.max(1, Math.round(surface.clientHeight * renderer.getPixelRatio()));
       const key = `${width}|${height}|${config.color}|${config.display}|${config.opacity}`;
       if (background.drawKey !== key) {
         background.canvas.width = width; background.canvas.height = height;
@@ -271,28 +296,54 @@ export default function Viewport(inputProps) {
       }
       scene.background = background.texture;
     }
-    state.refreshCursor = () => { renderer.domElement.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating); };
-    state.setCameraAngles = values => { if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); invalidate(); } };
-    controls.addEventListener('change', invalidate);
-    const unbindScroll = bindScrollSensitivity(renderer.domElement, {
-      getPreferences: () => latest.current.preferences,
-      onChange: value => latest.current.onSensitivityChange?.(value), onIndicator: value => { setAdjustingSensitivity(value); latest.current.onSensitivityIndicator?.(value); },
-      onPointerChange: value => latest.current.onPointerSensitivityChange?.(value),
-      onWheelModeChange: value => latest.current.onWheelModeChange?.(value),
-      // A Wisp left-button wheel gesture is a settings gesture, never a select or transform.
-      onPointerAdjustment: () => cancelGesture(),
-      onCameraModeToggle: () => latest.current.onCameraModeToggle?.(),
-      onWheel: (_event, sensitivity) => { controls.zoomSpeed = sensitivity; },
-    });
+    state.refreshCursor = () => { surface.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating); };
+    state.setCameraAngles = values => { if (quad && boundPane.workplane) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); activatePane(activePane); } };
+    function bindInput(pane) {
+      const element = pane.surface;
+      const activate = () => activatePane(pane);
+      // Capture runs before OrbitControls and sensitivity bindings.
+      element.addEventListener('pointerdown', activate, true);
+      element.addEventListener('wheel', activate, true);
+      element.addEventListener('focus', activate);
+      pane.controls.addEventListener('change', invalidate);
+      const unbindScroll = bindScrollSensitivity(element, {
+        getPreferences: () => latest.current.preferences,
+        onChange: value => latest.current.onSensitivityChange?.(value), onIndicator: value => { setAdjustingSensitivity(value); latest.current.onSensitivityIndicator?.(value); },
+        onPointerChange: value => latest.current.onPointerSensitivityChange?.(value),
+        onWheelModeChange: value => latest.current.onWheelModeChange?.(value),
+        // A Wisp left-button wheel gesture is a settings gesture, never a select or transform.
+        onPointerAdjustment: () => cancelGesture(),
+        onCameraModeToggle: () => latest.current.onCameraModeToggle?.(),
+        onWheel: (_event, sensitivity) => { pane.controls.zoomSpeed = sensitivity; },
+      });
+      element.addEventListener('pointerdown', pointerDown, true);
+      element.addEventListener('pointermove', pointerMove);
+      element.addEventListener('pointerup', pointerUp);
+      element.addEventListener('pointercancel', cancelGesture);
+      element.addEventListener('pointerleave', pointerLeave);
+      element.addEventListener('contextmenu', contextMenu);
+      pane.dispose = () => { unbindScroll(); pane.controls.removeEventListener('change', invalidate); pane.controls.dispose(); element.remove(); };
+    }
 
+    function resizePane() {
+      const width = Math.max(1, surface.clientWidth), height = Math.max(1, surface.clientHeight);
+      perspective.aspect = width / height; perspective.updateProjectionMatrix();
+      const p = latest.current, gridVisible = !quad && (p.overlays?.grid ?? !!p.showGrid);
+      const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
+      const half = orthographicHalfHeight(framed, width / height); ortho.left = -half * width / height; ortho.right = half * width / height; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
+    }
     function resize() {
       const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1);
       renderer.setPixelRatio(viewportPixelRatio(graphicsOptions(latest.current.preferences), window.devicePixelRatio));
-      renderer.setSize(width, height, false); perspective.aspect = width / height; perspective.updateProjectionMatrix();
-      const p = latest.current, gridVisible = p.overlays?.grid ?? !!p.showGrid;
-      const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
-      const half = orthographicHalfHeight(framed, width / height); ortho.left = -half * width / height; ortho.right = half * width / height; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
-      invalidate();
+      renderer.setSize(width, height, false);
+      const visible = quad ? panes.slice(1) : [singlePane], rects = viewportRects(width, height, quad);
+      for (const pane of panes) pane.surface.style.display = visible.includes(pane) ? 'block' : 'none';
+      visible.forEach((pane, index) => {
+        pane.rect = rects[index];
+        Object.assign(pane.surface.style, Object.fromEntries(Object.entries(pane.rect).map(([key, value]) => [key, value + 'px'])));
+        bindPane(pane); resizePane();
+      });
+      bindPane(activePane); invalidate();
     }
     state.resize = resize;
     const resizeObserver = new ResizeObserver(resize); resizeObserver.observe(host.current); resize();
@@ -313,32 +364,72 @@ export default function Viewport(inputProps) {
       if (bounds.isEmpty()) bounds.set(new THREE.Vector3(-50, -50, 0), new THREE.Vector3(50, 50, 100));
       bounds.getCenter(state.center); state.radius = Math.max(1, bounds.getSize(new THREE.Vector3()).length() / 2);
       state.floor = bounds.min.z;
-      const gridVisible = p.overlays?.grid ?? !!p.showGrid;
+      const gridVisible = !quad && (p.overlays?.grid ?? !!p.showGrid);
       const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
       const direction = perspective.position.clone().sub(controls.target).normalize();
-      const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1);
+      const width = Math.max(1, surface.clientWidth), height = Math.max(1, surface.clientHeight);
       perspective.position.copy(state.center).addScaledVector(direction.lengthSq() ? direction : new THREE.Vector3(1, -1.5, .9).normalize(), perspectiveFitDistance(framed, perspective.fov, width / height));
       controls.target.copy(state.center); perspective.zoom = ortho.zoom = 1;
-      resize(); state.setView(latest.current.view || 'front');
+      resizePane(); setPaneView(quad ? boundPane.view : latest.current.view || 'front');
     };
-    state.setView = next => {
-      state.appliedView = next;
+    function rememberView(next) {
+      state.appliedView = boundPane.view = next;
+      const label = surface.querySelector('.quad-pane-label');
+      if (label) label.textContent = next === 'right' ? 'Side' : next[0].toUpperCase() + next.slice(1);
+    }
+    function setPaneView(next) {
+      // A quad pane owns a fixed world plane, independent of view commands.
+      if (quad && boundPane !== singlePane && (boundPane.workplane ? viewWorkplane(next) !== boundPane.workplane : next !== 'perspective')) return;
+      rememberView(next);
       if (next === 'perspective') camera = perspective;
       else if (next === 'orthographic') {
         const previous = camera; camera = ortho; camera.position.copy(previous.position); camera.quaternion.copy(previous.quaternion); camera.up.copy(previous.up);
       }
       else {
-        const p = latest.current, gridVisible = p.overlays?.grid ?? !!p.showGrid;
+        const p = latest.current, gridVisible = !quad && (p.overlays?.grid ?? !!p.showGrid);
         const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
         camera = ortho; applyViewPreset(camera, next, controls.target, framed * 4);
       }
-      controls.object = camera; controls.enableRotate = true;
-      state.camera = camera; controls.update(); invalidate();
+      controls.object = camera; controls.enableRotate = !(quad && boundPane.workplane);
+      state.camera = camera; boundPane.view = next; boundPane.camera = camera; controls.update(); invalidate();
+    }
+    state.setView = next => {
+      cancelGesture();
+      if (quad) {
+        const plane = viewWorkplane(next);
+        if (!plane && next !== 'perspective') return;
+        activatePane(panes.slice(1).find(pane => pane.workplane === plane));
+      }
+      setPaneView(next);
+      if (quad) activatePane(activePane);
+    };
+    state.setQuad = enabled => {
+      if (quad === !!enabled) return;
+      cancelGesture(); savePane(); quad = !!enabled;
+      if (quad && panes.length === 1) {
+        for (const definition of QUAD_VIEWS) {
+          const element = document.createElement('div'); element.className = 'viewport-input quad-pane'; element.tabIndex = 0;
+          element.dataset.viewport = definition.id; element.setAttribute('aria-label', definition.label + ' viewport');
+          const label = document.createElement('span'); label.className = 'quad-pane-label'; label.textContent = definition.label;
+          element.appendChild(label); host.current.appendChild(element);
+          const perspective = singlePane.perspective.clone(), ortho = singlePane.ortho.clone();
+          const camera = definition.view === 'perspective' ? perspective : ortho;
+          const paneControls = new EditorCameraControls(camera, element); paneControls.enableDamping = false; paneControls.target.copy(singlePane.controls.target);
+          const pane = { ...definition, workplane: viewWorkplane(definition.view), surface: element, perspective, ortho, camera, controls: paneControls, grid: createViewportGrid(), center: singlePane.center.clone(), radius: singlePane.radius, floor: singlePane.floor };
+          scene.add(pane.grid);
+          panes.push(pane); bindInput(pane); bindPane(pane);
+          const saved = cameraMemory.current?.panes?.find(item => item.id === pane.id);
+          if (saved) { perspective.copy(saved.perspective); ortho.copy(saved.ortho); controls.target.copy(saved.target); state.center.copy(saved.center); state.radius = saved.radius; }
+          setPaneView(saved && viewWorkplane(saved.view) === pane.workplane ? saved.view : definition.view);
+        }
+      }
+      activePane = quad ? panes[1] : singlePane;
+      bindPane(activePane); resize(); activatePane(activePane);
     };
 
     const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
     let down = null;
-    function point(event) { const rect = renderer.domElement.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top, width: rect.width, height: rect.height }; }
+    function point(event) { const rect = surface.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top, width: rect.width, height: rect.height }; }
     function clearHoveredGeoset() {
       if (state.hoveredGeoset === null) return;
       state.hoveredGeoset = null; latest.current.onHoverGeoset?.(null);
@@ -379,21 +470,21 @@ export default function Viewport(inputProps) {
     function cameraAction(event) {
       const p = latest.current;
       const binding = cameraBindings(p.preferences);
-      if (event.button === 2 || event.button === 1) { const action = event.button === 2 ? binding.right : binding.middle; return action === 'pan' ? 'move' : action; }
-      if (event.altKey) return 'rotate';
-      return p.cameraMode;
+      let action = event.button === 2 ? binding.right : event.button === 1 ? binding.middle : event.altKey ? 'rotate' : p.cameraMode;
+      if (action === 'pan' || quad && boundPane.workplane && action === 'rotate') action = 'move';
+      return action;
     }
     // OrbitControls is used only for navigation. Capture configures it before its handler runs.
     function pointerDown(event) {
       if (down) return;
       clearHoveredGeoset();
-      host.current?.focus();
+      surface.focus();
       const action = cameraAction(event);
       rotating = action === 'rotate'; latest.current.onCameraGestureChange?.(rotating);
-      renderer.domElement.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating);
+      surface.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating);
       controls.enabled = true;
       controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(latest.current.preferences?.pointerSensitivity);
-      const binding = cameraBindings(latest.current.preferences), mouseAction = value => value === 'pan' ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
+      const binding = cameraBindings(latest.current.preferences), mouseAction = value => value === 'pan' || value === 'rotate' && quad && boundPane.workplane ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
       controls.mouseButtons.RIGHT = mouseAction(binding.right); controls.mouseButtons.MIDDLE = mouseAction(binding.middle);
       controls.mouseButtons.LEFT = action === 'move' ? THREE.MOUSE.PAN : action === 'rotate' ? THREE.MOUSE.ROTATE : null;
       if (event.shiftKey && action !== 'work') controls.rotateSpeed = controls.panSpeed *= latest.current.preferences?.fineSensitivity ?? .2;
@@ -402,7 +493,7 @@ export default function Viewport(inputProps) {
       if (event.button !== 0) return;
       const p = latest.current, start = point(event);
       down = { ...start, pointerId: event.pointerId, shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey, pointerSensitivity: pointerSensitivityValue(p.preferences?.pointerSensitivity), action: action === 'zoom' ? 'zoom' : p.transformMode };
-      controls.enabled = false; renderer.domElement.setPointerCapture(event.pointerId);
+      controls.enabled = false; surface.setPointerCapture(event.pointerId);
       if (action === 'zoom') { down.zoom = camera.zoom; down.cameraPosition = camera.position.clone(); return; }
       if (p.choosingZoomAnchor) { down.action = 'anchor'; state.anchorCandidate = null; return; }
       if (p.transformMode === 'select' || p.sequenceIndex >= 0 || p.playing || down.ctrl && p.onInspectGeoset) { down.action = 'select'; return; }
@@ -420,7 +511,8 @@ export default function Viewport(inputProps) {
       const anchor = p.zoomAnchor, anchorIndices = anchor && selectedMap[anchor.geosetIndex];
       if (anchorIndices?.includes(anchor.vertexIndex)) pivot.fromArray(snapshots[anchor.geosetIndex], anchor.vertexIndex * 3);
       down.pivotScreen = screenPosition(pivot, start);
-      state.drag = { ...down, selections: selectedMap, snapshots, pivot, workplane: p.workplane, workplaneEnabled: p.workplaneEnabled !== false, payload: null };
+      const lockedPlane = quad && boundPane.workplane;
+      state.drag = { ...down, selections: selectedMap, snapshots, pivot, workplane: lockedPlane || p.workplane, workplaneEnabled: !!lockedPlane || p.workplaneEnabled !== false, payload: null, move: { pointer: start, point: start, shift: event.shiftKey, axis: null } };
     }
     function translateInPlane(start, end, drag, constrain) {
       if (!drag.workplaneEnabled) return screenPlaneTranslation(camera, drag.pivot, end.width, end.height, end.x - start.x, end.y - start.y, constrain);
@@ -428,13 +520,18 @@ export default function Viewport(inputProps) {
       const basis = axes.map(axis => { const value = drag.pivot.clone(); value.setComponent(axis, value.getComponent(axis) + 1); return screenPosition(value, end).sub(center).toArray(); });
       return new THREE.Vector3().fromArray(projectedPlaneTranslation(drag.workplane, basis, end.x - start.x, end.y - start.y, constrain));
     }
+    function showBox(value) { setBox({ ...value, left: value.left + (boundPane.rect?.left || 0), top: value.top + (boundPane.rect?.top || 0) }); }
     function pointerMove(event) {
-      if (!down) { inspectHoveredGeoset(event); return; }
+      if (!down) {
+        const hoveredPane = panes.find(pane => pane.surface === event.currentTarget);
+        if (hoveredPane) bindPane(hoveredPane);
+        inspectHoveredGeoset(event); bindPane(activePane); return;
+      }
       const rawEnd = point(event), end = down.action === 'select' ? rawEnd : pointerDragPoint(down, rawEnd, down.pointerSensitivity), dx = end.x - down.x, dy = end.y - down.y;
       if (down.action === 'anchor') {
         const distance = Math.hypot(rawEnd.x - down.x, rawEnd.y - down.y);
         if (distance > 5) {
-          setBox({ left: Math.min(down.x, rawEnd.x), top: Math.min(down.y, rawEnd.y), width: Math.abs(rawEnd.x - down.x), height: Math.abs(rawEnd.y - down.y) });
+          showBox({ left: Math.min(down.x, rawEnd.x), top: Math.min(down.y, rawEnd.y), width: Math.abs(rawEnd.x - down.x), height: Math.abs(rawEnd.y - down.y) });
           down.anchorCandidate = anchorVertexInMarquee(latest.current, down, rawEnd); state.anchorCandidate = down.anchorCandidate; invalidate();
         } else { setBox(null); down.anchorCandidate = state.anchorCandidate = null; invalidate(); }
         return;
@@ -444,11 +541,11 @@ export default function Viewport(inputProps) {
         zoomEditorCamera(camera, down.zoom * factor);
         controls.update(); return;
       }
-      if (down.action === 'select') { if (Math.hypot(dx, dy) > 5) setBox({ left: Math.min(down.x, end.x), top: Math.min(down.y, end.y), width: Math.abs(dx), height: Math.abs(dy) }); return; }
+      if (down.action === 'select') { if (Math.hypot(dx, dy) > 5) showBox({ left: Math.min(down.x, end.x), top: Math.min(down.y, end.y), width: Math.abs(dx), height: Math.abs(dy) }); return; }
       const drag = state.drag; if (!drag) return;
       const payload = { selections: drag.selections, geosetIndex: latest.current.selectedGeoset, indices: drag.selections[latest.current.selectedGeoset] || [], pivot: drag.pivot.toArray() };
       const rotation = new THREE.Euler(), scale = new THREE.Vector3(1, 1, 1), translation = new THREE.Vector3();
-      if (drag.action === 'translate') { translation.copy(translateInPlane(down, end, drag, event.shiftKey)); payload.translation = translation.toArray(); }
+      if (drag.action === 'translate') { translation.copy(translateInPlane(down, moveDragPoint(drag.move, end, event.shiftKey), drag, false)); payload.translation = translation.toArray(); }
       if (drag.action === 'scale') { scale.fromArray(dragScale(dx, drag.workplane, event.shiftKey)); payload.scale = scale.toArray(); payload.allowSingularScale = true; }
       if (drag.action === 'rotate') {
         const a = new THREE.Vector2(down.x, down.y).sub(drag.pivotScreen), b = new THREE.Vector2(end.x, end.y).sub(drag.pivotScreen);
@@ -469,15 +566,15 @@ export default function Viewport(inputProps) {
         }
         position.needsUpdate = true; entry.geometry.computeBoundingSphere(); updateWideWireGeometry(entry);
       }
-      drag.payload = payload; drag.moved = Math.hypot(dx, dy) > 1;
+      drag.payload = payload; drag.moved = drag.action === 'translate' ? Math.hypot(drag.move.point.x - down.x, drag.move.point.y - down.y) > 1 : Math.hypot(dx, dy) > 1;
       invalidate();
     }
     function pointerUp(event) {
       rotating = false; latest.current.onCameraGestureChange?.(false);
-      renderer.domElement.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode);
+      surface.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode);
       const start = down; down = null; setBox(null); controls.enabled = true;
       if (!start) return;
-      if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
+      if (surface.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
       const drag = state.drag; state.drag = null;
       if (drag) {
         if (drag.moved && drag.payload) latest.current.onTransform?.(drag.payload);
@@ -542,30 +639,46 @@ export default function Viewport(inputProps) {
         const position = state.entries[key]?.geometry.attributes.position;
         if (position) { position.array.set(vertices); position.needsUpdate = true; }
       }
+      if (down && surface.hasPointerCapture(down.pointerId)) surface.releasePointerCapture(down.pointerId);
       state.drag = null; state.anchorCandidate = null; down = null; setBox(null); controls.enabled = true; state.dirty = true; invalidate();
     }
     const frameModel = event => { cancelGesture(); state.fit(event.detail?.selection === true); };
-    const viewCamera = event => { cancelGesture(); if (applyModelCamera(perspective, controls, event.detail)) { camera = perspective; state.camera = camera; state.appliedView = 'perspective'; invalidate(); } };
+    const viewCamera = event => { cancelGesture(); if (quad) activatePane(panes.find(pane => pane.id === 'perspective')); if (applyModelCamera(perspective, controls, event.detail)) { camera = perspective; state.camera = camera; state.appliedView = 'perspective'; invalidate(); } };
     window.addEventListener('mdlxl-view-camera', viewCamera);
-    const cancelKey = event => { if (event.key === 'Escape' && down) { cancelGesture(); event.preventDefault(); } };
+    const gestureKey = event => {
+      if (event.key === 'Escape' && event.type === 'keydown' && down) { cancelGesture(); event.preventDefault(); event.stopPropagation(); }
+      // Modifier transitions must reset the latch even if the mouse is still.
+      if (event.key === 'Shift' && state.drag?.action === 'translate') moveDragPoint(state.drag.move, state.drag.move.pointer, event.shiftKey);
+    };
+    // WarmKeys consumes Escape before viewport key listeners. Its Clear command
+    // gives an in-progress drag first refusal through this cancelable event.
+    const cancelCommand = event => { if (down) { cancelGesture(); event.preventDefault(); } };
     const contextMenu = event => event.preventDefault();
     const pointerLeave = () => { if (!down) clearHoveredGeoset(); };
-    renderer.domElement.addEventListener('pointerdown', pointerDown, true);
-    renderer.domElement.addEventListener('pointermove', pointerMove);
-    renderer.domElement.addEventListener('pointerup', pointerUp);
-    renderer.domElement.addEventListener('pointercancel', cancelGesture);
-    renderer.domElement.addEventListener('pointerleave', pointerLeave);
-    renderer.domElement.addEventListener('contextmenu', contextMenu);
-    window.addEventListener('mdlvis-frame', frameModel); window.addEventListener('keydown', cancelKey);
+    bindInput(singlePane);
+    window.addEventListener('mdlvis-frame', frameModel); window.addEventListener('keydown', gestureKey, true); window.addEventListener('keyup', gestureKey, true);
+    window.addEventListener('mdlxl-cancel-gesture', cancelCommand);
     const contextLost = event => { event.preventDefault(); state.scheduler?.dispose(); setError('The graphics context was lost. Reload the editor to restore the viewport. Save your work first.'); };
     renderer.domElement.addEventListener('webglcontextlost', contextLost);
 
     let callbackTime = performance.now();
     function render(now, delta) {
+      const visible = quad ? panes.slice(1) : [singlePane];
+      renderer.setScissorTest(quad);
+      for (const pane of visible) {
+        bindPane(pane);
+        const { left, top, width, height } = pane.rect;
+        renderer.setViewport(left, host.current.clientHeight - top - height, width, height);
+        renderer.setScissor(left, host.current.clientHeight - top - height, width, height);
+        if (renderPane(now, delta) === false) { bindPane(activePane); return false; }
+      }
+      bindPane(activePane);
+    }
+    function renderPane(now, delta) {
       if (state.disposed) return;
       const p = latest.current, renderGraphics = graphicsOptions(p.preferences), visual = visualOptions(p.preferences), appearance = viewportAppearanceOptions(p.preferences);
       const lighting = previewLighting(p.preferences); configurePreviewLights(ambient, key, lighting);
-      renderer.domElement.style.cursor = viewportCursor(p.cameraMode, p.rotationNormals ? 'rotateNormals' : p.transformMode, rotating);
+      surface.style.cursor = viewportCursor(p.cameraMode, p.rotationNormals ? 'rotateNormals' : p.transformMode, rotating);
       syncViewportBackground(appearance);
       ambient.visible = key.visible = renderGraphics.lighting;
       if (p.sequenceIndex !== state.sequenceIndex || !p.playing || !state.wasPlaying || (p.time !== state.lastExternalTime && Math.abs(p.time - (state.lastReportedFrame ?? -Infinity)) > 1)) state.frame = p.time || 0;
@@ -578,7 +691,7 @@ export default function Viewport(inputProps) {
       const overlays = viewportOverlayOptions(p);
       const showMarkers = overlays.bones || overlays.nodes || overlays.attachments || overlays.particles;
       const clipRadius = modelClipRadius(p.model, state.center, state.radius);
-      grid.update(p.preferences, p.workplane, overlays.grid, overlays.axes, renderer.domElement.clientWidth, renderer.domElement.clientHeight);
+      grid.update(p.preferences, p.workplane, overlays.grid, overlays.axes, surface.clientWidth, surface.clientHeight, quad ? { camera, target: controls.target, settings: appearance.quadView.grid } : null);
       platform.update(p.preferences, state.center, state.radius, state.floor || 0);
       const selectedMap = selections(p), active = editableGeosets(p);
       const selectionKey = `${JSON.stringify(selectedMap, (_, value) => value instanceof Set ? [...value] : value)}|${[...active].join(',')}|${JSON.stringify(p.hiddenVertices, (_, value) => value instanceof Set ? [...value] : value)}|${p.mode}|${p.sequenceIndex}|${p.transformMode}|${JSON.stringify(visual)}`;
@@ -629,8 +742,8 @@ export default function Viewport(inputProps) {
         // layers. The geometry-only prepass is reserved for modes where those
         // surface meshes are absent; otherwise it turns alpha planes opaque.
         entry.depth.visible = needsSolidDepthPrepass(p.mode);
-        configureWideLine(entry.wire.material, activeAppearance, renderer.domElement.clientWidth, renderer.domElement.clientHeight);
-        configureWideLine(entry.hiddenWire.material, activeAppearance, renderer.domElement.clientWidth, renderer.domElement.clientHeight, visual.occludedOpacity);
+        configureWideLine(entry.wire.material, activeAppearance, surface.clientWidth, surface.clientHeight);
+        configureWideLine(entry.hiddenWire.material, activeAppearance, surface.clientWidth, surface.clientHeight, visual.occludedOpacity);
         entry.hoverWire.material.color.set(visual.selectedGeometry); entry.hoverPoints.material.color.set(visual.selectedGeometry);
         for (let layerIndex = 0; layerIndex < entry.meshes.length; layerIndex++) {
           const mesh = entry.meshes[layerIndex], material = mesh.material, layer = entry.layers[layerIndex];
@@ -683,36 +796,36 @@ export default function Viewport(inputProps) {
       }
       state.selectionKey = selectionKey;
       controls.update();
-      updateDepthClipping(camera, state.center, clipRadius, gridDepthExtent(state.center, gridOptions(p.preferences).extent));
+      updateDepthClipping(camera, state.center, clipRadius, quad ? grid.userData.extent : gridDepthExtent(state.center, gridOptions(p.preferences).extent));
       const light = cameraLeftLight(camera, controls.target, state.radius);
       key.position.copy(light.position); key.target.position.copy(controls.target);
       ambient.position.copy(light.direction);
       try { renderer.render(scene, camera);
         if (p.presentation === 'preview' && previewOverlaySettings(p.previewOverlay).mode !== 'none') {
-          if (!previewCanvas) { previewCanvas = document.createElement('canvas'); previewCanvas.dataset.geometryOverlay = ''; previewCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(previewCanvas); }
-          previewCanvas.width = renderer.domElement.width; previewCanvas.height = renderer.domElement.height;
+          if (!previewCanvas) { previewCanvas = document.createElement('canvas'); previewCanvas.dataset.geometryOverlay = ''; previewCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; surface.appendChild(previewCanvas); }
+          previewCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); previewCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
           const geometry = state.entries.flatMap((entry, index) => entry?.group.visible ? [{ index, faces: entry.geoset.Faces, vertices: entry.geometry.attributes.position.array }] : []);
-          drawPresentationOverlay(previewCanvas.getContext('2d'), geometry, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, p.previewOverlay, renderer.getPixelRatio());
+          drawPresentationOverlay(previewCanvas.getContext('2d'), geometry, camera, surface.clientWidth, surface.clientHeight, p.previewOverlay, renderer.getPixelRatio());
         } else if (previewCanvas) { previewCanvas.remove(); previewCanvas = null; }
         if (p.overlays?.normals || p.showNormals) {
-          if (!normalCanvas) { normalCanvas = document.createElement('canvas'); normalCanvas.dataset.normalOverlay = ''; normalCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(normalCanvas); }
-          normalCanvas.width = renderer.domElement.width; normalCanvas.height = renderer.domElement.height;
+          if (!normalCanvas) { normalCanvas = document.createElement('canvas'); normalCanvas.dataset.normalOverlay = ''; normalCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; surface.appendChild(normalCanvas); }
+          normalCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); normalCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
           const geometry = state.entries.flatMap((entry, index) => entry?.group.visible && active.has(index) ? [{ index, vertices: entry.geometry.attributes.position.array, normals: entry.geometry.attributes.normal.array }] : []);
-          drawPreviewGeometryOverlay(normalCanvas.getContext('2d'), geometry, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, { normals: true, preferences: p.preferences }, state.center, state.radius, renderer.getPixelRatio());
+          drawPreviewGeometryOverlay(normalCanvas.getContext('2d'), geometry, camera, surface.clientWidth, surface.clientHeight, { normals: true, preferences: p.preferences }, state.center, state.radius, renderer.getPixelRatio());
         } else if (normalCanvas) { normalCanvas.remove(); normalCanvas = null; }
         if (showMarkers) {
-          if (!nodeCanvas) { nodeCanvas = document.createElement('canvas'); nodeCanvas.dataset.nodeOverlay = ''; nodeCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(nodeCanvas); }
-          nodeCanvas.width = renderer.domElement.width; nodeCanvas.height = renderer.domElement.height;
-          const width = renderer.domElement.clientWidth, height = renderer.domElement.clientHeight;
+          if (!nodeCanvas) { nodeCanvas = document.createElement('canvas'); nodeCanvas.dataset.nodeOverlay = ''; nodeCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; surface.appendChild(nodeCanvas); }
+          nodeCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); nodeCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
+          const width = surface.clientWidth, height = surface.clientHeight;
           const nodes = projectMovementNodes(p.model, state.frame, p.sequenceIndex, camera, width, height, state.globalTime, state.matrices);
           const options = { ...overlays, boneLines: true, preferences: p.preferences, glMarkers: true, wireframeMarkers: p.mode === 'wireframe' || p.mode === 'vertices', occludedMarkerEdges: p.mode === 'solid' || p.mode === 'textured' };
-          renderer.resetState(); rigMarkers.draw(camera, nodes, p.selectedNodeIds || [], options); renderer.resetState();
+          rigMarkers.draw(camera, nodes, p.selectedNodeIds || [], options); renderer.resetState(); renderer.setScissorTest(quad);
           drawMovementOverlay(nodeCanvas.getContext('2d'), nodes, p.selectedNodeIds || [], [], width, height, renderer.getPixelRatio(), options);
         } else if (nodeCanvas) { nodeCanvas.remove(); nodeCanvas = null; }
         if (p.overlays?.cameras ?? p.showCameras) {
-          if (!cameraCanvas) { cameraCanvas = document.createElement('canvas'); cameraCanvas.dataset.cameraOverlay = ''; cameraCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(cameraCanvas); }
-          cameraCanvas.width = renderer.domElement.width; cameraCanvas.height = renderer.domElement.height;
-          drawModelCameraOverlay(cameraCanvas.getContext('2d'), p.model || {}, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, renderer.getPixelRatio(), state.frame, p.sequenceIndex, state.globalTime, state.radius, visual.node);
+          if (!cameraCanvas) { cameraCanvas = document.createElement('canvas'); cameraCanvas.dataset.cameraOverlay = ''; cameraCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; surface.appendChild(cameraCanvas); }
+          cameraCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); cameraCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
+          drawModelCameraOverlay(cameraCanvas.getContext('2d'), p.model || {}, camera, surface.clientWidth, surface.clientHeight, renderer.getPixelRatio(), state.frame, p.sequenceIndex, state.globalTime, state.radius, visual.node);
         } else if (cameraCanvas) { cameraCanvas.remove(); cameraCanvas = null; }
         const overlayPoint = value => {
           const entry = value && state.entries[value.geosetIndex], position = entry?.geometry.attributes.position;
@@ -722,9 +835,9 @@ export default function Viewport(inputProps) {
         };
         const anchorPoint = overlayPoint(p.zoomAnchor), candidatePoint = overlayPoint(p.choosingZoomAnchor ? state.anchorCandidate : null);
         if (anchorPoint || candidatePoint) {
-          if (!anchorCanvas) { anchorCanvas = document.createElement('canvas'); anchorCanvas.dataset.anchorOverlay = ''; anchorCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2'; host.current.appendChild(anchorCanvas); }
-          anchorCanvas.width = renderer.domElement.width; anchorCanvas.height = renderer.domElement.height;
-          const context = anchorCanvas.getContext('2d'), pixelRatio = renderer.getPixelRatio(), width = renderer.domElement.clientWidth, height = renderer.domElement.clientHeight;
+          if (!anchorCanvas) { anchorCanvas = document.createElement('canvas'); anchorCanvas.dataset.anchorOverlay = ''; anchorCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2'; surface.appendChild(anchorCanvas); }
+          anchorCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); anchorCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
+          const context = anchorCanvas.getContext('2d'), pixelRatio = renderer.getPixelRatio(), width = surface.clientWidth, height = surface.clientHeight;
           context.setTransform(1, 0, 0, 1, 0, 0); context.clearRect(0, 0, anchorCanvas.width, anchorCanvas.height);
           context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0); context.fillStyle = '#39ff14';
           if (candidatePoint) {
@@ -749,12 +862,14 @@ export default function Viewport(inputProps) {
     document.addEventListener('visibilitychange', state.scheduler.sync);
     state.scheduler.invalidate();
     return () => {
-      cameraMemory.current = { view: state.appliedView, perspective: perspective.clone(), ortho: ortho.clone(), target: controls.target.clone(), center: state.center.clone(), radius: state.radius };
-      state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); unbindScroll(); resizeObserver.disconnect(); controls.removeEventListener('change', invalidate); controls.dispose();
-      renderer.domElement.removeEventListener('pointerdown', pointerDown, true); renderer.domElement.removeEventListener('pointermove', pointerMove); renderer.domElement.removeEventListener('pointerup', pointerUp); renderer.domElement.removeEventListener('webglcontextlost', contextLost);
-      renderer.domElement.removeEventListener('pointercancel', cancelGesture); renderer.domElement.removeEventListener('pointerleave', pointerLeave); renderer.domElement.removeEventListener('contextmenu', contextMenu);
-      window.removeEventListener('mdlvis-frame', frameModel); window.removeEventListener('mdlxl-view-camera', viewCamera); window.removeEventListener('keydown', cancelKey);
-      cameraCanvas?.remove(); normalCanvas?.remove(); nodeCanvas?.remove(); previewCanvas?.remove(); anchorCanvas?.remove(); rigMarkers.dispose(); platform.dispose(); clearGroup(modelGroup); state.textures.forEach(texture => texture.dispose()); state.markerTextures.forEach(texture => texture.dispose()); state.background.texture.dispose(); state.checker.dispose(); state.teamGlow.dispose(); grid.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); runtime.current = null;
+      savePane();
+      const remember = pane => ({ id: pane.id, view: pane.view, perspective: pane.perspective.clone(), ortho: pane.ortho.clone(), target: pane.controls.target.clone(), center: pane.center.clone(), radius: pane.radius });
+      cameraMemory.current = { ...remember(singlePane), panes: panes.slice(1).map(remember) };
+      state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); resizeObserver.disconnect(); panes.forEach(pane => { pane.dispose(); pane.grid.dispose(); });
+      renderer.domElement.removeEventListener('webglcontextlost', contextLost);
+      window.removeEventListener('mdlvis-frame', frameModel); window.removeEventListener('mdlxl-view-camera', viewCamera); window.removeEventListener('keydown', gestureKey, true); window.removeEventListener('keyup', gestureKey, true);
+      window.removeEventListener('mdlxl-cancel-gesture', cancelCommand);
+      cameraCanvas?.remove(); normalCanvas?.remove(); nodeCanvas?.remove(); previewCanvas?.remove(); anchorCanvas?.remove(); rigMarkers.dispose(); platform.dispose(); clearGroup(modelGroup); state.textures.forEach(texture => texture.dispose()); state.markerTextures.forEach(texture => texture.dispose()); state.background.texture.dispose(); state.checker.dispose(); state.teamGlow.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); runtime.current = null;
     };
   }, [graphics.antialias]);
 
@@ -804,7 +919,7 @@ export default function Viewport(inputProps) {
     if (state.loadedSignature === null) {
       state.loadedSignature = signature; state.fit();
       const saved = cameraMemory.current;
-      if (saved && saved.view === latest.current.view) { state.perspective.copy(saved.perspective); state.ortho.copy(saved.ortho); state.controls.target.copy(saved.target); state.center.copy(saved.center); state.radius=saved.radius; state.resize(); state.controls.update(); }
+      if (saved && (latest.current.quadView || saved.view === latest.current.view)) { state.setView(saved.view); state.perspective.copy(saved.perspective); state.ortho.copy(saved.ortho); state.controls.target.copy(saved.target); state.center.copy(saved.center); state.radius=saved.radius; state.resize(); state.controls.update(); }
     }
   }, [model, revision, shaded, graphics.lighting, graphics.antialias]);
 
@@ -840,7 +955,9 @@ export default function Viewport(inputProps) {
     return () => { cancelled = true; };
   }, [textureSignature, textureAssets, texturesNeeded, graphics.textures, graphics.antialias]);
 
-  useEffect(() => { if(runtime.current && runtime.current.appliedView !== view) runtime.current.setView(view); }, [view, graphics.antialias]);
+  useEffect(() => { runtime.current?.setQuad(props.quadView); }, [props.quadView, graphics.antialias]);
+  useEffect(() => { if(!props.quadView && runtime.current && runtime.current.appliedView !== view) runtime.current.setView(view); }, [view, props.quadView, graphics.antialias]);
+  useEffect(() => { if (props.quadView && props.viewRequest) runtime.current?.setView(props.viewRequest.view); }, [props.viewRequest]);
   useEffect(() => { if (props.cameraAnglesRequest) runtime.current?.setCameraAngles(props.cameraAnglesRequest); }, [props.cameraAnglesRequest]);
   useEffect(() => { runtime.current?.refreshCursor(); }, [cameraMode, transformMode, props.rotationNormals]);
   useEffect(() => { setAdjustingSensitivity(null); }, [props.preferences?.wheelMode]);
@@ -849,7 +966,7 @@ export default function Viewport(inputProps) {
   useEffect(() => { runtime.current?.scheduler.sync(); }, [props.presentation, props.previewMode, props.previewOverlay, model, revision, props.hoveredGeoset, selectedGeoset, selectedVertices, props.selectionByGeoset, props.selectableGeosets, hiddenGeosets, props.hiddenVertices, mode, showSkeleton, showGrid, props.showAxes, props.showVertices, props.overlays, props.showCameras, props.preferences, props.rgbPreview, props.rgbPreviewSequenceIndex, workplane, transformMode, props.zoomAnchor, props.choosingZoomAnchor, sequenceIndex, time, playing, teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden, graphics.textures, graphics.lighting]);
   return <div className="viewport" style={{ position: 'relative', width: '100%', height: '100%', minHeight: props.presentation === 'preview' ? 0 : 180, background: '#ccc', overflow: 'hidden' }}>
     <div ref={host} tabIndex={0} aria-label="3D model viewport" style={{ position: 'absolute', inset: 0, outline: 'none', cursor: viewportCursor(cameraMode, transformMode) }} />
-    {props.showOrientationCompass !== false && props.presentation !== 'preview' && <div className="viewport-orientation-compass" aria-label="View orientation" title="View orientation — click an axis to snap the camera" style={{ position: 'absolute', top: 31, left: 4, width: 82, height: 82, zIndex: 3, filter: 'drop-shadow(0 1px 2px #0008)' }}>
+    {!props.quadView && props.showOrientationCompass !== false && props.presentation !== 'preview' && <div className="viewport-orientation-compass" aria-label="View orientation" title="View orientation — click an axis to snap the camera" style={{ position: 'absolute', top: 31, left: 4, width: 82, height: 82, zIndex: 3, filter: 'drop-shadow(0 1px 2px #0008)' }}>
       <svg viewBox="0 0 82 82" width="82" height="82" aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
         <circle cx="41" cy="41" r="34" fill="#18202bdd" stroke="#c8d6e8aa" />
         {compassAxes.map(axis => <g key={axis.id} opacity={axis.depth < -.2 ? .48 : 1}><line x1="41" y1="41" x2={41 + axis.x * 25} y2={41 + axis.y * 25} stroke={axis.color} strokeWidth="3" strokeLinecap="round" /><circle cx={41 + axis.x * 25} cy={41 + axis.y * 25} r="7" fill={axis.color} stroke="#fff9" /></g>)}

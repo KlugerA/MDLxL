@@ -3,6 +3,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { gridOptions, visualOptions } from '../src/preferences.js';
+import { quadGridLayout } from './quad-grid.js';
 
 export function gridSegments(preferences, workplane = 'xy', showGrid = true, showAxes = true) {
   const grid = gridOptions(preferences), visual = visualOptions(preferences), segments = [];
@@ -29,12 +30,15 @@ export function gridSegments(preferences, workplane = 'xy', showGrid = true, sho
 
 export function createViewportGrid() {
   const group = new Group(); let key;
-  group.update = (preferences, workplane, showGrid, showAxes, width = 1, height = 1) => {
-    const next = JSON.stringify([gridOptions(preferences), visualOptions(preferences), workplane, showGrid, showAxes]);
+  group.update = (preferences, workplane, showGrid, showAxes, width = 1, height = 1, adaptive = null) => {
+    const layout = adaptive && quadGridLayout(adaptive.camera, adaptive.target, width, height, adaptive.settings, showGrid, showAxes);
+    if (layout) { group.position.copy(layout.origin); group.quaternion.copy(layout.quaternion); group.userData.extent = layout.extent; group.userData.spacing = layout.step; }
+    else { group.position.set(0, 0, 0); group.quaternion.identity(); }
+    const next = JSON.stringify(layout ? layout.segments : [gridOptions(preferences), visualOptions(preferences), workplane, showGrid, showAxes]);
     for (const item of group.children) item.material.resolution.set(Math.max(1, width), Math.max(1, height));
     if (next === key) return; key = next; group.dispose();
     const batches = new Map();
-    for (const line of gridSegments(preferences, workplane, showGrid, showAxes)) {
+    for (const line of layout?.segments || gridSegments(preferences, workplane, showGrid, showAxes)) {
       const id = `${line.color}|${line.opacity}|${line.width}`;
       if (!batches.has(id)) batches.set(id, { ...line, positions: [] });
       batches.get(id).positions.push(...line.a, ...line.b);
@@ -44,7 +48,7 @@ export function createViewportGrid() {
       // This is an editor background aid: draw before the model so opaque
       // silhouettes remain clear even when a mesh straddles the grid plane.
       // Custom blending keeps line opacity while remaining in the opaque queue.
-      const material = new LineMaterial({ color: item.color, opacity: item.opacity, transparent: false, blending: CustomBlending, blendSrc: SrcAlphaFactor, blendDst: OneMinusSrcAlphaFactor, linewidth: item.width, worldUnits: false, depthTest: true, depthWrite: false });
+      const material = new LineMaterial({ color: item.color, opacity: item.opacity, transparent: false, blending: CustomBlending, blendSrc: SrcAlphaFactor, blendDst: OneMinusSrcAlphaFactor, linewidth: item.width, worldUnits: false, depthTest: !adaptive, depthWrite: false });
       material.resolution.set(Math.max(1, width), Math.max(1, height));
       const lines = new LineSegments2(geometry, material); lines.computeLineDistances(); lines.frustumCulled = false; lines.renderOrder = -2; group.add(lines);
     }
