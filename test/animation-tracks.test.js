@@ -193,14 +193,12 @@ test('Bake is one undoable edit and preserves RGB/visibility through in-memory M
   }
 });
 
-test('disabled colors remain disabled in MDL export while MDX preserves their cached RGB values', () => {
+test('MDL reports unsupported dormant color loss while MDX preserves cached RGB values', () => {
   const doc = createDemoDocument();
   doc.apply('Static geoset tint', ['GeosetAnims'], model => {
     const anim = model.GeosetAnims[0]; anim.Color = new Float32Array([0.2, 0.5, 0.8]); anim.Flags = 1;
   });
-  const mdl = openDocument(doc.serialize('mdl'), 'synthetic.mdl');
-  assert.equal(mdl.model.GeosetAnims[0].Flags, 1);
-  assert.equal(mdl.model.GeosetAnims[0].Color, null);
+  assert.throws(() => doc.serialize('mdl'), /dormant nonwhite color cannot be represented in MDL/);
   const mdx = openDocument(doc.serialize('mdx'), 'synthetic.mdx');
   assert.equal(mdx.model.GeosetAnims[0].Flags, 1);
   close(mdx.model.GeosetAnims[0].Color, [0.2, 0.5, 0.8]);

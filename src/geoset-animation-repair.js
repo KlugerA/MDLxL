@@ -1,4 +1,5 @@
 import { directlyBoundBoneIds } from './binding-inspection.js';
+import { createVisibilityGeosetAnimation } from './geoset-animation-defaults.js';
 import { recalculateExtents } from './editor-document.js';
 
 const track = value => value && Array.isArray(value.Keys);
@@ -111,7 +112,7 @@ export function repairGeosetAnimations(model, { tint = 'preserve', owners = {}, 
     visibility.push({ geosetId: id, ...classification });
     if (classification.role === 'unchanged-additive') continue;
     let animation = next.find(item => item.GeosetId === id);
-    if (!animation) { animation = { GeosetId: id, Flags: 0, Color: null, Alpha: 1 }; next.push(animation); }
+    if (!animation) { animation = createVisibilityGeosetAnimation(id); next.push(animation); }
     animation.Alpha = visibilityTrack(model.Sequences, classification.role);
   }
   let clearedTints = 0;

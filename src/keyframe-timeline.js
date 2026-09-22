@@ -1,4 +1,5 @@
 import { allNodes, sampleTrack } from './animation.js';
+import { createVisibilityGeosetAnimation } from './geoset-animation-defaults.js';
 import { animationTargets, animationTrackId, readAnimationTrack } from './animation-tracks.js';
 
 const transforms = ['Translation', 'Rotation', 'Scaling'];
@@ -136,7 +137,7 @@ function commit(model, prepared) {
     if (target.kind === 'node') owner = allNodes(model).find(node => node.ObjectId === target.id);
     else {
       owner = model.GeosetAnims?.find(item => item.GeosetId === target.id);
-      if (!owner) { owner = { GeosetId: target.id, Flags: 0, Alpha: 1, Color: null }; (model.GeosetAnims ||= []).push(owner); }
+      if (!owner) { owner = createVisibilityGeosetAnimation(target.id); (model.GeosetAnims ||= []).push(owner); }
       if (target.property === 'Color' && enableColor) owner.Flags = (owner.Flags || 0) | 2;
     }
     track.Keys.sort((a, b) => a.Frame - b.Frame);

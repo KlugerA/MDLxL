@@ -57,7 +57,7 @@ import { allGeosets, chooseGeosets, initialGeosetSelection, invertGeosets, filte
 import { TEAM_COLORS } from '../src/team-colors.js';
 import { createStarterDocument } from '../src/starter-model.js';
 import { bindDropdownWheel } from '../src/dropdown-wheel.js';
-import { prepareModelSave } from '../src/save-target.js';
+import { prepareModelSaveAsync } from './model-save.js';
 import { sampleTrack } from '../src/animation.js';
 import { buildPaintExportArtifact, buildPaintProjectArtifact } from '../src/paint-export.js';
 import { markPaintProjectSaved, restorePaintProject, travelPaintHistory } from '../src/paint-project.js';
@@ -505,7 +505,7 @@ export default function App() {
         await loadTextures(records, target, { source: 'forge' });
       }
       if (missingForgeAssetPaths(target.assets, staged.model).length) throw Error('A Forge texture is missing. Load the model beside its MDLxL_Forge folder, or import the missing texture before saving.');
-      const {format,bytes,name} = prepareModelSave(staged,requestedFormat,target.doc.name);
+      const {format,bytes,name} = await prepareModelSaveAsync(staged,requestedFormat,target.doc.name);
       let savedName = name;
       if (window.desktop) { const result = await window.desktop.save({ bytes, name, path: target.path, format, saveAs:saveAs||format!==target.doc.format, forgeAssets:retainedForgeAssets(target.assets,staged.model) }); if (!result) return false; target.path = result.path; savedName = result.name; say(`Saved ${result.name}`); }
       else { const forgeAssets=retainedForgeAssets(target.assets,staged.model), blob=forgeAssets.length?forgeExportArchive(name,bytes,forgeAssets):new Blob([bytes]); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = forgeAssets.length?name.replace(/\.(mdl|mdx)$/i,'')+'.zip':name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); say(`Downloaded ${name}`); }
@@ -513,9 +513,8 @@ export default function App() {
       // Keep the target document's semantic serialization snapshot. Re-parsing
       // a staged document's bytes can differ in harmless object key order and
       // incorrectly leave an otherwise identical saved texture list dirty.
-      const committedBytes = staged === target.doc ? bytes : target.doc.serialize(format);
-      const sameBytes = committedBytes.length === bytes.length && committedBytes.every((value, i) => value === bytes[i]);
-      target.uvPreviews = {}; target.doc.markSaved(sameBytes ? committedBytes : bytes, savedName);
+      if (staged !== target.doc) target.doc.rememberSerializedSnapshot(bytes, staged.model);
+      target.uvPreviews = {}; target.doc.markSaved(bytes, savedName);
       try { await checkpoint(target); } catch (error) { say(`Saved; recovery checkpoint failed: ${error.message}`, true); }
       if (latest.current.session.id === target.id) refresh(); return !target.doc.dirty;
     } catch (error) { say(error.message, true); return false; }
