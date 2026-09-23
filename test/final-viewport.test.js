@@ -66,9 +66,9 @@ test('bone/helper cubes retain reference size, roots differ, attachments are tet
   const context = new Proxy({ rect(...args) { boxes.push(args); }, fill() { colors.push(this.fillStyle); }, createLinearGradient(...args) { gradients.push(args); return { addColorStop(...stop) { stops.push(stop); } }; } }, { get: (o, k) => k in o ? o[k] : () => {} });
   drawMovementOverlay(context, points, [], [], 400, 400, 1, { bones: true, nodes: true, attachments: true, boneLines: true });
   assert.deepEqual(boxes.map(box => box.slice(2)), [[18, 18], [18, 18], [18, 18]]);
-  assert.ok(colors.includes('#4cff59')); assert.ok(colors.includes('#b2b2ff')); assert.ok(!colors.includes('#4cb259'));
+  assert.ok(colors.includes('#4cff59')); assert.ok(colors.includes('#b2b2ff')); assert.ok(colors.includes('#4cb259'));
   assert.deepEqual(stops, Array.from({length: 3}, () => [[0, '#000000'], [1, '#ffffff']]).flat());
-  assert.ok(gradients[0][0]!==points[0].x||gradients[0][1]!==points[0].y,'connector begins outside the parent marker'); assert.deepEqual(model, before);
+  assert.deepEqual(gradients[0].slice(0, 2), [points[0].x, points[0].y]); assert.deepEqual(model, before);
 });
 
 test('normal indicators preserve split stored directions, normalize display length and leave data intact', () => {

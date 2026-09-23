@@ -122,7 +122,17 @@ export function drawPreviewGeometryOverlay(context, geosets, camera, width, heig
       }
       context.fill();
     }
-    context.globalAlpha = 1; context.fillStyle = appearance.selectedVertex.color; context.beginPath();
+    if (options.vertices && options.boneVertexColors) for (const color of ['#808080', '#000000']) {
+      context.fillStyle = color; context.beginPath();
+      for (const { index, points } of projectedGeosets) if (!eligible || eligible.has(index)) {
+        for (const [vertex, shade] of options.boneVertexColors.get(index) || []) {
+          const point = points[vertex];
+          if (shade === color && point?.visible && (options.showHiddenVertices || !depth.isOccluded(point))) markerPath(context, point, appearance.unselectedVertex);
+        }
+      }
+      context.fill();
+    }
+    context.globalAlpha = 1; context.fillStyle = options.boneVertexColors ? '#ff0000' : appearance.selectedVertex.color; context.beginPath();
     for (const geo of projectedGeosets.filter(geo => !eligible || eligible.has(geo.index))) for (const index of options.selectionByGeoset?.[geo.index] || []) {
       const point = geo.points[index]; if (!point?.visible || !options.showHiddenVertices && depth.isOccluded(point)) continue;
       markerPath(context, point, appearance.selectedVertex);

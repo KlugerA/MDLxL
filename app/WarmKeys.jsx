@@ -142,6 +142,7 @@ export function WarmKeysProvider({ preferences, catalog = [], activeScope = 'edi
     };
     const keydown = event => {
       if (event.target?.closest?.('[data-warmkey-recording]')) { cancel(); return; }
+      if (event.key === 'Escape' && event.target?.ownerDocument?.querySelector('.bone-create-menu')) return;
       const chord = chordFromEvent(event);
       if (sequence.active && (event.defaultPrevented || isTextEditingTarget(event.target) || event.isComposing || event.keyCode === 229)) { cancel(); return; }
       if (sequence.active || chord === WARMKEY_LEADER && canHandleHotkeyEvent(event)) {

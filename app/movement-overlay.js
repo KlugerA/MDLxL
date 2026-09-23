@@ -61,20 +61,9 @@ export function drawMovementOverlay(context, nodes, selectedIds, handles, width,
     if (appearance) {
       context.lineWidth = 6; context.strokeStyle = appearance; context.stroke();
     } else {
-      context.lineWidth = 3; context.strokeStyle = '#1a223fcc'; context.stroke();
       const gradient = context.createLinearGradient(line.from.x, line.from.y, line.to.x, line.to.y); gradient.addColorStop(0, '#000000'); gradient.addColorStop(1, '#ffffff');
-      context.lineWidth = 1.2; context.strokeStyle = gradient; context.stroke();
+      context.lineWidth = 3; context.strokeStyle = gradient; context.stroke();
     }
-  }
-  // The native GL markers sit below this annotation canvas. Punch their
-  // silhouettes out of the connector layer so links also pass behind any
-  // intervening bone/node, not only behind their own endpoints.
-  if (options.glMarkers) {
-    context.save(); context.globalCompositeOperation = 'destination-out'; context.fillStyle = '#000';
-    for (const point of nodes) if (point.visible && options[point.overlayKind || 'nodes']) {
-      context.beginPath(); context.arc(point.x, point.y, movementMarkerRadius(point, visual.helperSize), 0, Math.PI * 2); context.fill();
-    }
-    context.restore();
   }
   for (const point of nodes) if (point.visible && options[point.overlayKind || 'nodes']) {
     const isSelected = selected.has(point.node.ObjectId), emitter = (point.node.Flags & 4096) !== 0;
@@ -123,15 +112,10 @@ export function drawAttachGuide(context, nodes, sourceId, pointer, ratio = 1, ti
   context.restore();
 }
 
-/** Stop a connector at the visible marker boundaries. Connectors are painted
- * after the native model for legibility, but never on top of or inside nodes. */
-export function boneConnectionEndpoints(parent, child, helperSize = 6) {
-  const dx = child.x - parent.x, dy = child.y - parent.y, distance = Math.hypot(dx, dy);
-  if (!(distance > 0)) return null;
-  const fromRadius = movementMarkerRadius(parent, helperSize), toRadius = movementMarkerRadius(child, helperSize);
-  if (distance <= fromRadius + toRadius) return null;
-  const ux = dx / distance, uy = dy / distance;
-  return { from: { x: parent.x + ux * fromRadius, y: parent.y + uy * fromRadius }, to: { x: child.x - ux * toRadius, y: child.y - uy * toRadius } };
+/** Connect pivots directly, even when their visible markers overlap. */
+export function boneConnectionEndpoints(parent, child) {
+  if (parent.x === child.x && parent.y === child.y) return null;
+  return { from: { x: parent.x, y: parent.y }, to: { x: child.x, y: child.y } };
 }
 
 export function movementMarkerRadius(point, helperSize = 6) {

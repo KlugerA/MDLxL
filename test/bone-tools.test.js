@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStarterDocument } from '../src/starter-model.js';
-import { openDocument } from '../src/editor-document.js';
-import { attachToBone, changeVertexBinding, createRigNode, deleteRigBone, detachFromBone, selectedVertexCenter } from '../src/bone-tools.js';
+import { createNode, openDocument } from '../src/editor-document.js';
+import { attachToBone, boneVertexHighlights, changeVertexBinding, createRigNode, deleteRigBone, deleteRigNode, detachFromBone, renameRigNode, selectedVertexCenter, setBoneBillboarded } from '../src/bone-tools.js';
 import { markerStyle } from '../app/rig-markers-gl.js';
 
 test('rig creation uses selected vertex center and sequential names', () => {
@@ -59,6 +59,46 @@ test('root and child bone marker colors follow parent bone membership', () => {
   const byId = new Map([[1, root], [2, child]]);
   assert.equal(markerStyle(root, byId, {}).color, '#4cb259');
   assert.equal(markerStyle(child, byId, {}).color, '#4cff59');
+});
+
+test('billboarding and renaming edit only the selected bone or node', () => {
+  const doc = createStarterDocument(), model = doc.model, bone = model.Bones[0];
+  const oldFlags = bone.Flags;
+  setBoneBillboarded(model, bone.ObjectId, true);
+  assert.equal(!!(bone.Flags & 8), true);
+  assert.equal(!!(openDocument(doc.serialize('mdx')).model.Bones[0].Flags & 8), true);
+  setBoneBillboarded(model, bone.ObjectId, false);
+  assert.equal(bone.Flags, oldFlags & ~120);
+  assert.equal(renameRigNode(model, bone.ObjectId, '  New Bone  '), 'New Bone');
+  assert.equal(bone.Name, 'New Bone');
+  assert.throws(() => renameRigNode(model, bone.ObjectId, '  '), /empty/);
+  const attachment = createRigNode(model, 'Attachment');
+  renameRigNode(model, attachment.ObjectId, 'Anchor');
+  assert.equal(attachment.Name, 'Anchor');
+  assert.throws(() => setBoneBillboarded(model, attachment.ObjectId, true), /bone/);
+});
+
+test('delete accepts attachments, emitters and helper nodes without affecting other nodes', () => {
+  const model = createStarterDocument().model;
+  const attachment = createRigNode(model, 'Attachment');
+  const emitter = createNode(model, 'ParticleEmitter2');
+  const helper = createNode(model, 'Helper');
+  for (const node of [attachment, emitter, helper]) {
+    deleteRigNode(model, node.ObjectId);
+    assert.equal(model.Nodes[node.ObjectId], undefined);
+  }
+  assert.ok(model.Bones.length);
+});
+
+test('selected bone vertices are black and vertices bound only to child bones are grey', () => {
+  const model = createStarterDocument().model, root = model.Bones[0].ObjectId;
+  const child = createRigNode(model, 'Bone');
+  attachToBone(model, child.ObjectId, root);
+  changeVertexBinding(model, model.Geosets[0], [0], child.ObjectId, 'hard');
+  const colors = boneVertexHighlights(model, [root]).get(0);
+  assert.equal(colors.get(0), '#808080');
+  assert.equal(colors.get(1), '#000000');
+  assert.equal(boneVertexHighlights(model, [root, child.ObjectId]).get(0).get(0), '#000000');
 });
 
 test('skin weights add and remove only the selected bone while retaining a valid total', () => {

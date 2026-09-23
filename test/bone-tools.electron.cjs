@@ -59,7 +59,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await page.getByRole('menuitem', { name: 'Bone' }).click();
     assert.match(await page.getByLabel('Movement bone or node').inputValue(), /^[0-9]+$/);
     assert.match(await page.getByLabel('Movement bone or node').getAttribute('title'), /bone_new0/);
-    assert.equal(await page.getByRole('button', { name: 'Delete bone' }).isEnabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Delete selected object' }).isEnabled(), true);
     assert.equal(await page.getByRole('button', { name: 'Attach', exact: true }).isEnabled(), true);
     for (const label of ['Soft Bind', 'Hard Bind', 'Detach Vertices']) assert.equal(await page.getByRole('button', { name: label, exact: true }).isEnabled(), true);
     await page.keyboard.press('c');

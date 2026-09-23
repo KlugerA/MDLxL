@@ -8,7 +8,7 @@ import {preparePaintModelCommit,commitPaintModel,adoptCommittedPaintUVs} from '.
 import Addons from './Addons.jsx';
 import { commitPart } from '../src/bits-and-parts.js';
 import { directlyBoundBoneIds } from '../src/binding-inspection.js';
-import { attachToBone, changeVertexBinding, createRigNode, deleteRigBone, detachFromBone } from '../src/bone-tools.js';
+import { attachToBone, changeVertexBinding, createRigNode, deleteRigNode, detachFromBone, renameRigNode, setBoneBillboarded } from '../src/bone-tools.js';
 import { builtinTextureAssets } from '../src/builtin-textures.js';
 const BitsAndParts = lazy(() => import('./BitsAndParts.jsx'));
 const ParticleEditor = lazy(() => import('./ParticleEditor.jsx'));
@@ -273,11 +273,13 @@ export default function App() {
     setBoneCreateOpen(false);
     if (created && created !== false) setSelectedNodeIds([created.ObjectId]);
   };
-  const deleteSelectedBone = () => {
-    if (!selectedBone) return;
-    const result = edit('Delete bone', ['Nodes', 'PivotPoints', 'Geosets', 'Info'], current => deleteRigBone(current, selectedBone.ObjectId));
+  const deleteSelectedNode = () => {
+    if (!singleRigNode) return;
+    const result = edit('Delete object', ['Nodes', 'PivotPoints', 'Geosets', 'Info'], current => deleteRigNode(current, singleRigNode.ObjectId));
     if (result !== false) { setSelectedNodeIds([]); setAttachSourceId(null); }
   };
+  const renameSelectedNode = (id, value) => edit('Rename object', ['Nodes'], current => renameRigNode(current, id, value));
+  const setSelectedBoneBillboarded = (id, enabled) => edit('Set bone billboarded', ['Nodes'], current => setBoneBillboarded(current, id, enabled));
   const beginAttach = () => {
     if (!singleRigNode) return;
     setCameraMode('work'); setMovementMode('select'); setAttachSourceId(singleRigNode.ObjectId);
@@ -804,7 +806,7 @@ export default function App() {
     ...Object.fromEntries(['work','zoom','rotate','move'].map(v=>['camera:'+v,()=>setCameraMode(v)])),
     ...Object.fromEntries(['select','translate','rotate','scale'].map(v=>[v,()=>mode === 'bones' && v === 'rotate' ? bindSelectedVertices('hard') : setWorkTool(v)])),
     ...Object.fromEntries(['xy','xz','yz'].map(v=>['plane:'+v,()=>setWorkplane(v)])),
-    ...Object.fromEntries(['Delete vertices','Create triangle','Delete triangles','Uncouple','Collapse','Weld','Mirror','Extrude','Detach','Reverse normals','Smooth normals','Restore normals'].map(v=>[v,()=>mode === 'bones' && v === 'Delete vertices' ? deleteSelectedBone() : mode === 'bones' && v === 'Create triangle' ? beginAttach() : mode === 'bones' && v === 'Collapse' ? bindSelectedVertices('soft') : mode==='animation' && v==='Collapse' ? timelineCommands.current.copyPose?.() : mode==='animation' && v==='Delete vertices' ? timelineCommands.current.delete?.() : meshAction(v)])),
+    ...Object.fromEntries(['Delete vertices','Create triangle','Delete triangles','Uncouple','Collapse','Weld','Mirror','Extrude','Detach','Reverse normals','Smooth normals','Restore normals'].map(v=>[v,()=>mode === 'bones' && v === 'Delete vertices' ? deleteSelectedNode() : mode === 'bones' && v === 'Create triangle' ? beginAttach() : mode === 'bones' && v === 'Collapse' ? bindSelectedVertices('soft') : mode==='animation' && v==='Collapse' ? timelineCommands.current.copyPose?.() : mode==='animation' && v==='Delete vertices' ? timelineCommands.current.delete?.() : meshAction(v)])),
     'bone:detach': detachSelectedNode,
     'bone:detachVertices': () => bindSelectedVertices('detach'),
     ...Object.fromEntries(['flip-u','flip-v','rotate','fold','select-connected','select-invert'].map(v=>['uv:'+v,()=>uvAction(v)])),
@@ -816,7 +818,7 @@ export default function App() {
     if(id.startsWith('paint:'))return mode==='paint'&&!doc.readOnly&&!saving;
     if(id==='optimizeModel')return !doc.readOnly&&!saving&&!liveUV&&!Object.keys(session.uvPreviews).length;
     if (mode === 'bones') {
-      if (id === 'Delete vertices') return editable && !!selectedBone;
+      if (id === 'Delete vertices') return editable && !!singleRigNode;
       if (id === 'Create triangle') return editable && !!singleRigNode;
       if (id === 'Collapse' || id === 'rotate' || id === 'bone:detachVertices') return editable && !!selectedBone && selectionCount > 0;
       if (id === 'bone:detach') return editable && !!singleRigNode && !!parentBone;
@@ -851,7 +853,7 @@ export default function App() {
   }
   // Playback time changes do not change available commands or shortcut bindings.
   const settingsCommands = ['settings','warmkeys','graphics','captureSettings','appearanceSettings','configurationSettings','gridSettings','gameDataSettings'];
-  const commandCatalog = useMemo(() => COMMANDS.map(command => ({...command,label: mode === 'bones' ? ({ rotate: 'Hard Bind', 'Delete vertices': 'Delete bone', 'Create triangle': 'Attach', Collapse: 'Soft Bind' }[command.id] || command.label) : command.label,allowInModal:settingsCommands.includes(command.id),enabled:commandEnabled(command.id)})), [doc, doc.revision, mode, tool, sequence, validSelection, selectable, hiddenCount, selectionCount, selectedNodeIds, selectedBone, parentBone, selectedFaces, geoset, clipboard.current, restrictions, restPose, rigWorkspace, cleanAnimationPreview, saving, repairBlocked, repairReceipt]);
+  const commandCatalog = useMemo(() => COMMANDS.map(command => ({...command,label: mode === 'bones' ? ({ rotate: 'Hard Bind', 'Delete vertices': 'Delete object', 'Create triangle': 'Attach', Collapse: 'Soft Bind' }[command.id] || command.label) : command.label,allowInModal:settingsCommands.includes(command.id),enabled:commandEnabled(command.id)})), [doc, doc.revision, mode, tool, sequence, validSelection, selectable, hiddenCount, selectionCount, selectedNodeIds, singleRigNode, selectedBone, parentBone, selectedFaces, geoset, clipboard.current, restrictions, restPose, rigWorkspace, cleanAnimationPreview, saving, repairBlocked, repairReceipt]);
   const runCommand = id => { if(commandEnabled(id)) { if(repairBlocked && id==='saveAs') save(true); else commands.current[id]?.(); } };
   const runLatest = useRef(runCommand); runLatest.current = runCommand;
 
@@ -986,7 +988,7 @@ export default function App() {
         <Tool action="Reverse normals" title="Reverse normals" disabled={!editable || !selectionCount || mode === 'uv'} onClick={() => meshAction('Reverse normals')}>−1</Tool>{toolButton('sb_nsmooth', 'Smooth normals', 'Average selected normals')}{toolButton('sb_nrestore', 'Restore normals', 'Recalculate geoset normals')}<button data-warmkey="uv" className="classic-tool classic-uv-button uv-button" title="UV maps" disabled={!commandEnabled('uv')} onClick={() => selectMode('uv')}>UV-maps</button>
       </div>}
       </>}
-      {mode === 'bones' && !cameraRotating && <Suspense fallback={<p>Loading controller…</p>}><MovementController restPose={restPose} selectionByGeoset={validSelection} workplaneEnabled={workplaneEnabled} onWorkplaneEnabled={setWorkplaneEnabled} workplane={workplane} onWorkplane={setWorkplane} restrictions={restrictions} onRestrictions={setRestrictions} multiple={multipleNodes} onMultiple={setMultipleNodes} onVertexTransform={transform} globalSeqId={restPose ? null : globalSeqId} onTimelineChange={selectTimeline} highlightKeyframes={highlightKeyframes} onHighlightKeyframes={setHighlightKeyframes} preferences={preferences} disabled={doc.readOnly || saving} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onEdit={edit} onSeek={setTime} onSequenceChange={selectSequence} playing={playing} onPlayingChange={setPlaying} transformMode={movementMode} onTransformMode={value => setWorkTool(value==='move'?'translate':value)} transformSpace={movementSpace} onTransformSpace={setMovementSpace} showNodes={showNodes} onShowNodes={setShowNodes} showParticles={preferences.graphics.particles} onShowParticles={showParticlePreview} onOpenNodeManager={openNodeManager} onDeleteBone={deleteSelectedBone} onCreateRigNode={createBoneOrAttachment} onAttach={beginAttach} onDetach={detachSelectedNode} onSoftBind={() => bindSelectedVertices('soft')} onHardBind={() => bindSelectedVertices('hard')} onDetachVertices={() => bindSelectedVertices('detach')} attachActive={attachSourceId != null} createOpen={boneCreateOpen} onCreateOpen={setBoneCreateOpen} canDeleteBone={!!selectedBone} canAttach={!!singleRigNode} canDetach={!!parentBone} canBind={!!selectedBone && selectionCount > 0} /></Suspense>}
+      {mode === 'bones' && !cameraRotating && <Suspense fallback={<p>Loading controller…</p>}><MovementController restPose={restPose} selectionByGeoset={validSelection} workplaneEnabled={workplaneEnabled} onWorkplaneEnabled={setWorkplaneEnabled} workplane={workplane} onWorkplane={setWorkplane} restrictions={restrictions} onRestrictions={setRestrictions} multiple={multipleNodes} onMultiple={setMultipleNodes} onVertexTransform={transform} globalSeqId={restPose ? null : globalSeqId} onTimelineChange={selectTimeline} highlightKeyframes={highlightKeyframes} onHighlightKeyframes={setHighlightKeyframes} preferences={preferences} disabled={doc.readOnly || saving} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onEdit={edit} onSeek={setTime} onSequenceChange={selectSequence} playing={playing} onPlayingChange={setPlaying} transformMode={movementMode} onTransformMode={value => setWorkTool(value==='move'?'translate':value)} transformSpace={movementSpace} onTransformSpace={setMovementSpace} showNodes={showNodes} onShowNodes={setShowNodes} showParticles={preferences.graphics.particles} onShowParticles={showParticlePreview} onOpenNodeManager={openNodeManager} onDeleteNode={deleteSelectedNode} onRenameNode={renameSelectedNode} onBillboarded={setSelectedBoneBillboarded} onCreateRigNode={createBoneOrAttachment} onAttach={beginAttach} onDetach={detachSelectedNode} onSoftBind={() => bindSelectedVertices('soft')} onHardBind={() => bindSelectedVertices('hard')} onDetachVertices={() => bindSelectedVertices('detach')} attachActive={attachSourceId != null} createOpen={boneCreateOpen} onCreateOpen={setBoneCreateOpen} canDeleteNode={!!singleRigNode} canAttach={!!singleRigNode} canDetach={!!parentBone} canBind={!!selectedBone && selectionCount > 0} /></Suspense>}
       {mode === 'animation' && !cameraRotating && <Suspense fallback={<p>Loading controller…</p>}>
 
         {animationPanel === 'movement' ? !cameraRotating && <MovementController restPose={restPose} selectionByGeoset={validSelection} workplaneEnabled={workplaneEnabled} onWorkplaneEnabled={setWorkplaneEnabled} workplane={workplane} onWorkplane={setWorkplane} restrictions={restrictions} onRestrictions={setRestrictions} multiple={multipleNodes} onMultiple={setMultipleNodes} onVertexTransform={transform} globalSeqId={restPose ? null : globalSeqId} onTimelineChange={selectTimeline} highlightKeyframes={highlightKeyframes} onHighlightKeyframes={setHighlightKeyframes} preferences={preferences} disabled={doc.readOnly || saving} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onEdit={edit} onSeek={setTime} onSequenceChange={selectSequence} playing={playing} onPlayingChange={setPlaying} transformMode={movementMode} onTransformMode={value => setWorkTool(value==='move'?'translate':value)} transformSpace={movementSpace} onTransformSpace={setMovementSpace} showNodes={showNodes} onShowNodes={setShowNodes} showParticles={preferences.graphics.particles} onShowParticles={showParticlePreview} onOpenNodeManager={openNodeManager} portraitMode={activePortrait} /> : <>

@@ -115,8 +115,53 @@ export function changeVertexBinding(model, geoset, indices, boneId, mode) {
   geoset.TotalGroupsCount = geoset.Groups.reduce((sum, group) => sum + group.length, 0);
 }
 
-export function deleteRigBone(model, id) {
-  if (!(model.Bones || []).some(bone => bone.ObjectId === id)) throw new Error('Select one bone to delete.');
+export function renameRigNode(model, id, value) {
+  const node = model.Nodes?.[id];
+  if (!node) throw new Error('Select one object to rename.');
+  const name = String(value ?? '').replace(/[\r\n\0]/g, '').trim();
+  if (!name) throw new Error('An object name cannot be empty.');
+  if (new TextEncoder().encode(name).length > 79) throw new Error('An object name must fit in 79 UTF-8 bytes.');
+  node.Name = name;
+  return name;
+}
+
+export function setBoneBillboarded(model, id, enabled) {
+  const bone = (model.Bones || []).find(node => node.ObjectId === id);
+  if (!bone) throw new Error('Select one bone.');
+  bone.Flags = (bone.Flags || 0) & ~120 | (enabled ? 8 : 0);
+}
+
+export function boneVertexHighlights(model, selectedNodeIds = []) {
+  const boneIds = new Set([...(model.Bones || []), ...(model.Helpers || [])].map(node => node.ObjectId));
+  const selected = new Set(selectedNodeIds.filter(id => boneIds.has(id)));
+  if (!selected.size) return new Map();
+  const descendants = new Set();
+  for (const node of [...(model.Bones || []), ...(model.Helpers || [])]) {
+    if (selected.has(node.ObjectId)) continue;
+    const seen = new Set([node.ObjectId]);
+    for (let parent = node.Parent; parent != null && !seen.has(parent); parent = model.Nodes?.[parent]?.Parent) {
+      if (selected.has(parent)) { descendants.add(node.ObjectId); break; }
+      seen.add(parent);
+    }
+  }
+  const colors = new Map();
+  (model.Geosets || []).forEach((geoset, geosetIndex) => {
+    const vertices = new Map(), count = (geoset.Vertices?.length || 0) / 3;
+    for (let vertex = 0; vertex < count; vertex++) {
+      const skin = geoset.SkinWeights, offset = vertex * 8;
+      const influences = skin?.length === count * 8
+        ? Array.from({ length: 4 }, (_, slot) => skin[offset + 4 + slot] > 0 ? skin[offset + slot] : null).filter(id => id != null)
+        : geoset.Groups?.[geoset.VertexGroup?.[vertex]] || [];
+      if (influences.some(id => selected.has(id))) vertices.set(vertex, '#000000');
+      else if (influences.some(id => descendants.has(id))) vertices.set(vertex, '#808080');
+    }
+    if (vertices.size) colors.set(geosetIndex, vertices);
+  });
+  return colors;
+}
+
+export function deleteRigNode(model, id) {
+  if (!model.Nodes?.[id]) throw new Error('Select one object to delete.');
   const children = (model.Nodes || []).filter(node => node?.Parent === id);
   for (const geoset of model.Geosets || []) {
     for (const group of geoset.Groups || []) {
@@ -143,3 +188,5 @@ export function deleteRigBone(model, id) {
   for (const child of children) child.Parent = null;
   return removed;
 }
+
+export const deleteRigBone = deleteRigNode;

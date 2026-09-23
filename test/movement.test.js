@@ -237,13 +237,12 @@ test('movement multiselect uses Shift to add and Ctrl to remove', () => {
   assert.deepEqual(movementNodeSelection([1, 2], 3, { multiple: true, ctrl: true }), [1, 2]);
 });
 
-test('bone connectors stop outside every rendered marker silhouette', () => {
+test('bone connectors reach both pivot centers even when markers nearly overlap', () => {
   const parent = { x: 0, y: 0, overlayKind: 'bones' }, child = { x: 100, y: 0, overlayKind: 'bones' };
-  const radius = movementMarkerRadius(parent, 6), line = boneConnectionEndpoints(parent, child, 6);
-  assert.ok(radius > 15, 'radius covers a rotated three-dimensional cube');
-  assert.equal(line.from.x, radius);
-  assert.equal(line.to.x, 100 - radius);
-  assert.equal(boneConnectionEndpoints(parent, { ...child, x: radius * 2 - 1 }, 6), null);
+  const line = boneConnectionEndpoints(parent, child);
+  assert.deepEqual(line, { from: { x: 0, y: 0 }, to: { x: 100, y: 0 } });
+  assert.equal(boneConnectionEndpoints(parent, { ...child, x: 1 }).to.x, 1);
+  assert.equal(boneConnectionEndpoints(parent, { ...child, x: 0 }), null);
 });
 
 test('UV fast path accepts UV overlays and rejects topology, material, and node changes', () => {

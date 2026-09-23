@@ -3,6 +3,7 @@ import { visualOptions } from '../src/preferences.js';
 
 const CUBE = { vertices: [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]], faces: [[0,3,2,1],[4,5,6,7],[0,1,5,4],[3,7,6,2],[0,4,7,3],[1,2,6,5]] };
 const TETRA = { vertices: [[1,1,1],[-1,-1,1],[-1,1,-1],[1,-1,-1]], faces: [[0,2,1],[0,1,3],[0,3,2],[1,2,3]] };
+const MARKER_LIGHT = new Vector3(-.4, -.5, 1).normalize();
 
 export function boneHighlightColors(nodes, selectedIds) {
   const byId = new Map(nodes.map(point => [point.node.ObjectId, point]));
@@ -52,12 +53,9 @@ export function rigMarkerGeometry(nodes, selectedIds, options = {}) {
     const points = shape.vertices.map(vertex => new Vector3(...vertex).multiplyScalar(point.unitsPerPixel * size).applyQuaternion(point.rotation).add(point.world));
     const seen = new Set();
     for (const face of shape.faces) {
-      // Faces are wound outwards. Light the outward side from the viewer so a
-      // cube/polyhedron can never look like its dark interior is facing out.
+      // Face illumination stays in model space while the camera moves.
       const normal = points[face[1]].clone().sub(points[face[0]]).cross(points[face[2]].clone().sub(points[face[0]])).normalize();
-      const faceCenter = face.reduce((value, id) => value.add(points[id]), new Vector3()).multiplyScalar(1 / face.length);
-      const light = options.cameraPosition ? new Vector3().fromArray(options.cameraPosition).sub(faceCenter).normalize() : new Vector3(-.4,-.5,1).normalize();
-      const illumination = .58 + .42 * Math.max(0, normal.dot(light));
+      const illumination = .58 + .42 * Math.max(0, normal.dot(MARKER_LIGHT));
       for (let i = 1; i + 1 < face.length; i++) for (const id of [face[0],face[i],face[i+1]]) triangles.push(...points[id].toArray(), ...rgb.map(c => c * illumination));
       for (let i = 0; i < face.length; i++) {
         const a = face[i], b = face[(i+1)%face.length], key = [a,b].sort().join(':');
@@ -99,7 +97,7 @@ export function createRigMarkersGL(gl) {
   gl.bindVertexArray(null);
   return {
     draw(camera, nodes, selectedIds, options) {
-      const { triangles, edges, emphasizedEdges } = rigMarkerGeometry(nodes, selectedIds, { ...options, cameraPosition: camera.position.toArray() });
+      const { triangles, edges, emphasizedEdges } = rigMarkerGeometry(nodes, selectedIds, options);
       const viewport = gl.getParameter(gl.VIEWPORT);
       const thickEdges = thickMarkerEdges(emphasizedEdges, camera, viewport[2], viewport[3]);
       const drawParentEdges = () => { gl.disable(gl.CULL_FACE); gl.bufferData(gl.ARRAY_BUFFER,thickEdges,gl.DYNAMIC_DRAW); gl.drawArrays(gl.TRIANGLES,0,thickEdges.length/6); };

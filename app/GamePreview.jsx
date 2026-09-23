@@ -6,6 +6,7 @@ import { createPreviewSceneGL } from './preview-scene-gl.js';
 import { projectPreviewGeosets, pickPreviewGeoset, selectPreviewVertices } from './preview-selection.js';
 import { cameraLeftLight, improveNativeTexture, captureDimensions, nativeTeamColor, viewportPixelRatio } from './viewport-quality.js';
 import { createRigMarkersGL } from './rig-markers-gl.js';
+import { boneVertexHighlights } from '../src/bone-tools.js';
 import { drawModelCameraOverlay } from './model-camera-overlay.js';
 import { ModelRenderer } from 'war3-model';
 import { textureFromAsset } from './Viewport.jsx';
@@ -646,6 +647,7 @@ export default function GamePreview(inputProps) {
       overlayOptions.grid = false;
       overlayOptions.normals ||= !!p.showNormals;
       overlayOptions.selectionByGeoset = p.selectionByGeoset;
+      if (p.restPose) overlayOptions.boneVertexColors = boneVertexHighlights(ownedModel, p.selectedNodeIds || []);
       overlayOptions.selectedGeoset = p.selectedGeoset;
       overlayOptions.wires ||= p.mode === 'wireframe' || p.mode === 'vertices';
       overlayOptions.showHiddenWires = p.mode === 'wireframe' || p.mode === 'vertices';
