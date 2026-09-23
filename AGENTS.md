@@ -19,6 +19,11 @@
   keys. Ordinary speed changes, slight deviations, and intentional attack or
   walking motion are not warnings by themselves. Check false positives against
   the user's known-good animations; do not hard-code animation names.
+- Distinguish the observed jump from the keys constraining an intended pose.
+  Hand selection to the existing bone/channel/keyframe tools. Preserve the
+  user's intended pose, and select exact holding keys without including that
+  pose in a continuous deletion range. Removing the intended movement merely
+  to make a warning disappear is not a successful repair.
 
 ## Git workflow
 

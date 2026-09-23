@@ -214,7 +214,7 @@ export default function App() {
   const [zoomAnchor, setZoomAnchor] = useState(null), [choosingZoomAnchor, setChoosingZoomAnchor] = useState(false);
   const files = useRef(), textures = useRef(), folder = useRef(), clipboard = useRef(null), latest = useRef(), commands = useRef({}), rangeAnchor = useRef(0), settings = useRef({}), textureResolutions = useRef(new WeakMap());
   const doc = session.doc, model = doc.model, geoset = model.Geosets[activeGeoset];
-  const inspectingMotion = mode === 'animation' && animationPanel === 'movement' && globalSeqId === null;
+  const inspectingMotion = mode === 'animation' && globalSeqId === null;
   const motion = useMotionInspector(session, sequence, doc.revision, inspectingMotion && sequence >= 0);
   const [motionAnchor, setMotionAnchor] = useState(8);
   const motionOrigin = useRef(null);
@@ -223,16 +223,19 @@ export default function App() {
     const global = node?.[movementProperties[movementMode]]?.GlobalSeqId;
     return selectedNodeIds.includes(node?.ObjectId) && Number.isInteger(global) && global >= 0;
   });
-  const [liveMotionPose, setLiveMotionPose] = useState(null);
-  useEffect(() => setLiveMotionPose(null), [session.id, sequence]);
   const seekMotionTime = value => {
     setPlaying(false); setTime(value);
     if (motion.focus && (value < motion.focus[0] || value > motion.focus[1])) motion.setFocus(null);
   };
   const selectMotion = finding => {
-    seekMotionTime(Math.round(finding.time)); setSelectedNodeIds([finding.nodeId]);
-    setMovementMode(Object.keys(movementProperties).find(mode => movementProperties[mode] === finding.property) || 'rotate');
-    setHighlightKeyframes(true); setCameraMode('work'); setLiveMotionPose(null);
+    const target = finding.targets?.[0] || { time: finding.time, keyTimes: finding.selectionKeys || [finding.time] };
+    const channel = Object.keys(movementProperties).find(mode => movementProperties[mode] === finding.property) || 'rotate';
+    selectAnimationPanel('movement');
+    seekMotionTime(Math.round(target.time)); setSelectedNodeIds([finding.nodeId]);
+    setMovementMode(channel); setTool(channel === 'move' ? 'translate' : channel);
+    setHighlightByPanel(previous => ({ ...previous, movement: true }));
+    timelineCommands.current.selectKeys?.(target.keyTimes || [target.time], { kind: 'node', id: finding.nodeId, property: finding.property });
+    setCameraMode('work');
     setShowNodes(true); setCleanViews(previous => ({ ...previous, animation: false }));
     setOverlayModes(previous => setEditorDisplay(setEditorDisplay(previous, 'animation', 'bones', true), 'animation', 'nodes', true));
   };
@@ -908,7 +911,7 @@ export default function App() {
     onMotionFinding={(finding, element) => { motionOrigin.current = element; setMotionAnchor(element.getBoundingClientRect().left); motion.setActive(finding); selectMotion(finding); }}
     onSelectKey={mode === 'animation' && animationPanel === 'movement' ? key => { if (motion.active) closeMotion(); selectMotion(key); } : undefined}
     restrictions={rigWorkspace?restrictions:{}} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} selectedGeosets={[...selectable]} globalSeqId={globalSeqId} highlightKeyframes={highlightKeyframes} playing={playing} onPlayingChange={setPlaying} onStatus={say} activeController={animationPanel==='movement'?movementMode:'animations'} onEdit={edit} onSeek={seekMotionTime} onCommands={registerTimelineCommands} disabled={doc.readOnly||saving} preferences={preferences}>
-    {inspectingMotion && motion.active && <Suspense fallback={null}><MotionInspector model={model} revision={doc.revision} sequenceIndex={sequence} globalSeqId={globalSeqId} selectedNodeIds={selectedNodeIds} mode={movementMode} motion={motion} anchor={motionAnchor} onClose={closeMotion} onSelect={selectMotion} onReplay={replayMotion} onEdit={edit} onPlayingChange={setPlaying} disabled={doc.readOnly || saving} restrictions={restrictions} livePose={liveMotionPose}/></Suspense>}
+    {inspectingMotion && animationPanel === 'movement' && motion.active && <Suspense fallback={null}><MotionInspector time={time} selectedNodeIds={selectedNodeIds} mode={movementMode} motion={motion} anchor={motionAnchor} onClose={closeMotion} onSelect={selectMotion} onReplay={replayMotion}/></Suspense>}
   </KeyframeTimeline></Suspense>);
   const activePortrait = portraitModeActive;
   const cameraPortraitActive = activePortrait && !!model.Cameras?.[portraitCameraIndex];
@@ -958,7 +961,7 @@ export default function App() {
       {mode === 'uv' && (window.desktop ? <div className="uv-detached-message">UV Wrapper is open in its own window.</div> : uvWorkspace)}
       {preferencesReady && mode === 'paint' && <Suspense fallback={<div className="classic-empty-view">{paintMessage('paint.loading')}</div>}><PaintBoundary key={session.id} onSave={()=>savePaintProject()} onExit={()=>selectMode('vertices')}><PaintWorkspace key={session.id} model={session.paintWorkingModel||model} originalModel={paintOriginalModel} revision={doc.revision+session.paintWorkingRevision} modelName={doc.name} modelPath={session.path} textureAssets={session.assets} project={session.paintProject} activeGeoset={activeGeoset} onGeosetChange={setActiveGeoset} onWorkingModelChange={value=>{session.paintWorkingModel=value;session.paintWorkingRevision++;refresh();}} onProjectChange={value=>{if(!session.paintProject&&value){session.paintOriginalModelBytes=doc.serialize(doc.format);session.paintWorkingModel ||= structuredClone(model);}if(!value){session.paintWorkingModel=null;session.paintWorkingRevision++;delete session.paintAppliedRevision;}session.paintProject=value;refresh();}} onEnsureTarget={ensurePaintTarget} onSaveProject={savePaintProject} onOpenProject={open} onExport={exportPaintProject} onApply={applyPaintToModel} onExit={()=>selectMode('vertices')} onStatus={say} preferences={preferences} cameraProps={{...cameraProps,onWorkMode:()=>setCameraMode('work'),onSensitivityChange:changeSensitivity,onPointerSensitivityChange:changePointerSensitivity,onCameraModeToggle:toggleMiddleCamera}} view={view} cameraMode={cameraMode} teamColor={teamColor} readOnly={doc.readOnly||saving||model.Version!==800}/></PaintBoundary></Suspense>}
       {(mode === 'animation' || mode === 'bones') && <Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview previewMode={previewRenderModes.animation} presentation={cleanAnimationPreview?"preview":"editor"} restPose={restPose} cleanAnimationPreview={cleanAnimationPreview} workplaneEnabled={workplaneEnabled} restrictions={restrictions} multiple={multipleNodes} {...cameraProps} onInspectGeoset={inspectGeoset} selectedGeoset={activeGeoset} selectionByGeoset={validSelection} selectableGeosets={selectable} onSelectionChange={next=>setSelection(filterVertexSelection(next,selectable,doc.model))} hiddenGeosets={showAllGeosets?new Set():new Set([...allGeosets(model.Geosets.length)].filter(i=>!selectable.has(i)))} modelPath={session.path} mode={cleanView ? 'textured' : renderMode} shaded={shaded} showGrid={cameraPortraitActive ? false : showGrid} showAxes={cameraPortraitActive ? false : showAxes} workplane={workplane} backgroundUrl={backgroundLibrary.url} backgroundType={backgroundLibrary.type} onCaptureReady={setCaptureAPI} timelineInterval={[animationDomain.start,animationDomain.end]} overlays={cameraPortraitActive ? portraitOverlays : panelOverlays} loop={previewLoop} hoveredGeoset={!cleanView && preferences.highlightSelection ? hoveredGeoset : null} preferences={preferences} onSensitivityChange={changeSensitivity} onPointerSensitivityChange={changePointerSensitivity} onCameraModeToggle={toggleMiddleCamera} suspended={previewSuspended} key={session.id} model={previewModel} revision={doc.revision} sequenceIndex={sequence} time={time} playing={playing} onTimeChange={setTime} onPlayingChange={setPlaying} teamColor={teamColor} textureAssets={session.assets} view={cameraPortraitActive ? portraitView : view} cameraMode={cameraMode}
-        portraitMode={activePortrait} portraitCameraIndex={portraitCameraIndex} portraitSnapRevision={portraitSnapRevision} liveMovementRevision={liveMovementRevision.current} playbackRange={inspectingMotion ? motion.focus : null} onNodePosePreview={setLiveMotionPose} globalSeqId={globalSeqId} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onNodeTransform={doc.readOnly || saving || sharedMotionChannel || !rigWorkspace || !restPose && globalSeqId !== null ? undefined : moveNodes} showNodes={showNodes} showParticles={preferences.graphics.particles} transformMode={rigWorkspace ? movementMode : 'select'} transformSpace={movementSpace} /></Suspense>}
+        portraitMode={activePortrait} portraitCameraIndex={portraitCameraIndex} portraitSnapRevision={portraitSnapRevision} liveMovementRevision={liveMovementRevision.current} playbackRange={inspectingMotion ? motion.focus : null} globalSeqId={globalSeqId} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onNodeTransform={doc.readOnly || saving || sharedMotionChannel || !rigWorkspace || !restPose && globalSeqId !== null ? undefined : moveNodes} showNodes={showNodes} showParticles={preferences.graphics.particles} transformMode={rigWorkspace ? movementMode : 'select'} transformSpace={movementSpace} /></Suspense>}
     </section>{mode !== 'uv' && mode !== 'paint' && <aside className="classic-sidebar">
       {cameraRotating && cameraPanel}
       {!rigWorkspace && mode !== 'animation' && !cameraRotating && <><div className="classic-counts"><div>Vertices: <span>{totalVertices}</span></div><div>Selected: <span>{selectionCount}</span></div><div>Hidden: <span>{hiddenCount}</span></div><div>Triangles: <span>{totalFaces}</span></div><div>Selected: <span>{selectedFaces}</span></div></div>

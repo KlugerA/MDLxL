@@ -4,7 +4,7 @@ import { Quaternion, Vector3 } from 'three';
 import { createDemoDocument, openDocument } from '../src/editor-document.js';
 import { scanMotion, motionPose, setMotionPose, motionSnapshot, rotationDistance } from '../src/motion-inspector.js';
 import { motionModelKey, motionSignature, motionDecisionStore } from '../src/motion-decisions.js';
-import { applyMovementTransform, deleteMovementKeys } from '../src/movement.js';
+import { applyMovementTransform, deleteMovementKeys, sampleMovement } from '../src/movement.js';
 import { sampleNodeMatrices } from '../src/animation.js';
 import { previewPlaybackStep } from '../app/game-preview-capture.js';
 
@@ -26,9 +26,19 @@ test('holding keys and compressed transition are one hint with actual times and 
   const finding = result.findings.find(f => f.kind === 'holding-keys');
   assert.deepEqual(finding.keyTimes, [0, 200, 400, 600, 800, 850]);
   assert.deepEqual([finding.start, finding.end, finding.time], [0, 850, 800]);
+  assert.deepEqual(finding.targets, [{ role: 'hold', time: 800, keyTimes: [200, 400, 600, 800] }]);
   assert.match(finding.explanation, /4 intermediate keys/); assert.match(finding.explanation, /final 50 ms/);
   assert.match(finding.explanation, /Interpolation still operates/); assert.match(finding.evidence, /90°.*1800°\/s/);
   assert.deepEqual(model, before);
+});
+
+test('holding selection frees the transition while preserving both intended poses', () => {
+  const model = fixture(), node = model.Nodes[1], finding = scanMotion(model).findings.find(f => f.kind === 'holding-keys');
+  const first = structuredClone(node.Rotation.Keys[0]), destination = structuredClone(node.Rotation.Keys.find(k => k.Frame === 850));
+  assert.ok(rotationDistance(sampleMovement(model, node, 'Rotation', 400, 0), first.Vector) < .001);
+  for (const time of finding.targets[0].keyTimes) deleteMovementKeys(model, [node.ObjectId], time, 0, 'rotate');
+  assert.deepEqual(node.Rotation.Keys, [first, destination, { Frame: 1000, Vector: new Float32Array(rotation(90)) }]);
+  assert.ok(rotationDistance(sampleMovement(model, node, 'Rotation', 400, 0), first.Vector) > 40, 'The real evaluator now moves during the previously held interval');
 });
 
 test('inherited sword jerk is observed in model space, not blamed on clean local tracks', () => {
@@ -101,8 +111,23 @@ test('one stray pose surrounded by repeated holds is distinct from a minor speed
   const findings = scanMotion(model).findings;
   assert.equal(findings.length, 1); assert.equal(findings[0].kind, 'pose-spike');
   assert.equal(findings[0].time, 245377); assert.match(findings[0].explanation, /surrounding intervals hold the same pose/);
+  assert.deepEqual(findings[0].targets, [{ role: 'surrounding-holds', time: 245224, keyTimes: [245224, 245472, 245690, 245853, 245997], returnTime: 245472, preserveTime: 245377 }]);
   model.Nodes[1].Rotation.Keys[2].Vector = new Float32Array(rotation(2));
   assert.deepEqual(scanMotion(model).findings, [], 'A tiny stray adjustment is below the warning threshold');
+});
+
+test('selecting surrounding holds preserves the changed pose and lengthens its approach and return', () => {
+  const model = fixture(); model.Nodes = model.Nodes.slice(0, 2);
+  model.Nodes[1].Rotation = track([[0, rotation(0)], [224, rotation(0)], [377, rotation(8)], [472, rotation(0)], [690, rotation(0)], [1000, rotation(0)]]);
+  const node = model.Nodes[1], finding = scanMotion(model).findings.find(f => f.kind === 'pose-spike');
+  const intended = structuredClone(node.Rotation.Keys.find(k => k.Frame === finding.time));
+  assert.ok(rotationDistance(sampleMovement(model, node, 'Rotation', 100, 0), rotation(0)) < .001);
+  for (const frame of finding.targets[0].keyTimes) deleteMovementKeys(model, [node.ObjectId], frame, 0, 'rotate');
+  assert.deepEqual(node.Rotation.Keys.map(k => k.Frame), [0, 377, 1000]);
+  assert.deepEqual(node.Rotation.Keys.find(k => k.Frame === finding.time), intended);
+  assert.ok(rotationDistance(sampleMovement(model, node, 'Rotation', 100, 0), rotation(0)) > 2);
+  assert.ok(rotationDistance(sampleMovement(model, node, 'Rotation', 377, 0), intended.Vector) < .001);
+  assert.ok(rotationDistance(sampleMovement(model, node, 'Rotation', 500, 0), rotation(0)) > 6, 'Return is spread out instead of immediately pulling back');
 });
 
 test('a near-instant left-to-right rotation is caught without repeated holding keys', () => {

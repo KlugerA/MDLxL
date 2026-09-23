@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { classicTimelineDomain, classicTimelineTargets, classicPaste, unrestrictedTimelineTargets } from '../src/classic-keyframes.js';
 import { timelineTracks, timelineKeys, timelineSections, copyTimelineKeys, copyTimelinePose, setTimelineKeys, clearTimelineKeys } from '../src/keyframe-timeline.js';
 import { animationMarkerTimes } from '../src/animation-markers.js';
+import { animationTrackId } from '../src/animation-tracks.js';
 import './KeyframeTimeline.css';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -9,6 +10,7 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 /** The original compact reel: time selection, with authoring in the controllers. */
 export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, globalSeqId = null, time = 0, selectedNodeIds = [], selectedGeosets = [], activeController = 'rotate', highlightKeyframes = true, playing = false, onPlayingChange, onEdit, onSeek, onCommands, onStatus, disabled = false, restrictions = {}, motionFindings = [], motionActive = null, motionControls = null, onMotionFinding, onSelectKey, children }) {
   const [range, setRange] = useState(null), [context, setContext] = useState(null), [draftTime, setDraftTime] = useState('0');
+  const [keySelection, setKeySelection] = useState(null);
   const [, refreshClipboard] = useState(0);
   const panel = useRef(null), reel = useRef(null), menu = useRef(null), clipboard = useRef(null), cleanup = useRef(null), editingTime = useRef(false), suppressContext = useRef(false);
   const tracks = useMemo(() => timelineTracks(model), [model, revision]);
@@ -37,31 +39,33 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
   const frame = domain ? Math.round(clamp(time, domain.start, domain.end)) : 0;
   const span = Math.max(1, (domain?.end || 0) - (domain?.start || 0));
   const percent = value => (value - (domain?.start || 0)) / span * 100;
-  const keyMarkers = useMemo(() => times.map(value => <span key={value} data-frame={value} className={`classic-reel-key${motionActive && value >= motionActive.start && value <= motionActive.end ? ' motion-key-highlight' : ''}`} style={{ left: `clamp(0px, ${(value - (domain?.start || 0)) / span * 100}%, calc(100% - 1px))` }}/>), [times, domain, span, motionActive]);
+  const selectedKeysById = keySelection && activeController === keySelection.controller && selectedNodeIds.length === 1 && selectedNodeIds[0] === keySelection.nodeId ? keySelection : null;
+  const keyMarkers = useMemo(() => times.map(value => <span key={value} data-frame={value} className={`classic-reel-key${motionActive && value >= motionActive.start && value <= motionActive.end ? ' motion-key-highlight' : ''}${selectedKeysById?.frames.has(value) && keys.some(key => key.frame === value && key.trackId === selectedKeysById.trackId) ? ' motion-key-selected' : ''}`} style={{ left: `clamp(0px, ${(value - (domain?.start || 0)) / span * 100}%, calc(100% - 1px))` }}/>), [times, domain, span, motionActive, selectedKeysById, keys]);
   const warningMarkers = useMemo(() => {
     const grouped = new Map();
+    const warningTimes = activeController === 'animations' && highlightKeyframes && domain ? new Set(animationMarkerTimes(model, domain, tracks)) : timeSet;
     for (const finding of motionFindings) {
-      if (highlightKeyframes && !selectedNodeIds.includes(finding.nodeId)) continue;
+      if (activeController !== 'animations' && highlightKeyframes && !selectedNodeIds.includes(finding.nodeId)) continue;
       // A sampled warning belongs to a relevant, visible stored key, never to an
       // invented key between diamonds. Coincident warnings share one hit target.
-      const candidates = [finding.time, ...(finding.keyTimes || [])].filter(value => timeSet.has(value));
-      const at = candidates.reduce((best, value) => Math.abs(value - finding.time) < Math.abs(best - finding.time) ? value : best, Infinity);
+      const targetTime = finding.targets?.[0]?.time ?? finding.time;
+      const candidates = [targetTime, ...(finding.keyTimes || [])].filter(value => warningTimes.has(value));
+      const at = candidates.reduce((best, value) => Math.abs(value - targetTime) < Math.abs(best - targetTime) ? value : best, Infinity);
       if (!Number.isFinite(at)) continue;
       if (!grouped.has(at)) grouped.set(at, []);
       grouped.get(at).push(finding);
     }
     return [...grouped].sort((a, b) => a[0] - b[0]);
-  }, [motionFindings, timeSet, selectionStamp, highlightKeyframes]);
+  }, [motionFindings, timeSet, selectionStamp, highlightKeyframes, activeController, domain, model, tracks]);
   const hasRange = range && range[0] !== range[1];
-  const bounds = hasRange ? [Math.min(...range), Math.max(...range)] : [frame, frame];
+  const bounds = selectedKeysById ? [Math.min(...selectedKeysById.frames), Math.max(...selectedKeysById.frames)] : hasRange ? [Math.min(...range), Math.max(...range)] : [frame, frame];
   const mutationTargets = useMemo(() => unrestrictedTimelineTargets(targets, restrictions), [targets, restrictions]);
   const mutationTrackIds = new Set(mutationTargets.map(target => target.trackId));
   const mutationBlocked = disabled || !domain || !mutationTargets.length;
 
   // Playback displays the live frame directly; only a focused edit owns a draft.
-  useEffect(() => { setRange(null); setContext(null); editingTime.current = false; setDraftTime(String(frame)); }, [domainStamp]);
-  // Warning selection is one key, never an earlier Shift-selected interval.
-  useEffect(() => { if (motionActive) { setRange(null); setContext(null); } }, [motionActive?.signature]);
+  useEffect(() => { setRange(null); setKeySelection(null); setContext(null); editingTime.current = false; setDraftTime(String(frame)); }, [domainStamp]);
+  useEffect(() => { if (keySelection && !selectedKeysById) setKeySelection(null); }, [selectionStamp, activeController]);
   useEffect(() => () => cleanup.current?.(), []);
   useEffect(() => {
     if (!context) return;
@@ -79,7 +83,7 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
   function seek(value, extend = false, anchor = frame) {
     if (!domain) return;
     const next = Math.round(clamp(value, domain.start, domain.end));
-    setRange(extend ? [anchor, next] : null); setDraftTime(String(next)); onPlayingChange?.(false); onSeek?.(next);
+    setKeySelection(null); setRange(extend ? [anchor, next] : null); setDraftTime(String(next)); onPlayingChange?.(false); onSeek?.(next);
   }
   function selectionAnchor() {
     return hasRange && frame === range[0] ? range[1] : hasRange && frame === range[1] ? range[0] : frame;
@@ -99,12 +103,12 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
       if (result !== false && result !== undefined) onStatus?.(count ? label : 'No keyframes changed.');
     });
   }
-  function selectedKeys(interval = bounds) { return keys.filter(key => key.frame >= interval[0] && key.frame <= interval[1]); }
+  function selectedKeys(interval = bounds) { return keys.filter(key => selectedKeysById ? key.trackId === selectedKeysById.trackId && selectedKeysById.frames.has(key.frame) : key.frame >= interval[0] && key.frame <= interval[1]); }
   function editableKeys(interval = bounds) { return selectedKeys(interval).filter(key => mutationTrackIds.has(key.trackId)); }
   function copyKeys() {
     if (!domain || !copyTargets.length) { clipboard.current = null; refreshClipboard(value => value + 1); onStatus?.('No stored keys here.'); return; }
     report(() => {
-      const selected = copyKeysInDomain.filter(key => key.frame >= bounds[0] && key.frame <= bounds[1]);
+      const selected = selectedKeysById ? selectedKeys() : copyKeysInDomain.filter(key => key.frame >= bounds[0] && key.frame <= bounds[1]);
       clipboard.current = copyTimelineKeys(model, copyTargets, selected, domain, bounds[0]); refreshClipboard(value => value + 1);
       onStatus?.(clipboard.current.count ? `${clipboard.current.count} stored keys copied.` : 'No stored keys here.');
     });
@@ -134,7 +138,10 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     },
     delete: () => mutate('Delete keyframes', current => clearTimelineKeys(current, mutationTargets, editableKeys(), domain)),
     clear: () => mutate('Clear keyframes', current => clearTimelineKeys(current, mutationTargets, editableKeys(hasRange ? bounds : [domain.start, domain.end]), domain)),
-    selectAll: () => { if (domain) setRange([domain.start, domain.end]); },
+    selectAll: () => { if (domain) { setKeySelection(null); setRange([domain.start, domain.end]); } },
+    // Exact stored-key selection can skip an intended pose between holding keys.
+    // Existing copy/delete/undo operations consume this same selection.
+    selectKeys: (frames, target) => { setContext(null); setRange(null); setKeySelection(frames.length ? { trackId: animationTrackId(target), nodeId: target.id, controller: ({ Translation: 'move', Rotation: 'rotate', Scaling: 'scale' })[target.property], frames: new Set(frames) } : null); },
     previous, next,
   };
   useEffect(() => { onCommands?.(commands); });
@@ -179,7 +186,7 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
   }
   function keyboard(event) {
     if (event.target.matches('input,textarea,select,button')) return;
-    if (event.key === 'Escape') { setContext(null); setRange(null); return; }
+    if (event.key === 'Escape') { setContext(null); setRange(null); setKeySelection(null); return; }
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault(); event.stopPropagation(); (event.key === 'ArrowLeft' ? previous : next)(event.shiftKey);

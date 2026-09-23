@@ -93,9 +93,9 @@ export function scanMotion(model, { sequenceIndex = 0, nodeIds = null, maxWorldS
   const findings = [], notes = new Set(), minimum = property => property === 'Rotation' ? 60 : Math.max(.01, size * .2);
   const snapMinimum = property => property === 'Rotation' ? 90 : Math.max(.01, size * .25);
   let localIntervals = 0, worldSamples = 0, capped = false;
-  const add = (node, property, kind, space, start, end, time, explanation, evidence, keyTimes) => {
+  const add = (node, property, kind, space, start, end, time, explanation, evidence, keyTimes, targets = []) => {
     if (findings.length >= maxFindings) { capped = true; return; }
-    const finding = { nodeId: node.ObjectId, nodeName: label(node), property, kind, space, start, end, time, explanation, evidence, keyTimes,
+    const finding = { nodeId: node.ObjectId, nodeName: label(node), property, kind, space, start, end, time, explanation, evidence, keyTimes, targets,
       trackId: animationTrackId({ kind: 'node', id: node.ObjectId, property }),
       chain: motionParentChain(model, node.ObjectId).map(n => ({ id: n.ObjectId, name: label(n) })) };
     finding.state = motionEvidence(model, finding, sequenceIndex);
@@ -129,7 +129,8 @@ export function scanMotion(model, { sequenceIndex = 0, nodeIds = null, maxWorldS
       const held = left.Frame - (keys[holdStart]?.Frame ?? left.Frame);
       const compressed = i - holdStart >= 2 && held >= Math.max(400, segment.dt * 6) && segment.change >= min && segment.dt <= 80;
       if (compressed) add(node, property, 'holding-keys', 'local', keys[holdStart].Frame, right.Frame, left.Frame,
-        `${label(node)} changes pose sharply after a hold. ${i - holdStart} intermediate keys repeat almost the same pose from ${keys[holdStart].Frame} to ${left.Frame} ms. They may compress the transition into the final ${segment.dt} ms. Interpolation still operates between keys. Inspect or manually remove unwanted intermediate keys to spread the movement; a deliberate hold is valid.`, measurement, keys.slice(holdStart, i + 2).map(k => k.Frame));
+        `${label(node)} changes pose sharply after a hold. ${i - holdStart} intermediate keys repeat almost the same pose from ${keys[holdStart].Frame} to ${left.Frame} ms. They may compress the transition into the final ${segment.dt} ms. Interpolation still operates between keys. Inspect or manually remove unwanted intermediate keys to spread the movement; a deliberate hold is valid.`, measurement, keys.slice(holdStart, i + 2).map(k => k.Frame),
+        [{ role: 'hold', time: left.Frame, keyTimes: keys.slice(holdStart + 1, i + 1).map(k => k.Frame) }]);
       const adjacent = [segments[i - 1]?.speed, segments[i + 1]?.speed].filter(Number.isFinite);
       const baseline = adjacent.length ? Math.max(...adjacent, min) : min;
       if (!compressed && segment.change >= snapMinimum(property) && segment.dt <= 50 && segment.speed >= baseline * 8)
@@ -140,9 +141,16 @@ export function scanMotion(model, { sequenceIndex = 0, nodeIds = null, maxWorldS
         && segments[i - 1].travel <= tolerance && segments[i + 2].travel <= tolerance
         && distance(segments[i - 1].poses[0], segments[i + 2].poses[4], property) <= tolerance;
       const spikeMinimum = isolated ? (property === 'Rotation' ? 6 : Math.max(.01, size * .04)) : snapMinimum(property);
-      if (returns && segment.change >= spikeMinimum && segments[i + 1].change >= spikeMinimum && segment.dt + segments[i + 1].dt <= (isolated ? 300 : 100))
-        add(node, property, 'pose-spike', 'local', isolated ? keys[i - 1].Frame : left.Frame, isolated ? keys[i + 3].Frame : keys[i + 2].Frame, right.Frame,
-          `${label(node)} briefly leaves its pose at ${right.Frame} ms and returns near it by ${keys[i + 2].Frame} ms. ${isolated ? 'The surrounding intervals hold the same pose, making this single different key stand out. ' : ''}Inspect the middle key; this can also be an intentional impact.`, measurement, keys.slice(isolated ? i - 1 : i, isolated ? i + 4 : i + 3).map(k => k.Frame));
+      if (returns && segment.change >= spikeMinimum && segments[i + 1].change >= spikeMinimum && segment.dt + segments[i + 1].dt <= (isolated ? 300 : 100)) {
+        let returnEnd = i + 2;
+        if (isolated) while (returnEnd < segments.length && segments[returnEnd].travel <= tolerance && distance(segment.poses[0], segments[returnEnd].poses[4], property) <= tolerance) returnEnd++;
+        // Select repeated old-pose keys on both sides, skipping the changed pose
+        // and the outer anchors. Their timing can be edited without losing it.
+        const holdingKeys = isolated ? [...keys.slice(holdStart + 1, i + 1), ...keys.slice(i + 2, returnEnd)].map(key => key.Frame) : [];
+        add(node, property, 'pose-spike', 'local', isolated ? keys[holdStart].Frame : left.Frame, keys[returnEnd].Frame, right.Frame,
+          `${label(node)} briefly leaves its pose at ${right.Frame} ms and returns near it by ${keys[i + 2].Frame} ms. ${isolated ? 'The surrounding intervals hold the same pose, making this single different key stand out. ' : ''}Inspect the middle key; this can also be an intentional impact.`, measurement, keys.slice(isolated ? i - 1 : i, isolated ? i + 4 : i + 3).map(k => k.Frame),
+          isolated ? [{ role: 'surrounding-holds', time: left.Frame, keyTimes: holdingKeys, returnTime: keys[i + 2].Frame, preserveTime: right.Frame }] : []);
+      }
       if (track.LineType >= 2) {
         const overshoot = property === 'Rotation'
           ? Math.max(...segment.poses.map(p => (distance(segment.poses[0], p, property) + distance(p, segment.poses[4], property) - segment.change) / 2))

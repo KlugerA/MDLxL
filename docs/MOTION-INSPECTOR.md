@@ -1,23 +1,29 @@
 # Motion warnings
 
-The normal Movement layout is unchanged. Choose a named animation: a background
+The normal Movement and Animations layouts are unchanged. Choose a named animation: a background
 worker checks its motion and adds a small amber mark beneath an affected timeline
 diamond. There is no permanent inspector, warning list, scan button, or wider
 sidebar. Ordinary key selection does not open additional UI.
 
-Click a warning to select its bone, channel, and suspect key directly. A small
-popup gives a plain explanation and **Delete selected key**, **Replay section**,
-and **Mark Desired**. The selected marker is outlined; surrounding evidence keys
-are amber. An old timeline range is cleared so keyboard Delete also targets just
-the selected key. Deletion is manual and uses the existing undo/redo workflow;
-other keys and channels stay intact. Replay remains available after deletion.
+Click a warning in either timeline to hand selection to **Movement**, with the
+affected bone and transform controller active. For holding patterns, the repeated
+old-pose keys are selected in blue. The intended changed pose and outer end poses
+stay unselected. Selection uses exact track/key identities, not a continuous
+range that could accidentally include the intended pose between the holds.
+
+The compact popup explains the limiting timing and offers **Select holding keys**
+to return to the existing editor, plus **Replay section** and **Mark Desired**.
+There is no duplicate Delete button: the existing Delete command and undo/redo
+operate on the selection. Selecting another bone, channel, or time clears it;
+copy and clear also respect the selected key identities. Selection changes no
+model data, and normal Movement tools continue to own visual/numerical edits.
 
 There is no expanded key list, numeric inspector, parent tree, or second scrubber
 in the popup. The existing Movement controls remain available. Selecting another
 ordinary key dismisses the old warning. Previous/next arrows appear only when
 there are multiple warnings; coincident findings share one timeline marker.
 Measured evidence is retained in the explanation's tooltip. Inherited motion and
-curve overshoot do not identify one suspect key and offer no deletion button.
+curve overshoot do not invent a set of responsible holding keys.
 Nothing is automatically deleted, repaired, or baked.
 
 After a warning is opened (or this animation has Desired decisions), the timeline
@@ -58,9 +64,11 @@ small deviations, and dense sampling are not defects. These remain conservative
 inspection hints; deliberate snaps and holds can be marked Desired.
 
 A read-only scan of the supplied Desktop `WH_WOC_KnightSlaanesh04.mdx` returns one
-warning in **Channel**, at **245377 ms**, on **Bone_Arm1_L**: an 8-degree excursion
-surrounded by repeated poses, returning at 245472 ms. Its other 13 animations
-return no warnings. The classifier contains no model or animation-name exceptions.
+warning in **Channel**, around the pose at **245377 ms**, on **Bone_Arm1_L**.
+The old pose holds until 245224 ms and returns at 245472 ms. The marker selects
+Rotation keys at **245224, 245472, 245690, 245853, and 245997 ms**, preserving the
+user's intended **245377 ms** pose and the 245000/246200 ms end poses. Its other
+13 animations return no warnings. No model or animation names are special-cased.
 
 ## Desired persistence
 
@@ -93,19 +101,23 @@ motion, repeated holds, inherited sword movement, equivalent rotations, sparse
 edits, undo/redo, Desired invalidation, and identical unchanged MDL/MDX exports.
 The Electron test uses a synthetic model in a separate profile and checks the
 markers-only default, original sidebar width, no layout change on opening details,
-direct key selection/deletion, Desired/restore, replay, undo/redo, and save/reopen.
-It also verifies deletion during playback uses the identified key rather than
-the moving cursor, and a same-time translation key is preserved. It does not
-alter the user's model or testing window.
+selection from Animations into the correct Movement bone/Rotation controller,
+noncontiguous holding-key selection, Desired/restore, replay, undo/redo, and
+save/reopen. Ordinary Delete removes only the selected holding keys, preserving
+the intended pose and all other channels. It does not alter the user's model
+or testing window.
 
-The focused regression run passed 132 tests. The rebuilt Electron synthetic
-workflow passed, including a measured 164-pixel sidebar and a popup under 230
-pixels tall, single-key deletion, undo/redo, and repeated popup dismissal.
+The focused regression run passed 135 tests. The rebuilt Electron synthetic
+workflow passed, including the existing 300-pixel Animations and 164-pixel
+Movement sidebars, a compact popup, scoped holding-key deletion, undo/redo,
+and repeated popup dismissal.
 A separate read-only Electron check confirms the one Channel marker and zero
 markers in the other 13 Knight04 animations. An in-memory copy verifies that
-deleting just the 245377 ms rotation key clears the warning, and undo restores
-identical MDX output. The Desktop model is never written. Screenshots of the
-normal view and the explicitly opened warning are inspected separately.
+removing the five surrounding holding keys preserves the 245377 ms key exactly
+and lets the real evaluator move during the previously held interval (2.12
+degrees by 245100 ms). Undo restores identical MDX output. The Desktop model is
+never written. Screenshots of the normal Animations view and the selected
+holding keys in Movement were inspected. This is not user acceptance of playback.
 
 Broader legacy checks also encountered two failures in unchanged source/tests:
 inline RGB on All line expects 179 rather than the current mixed value, and a
