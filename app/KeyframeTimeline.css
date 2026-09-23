@@ -6,7 +6,10 @@
 .classic-reel-key { position:absolute; top:1px; bottom:1px; width:1px; background:#0000ff; pointer-events:none; }
 .classic-reel-key.motion-key-highlight { background:#ae6800; width:3px; }
 .motion-reel-interval { position:absolute; inset-block:0; background:#f3ac303b; pointer-events:none; }
-.classic-keyframe-reel .motion-reel-warning { position:absolute; top:22px; transform:translateX(-50%); z-index:2; width:12px; min-width:12px; height:13px; min-height:13px; padding:0; border:0; background:transparent; color:#ac6500; font-size:13px; line-height:13px; }
+.classic-keyframe-reel .motion-reel-warning { position:absolute; top:22px; transform:translateX(-50%); z-index:2; width:14px; min-width:14px; height:23px; min-height:23px; padding:0; border:0; background:transparent!important; box-shadow:none; color:var(--ui-text,#161616); font-size:10px; line-height:10px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:3px; }
+.motion-warning-underline { display:block; width:12px; height:4px; border-radius:1px; background:#df8b00; }
+.motion-reel-desired .motion-warning-underline { background:#54956b; }
+.classic-keyframe-reel .motion-reel-warning:hover .motion-warning-underline { outline:1px solid currentColor; }
 .classic-keyframe-reel .motion-reel-warning:focus { outline:2px solid #4582c6; }
 .classic-reel-cursor { position:absolute; top:0; bottom:0; width:2px; transform:translateX(-1px); background:#ff0000; cursor:ew-resize; }
 .classic-reel-selection { position:absolute; top:50%; bottom:0; background:#b5b5b5; pointer-events:none; }

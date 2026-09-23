@@ -87,7 +87,11 @@ export function scanMotion(model, { sequenceIndex = 0, nodeIds = null, maxWorldS
   if (!interval) throw Error('Choose an animation before scanning motion.');
   const nodes = allNodes(model), scope = nodeIds ? new Set(nodeIds.flatMap(id => motionParentChain(model, id).map(n => n.ObjectId))) : null;
   const selected = nodes.filter(node => !scope || scope.has(node.ObjectId)), size = modelSize(model, nodes);
-  const findings = [], notes = new Set(), minimum = property => property === 'Rotation' ? 15 : Math.max(.01, size * .04);
+  // Default warnings require a major change in a short *millisecond* interval,
+  // or strong structural evidence of one stray pose in an otherwise held track.
+  // A speed ratio alone is not evidence: starting/stopping and attacks do that.
+  const findings = [], notes = new Set(), minimum = property => property === 'Rotation' ? 60 : Math.max(.01, size * .2);
+  const snapMinimum = property => property === 'Rotation' ? 90 : Math.max(.01, size * .25);
   let localIntervals = 0, worldSamples = 0, capped = false;
   const add = (node, property, kind, space, start, end, time, explanation, evidence, keyTimes) => {
     if (findings.length >= maxFindings) { capped = true; return; }
@@ -102,7 +106,7 @@ export function scanMotion(model, { sequenceIndex = 0, nodeIds = null, maxWorldS
     if (!track?.Keys) continue;
     if (globalTrack(track)) { notes.add('Shared global tracks contribute to model-space sampling; their local key patterns are not classified.'); continue; }
     const keys = track.Keys.filter(k => k.Frame >= interval[0] && k.Frame <= interval[1]);
-    const unit = property === 'Rotation' ? '°' : ' model units', min = minimum(property), tolerance = min / 60;
+    const unit = property === 'Rotation' ? '°' : ' model units', min = minimum(property), tolerance = property === 'Rotation' ? .25 : Math.max(.0001, size * .001);
     const sample = time => Array.from(sampleTrack(track, time, { interval, quaternion: property === 'Rotation', fallback: defaults[property] }));
     const segments = keys.slice(1).map((key, i) => {
       const left = keys[i], dt = key.Frame - left.Frame;
@@ -123,25 +127,27 @@ export function scanMotion(model, { sequenceIndex = 0, nodeIds = null, maxWorldS
         continue;
       }
       const held = left.Frame - (keys[holdStart]?.Frame ?? left.Frame);
-      const compressed = i - holdStart >= 2 && held >= segment.dt * 3 && segment.change >= min && (segment.dt <= 250 || segment.speed >= min * 4);
+      const compressed = i - holdStart >= 2 && held >= Math.max(400, segment.dt * 6) && segment.change >= min && segment.dt <= 80;
       if (compressed) add(node, property, 'holding-keys', 'local', keys[holdStart].Frame, right.Frame, left.Frame,
         `${label(node)} changes pose sharply after a hold. ${i - holdStart} intermediate keys repeat almost the same pose from ${keys[holdStart].Frame} to ${left.Frame} ms. They may compress the transition into the final ${segment.dt} ms. Interpolation still operates between keys. Inspect or manually remove unwanted intermediate keys to spread the movement; a deliberate hold is valid.`, measurement, keys.slice(holdStart, i + 2).map(k => k.Frame));
       const adjacent = [segments[i - 1]?.speed, segments[i + 1]?.speed].filter(Number.isFinite);
       const baseline = adjacent.length ? Math.max(...adjacent, min) : min;
-      if (!compressed && segment.change >= min && segment.dt <= 150 && segment.speed >= baseline * 4)
+      if (!compressed && segment.change >= snapMinimum(property) && segment.dt <= 50 && segment.speed >= baseline * 8)
         add(node, property, 'abrupt-change', 'local', left.Frame, right.Frame, right.Frame,
           `${label(node)} moves much faster in this short interval than in neighboring intervals. Closely spaced poses may explain a snap; intent is uncertain.`, measurement, [left.Frame, right.Frame]);
-      else if (!compressed && i > 0 && segment.change >= min && segment.speed > Math.max(min, segments[i - 1].speed) * 5)
-        add(node, property, 'speed-change', 'local', keys[i - 1].Frame, right.Frame, left.Frame,
-          `${label(node)} speeds up at ${left.Frame} ms. The sampled average speed rises from ${round(segments[i - 1].speed)} to ${round(segment.speed)}${unit}/s. Check the spacing and curve around this key; acceleration may be intentional.`, measurement, [keys[i - 1].Frame, left.Frame, right.Frame]);
-      if (i + 1 < segments.length && segment.change >= min && segments[i + 1].change >= min && segment.dt + segments[i + 1].dt <= 350 && distance(segment.poses[0], segments[i + 1].poses[4], property) <= Math.max(tolerance, segment.change * .15))
-        add(node, property, 'pose-spike', 'local', left.Frame, keys[i + 2].Frame, right.Frame,
-          `${label(node)} briefly leaves its pose at ${right.Frame} ms and returns near it by ${keys[i + 2].Frame} ms. Inspect the middle key; this can also be an intentional impact.`, measurement, [left.Frame, right.Frame, keys[i + 2].Frame]);
+      const returns = i + 1 < segments.length && distance(segment.poses[0], segments[i + 1].poses[4], property) <= tolerance;
+      const isolated = i > 0 && i + 2 < segments.length && returns
+        && segments[i - 1].travel <= tolerance && segments[i + 2].travel <= tolerance
+        && distance(segments[i - 1].poses[0], segments[i + 2].poses[4], property) <= tolerance;
+      const spikeMinimum = isolated ? (property === 'Rotation' ? 6 : Math.max(.01, size * .04)) : snapMinimum(property);
+      if (returns && segment.change >= spikeMinimum && segments[i + 1].change >= spikeMinimum && segment.dt + segments[i + 1].dt <= (isolated ? 300 : 100))
+        add(node, property, 'pose-spike', 'local', isolated ? keys[i - 1].Frame : left.Frame, isolated ? keys[i + 3].Frame : keys[i + 2].Frame, right.Frame,
+          `${label(node)} briefly leaves its pose at ${right.Frame} ms and returns near it by ${keys[i + 2].Frame} ms. ${isolated ? 'The surrounding intervals hold the same pose, making this single different key stand out. ' : ''}Inspect the middle key; this can also be an intentional impact.`, measurement, keys.slice(isolated ? i - 1 : i, isolated ? i + 4 : i + 3).map(k => k.Frame));
       if (track.LineType >= 2) {
         const overshoot = property === 'Rotation'
           ? Math.max(...segment.poses.map(p => (distance(segment.poses[0], p, property) + distance(p, segment.poses[4], property) - segment.change) / 2))
           : Math.max(0, ...segment.poses.flatMap(p => p.map((v, j) => Math.max(Math.min(segment.poses[0][j], segment.poses[4][j]) - v, v - Math.max(segment.poses[0][j], segment.poses[4][j])))));
-        if (overshoot > min / 2) add(node, property, 'curve-overshoot', 'local', left.Frame, right.Frame, Math.round((left.Frame + right.Frame) / 2),
+        if (overshoot >= min && segment.dt <= 100) add(node, property, 'curve-overshoot', 'local', left.Frame, right.Frame, Math.round((left.Frame + right.Frame) / 2),
           `${label(node)} travels beyond the endpoint poses between ${left.Frame} and ${right.Frame} ms. The ${track.LineType === 2 ? 'Hermite' : 'Bezier'} curve controls may explain this extra movement. Inspect the curve and replay it.`, `Sampled excess: ${round(overshoot)}${unit}. ${measurement}`, [left.Frame, right.Frame]);
       }
     }
@@ -202,7 +208,7 @@ export function scanMotion(model, { sequenceIndex = 0, nodeIds = null, maxWorldS
       });
       stats.forEach((s, i) => {
         const neighbors = [stats[i - 1]?.speed, stats[i + 1]?.speed].filter(Number.isFinite);
-        if (s.travel < min || s.end - s.start > 150 || s.speed < Math.max(min, ...neighbors) * 4) return;
+        if (s.travel < snapMinimum(property) || s.end - s.start > 50 || s.speed < Math.max(min, ...neighbors) * 8) return;
         const own = findings.some(f => f.space === 'local' && f.nodeId === node.ObjectId && f.property === property && f.start <= s.end && f.end >= s.start);
         if (own) return;
         const parentEvidence = findings.filter(f => f.space === 'local' && chain.slice(1).some(n => n.ObjectId === f.nodeId) && f.start < s.end && f.end >= s.end);

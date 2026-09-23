@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motionSnapshot } from '../src/motion-inspector.js';
 import { sessionMotionStore } from '../src/motion-decisions.js';
 
-export default function useMotionInspector(session, sequenceIndex, revision) {
+export default function useMotionInspector(session, sequenceIndex, revision, enabled = false) {
   const [result, setResult] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [desired, setDesired] = useState({}), [showDesired, setShowDesired] = useState(false), [active, setActive] = useState(null);
   const [focus, setFocus] = useState(null), [progress, setProgress] = useState(null);
@@ -10,7 +10,13 @@ export default function useMotionInspector(session, sequenceIndex, revision) {
   current.current = { session, sequenceIndex, revision };
   const cancel = () => { generation.current++; worker.current?.terminate(); worker.current = null; setBusy(false); };
   useEffect(() => { cancel(); setResult(null); setActive(null); setFocus(null); setDesired({}); setError(''); }, [session.id, sequenceIndex]);
-  useEffect(() => { cancel(); }, [revision]);
+  // Background work changes only warning markers; it never opens the inspector.
+  useEffect(() => {
+    cancel();
+    if (!enabled) { setActive(null); setFocus(null); return; }
+    const timer = setTimeout(() => scan(), 250);
+    return () => { clearTimeout(timer); cancel(); };
+  }, [enabled, session.id, sequenceIndex, revision]);
   useEffect(() => () => worker.current?.terminate(), []);
   useEffect(() => {
     let active = true;
@@ -35,7 +41,12 @@ export default function useMotionInspector(session, sequenceIndex, revision) {
         if (data.progress) { setProgress(data.progress); return; }
         if (data.error) { fail(data.error); return; }
         job.terminate(); worker.current = null; setBusy(false); setResult({ ...data.result, revision, sequenceIndex, sessionId: session.id });
-        setActive(null);
+        setActive(previous => {
+          if (!previous) return null;
+          return data.result.findings.find(f => f.signature === previous.signature)
+            || data.result.findings.find(f => f.nodeId === previous.nodeId && f.property === previous.property && f.kind === previous.kind && f.start === previous.start && f.end === previous.end)
+            || { ...previous, resolved: true };
+        });
       };
       job.postMessage({ model: motionSnapshot(session.doc.model), options: { sequenceIndex, nodeIds } });
     } catch (cause) { if (token === generation.current) { cancel(); setError(cause.message); } }
@@ -44,7 +55,7 @@ export default function useMotionInspector(session, sequenceIndex, revision) {
     const started = current.current;
     try {
       const store = await sessionMotionStore(session);
-      if (started.session !== current.current.session || started.revision !== current.current.revision || started.sequenceIndex !== current.current.sequenceIndex || stale) return;
+      if (started.session !== current.current.session || started.revision !== current.current.revision || started.sequenceIndex !== current.current.sequenceIndex || stale || finding.resolved) return;
       setDesired(store.mark(finding, value)); setError('');
     } catch (cause) { setError(`Desired decision was not saved: ${cause.message}`); }
   }

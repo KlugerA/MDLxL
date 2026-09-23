@@ -7,7 +7,7 @@ import './KeyframeTimeline.css';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 /** The original compact reel: time selection, with authoring in the controllers. */
-export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, globalSeqId = null, time = 0, selectedNodeIds = [], selectedGeosets = [], activeController = 'rotate', highlightKeyframes = true, playing = false, onPlayingChange, onEdit, onSeek, onCommands, onStatus, disabled = false, restrictions = {}, motionFindings = [], motionActive = null, onMotionFinding, onSelectKey }) {
+export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, globalSeqId = null, time = 0, selectedNodeIds = [], selectedGeosets = [], activeController = 'rotate', highlightKeyframes = true, playing = false, onPlayingChange, onEdit, onSeek, onCommands, onStatus, disabled = false, restrictions = {}, motionFindings = [], motionActive = null, motionControls = null, onMotionFinding, onSelectKey, children }) {
   const [range, setRange] = useState(null), [context, setContext] = useState(null), [draftTime, setDraftTime] = useState('0');
   const [, refreshClipboard] = useState(0);
   const panel = useRef(null), reel = useRef(null), menu = useRef(null), clipboard = useRef(null), cleanup = useRef(null), editingTime = useRef(false), suppressContext = useRef(false);
@@ -38,6 +38,20 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
   const span = Math.max(1, (domain?.end || 0) - (domain?.start || 0));
   const percent = value => (value - (domain?.start || 0)) / span * 100;
   const keyMarkers = useMemo(() => times.map(value => <span key={value} data-frame={value} className={`classic-reel-key${motionActive && value >= motionActive.start && value <= motionActive.end ? ' motion-key-highlight' : ''}`} style={{ left: `clamp(0px, ${(value - (domain?.start || 0)) / span * 100}%, calc(100% - 1px))` }}/>), [times, domain, span, motionActive]);
+  const warningMarkers = useMemo(() => {
+    const grouped = new Map();
+    for (const finding of motionFindings) {
+      if (highlightKeyframes && !selectedNodeIds.includes(finding.nodeId)) continue;
+      // A sampled warning belongs to a relevant, visible stored key, never to an
+      // invented key between diamonds. Coincident warnings share one hit target.
+      const candidates = [finding.time, ...(finding.keyTimes || [])].filter(value => timeSet.has(value));
+      const at = candidates.reduce((best, value) => Math.abs(value - finding.time) < Math.abs(best - finding.time) ? value : best, Infinity);
+      if (!Number.isFinite(at)) continue;
+      if (!grouped.has(at)) grouped.set(at, []);
+      grouped.get(at).push(finding);
+    }
+    return [...grouped].sort((a, b) => a[0] - b[0]);
+  }, [motionFindings, timeSet, selectionStamp, highlightKeyframes]);
   const hasRange = range && range[0] !== range[1];
   const bounds = hasRange ? [Math.min(...range), Math.max(...range)] : [frame, frame];
   const mutationTargets = useMemo(() => unrestrictedTimelineTargets(targets, restrictions), [targets, restrictions]);
@@ -174,7 +188,7 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     event.preventDefault();
     if (suppressContext.current) { suppressContext.current = false; return; }
     const ownerWindow = event.currentTarget.ownerDocument.defaultView || window;
-    setContext({ x: clamp(event.clientX, 0, Math.max(0, ownerWindow.innerWidth - 185)), y: clamp(event.clientY, 0, Math.max(0, ownerWindow.innerHeight - 165)) });
+    setContext({ x: clamp(event.clientX, 0, Math.max(0, ownerWindow.innerWidth - 230)), y: clamp(event.clientY, 0, Math.max(0, ownerWindow.innerHeight - (motionControls ? 265 : 165))) });
   }
   const divisions = Array.from({ length: 11 }, (_, index) => Math.round((domain?.start || 0) + span * index / 10)).filter((value, index, values) => value <= (domain?.end || 0) && values.indexOf(value) === index);
   const canPaste = !!clipboard.current && (clipboard.current.kind === 'pose' || clipboard.current.count > 0);
@@ -189,7 +203,7 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
         {keyMarkers}
         <span className="classic-reel-cursor" style={{ left: `clamp(1px, ${percent(frame)}%, calc(100% - 1px))` }}/>
       </div>
-      {motionFindings.map(finding => <button key={finding.signature} type="button" className="motion-reel-warning" aria-label={`Motion warning: ${finding.nodeName}, ${finding.property}, ${finding.time} ms, ${finding.kind}`} title={`${finding.nodeName} · ${finding.property} · ${finding.kind} · ${finding.time} ms`} style={{ left: `clamp(6px, ${percent(finding.time)}%, calc(100% - 6px))` }} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onMotionFinding?.(finding); }}>◆</button>)}
+      {warningMarkers.map(([at, findings]) => <button key={at} type="button" data-frame={at} className={`motion-reel-warning${findings.every(f => motionControls?.desired[f.signature]) ? ' motion-reel-desired' : ''}`} aria-label={`Motion warning: ${findings.map(f => `${f.nodeName}, ${f.property}, ${f.time} ms, ${f.kind}`).join('; ')}`} title={`${findings.length > 1 ? `${findings.length} motion warnings` : `${findings[0].nodeName} · ${findings[0].property}`} · ${at} ms — click to inspect`} style={{ left: `clamp(6px, ${percent(at)}%, calc(100% - 6px))` }} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onMotionFinding?.(findings[0], event.currentTarget); }}><span aria-hidden="true">◆</span><span className="motion-warning-underline" aria-hidden="true"/></button>)}
       <div className="classic-reel-ruler" aria-hidden="true" translate="no">{divisions.map((value, index) => <span key={value} className={index === divisions.length - 1 ? 'is-last' : ''} style={{ left: `${percent(value)}%` }}>{value}</span>)}</div>
     </div>
     <label className="classic-reel-frame"><span>Frame:</span><input type="number" inputMode="numeric" step="1" min={domain?.start || 0} max={domain?.end || 0} aria-label="Current animation frame" data-warmkey="keyframe:time" translate="no" className={timeSet.has(frame) ? 'is-keyframe' : ''} value={editingTime.current ? draftTime : String(frame)} disabled={!domain} onFocus={() => { setDraftTime(String(frame)); editingTime.current = true; onPlayingChange?.(false); }} onChange={event => { editingTime.current = true; setDraftTime(event.target.value); }} onBlur={() => commitTime()} onKeyDown={event => {
@@ -197,6 +211,13 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
       if (event.key === 'Escape') { event.preventDefault(); setDraftTime(String(frame)); editingTime.current = false; }
       if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); event.stopPropagation(); editingTime.current = false; seek(frame + (event.key === 'ArrowUp' ? 1 : -1), event.shiftKey, selectionAnchor()); }
     }}/></label>
-    {context && <div ref={menu} className="classic-reel-menu" role="menu" style={{ left: context.x, top: context.y }}>{menuItems.map(([id, label, unavailable, title]) => <button type="button" role="menuitem" key={id} data-warmkey={`keyframe:${id}`} disabled={unavailable} title={title} onClick={() => { setContext(null); commands[id](); }}>{label}</button>)}</div>}
+    {context && <div ref={menu} className="classic-reel-menu" role="menu" style={{ left: context.x, top: context.y }}>{menuItems.map(([id, label, unavailable, title]) => <button type="button" role="menuitem" key={id} data-warmkey={`keyframe:${id}`} disabled={unavailable} title={title} onClick={() => { setContext(null); commands[id](); }}>{label}</button>)}{motionControls && <>
+      <hr/>
+      <button role="menuitem" disabled={motionControls.busy} onClick={() => { setContext(null); motionControls.scan(); }}>Find Motion Irregularities</button>
+      <button role="menuitem" disabled={motionControls.busy || !selectedNodeIds.length} onClick={() => { setContext(null); motionControls.scan(selectedNodeIds); }}>Inspect selected bone and parents</button>
+      <button role="menuitemcheckbox" aria-checked={motionControls.showDesired} onClick={() => { setContext(null); motionControls.setShowDesired(!motionControls.showDesired); }}>{motionControls.showDesired ? '✓ ' : ''}Show Desired</button>
+      {motionControls.error && <p role="alert">{motionControls.error}</p>}
+    </>}</div>}
+    {children}
   </section>;
 }

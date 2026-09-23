@@ -20,22 +20,39 @@ const model = createDemoDocument().model, id = model.Bones[0].ObjectId;
 const finding = { signature: 'one', kind: 'holding-keys', nodeName: 'Arm', nodeId: id, property: 'Rotation', space: 'local', start: 0, end: 1100, time: 1000, explanation: 'Holding keys compress the transition.', evidence: '90° in 100 ms.' };
 const motion = { result: { findings: [finding], notes: [] }, visible: [finding], desired: {}, active: finding };
 function render(props = {}) { return renderToStaticMarkup(React.createElement(Inspector, { model, revision: 0, sequenceIndex: 0, globalSeqId: null, time: 1000, mode: 'rotate', selectedNodeIds: [id], motion, ...props })); }
-test('inspector renders real key values in degrees, neighboring keys, warnings and explicit sparse edit state', () => {
+test('warning details stay absent until a marker is selected; keys require a second deliberate click', () => {
+  assert.equal(render({ motion: { ...motion, active: null } }), '');
   const html = render();
-  assert.match(html, /Stored key at 1000 ms/); assert.match(html, /Motion Z \(degrees\)/);
+  assert.match(html, /Motion warning details/); assert.match(html, /Close motion warning/);
   assert.match(html, /Mark Desired/); assert.match(html, /Show Keys/); assert.match(html, /Replay section/);
-  assert.match(html, /Previous warning/); assert.match(html, /Next warning/); assert.match(html, /Interpolation/);
-  assert.doesNotMatch(html, /quaternion/);
-  assert.match(render({ time: 750 }), /editing creates a key at 750 ms/);
+  assert.match(html, /Previous warning/); assert.match(html, /Next warning/);
+  assert.doesNotMatch(html, /Motion findings|Find Motion Irregularities|Motion key inspector|Motion Z|quaternion/);
 });
-test('stale results and global tracks cannot be edited or marked from stale evidence', () => {
+test('changed or resolved evidence cannot be marked Desired', () => {
   const html = render({ motion: { ...motion, stale: true, visible: [] } });
-  assert.match(html, /Animation changed/); assert.match(html, /disabled="">Mark Desired/);
-  const global = structuredClone(model); global.GlobalSequences = [2000]; global.Bones[0].Rotation.GlobalSeqId = 0;
-  assert.match(render({ model: global }), /Shared global track/);
-  assert.match(render({ model: global }), /aria-label="Motion Z \(degrees\)" disabled/);
+  assert.match(html, /Motion changed/); assert.match(html, /disabled="">Mark Desired/);
+  assert.match(render({ motion: { ...motion, active: { ...finding, resolved: true } } }), /no longer appears/);
 });
-test('timeline warnings remain separate, labelled buttons alongside ordinary key markers and highlighted interval', () => {
+test('clearing the selected bone while warning details are open does not crash', () => {
+  const html = render({ selectedNodeIds: [], livePose: null });
+  assert.match(html, /Motion warning details/);
+  assert.doesNotMatch(html, /Motion key inspector/);
+});
+test('only small warning markers show by default, underneath relevant existing keys', () => {
+  const before = structuredClone(model);
+  const html = renderToStaticMarkup(React.createElement(Timeline, { model, sequenceIndex: 0, motionFindings: [finding, { ...finding, signature: 'same-time' }], selectedNodeIds: [id] }));
+  assert.equal((html.match(/class="motion-reel-warning"/g) || []).length, 1);
+  assert.match(html, /data-frame="1000" class="motion-reel-warning"/);
+  assert.match(html, /motion-warning-underline/);
+  assert.doesNotMatch(html, /motion-reel-interval|Motion warning details|Find Motion Irregularities|Motion findings/);
+  assert.deepEqual(model, before);
+  const unrelated = renderToStaticMarkup(React.createElement(Timeline, { model, sequenceIndex: 0, motionFindings: [{ ...finding, nodeId: 999 }], selectedNodeIds: [id] }));
+  assert.doesNotMatch(unrelated, /motion-reel-warning/);
+  const between = renderToStaticMarkup(React.createElement(Timeline, { model, sequenceIndex: 0, motionFindings: [{ ...finding, time: 950, keyTimes: [500, 1000] }], selectedNodeIds: [id] }));
+  assert.match(between, /data-frame="1000" class="motion-reel-warning"/);
+  assert.doesNotMatch(between, /data-frame="950"/);
+});
+test('clicking a warning can highlight its interval separately from ordinary keys', () => {
   const html = renderToStaticMarkup(React.createElement(Timeline, { model, sequenceIndex: 0, motionFindings: [finding], motionActive: finding, selectedNodeIds: [id] }));
   assert.match(html, /Motion warning: Arm, Rotation, 1000 ms, holding-keys/);
   assert.match(html, /motion-reel-interval/); assert.match(html, /classic-reel-key motion-key-highlight/);

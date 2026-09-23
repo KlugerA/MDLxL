@@ -57,7 +57,7 @@ test('only active sequence keys are sampled; boundary jumps to other animations 
   assert.deepEqual(scanMotion(model).findings, []);
 });
 
-test('translation spikes, abrupt changes, speed changes, stepped keys and real curve overshoot', () => {
+test('severe translation spikes, abrupt changes, steps and short extreme curve excursions', () => {
   const model = fixture(); delete model.Nodes[1].Rotation;
   const node = model.Nodes[1];
   node.Translation = track([[0, [0, 0, 0]], [500, [0, 0, 0]], [550, [10, 0, 0]], [600, [0, 0, 0]], [1000, [0, 0, 0]]]);
@@ -65,17 +65,50 @@ test('translation spikes, abrupt changes, speed changes, stepped keys and real c
   node.Translation = track([[0, [0, 0, 0]], [800, [0, 0, 0]], [850, [10, 0, 0]], [1000, [10, 0, 0]]]);
   assert.ok(scanMotion(model).findings.some(f => f.kind === 'abrupt-change'));
   node.Translation = track([[0, [0, 0, 0]], [500, [1, 0, 0]], [1000, [30, 0, 0]]]);
-  assert.ok(scanMotion(model).findings.some(f => f.kind === 'speed-change'));
+  assert.deepEqual(scanMotion(model).findings, [], 'A speed increase over half a second is not a snap');
   node.Translation.LineType = 0;
   assert.ok(scanMotion(model).findings.some(f => f.kind === 'step'));
   node.Translation = track([[0, [0, 0, 0]], [1000, [0, 0, 0]]], 3);
   for (const key of node.Translation.Keys) { key.InTan = [30, 0, 0]; key.OutTan = [30, 0, 0]; }
+  assert.deepEqual(scanMotion(model).findings, [], 'A broad animated arc is not a sudden jump');
+  node.Translation.Keys[1].Frame = 50;
   assert.ok(scanMotion(model).findings.some(f => f.kind === 'curve-overshoot'));
   // Same endpoints are not a hold if their curve leaves the pose in between.
   node.Rotation = undefined;
   node.Translation = track([0, 200, 400, 600, 800, 850].map(t => [t, [t === 850 ? 10 : 0, 0, 0]]), 3);
   for (const key of node.Translation.Keys) { key.InTan = [20, 0, 0]; key.OutTan = [20, 0, 0]; }
   assert.ok(!scanMotion(model).findings.some(f => f.kind === 'holding-keys'));
+});
+
+test('ordinary fast walking, attack swings, small deviations and starts/stops remain quiet', () => {
+  for (const pairs of [
+    [[0,0],[200,0],[233,61],[267,90],[500,0],[1000,0]],
+    [[0,0],[300,0],[500,140],[700,0],[1000,0]],
+    [[0,0],[300,2],[333,22],[366,2],[1000,0]],
+    [[0,0],[200,0],[400,0],[600,0],[800,0],[850,15],[1000,15]],
+  ]) {
+    const model = fixture(); model.Nodes = model.Nodes.slice(0, 2);
+    model.Nodes[1].Rotation = track(pairs.map(([t, angle]) => [t, rotation(angle)]));
+    assert.deepEqual(scanMotion(model).findings, []);
+  }
+});
+
+test('one stray pose surrounded by repeated holds is distinct from a minor speed deviation', () => {
+  const model = fixture(); model.Nodes = model.Nodes.slice(0, 2);
+  model.Sequences[0] = { Name: 'Any animation name', Interval: [245000,246200] };
+  const times = [245000,245224,245377,245472,245690,245853,245997,246200];
+  model.Nodes[1].Rotation = track(times.map(t => [t, rotation(t === 245377 ? 8 : 0)]));
+  const findings = scanMotion(model).findings;
+  assert.equal(findings.length, 1); assert.equal(findings[0].kind, 'pose-spike');
+  assert.equal(findings[0].time, 245377); assert.match(findings[0].explanation, /surrounding intervals hold the same pose/);
+  model.Nodes[1].Rotation.Keys[2].Vector = new Float32Array(rotation(2));
+  assert.deepEqual(scanMotion(model).findings, [], 'A tiny stray adjustment is below the warning threshold');
+});
+
+test('a near-instant left-to-right rotation is caught without repeated holding keys', () => {
+  const model = fixture(); model.Nodes = model.Nodes.slice(0, 2);
+  model.Nodes[1].Rotation = track([[0, rotation(-80)], [500, rotation(-80)], [533, rotation(80)], [1000, rotation(80)]]);
+  assert.ok(scanMotion(model).findings.some(f => f.kind === 'abrupt-change' && f.time === 533));
 });
 
 test('Desired persists across scans/reopen/save aliases, restores and reconsiders relevant changes', async () => {
