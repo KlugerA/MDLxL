@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OrthographicCamera, Vector3 } from 'three';
 import { QUAD_VIEWS, QUAD_VIEW_OPTIONS, viewWorkplane, viewportRects } from '../app/quad-view.js';
-import { VIEW_PRESETS, applyViewPreset, projectedPlaneTranslation } from '../app/viewport-math.js';
+import { VIEW_PRESETS, applyViewPreset, quadProjectedPlaneTranslation } from '../app/viewport-math.js';
 import { quadGridLayout } from '../app/quad-grid.js';
 import { BUILT_IN_VIEWPORT_PRESETS, normalizeViewportAppearance } from '../src/viewport-appearance.js';
 import { exportConfiguration, importConfiguration } from '../src/portable-settings.js';
@@ -25,7 +25,7 @@ test('existing plane solver and transform commit preserve exact depth in all ort
     const project = point => {const p=point.clone().project(camera);return [(p.x+1)*400,(1-p.y)*260];};
     const center=project(pivot), basis=axes.map(axis=>{const p=pivot.clone();p.setComponent(axis,p.getComponent(axis)+1);return project(p).map((v,i)=>v-center[i]);});
     for (const shift of [false,true]) {
-      const delta=projectedPlaneTranslation(plane,basis,31,-19,shift);
+      const delta=quadProjectedPlaneTranslation(plane,basis,31,-19,shift);
       assert.equal(delta[depth],0);
       const geoset={Vertices:new Float32Array([17,29,43,101,103,107])};
       transformVertices(geoset,[0],delta,[1,1,1],[0,0,0],pivot.toArray());
@@ -55,7 +55,7 @@ test('quad commands expose only the fixed planes and perspective, with horizonta
     const center=project(pivot),plane=viewWorkplane(view);
     for(const [dx,dy] of [[30,11],[-30,-11],[11,30],[-11,-30]]){
       const basis=planeAxes(plane).map(axis=>{const p=pivot.clone();p.setComponent(axis,p.getComponent(axis)+1);return project(p).map((v,i)=>v-center[i]);});
-      const delta=new Vector3().fromArray(projectedPlaneTranslation(plane,basis,dx,dy,true));
+      const delta=new Vector3().fromArray(quadProjectedPlaneTranslation(plane,basis,dx,dy,true));
       const moved=project(pivot.clone().add(delta)),locked=Math.abs(dx)>Math.abs(dy)?1:0;
       assert.ok(Math.abs(moved[locked]-center[locked])<1e-8,view+' screen lock');
       assert.ok(Math.abs(delta.dot(camera.getWorldDirection(new Vector3())))<1e-8,view+' depth');

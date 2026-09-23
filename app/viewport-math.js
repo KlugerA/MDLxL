@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { planeAxes } from './classic-gestures.js';
+import { constrainedAxis, planeAxes } from './classic-gestures.js';
 import { applyEvaluatedModelCamera, evaluateModelCamera } from './portrait-view.js';
 
 // Warcraft models face +X and use +Z as up. Top view faces down the screen.
@@ -85,15 +85,15 @@ export function applyModelCamera(camera, controls, source, options = {}) {
   return applyEvaluatedModelCamera(camera, controls, evaluated, options.aspect);
 }
 
-/** Shift follows the dominant screen direction in either direction. The plane
- * solver still preserves its hidden world axis and rejects edge-on amplification. */
+/** Solve an axis directly BEFORE solving the plane: a near edge-on plane must
+ * never amplify its almost-zero determinant into a huge constrained move. */
 export function projectedPlaneTranslation(workplane, basis, dx, dy, constrain = false) {
-  if (constrain) { if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0; }
   const axes = planeAxes(workplane), out = [0, 0, 0];
   const projection = i => {
     const [x, y] = basis[i], lengthSq = x * x + y * y;
     return lengthSq > 1e-4 ? (dx * x + dy * y) / lengthSq : 0;
   };
+  if (constrain) { const axis = constrainedAxis(workplane); out[axis] = projection(axes.indexOf(axis)); return out; }
   const [[ax, ay], [bx, by]] = basis, determinant = ax * by - ay * bx;
   const product = Math.hypot(ax, ay) * Math.hypot(bx, by);
   if (product > 1e-4 && Math.abs(determinant) / product > .04) {
@@ -104,6 +104,13 @@ export function projectedPlaneTranslation(workplane, basis, dx, dy, constrain = 
     out[axes[visible]] = projection(visible);
   }
   return out;
+}
+
+/** Quad View alone uses a screen-axis constraint instead of the classic
+ * workplane-axis constraint. */
+export function quadProjectedPlaneTranslation(workplane, basis, dx, dy, constrain = false) {
+  if (constrain) { if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0; }
+  return projectedPlaneTranslation(workplane, basis, dx, dy);
 }
 
 /** Free mesh dragging uses the view plane through the selection pivot. */

@@ -28,7 +28,7 @@ import { viewportOverlayOptions } from './viewport-overlays.js';
 import { projectCompassAxes } from './viewport-compass.js';
 import { configureWideWirePattern } from '../src/wire-pattern.js';
 
-import { applyViewPreset, applyModelCamera, gridDepthExtent, gridFrameRadius, orthographicHalfHeight, perspectiveFitDistance, updateDepthClipping, modelClipRadius, projectedPlaneTranslation, screenPlaneTranslation } from './viewport-math.js';
+import { applyViewPreset, applyModelCamera, gridDepthExtent, gridFrameRadius, orthographicHalfHeight, perspectiveFitDistance, updateDepthClipping, modelClipRadius, projectedPlaneTranslation, quadProjectedPlaneTranslation, screenPlaneTranslation } from './viewport-math.js';
 import { createViewportGrid } from './viewport-grid.js';
 import { visualOptions, viewportAppearanceOptions, gridOptions, cameraBindings } from '../src/preferences.js';
 import { backgroundImageRect } from '../src/viewport-appearance.js';
@@ -210,7 +210,7 @@ export default function Viewport(inputProps) {
     setError('');
     renderer.setPixelRatio(viewportPixelRatio(graphics, window.devicePixelRatio));
     renderer.setClearColor(0xcccccc); renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none;outline:none';
+    renderer.domElement.style.cssText = 'display:block;position:absolute;left:0;top:0;width:100%;height:100%;touch-action:none;outline:none';
     renderer.domElement.tabIndex = 0;
     host.current.appendChild(renderer.domElement);
     const scene = new THREE.Scene(), modelGroup = new THREE.Group();
@@ -220,8 +220,9 @@ export default function Viewport(inputProps) {
     let ortho = new THREE.OrthographicCamera(-100, 100, 100, -100, .2, 1000);
     ortho.up.set(0, 0, 1);
     let camera = perspective;
-    let surface = document.createElement('div');
-    surface.className = 'viewport-input'; surface.tabIndex = 0; host.current.appendChild(surface);
+    // The classic single view keeps the canvas itself as its input surface.
+    // Only Quad View creates separate input panes over the shared canvas.
+    let surface = renderer.domElement;
     let controls = new EditorCameraControls(camera, surface);
     controls.enableDamping = false;
     controls.mouseButtons = { LEFT: null, MIDDLE: null, RIGHT: THREE.MOUSE.PAN };
@@ -297,14 +298,17 @@ export default function Viewport(inputProps) {
       scene.background = background.texture;
     }
     state.refreshCursor = () => { surface.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating); };
-    state.setCameraAngles = values => { if (quad && boundPane.workplane) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); activatePane(activePane); } };
+    state.setCameraAngles = values => { if (quad && boundPane.workplane) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); if (quad) activatePane(activePane); else invalidate(); } };
     function bindInput(pane) {
       const element = pane.surface;
       const activate = () => activatePane(pane);
-      // Capture runs before OrbitControls and sensitivity bindings.
-      element.addEventListener('pointerdown', activate, true);
-      element.addEventListener('wheel', activate, true);
-      element.addEventListener('focus', activate);
+      // Pane activation is only needed for Quad View. The classic canvas
+      // keeps its original listener order and input ownership.
+      if (pane !== singlePane) {
+        element.addEventListener('pointerdown', activate, true);
+        element.addEventListener('wheel', activate, true);
+        element.addEventListener('focus', activate);
+      }
       pane.controls.addEventListener('change', invalidate);
       const unbindScroll = bindScrollSensitivity(element, {
         getPreferences: () => latest.current.preferences,
@@ -337,7 +341,11 @@ export default function Viewport(inputProps) {
       renderer.setPixelRatio(viewportPixelRatio(graphicsOptions(latest.current.preferences), window.devicePixelRatio));
       renderer.setSize(width, height, false);
       const visible = quad ? panes.slice(1) : [singlePane], rects = viewportRects(width, height, quad);
-      for (const pane of panes) pane.surface.style.display = visible.includes(pane) ? 'block' : 'none';
+      for (const pane of panes) {
+        pane.surface.style.display = pane === singlePane || visible.includes(pane) ? 'block' : 'none';
+        if (pane === singlePane) pane.surface.style.pointerEvents = quad ? 'none' : 'auto';
+      }
+      if (quad) Object.assign(renderer.domElement.style, { left: '0px', top: '0px', width: width + 'px', height: height + 'px' });
       visible.forEach((pane, index) => {
         pane.rect = rects[index];
         Object.assign(pane.surface.style, Object.fromEntries(Object.entries(pane.rect).map(([key, value]) => [key, value + 'px'])));
@@ -370,7 +378,8 @@ export default function Viewport(inputProps) {
       const width = Math.max(1, surface.clientWidth), height = Math.max(1, surface.clientHeight);
       perspective.position.copy(state.center).addScaledVector(direction.lengthSq() ? direction : new THREE.Vector3(1, -1.5, .9).normalize(), perspectiveFitDistance(framed, perspective.fov, width / height));
       controls.target.copy(state.center); perspective.zoom = ortho.zoom = 1;
-      resizePane(); setPaneView(quad ? boundPane.view : latest.current.view || 'front');
+      if (quad) resizePane(); else resize();
+      setPaneView(quad ? boundPane.view : latest.current.view || 'front');
     };
     function rememberView(next) {
       state.appliedView = boundPane.view = next;
@@ -394,7 +403,7 @@ export default function Viewport(inputProps) {
       state.camera = camera; boundPane.view = next; boundPane.camera = camera; controls.update(); invalidate();
     }
     state.setView = next => {
-      cancelGesture();
+      if (quad) cancelGesture();
       if (quad) {
         const plane = viewWorkplane(next);
         if (!plane && next !== 'perspective') return;
@@ -406,6 +415,7 @@ export default function Viewport(inputProps) {
     state.setQuad = enabled => {
       if (quad === !!enabled) return;
       cancelGesture(); savePane(); quad = !!enabled;
+      for (const overlay of [singlePane.cameraCanvas, singlePane.normalCanvas, singlePane.nodeCanvas, singlePane.previewCanvas, singlePane.anchorCanvas]) if (overlay) overlay.style.display = quad ? 'none' : '';
       if (quad && panes.length === 1) {
         for (const definition of QUAD_VIEWS) {
           const element = document.createElement('div'); element.className = 'viewport-input quad-pane'; element.tabIndex = 0;
@@ -478,7 +488,7 @@ export default function Viewport(inputProps) {
     function pointerDown(event) {
       if (down) return;
       clearHoveredGeoset();
-      surface.focus();
+      if (quad) surface.focus(); else host.current?.focus();
       const action = cameraAction(event);
       rotating = action === 'rotate'; latest.current.onCameraGestureChange?.(rotating);
       surface.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.rotationNormals ? 'rotateNormals' : latest.current.transformMode, rotating);
@@ -518,11 +528,13 @@ export default function Viewport(inputProps) {
       if (!drag.workplaneEnabled) return screenPlaneTranslation(camera, drag.pivot, end.width, end.height, end.x - start.x, end.y - start.y, constrain);
       const axes = planeAxes(drag.workplane), center = screenPosition(drag.pivot, end);
       const basis = axes.map(axis => { const value = drag.pivot.clone(); value.setComponent(axis, value.getComponent(axis) + 1); return screenPosition(value, end).sub(center).toArray(); });
-      return new THREE.Vector3().fromArray(projectedPlaneTranslation(drag.workplane, basis, end.x - start.x, end.y - start.y, constrain));
+      const solve = quad ? quadProjectedPlaneTranslation : projectedPlaneTranslation;
+      return new THREE.Vector3().fromArray(solve(drag.workplane, basis, end.x - start.x, end.y - start.y, constrain));
     }
     function showBox(value) { setBox({ ...value, left: value.left + (boundPane.rect?.left || 0), top: value.top + (boundPane.rect?.top || 0) }); }
     function pointerMove(event) {
       if (!down) {
+        if (!quad) { inspectHoveredGeoset(event); return; }
         const hoveredPane = panes.find(pane => pane.surface === event.currentTarget);
         if (hoveredPane) bindPane(hoveredPane);
         inspectHoveredGeoset(event); bindPane(activePane); return;
@@ -644,24 +656,26 @@ export default function Viewport(inputProps) {
         const position = state.entries[key]?.geometry.attributes.position;
         if (position) { position.array.set(vertices); position.needsUpdate = true; }
       }
-      if (down && surface.hasPointerCapture(down.pointerId)) surface.releasePointerCapture(down.pointerId);
+      if (quad && down && surface.hasPointerCapture(down.pointerId)) surface.releasePointerCapture(down.pointerId);
       state.drag = null; state.anchorCandidate = null; down = null; setBox(null); controls.enabled = true; state.dirty = true; invalidate();
     }
     const frameModel = event => { cancelGesture(); state.fit(event.detail?.selection === true); };
     const viewCamera = event => { cancelGesture(); if (quad) activatePane(panes.find(pane => pane.id === 'perspective')); if (applyModelCamera(perspective, controls, event.detail)) { camera = perspective; state.camera = camera; state.appliedView = 'perspective'; invalidate(); } };
     window.addEventListener('mdlxl-view-camera', viewCamera);
+    const cancelKey = event => { if (!quad && event.key === 'Escape' && down) { cancelGesture(); event.preventDefault(); } };
     const gestureKey = event => {
+      if (!quad) return;
       if (event.key === 'Escape' && event.type === 'keydown' && down) { cancelGesture(); event.preventDefault(); event.stopPropagation(); }
       // Modifier transitions must reset the latch even if the mouse is still.
       if (quad && event.key === 'Shift' && state.drag?.action === 'translate') moveDragPoint(state.drag.move, state.drag.move.pointer, event.shiftKey);
     };
     // WarmKeys consumes Escape before viewport key listeners. Its Clear command
     // gives an in-progress drag first refusal through this cancelable event.
-    const cancelCommand = event => { if (down) { cancelGesture(); event.preventDefault(); } };
+    const cancelCommand = event => { if (quad && down) { cancelGesture(); event.preventDefault(); } };
     const contextMenu = event => event.preventDefault();
     const pointerLeave = () => { if (!down) clearHoveredGeoset(); };
     bindInput(singlePane);
-    window.addEventListener('mdlvis-frame', frameModel); window.addEventListener('keydown', gestureKey, true); window.addEventListener('keyup', gestureKey, true);
+    window.addEventListener('mdlvis-frame', frameModel); window.addEventListener('keydown', cancelKey); window.addEventListener('keydown', gestureKey, true); window.addEventListener('keyup', gestureKey, true);
     window.addEventListener('mdlxl-cancel-gesture', cancelCommand);
     const contextLost = event => { event.preventDefault(); state.scheduler?.dispose(); setError('The graphics context was lost. Reload the editor to restore the viewport. Save your work first.'); };
     renderer.domElement.addEventListener('webglcontextlost', contextLost);
@@ -684,6 +698,7 @@ export default function Viewport(inputProps) {
       const p = latest.current, renderGraphics = graphicsOptions(p.preferences), visual = visualOptions(p.preferences), appearance = viewportAppearanceOptions(p.preferences);
       const lighting = previewLighting(p.preferences); configurePreviewLights(ambient, key, lighting);
       surface.style.cursor = viewportCursor(p.cameraMode, p.rotationNormals ? 'rotateNormals' : p.transformMode, rotating);
+      const overlayHost = quad ? surface : host.current;
       syncViewportBackground(appearance);
       ambient.visible = key.visible = renderGraphics.lighting;
       if (p.sequenceIndex !== state.sequenceIndex || !p.playing || !state.wasPlaying || (p.time !== state.lastExternalTime && Math.abs(p.time - (state.lastReportedFrame ?? -Infinity)) > 1)) state.frame = p.time || 0;
@@ -807,28 +822,29 @@ export default function Viewport(inputProps) {
       ambient.position.copy(light.direction);
       try { renderer.render(scene, camera);
         if (p.presentation === 'preview' && previewOverlaySettings(p.previewOverlay).mode !== 'none') {
-          if (!previewCanvas) { previewCanvas = document.createElement('canvas'); previewCanvas.dataset.geometryOverlay = ''; previewCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; surface.appendChild(previewCanvas); }
+          if (!previewCanvas) { previewCanvas = document.createElement('canvas'); previewCanvas.dataset.geometryOverlay = ''; previewCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; overlayHost.appendChild(previewCanvas); }
           previewCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); previewCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
           const geometry = state.entries.flatMap((entry, index) => entry?.group.visible ? [{ index, faces: entry.geoset.Faces, vertices: entry.geometry.attributes.position.array }] : []);
           drawPresentationOverlay(previewCanvas.getContext('2d'), geometry, camera, surface.clientWidth, surface.clientHeight, p.previewOverlay, renderer.getPixelRatio());
         } else if (previewCanvas) { previewCanvas.remove(); previewCanvas = null; }
         if (p.overlays?.normals || p.showNormals) {
-          if (!normalCanvas) { normalCanvas = document.createElement('canvas'); normalCanvas.dataset.normalOverlay = ''; normalCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; surface.appendChild(normalCanvas); }
+          if (!normalCanvas) { normalCanvas = document.createElement('canvas'); normalCanvas.dataset.normalOverlay = ''; normalCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; overlayHost.appendChild(normalCanvas); }
           normalCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); normalCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
           const geometry = state.entries.flatMap((entry, index) => entry?.group.visible && active.has(index) ? [{ index, vertices: entry.geometry.attributes.position.array, normals: entry.geometry.attributes.normal.array }] : []);
           drawPreviewGeometryOverlay(normalCanvas.getContext('2d'), geometry, camera, surface.clientWidth, surface.clientHeight, { normals: true, preferences: p.preferences }, state.center, state.radius, renderer.getPixelRatio());
         } else if (normalCanvas) { normalCanvas.remove(); normalCanvas = null; }
         if (showMarkers) {
-          if (!nodeCanvas) { nodeCanvas = document.createElement('canvas'); nodeCanvas.dataset.nodeOverlay = ''; nodeCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; surface.appendChild(nodeCanvas); }
+          if (!nodeCanvas) { nodeCanvas = document.createElement('canvas'); nodeCanvas.dataset.nodeOverlay = ''; nodeCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; overlayHost.appendChild(nodeCanvas); }
           nodeCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); nodeCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
           const width = surface.clientWidth, height = surface.clientHeight;
           const nodes = projectMovementNodes(p.model, state.frame, p.sequenceIndex, camera, width, height, state.globalTime, state.matrices);
           const options = { ...overlays, boneLines: true, preferences: p.preferences, glMarkers: true, wireframeMarkers: p.mode === 'wireframe' || p.mode === 'vertices', occludedMarkerEdges: p.mode === 'solid' || p.mode === 'textured' };
+          if (!quad) renderer.resetState();
           rigMarkers.draw(camera, nodes, p.selectedNodeIds || [], options); renderer.resetState(); renderer.setScissorTest(quad);
           drawMovementOverlay(nodeCanvas.getContext('2d'), nodes, p.selectedNodeIds || [], [], width, height, renderer.getPixelRatio(), options);
         } else if (nodeCanvas) { nodeCanvas.remove(); nodeCanvas = null; }
         if (p.overlays?.cameras ?? p.showCameras) {
-          if (!cameraCanvas) { cameraCanvas = document.createElement('canvas'); cameraCanvas.dataset.cameraOverlay = ''; cameraCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; surface.appendChild(cameraCanvas); }
+          if (!cameraCanvas) { cameraCanvas = document.createElement('canvas'); cameraCanvas.dataset.cameraOverlay = ''; cameraCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'; overlayHost.appendChild(cameraCanvas); }
           cameraCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); cameraCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
           drawModelCameraOverlay(cameraCanvas.getContext('2d'), p.model || {}, camera, surface.clientWidth, surface.clientHeight, renderer.getPixelRatio(), state.frame, p.sequenceIndex, state.globalTime, state.radius, visual.node);
         } else if (cameraCanvas) { cameraCanvas.remove(); cameraCanvas = null; }
@@ -840,7 +856,7 @@ export default function Viewport(inputProps) {
         };
         const anchorPoint = overlayPoint(p.zoomAnchor), candidatePoint = overlayPoint(p.choosingZoomAnchor ? state.anchorCandidate : null);
         if (anchorPoint || candidatePoint) {
-          if (!anchorCanvas) { anchorCanvas = document.createElement('canvas'); anchorCanvas.dataset.anchorOverlay = ''; anchorCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2'; surface.appendChild(anchorCanvas); }
+          if (!anchorCanvas) { anchorCanvas = document.createElement('canvas'); anchorCanvas.dataset.anchorOverlay = ''; anchorCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2'; overlayHost.appendChild(anchorCanvas); }
           anchorCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); anchorCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
           const context = anchorCanvas.getContext('2d'), pixelRatio = renderer.getPixelRatio(), width = surface.clientWidth, height = surface.clientHeight;
           context.setTransform(1, 0, 0, 1, 0, 0); context.clearRect(0, 0, anchorCanvas.width, anchorCanvas.height);
@@ -872,7 +888,7 @@ export default function Viewport(inputProps) {
       cameraMemory.current = { ...remember(singlePane), panes: panes.slice(1).map(remember) };
       state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); resizeObserver.disconnect(); panes.forEach(pane => { pane.dispose(); pane.grid.dispose(); });
       renderer.domElement.removeEventListener('webglcontextlost', contextLost);
-      window.removeEventListener('mdlvis-frame', frameModel); window.removeEventListener('mdlxl-view-camera', viewCamera); window.removeEventListener('keydown', gestureKey, true); window.removeEventListener('keyup', gestureKey, true);
+      window.removeEventListener('mdlvis-frame', frameModel); window.removeEventListener('mdlxl-view-camera', viewCamera); window.removeEventListener('keydown', cancelKey); window.removeEventListener('keydown', gestureKey, true); window.removeEventListener('keyup', gestureKey, true);
       window.removeEventListener('mdlxl-cancel-gesture', cancelCommand);
       cameraCanvas?.remove(); normalCanvas?.remove(); nodeCanvas?.remove(); previewCanvas?.remove(); anchorCanvas?.remove(); rigMarkers.dispose(); platform.dispose(); clearGroup(modelGroup); state.textures.forEach(texture => texture.dispose()); state.markerTextures.forEach(texture => texture.dispose()); state.background.texture.dispose(); state.checker.dispose(); state.teamGlow.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); runtime.current = null;
     };
@@ -924,7 +940,7 @@ export default function Viewport(inputProps) {
     if (state.loadedSignature === null) {
       state.loadedSignature = signature; state.fit();
       const saved = cameraMemory.current;
-      if (saved && (latest.current.quadView || saved.view === latest.current.view)) { state.setView(saved.view); state.perspective.copy(saved.perspective); state.ortho.copy(saved.ortho); state.controls.target.copy(saved.target); state.center.copy(saved.center); state.radius=saved.radius; state.resize(); state.controls.update(); }
+      if (saved && (latest.current.quadView || saved.view === latest.current.view)) { if (latest.current.quadView) state.setView(saved.view); state.perspective.copy(saved.perspective); state.ortho.copy(saved.ortho); state.controls.target.copy(saved.target); state.center.copy(saved.center); state.radius=saved.radius; state.resize(); state.controls.update(); }
     }
   }, [model, revision, shaded, graphics.lighting, graphics.antialias]);
 
