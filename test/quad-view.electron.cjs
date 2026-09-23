@@ -216,7 +216,38 @@ function sameOrientation(actual, expected, message) {
       await shiftLatchDrag(view,page.locator(`[data-viewport="${id}"]`),depthAxis);
     }
     await toggle();await idle();await page.evaluate(()=>{draws={};});
-    await shiftLatchDrag('single perspective',page.locator('[aria-label="3D model viewport"]'));
+    assert.equal(await page.evaluate(()=>{const r=document.querySelector('[aria-label="3D model viewport"]').getBoundingClientRect();return document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.tagName;}),'CANVAS','single view uses the original canvas input surface');
+    // With Workplane off, classic Shift follows the current displacement.
+    await page.keyboard.press('m');
+    const singleBefore=await page.evaluate(()=>({coordinates:coordinates(),point:vertexPoint(),camera:cameraState()}));
+    const sr=await page.locator('[aria-label="3D model viewport"]').boundingBox(),sx=Math.round(sr.x+sr.width/2),sy=Math.round(sr.y+sr.height/2);
+    await page.mouse.move(sx,sy);await page.keyboard.down('Shift');await page.mouse.down();
+    await page.mouse.move(sx-25,sy);await idle();
+    const singleHorizontal=await page.evaluate(()=>({coordinates:Array.from(viewportState().entries[0].geometry.attributes.position.array.slice(0,3)),point:vertexPoint()}));
+    assert.ok(singleHorizontal.point.x<singleBefore.point.x-2,'single-view Shift initially follows horizontal motion');
+    await page.mouse.move(sx-25,sy-65);await idle();
+    const singleVertical=await page.evaluate(()=>({coordinates:Array.from(viewportState().entries[0].geometry.attributes.position.array.slice(0,3)),point:vertexPoint()}));
+    assert.ok(Math.abs(singleVertical.point.x-singleBefore.point.x)<1e-3,'single-view Shift does not keep a horizontal latch');
+    assert.ok(singleVertical.point.y<singleBefore.point.y-2,'single-view Shift follows vertical motion');
+    await page.mouse.up();await page.keyboard.up('Shift');await idle();
+    assert.deepEqual(await page.evaluate(()=>coordinates()),singleVertical.coordinates);
+    sameCamera(await page.evaluate(()=>cameraState()),singleBefore.camera,'single-view Shift drag leaves camera unchanged');
+    await page.keyboard.press('Control+z');await idle();assert.deepEqual(await page.evaluate(()=>coordinates()),singleBefore.coordinates);
+    // With Workplane on, the pre-Quad control constrains its selected world
+    // axis. The Quad screen-axis solver must not reach this path.
+    await page.getByLabel('Workplane',{exact:true}).check();
+    await page.getByLabel('XY workplane',{exact:true}).check();
+    const planeBefore=await page.evaluate(()=>({coordinates:coordinates(),camera:cameraState()}));
+    await page.mouse.move(sx,sy);await page.keyboard.down('Shift');await page.mouse.down();
+    await page.mouse.move(sx-35,sy-18,{steps:4});await idle();
+    const planeLive=await page.evaluate(()=>Array.from(viewportState().entries[0].geometry.attributes.position.array.slice(0,3)));
+    assert.notEqual(planeLive[0],planeBefore.coordinates[0],'classic XY Shift moves X');
+    assert.equal(planeLive[1],planeBefore.coordinates[1],'classic XY Shift keeps Y');
+    assert.equal(planeLive[2],planeBefore.coordinates[2],'classic XY Shift keeps Z');
+    await page.mouse.up();await page.keyboard.up('Shift');await idle();
+    assert.deepEqual(await page.evaluate(()=>coordinates()),planeLive);
+    sameCamera(await page.evaluate(()=>cameraState()),planeBefore.camera,'classic Workplane Shift leaves camera unchanged');
+    await page.keyboard.press('Control+z');await idle();assert.deepEqual(await page.evaluate(()=>coordinates()),planeBefore.coordinates);
     await toggle();await idle();
     await dropdown.selectOption('front');await activate('front');
     const fr=await page.locator('[data-viewport="front"]').boundingBox(),cx=fr.x+fr.width/2,cy=fr.y+fr.height/2;
@@ -248,10 +279,15 @@ function sameOrientation(actual, expected, message) {
     assert.equal(await page.evaluate(()=>viewportState().scene.background.getHexString()),'203040');
     await page.getByLabel('Quadview appearance',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'quad-appearance-settings.png')});
     await page.getByRole('button',{name:'Done',exact:true}).click();await idle();await page.screenshot({path:path.join(out,'quad-custom-appearance.png')});
+    await dropdown.selectOption('top');await idle();
+    await page.getByRole('button',{name:'Bones',exact:true}).click();await idle();
+    assert.equal(await dropdown.inputValue(),'perspective','Quad pane view does not change the Bones viewpoint');
+    await page.getByRole('button',{name:'Animations',exact:true}).click();await idle();
+    assert.equal(await dropdown.inputValue(),'perspective','Quad pane view does not change the Animations viewpoint');
     assert.deepEqual(errors,[]);assert.deepEqual(await page.locator('[role="alert"]').allTextContents(),[]);
     assert.ok(fs.readFileSync(fixture).equals(original),'input file stays unchanged');
     fs.writeFileSync(path.join(out,'metrics.json'),JSON.stringify({metrics,shiftMetrics,latchMetrics,sizes,errors},null,2));
-    console.log('PASS',JSON.stringify({metrics,sizes,lockedPlaneDrags:shiftMetrics.length,shiftLatchDrags:latchMetrics.length,checks:'shared live preview, exact depth, undo/redo, cancel, selection, marquee, independent cameras, perspective orbit, toggle restore, resize, input preservation, permanent planes, disabled global workplane override, blocked orthographic orbit/angles, Shift H/V, per-hold direction latch, continuous release/repress, effective displacement commit, toolbar order, adaptive zoom, appearance bundles'}));
+    console.log('PASS',JSON.stringify({metrics,sizes,lockedPlaneDrags:shiftMetrics.length,shiftLatchDrags:latchMetrics.length,checks:'shared live preview, exact depth, undo/redo, cancel, selection, marquee, independent cameras, perspective orbit, toggle restore, resize, input preservation, permanent planes, disabled global workplane override, blocked orthographic orbit/angles, Quad Shift H/V and per-hold latch, classic single-view canvas and Workplane Shift, Bones and Animations viewpoint isolation, adaptive zoom, appearance bundles'}));
   } catch(error) {
     console.error(error);
     const page=await app.firstWindow();await page.screenshot({path:path.join(out,'failure.png')});
