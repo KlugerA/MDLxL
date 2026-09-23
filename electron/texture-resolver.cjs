@@ -72,9 +72,10 @@ class TextureResolver {
       // A fully qualified native module path is an explicit CASC choice. Do
       // not substitute a same-named custom file beside the model for it.
       const nativeModule = /\.w3mod:/i.test(name);
+      const nativeName = nativeModule && !/^war3\.w3mod:/i.test(name) ? 'war3.w3mod:' + name : name;
       let bytes = null;
       for (const source of sources) {
-        bytes = (!nativeModule && (await this.loose(name, source.folders) || await this.archived(name, source.archives))) || await this.casc?.read(name, source.cascFolders);
+        bytes = (!nativeModule && (await this.loose(name, source.folders) || await this.archived(name, source.archives))) || await this.casc?.read(nativeName, source.cascFolders);
         // Reforged can keep event models exclusively in an SD/HD module. This
         // endpoint is also used for them; image lookup retains its own order.
         if (!bytes && !nativeModule && /\.(mdx|mdl)$/i.test(name) && this.casc) {
