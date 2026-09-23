@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('desktop', {
   resolveEventResources: payload => ipcRenderer.invoke('preview:eventResources',payload),
   loadHumanPortraitFrame: () => ipcRenderer.invoke('preview:humanPortraitFrame'),
   textureLibraryCatalog: payload => ipcRenderer.invoke('texture:library',payload),
+  copyTexturePath: value => ipcRenderer.invoke('texture:copyPath',value),
   textureLibraryPreloadStatus: () => ipcRenderer.invoke('texture:preloadStatus'),
   textureLibraryPreloadStart: payload => ipcRenderer.invoke('texture:preloadStart',payload),
   textureLibraryPreloadCancel: payload => ipcRenderer.invoke('texture:preloadCancel',payload),

@@ -14,6 +14,7 @@ const thumbnailQueue=createThumbnailQueue({concurrency:4});
 const thumbnailJobs=new Map();
 let sharedWorker=null,searchSerial=0,libraryConsumers=0;
 const warmJobs=new Map();
+const textureVersionLabel={classic:'CLASSIC',reforged:'REFORGED','forsaken-kingdom':'FORSAKEN KINGDOM',custom:'MODEL FOLDER',unknown:'UNCLASSIFIED NATIVE SOURCE'};
 function preferredVibe(){try{return localStorage.getItem('mdlvis.texture-library.vibe')!=='false';}catch{return true;}}
 function preferredFormat(){try{return localStorage.getItem('mdlvis.texture-library.blp-only')==='true'?'blp':'all';}catch{return'all';}}
 function libraryWorker(){
@@ -63,7 +64,7 @@ function TextureTile({item,modelPath,selected,onSelect,cacheEpoch}){
   },[item.cacheKey,modelPath,cacheEpoch]);
   return <button ref={ref} type="button" className={'tl-tile'+(selected?' selected':'')} onClick={()=>onSelect(item)} aria-pressed={selected} title={item.sourcePath}>
     <span className="tl-tile-image">{image?<img src={image} alt="" loading="lazy" decoding="async"/>:<span>{error?'Unavailable':'…'}</span>}</span><span className="tl-tile-name" translate="no">{item.name}</span>
-    <small>{item.source==='custom'?'Model folder':item.variant==='reforged'?'Reforged':item._match?.type==='inspiration'?'Kitbash suggestion':item._match?.type==='close'?'Related surface':'Warcraft III'}</small>
+    <small>{textureVersionLabel[item.variant]||textureVersionLabel.unknown}</small>
   </button>;
 }
 function FolderBranch({node,selected,onSelect,depth=0}){
@@ -112,6 +113,7 @@ export default function TextureLibrary({model,modelPath,onClose,onAddTexture,onP
   const checkedPreview=selectedGeosets==null?null:getUVPreviewSelection(model,selectedGeosets);
   const previewAllowed=previewEnabled&&(!checkedPreview||checkedPreview.enabled),disabledPreviewReason=previewReason||checkedPreview?.reason||'Texture preview is unavailable for this selection.';
   const act=async(callback,success)=>{if(!catalogFresh||!selectedAsset||!callback)return;setBusy(true);setSelectionError('');try{await callback(selectedAsset,selected);setMessage(success);}catch(error){setSelectionError(error.message);}finally{setBusy(false);}};
+  const copyPath=async()=>{setSelectionError('');try{await window.desktop.copyTexturePath(selected.path);setMessage('Texture path copied.');}catch(error){setSelectionError(error.message);}};
   const changeVariant=value=>{setVariant(value);setFolder('');};
   const keys=event=>{
     event.stopPropagation();
@@ -123,7 +125,7 @@ export default function TextureLibrary({model,modelPath,onClose,onAddTexture,onP
     <div className="tl-toolbar"><input ref={input} type="search" value={query} placeholder={vibe?'Try rusty chain mail, Nurgle, or a texture name':'Search texture names and paths'} onChange={event=>setQuery(event.target.value)} aria-label="Search textures"/>
       <label title="Search surfaces, colours and kitbash associations"><input type="checkbox" checked={vibe} onChange={event=>{setVibe(event.target.checked);try{localStorage.setItem('mdlvis.texture-library.vibe',String(event.target.checked));}catch{}}}/>Vibe search</label>
       <label title="Hide DDS and other texture formats"><input aria-label="BLP textures only" type="checkbox" checked={format==='blp'} onChange={event=>{const next=event.target.checked?'blp':'all';setFormat(next);if(next==='blp')setSelected(previous=>textureFormatMatches(previous,next)?previous:null);try{localStorage.setItem('mdlvis.texture-library.blp-only',String(event.target.checked));}catch{}}}/>BLP only</label>
-      <select aria-label="Texture source" value={variant} onChange={event=>changeVariant(event.target.value)}><option value="classic">Classic</option><option value="reforged">Reforged</option><option value="custom">Model folder</option><option value="all">All installed</option></select>
+      <select aria-label="Texture source" value={variant} onChange={event=>changeVariant(event.target.value)}><option value="classic">Classic</option><option value="reforged">Reforged</option><option value="forsaken-kingdom">Forsaken Kingdom</option><option value="custom">Model folder</option><option value="all">All installed</option></select>
       <select aria-label="Texture kind" value={kind} onChange={event=>setKind(event.target.value)}><option value="all">All textures</option><option value="units">Units &amp; characters</option><option value="buildings">Buildings</option><option value="doodads">Doodads</option><option value="terrain">Terrain</option><option value="effects">Effects</option><option value="icons">Icons</option></select>
     </div>
     <div className="tl-body"><nav className="tl-folders" aria-label="Native texture folders"><button type="button" className={'tl-all-folders'+(!folder?' selected':'')} onClick={()=>setFolder('')}>All folders <small>{tree.count}</small></button>{tree.children.map(node=><FolderBranch key={node.path} node={node} selected={folder} onSelect={setFolder}/>)}</nav>
@@ -136,7 +138,7 @@ export default function TextureLibrary({model,modelPath,onClose,onAddTexture,onP
         <div className="tl-grid">{result.items.map(item=><TextureTile key={item.id} item={item} modelPath={modelPath} cacheEpoch={cacheEpoch} selected={selected?.id===item.id} onSelect={setSelected}/>)}</div>
         {result.hasMore&&<button type="button" className="tl-more" onClick={()=>setLimit(n=>n+120)} disabled={searching}>Show more textures</button>}
       </main>
-      <aside className="tl-details">{selected?<><div className="tl-preview">{selectedImage?<img src={selectedImage} alt={selected.name} translate="no"/>:<span>{selectionError?'Preview unavailable':'Loading preview…'}</span>}</div><h3 translate="no">{selected.name}</h3><code translate="no">{selected.path}</code>{selected.sourcePath!==selected.path&&<details><summary>Native source path</summary><code translate="no">{selected.sourcePath}</code></details>}
+      <aside className="tl-details">{selected?<><div className="tl-preview">{selectedImage?<img src={selectedImage} alt={selected.name} translate="no"/>:<span>{selectionError?'Preview unavailable':'Loading preview…'}</span>}</div><h3 translate="no">{selected.name}</h3><p className="tl-version">Game version: <strong>{textureVersionLabel[selected.variant]||textureVersionLabel.unknown}</strong></p><code translate="no">{selected.path}</code><button type="button" className="tl-copy-path" onClick={copyPath}>Copy texture path</button>{selected.sourcePath!==selected.path&&<details><summary>Native source path</summary><code translate="no">{selected.sourcePath}</code></details>}
         {selected.width>0&&<p className="tl-dimensions">{selected.width} × {selected.height}</p>}{selected._match?.type==='inspiration'&&<p className="tl-note">{selected._match.inspiration} kitbash suggestion<br/>{selected._match.reason.split(' · ').map(value=>translate(value)).join(' · ')}</p>}
         {selected.notes&&<p>{selected.notes}</p>}{selected._match?.missing?.length>0&&<p className="tl-note">Related result. Unconfirmed: {selected._match.missing.map(value=>translate(value)).join(', ')}.</p>}
         {selected.tags?.length>0&&<div className="tl-tags">{selected.tags.slice(0,12).map(tag=><button type="button" key={tag} onClick={()=>{setQuery(tag==='chain'?'chainmail':tag.replaceAll('-',' '));setVibe(true);}}>{tag==='chain'?'chainmail':tag.replaceAll('-',' ')}</button>)}</div>}
