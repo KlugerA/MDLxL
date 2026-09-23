@@ -90,6 +90,22 @@ test('library joins only native paths which exist, and never borrows SD appearan
   assert.equal(sd.path,'Textures\\Footman.blp');assert.equal(sd.lookupName,'war3.w3mod:textures\\footman.dds');assert.ok(sd.tags.includes('plate'));
   assert.equal(hd.notes,undefined);assert.deepEqual(hd.tags,[]);
 });
+test('library labels installed Classic, Reforged, and Forsaken Kingdom sources independently',async()=>{
+  const names=[
+    'war3.w3mod:textures\\footman.dds',
+    'war3.w3mod:_hd.w3mod:units\\human\\footman\\footman_diffuse.dds',
+    'war3.w3mod:_de.w3mod:units\\human\\footman\\footman_diffuse.dds',
+    'war3.w3mod:campaign\\forsakenkingdom\\undeadre02.w3x\\_de.w3mod:textures\\banner.dds',
+    'war3.w3mod:_tilesets\\a.w3mod:terrainart\\ground.dds',
+  ];
+  const library=new TextureLibrary({casc:{list:async()=>({sources:[{folder:'game',key:'build',names}],errors:[]})}});
+  const result=await library.catalog();
+  assert.deepEqual(Object.fromEntries(result.items.map(item=>[item.sourcePath,item.variant])),{
+    [names[0]]:'classic',[names[1]]:'reforged',[names[2]]:'forsaken-kingdom',[names[3]]:'forsaken-kingdom',[names[4]]:'classic',
+  });
+  assert.equal(searchTextureLibrary(prepareTextureLibrary(result.items),{query:'',variant:'forsaken-kingdom'}).total,2);
+  assert.equal(result.items.find(item=>item.sourcePath===names[2]).path,'_de.w3mod:units\\human\\footman\\footman_diffuse.dds');
+});
 test('custom catalog lists only immediate texture files and never reads a model',async()=>{
   const calls=[],folder=path.resolve(os.tmpdir(),'mdlvis-library-test');
   const directoryEntry=(name,isFile)=>({name,isFile:()=>isFile});
@@ -126,10 +142,13 @@ test('module textures use persisted native content keys after restart',async t=>
 });
 test('explicit native module paths bypass custom basename collisions and respect chosen CASC order',async()=>{
   const attempts=[];let looseReads=0;
-  const resolver=new TextureResolver({stat:async()=>({isFile:()=>true,size:20}),readFile:async()=>{looseReads++;return Buffer.from('custom texture');},openArchive:async()=>{throw Error('Explicit native paths must not read MPQ files');},casc:{read:async(name,folders)=>{attempts.push(folders);return folders.includes('selected')?Buffer.from('selected native'):Buffer.from('fallback native');},close(){}}});
+  const resolver=new TextureResolver({stat:async()=>({isFile:()=>true,size:20}),readFile:async()=>{looseReads++;return Buffer.from('custom texture');},openArchive:async()=>{throw Error('Explicit native paths must not read MPQ files');},casc:{read:async(name,folders)=>{attempts.push({name,folders});return folders.includes('selected')?Buffer.from('selected native'):Buffer.from('fallback native');},close(){}}});
   const sources={folders:[path.resolve('custom')],archives:['archive.mpq'],cascFolders:['selected'],fallbackCascFolders:['automatic']};
   const native=await resolver.resolve(['war3.w3mod:textures\\footman.dds'],sources);
-  assert.equal(native[0].bytes.toString(),'selected native');assert.equal(looseReads,0);assert.deepEqual(attempts,[['selected']]);
+  assert.equal(native[0].bytes.toString(),'selected native');assert.equal(looseReads,0);assert.deepEqual(attempts,[{name:'war3.w3mod:textures\\footman.dds',folders:['selected']}]);
+  const definitive=await resolver.resolve(['_de.w3mod:replaceabletextures\\commandbuttons\\btnforsakenpaladin.dds'],sources);
+  assert.equal(definitive[0].bytes.toString(),'selected native');assert.equal(looseReads,0);
+  assert.deepEqual(attempts[1],{name:'war3.w3mod:_de.w3mod:replaceabletextures\\commandbuttons\\btnforsakenpaladin.dds',folders:['selected']});
   const ordinary=await resolver.resolve(['Textures\\Footman.dds'],sources);
   assert.equal(ordinary[0].bytes.toString(),'custom texture');assert.equal(looseReads,1);await resolver.close();
 });

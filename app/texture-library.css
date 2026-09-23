@@ -10,5 +10,10 @@
 .tl-dialog .tl-toolbar select[aria-label="Texture source"]{min-width:17ch}
 .tl-dialog .tl-toolbar select[aria-label="Texture kind"]{min-width:23ch}
 .tl-dialog .tl-actions>.tl-primary:disabled{background:#374047;border-color:#5b646a;color:#9ca5aa;opacity:1}
+.tl-tile small{color:var(--ui-text,#a2b3be);font-weight:600}
+.tl-details .tl-version{margin:4px 0 10px;color:var(--ui-text,#ddd);font-size:11px}
+.tl-version strong{color:var(--ui-text,#eddfbb);font-weight:700;letter-spacing:.04em}
+.tl-details code{color:var(--ui-link,#a8c1d1)}
+.tl-details .tl-copy-path{margin:8px 0 4px;padding:6px 9px;border:1px solid #64737c;background:#35424c;color:#eee;border-radius:2px}
 .tl-dialog .tl-preview-reason{font-size:11px;color:#b9b5a9;line-height:1.45;margin:0}
 @media(max-width:760px){.tl-dialog .tl-toolbar>input[type=search]{flex-basis:100%}.tl-dialog .tl-toolbar select{min-height:34px}}
