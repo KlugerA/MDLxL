@@ -90,7 +90,7 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
   const [recording, setRecording] = useState(null), [recorded, setRecorded] = useState(''), [message, setMessage] = useState(''), [resetConfirm, setResetConfirm] = useState(false), [presetName, setPresetName] = useState('');
   const [sequenceCode, setSequenceCode] = useState(null), sequence = useRef(null), sequenceTimer = useRef(null);
   if (!sequence.current) sequence.current = new WarmKeySequence();
-  const configInput = useRef(null), platformInput = useRef(null), viewportImageInput = useRef(null);
+  const configInput = useRef(null), platformInput = useRef(null), viewportImageInput = useRef(null), quadImageInput = useRef(null);
   const recorder = useRef(null), panel = useRef(null), previousFocus = useRef(null);
   const bindings = useMemo(() => effectiveBindings(catalog, prefs.hotkeys), [catalog, preferences?.hotkeys]);
   const categories = [...new Set(catalog.map(action => action.category || 'Controls'))].sort();
@@ -102,6 +102,7 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
   const visual = change => commit({ visuals: { ...prefs.visuals, ...change } });
   const viewport = change => commit({ viewportPreset: 'custom', viewportAppearance: { ...prefs.viewportAppearance, ...change } });
   const viewportPart = (part, change) => viewport({ [part]: { ...prefs.viewportAppearance[part], ...change } });
+  const quadPart = (part, change) => viewportPart('quadView', { [part]: { ...prefs.viewportAppearance.quadView[part], ...change } });
   const grid = change => commit({ grid: { ...prefs.grid, ...change } });
   useEffect(() => {
     previousFocus.current = document.activeElement;
@@ -144,13 +145,13 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
   };
   const loadConfiguration=async file=>{try{if(!file)return;if(file.size>4000000)throw new Error('Configuration exceeds 4 MB.');const next=importConfiguration(await file.text());const bindings=effectiveBindings(catalog,next.hotkeys),seen=new Map();for(const [id,keys] of Object.entries(bindings))for(const key of keys){if(seen.has(key))throw new Error('Conflicting shortcut '+key+'.');seen.set(key,id);}onChange(next);setMessage('Configuration imported. Portable settings replaced.');}catch(error){setMessage(error.message);}};
   const loadPlatformTexture=async file=>{try{if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2000000)throw new Error('Choose a PNG, JPEG or WebP under 2 MB.');const reader=new FileReader();reader.onload=()=>commit({platform:{...prefs.platform,textureUrl:reader.result}});reader.readAsDataURL(file);}catch(error){setMessage(error.message);}};
-  const loadViewportBackground = async file => {
+  const loadViewportBackground = async (file, quad = false) => {
     try {
       if (!file) return;
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 8_000_000) throw new Error('Choose a PNG, JPEG or WebP under 8 MB.');
       const imageData = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('The background image could not be read.')); reader.readAsDataURL(file); });
       if (typeof imageData !== 'string' || imageData.length > MAX_VIEWPORT_BACKGROUND_DATA_LENGTH) throw new Error('The encoded background image is too large to save safely.');
-      viewportPart('background', { type: 'image', imageData, imageName: file.name }); setMessage(`Background image loaded: ${file.name}`);
+      (quad ? quadPart : viewportPart)('background', { type: 'image', imageData, imageName: file.name }); setMessage(`Background image loaded: ${file.name}`);
     } catch (error) { setMessage(error.message); }
   };
   const applyViewportPreset = id => {
@@ -271,6 +272,24 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
             <VertexMarkerPreview marker={prefs.viewportAppearance[part]} background={prefs.viewportAppearance.background.color} label={label}/>
           </fieldset>)}
         </div>
+        <fieldset className="settings-appearance-group" aria-label="Quadview appearance"><legend>Quadview</legend>
+          <p className="settings-hint">A grid for each pane's editing plane. Zooming reveals finer subdivisions; these settings are saved in appearance presets and configuration exports.</p>
+          <Toggle id="appearance:quadview:grid" label="Quadview grid" checked={prefs.viewportAppearance.quadView.grid.enabled} onChange={enabled => quadPart('grid', {enabled})}/>
+          <div className="settings-color-grid">
+            <label className="settings-color"><span>Background</span><input type="color" aria-label="Quadview background color" value={prefs.viewportAppearance.quadView.background.color} onChange={event => quadPart('background', {color:event.target.value})}/></label>
+            {[['minorColor','Minor grid'],['majorColor','Major grid'],['axisColor','Origin axes']].map(([key,label]) => <label className="settings-color" key={key}><span>{label}</span><input type="color" aria-label={`Quadview ${label.toLowerCase()} color`} value={prefs.viewportAppearance.quadView.grid[key]} onChange={event => quadPart('grid', {[key]:event.target.value})}/></label>)}
+          </div>
+          <div className="settings-graphics-grid">
+            <Numeric id="appearance:quadview:spacing" label="Quadview minimum cell size" value={prefs.viewportAppearance.quadView.grid.spacing} min={12} max={96} unit="px" onChange={spacing => quadPart('grid', {spacing})}/>
+            <Numeric id="appearance:quadview:major" label="Quadview major line every" value={prefs.viewportAppearance.quadView.grid.majorEvery} min={2} max={10} unit="cells" onChange={majorEvery => quadPart('grid', {majorEvery})}/>
+            <Numeric id="appearance:quadview:thickness" label="Quadview line thickness" value={prefs.viewportAppearance.quadView.grid.thickness} min={.5} max={4} step={.25} unit="px" onChange={thickness => quadPart('grid', {thickness})}/>
+            <Numeric id="appearance:quadview:opacity" label="Quadview minor opacity" value={prefs.viewportAppearance.quadView.grid.opacity} min={0} max={1} step={.05} onChange={opacity => quadPart('grid', {opacity})}/>
+            <Numeric id="appearance:quadview:major-opacity" label="Quadview major opacity" value={prefs.viewportAppearance.quadView.grid.majorOpacity} min={0} max={1} step={.05} onChange={majorOpacity => quadPart('grid', {majorOpacity})}/>
+          </div>
+          <input ref={quadImageInput} hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" onChange={event => { loadViewportBackground(event.target.files[0], true); event.target.value=''; }}/>
+          <div className="settings-inline-actions"><button onClick={() => quadImageInput.current?.click()}>Choose Quadview background image…</button>{prefs.viewportAppearance.quadView.background.imageData && <button onClick={() => quadPart('background', {type:'color',imageData:'',imageName:''})}>Remove Quadview image</button>}</div>
+          {prefs.viewportAppearance.quadView.background.imageData && <div className="settings-graphics-grid"><label>Quadview image display <select aria-label="Quadview image display" value={prefs.viewportAppearance.quadView.background.display} onChange={event => quadPart('background', {display:event.target.value})}>{['fit','fill','stretch','center'].map(value => <option key={value} value={value}>{value}</option>)}</select></label><Numeric id="appearance:quadview:image-opacity" label="Quadview image opacity" value={prefs.viewportAppearance.quadView.background.opacity} min={0} max={1} step={.05} onChange={opacity => quadPart('background', {opacity})}/></div>}
+        </fieldset>
         <h3>Viewport background</h3>
         <div className="settings-inline-actions" role="group" aria-label="Viewport background type"><span>Type:</span><button aria-pressed={prefs.viewportAppearance.background.type === 'color'} onClick={() => viewportPart('background',{type:'color'})}>Solid color</button><button aria-pressed={prefs.viewportAppearance.background.type === 'image'} disabled={!prefs.viewportAppearance.background.imageData} onClick={() => viewportPart('background',{type:'image'})}>Image</button></div>
         <label className="settings-color">Fallback color <input type="color" aria-label="Viewport background color" value={prefs.viewportAppearance.background.color} onChange={event => viewportPart('background',{color:event.target.value})}/><code>{prefs.viewportAppearance.background.color}</code></label>

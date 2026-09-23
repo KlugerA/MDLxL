@@ -44,11 +44,12 @@ test('adaptive depth precision improves at distant zoom without moving model geo
   assert.ok(depthClipRange(0, 100).near < 1, 'close navigation remains possible');
 });
 
-test('constrained moves solve the visible selected axis in every workplane', () => {
-  assert.deepEqual(projectedPlaneTranslation('xy', [[2, 0], [0, 2]], 10, 20, true), [5, 0, 0]);
-  assert.deepEqual(projectedPlaneTranslation('yz', [[2, 0], [0, 2]], 10, 20, true), [0, 5, 0]);
+test('Shift locks either dominant screen direction inside the workplane', () => {
+  assert.deepEqual(projectedPlaneTranslation('xy', [[2, 0], [0, 2]], 10, 20, true), [0, 10, 0]);
+  assert.deepEqual(projectedPlaneTranslation('yz', [[2, 0], [0, 2]], 10, 20, true), [0, 0, 10]);
   assert.deepEqual(projectedPlaneTranslation('xz', [[2, 0], [0, 2]], 10, 20, true), [0, 0, 10]);
-  assert.deepEqual(projectedPlaneTranslation('xz', [[2, 0], [2, .00001]], 10, 20, true).map(Math.round), [0, 0, 5]);
+  assert.deepEqual(projectedPlaneTranslation('xz', [[2, 0], [0, 2]], -20, 10, true), [-10, 0, 0]);
+  assert.deepEqual(projectedPlaneTranslation('xz', [[2, 0], [2, .00001]], 10, 20, true).map(Math.round), [0, 0, 0]);
   assert.deepEqual(projectedPlaneTranslation('xz', [[2, 0], [0, 0]], 10, 20, true), [0, 0, 0]);
   for (const plane of ['xy', 'yz', 'xz']) for (const constrain of [false, true]) {
     const value = projectedPlaneTranslation(plane, [[2, 0], [2, .00001]], 10, 20, constrain);
