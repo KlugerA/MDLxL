@@ -12,7 +12,7 @@ import { textureFromAsset } from './Viewport.jsx';
 import { drawGeosetHighlight } from './geoset-highlight.js';
 import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatrices, skinGeoset, skinGeosetNormals } from '../src/animation.js';
 import { applyMovementTransform, movementRestricted } from '../src/movement.js';
-import { drawMovementOverlay, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from './movement-overlay.js';
+import { drawAttachGuide, drawMovementOverlay, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from './movement-overlay.js';
 import { applyRestPoseMatrices, isUVOnlyPreviewChange, portraitBlankDragRotatesCamera, restorePreviewCamera } from './game-preview-data.js';
 import { installWarcraftPreviewAdapter, resetPreviewEffects } from './warcraft-preview-adapter.js';
 import { composePreviewCapture, drawPreviewBackground, previewPlaybackStep } from './game-preview-capture.js';
@@ -175,7 +175,7 @@ export default function GamePreview(inputProps) {
     host.current.appendChild(canvas);
     const gl = canvas.getContext('webgl2', { antialias: graphics.antialias, alpha: false, premultipliedAlpha: false });
     if (!gl) { setError('This preview needs WebGL 2. The geometry editor remains available.'); canvas.remove(); backgroundCanvas.remove(); return; }
-    let native, disposed = false, observer, scheduler, hoverCanvas, nodeCanvas, geometryCanvas, cameraCanvas, nodePoints = [], nodeHandles = [], nodeGesture = null, selectionGesture = null, posedGeosets = [], rotating = false, portraitBackup = null, cameraGestureStart = null;
+    let native, disposed = false, observer, scheduler, hoverCanvas, nodeCanvas, geometryCanvas, cameraCanvas, nodePoints = [], nodeHandles = [], nodeGesture = null, selectionGesture = null, posedGeosets = [], rotating = false, portraitBackup = null, cameraGestureStart = null, attachPointer = null;
     const invalidate = () => scheduler?.invalidate();
     const ownedModel = structuredClone(rendererModel);
     ownedModel.Nodes = []; for (const node of allNodes(ownedModel)) ownedModel.Nodes[node.ObjectId] = node;
@@ -264,6 +264,13 @@ export default function GamePreview(inputProps) {
       const work = (p.cameraMode ?? 'work') === 'work' && !event.altKey;
       const portraitCameraDrag = portraitBlankDragRotatesCamera(p, event);
       const overlayOptions = previewOverlayOptions(p.overlays, p.showNodes), pickable = visibleMovementPoints(nodePoints, overlayOptions);
+      if (event.button === 0 && p.attachSourceId != null) {
+        const rect = canvas.getBoundingClientRect(), x = event.clientX - rect.left, y = event.clientY - rect.top;
+        attachPointer = { x, y };
+        const target = pickMovementNode(pickable.filter(point => point.overlayKind === 'bones' && point.node.ObjectId !== p.attachSourceId), x, y);
+        if (target) p.onAttachTarget?.(target.node.ObjectId);
+        invalidate(); event.preventDefault(); event.stopImmediatePropagation(); return;
+      }
       if (event.button === 0 && work && !(event.ctrlKey && p.onInspectGeoset) && pickable.length) {
         const rect = canvas.getBoundingClientRect(), x = event.clientX - rect.left, y = event.clientY - rect.top;
         const editSequence = movementSequence(p, Math.round(native.getFrame()));
@@ -322,6 +329,11 @@ export default function GamePreview(inputProps) {
     }
     const nodePointerMove = event => {
       const p = latest.current;
+      if (p.attachSourceId != null) {
+        const rect = canvas.getBoundingClientRect();
+        attachPointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        canvas.style.cursor = 'crosshair'; invalidate(); return;
+      }
       if (selectionGesture?.id === event.pointerId) {
         const rect = canvas.getBoundingClientRect(), x = event.clientX - rect.left, y = event.clientY - rect.top;
         if (Math.hypot(x - selectionGesture.x, y - selectionGesture.y) > 5) setSelectionBox({ left: Math.min(x, selectionGesture.x), top: Math.min(y, selectionGesture.y), width: Math.abs(x - selectionGesture.x), height: Math.abs(y - selectionGesture.y) });
@@ -385,6 +397,9 @@ export default function GamePreview(inputProps) {
       invalidate();
     };
     const cancelNodeGesture = event => {
+      if (event.key === 'Escape' && latest.current.attachSourceId != null) {
+        latest.current.onCancelAttach?.(); event.preventDefault(); event.stopImmediatePropagation(); invalidate(); return;
+      }
       if (event.key === 'Escape' && selectionGesture) finishNodeGesture({ pointerId: selectionGesture.id, type: 'pointercancel', preventDefault: () => event.preventDefault(), stopImmediatePropagation: () => event.stopImmediatePropagation() });
       if (event.key === 'Escape' && nodeGesture) { finishNodeGesture({ pointerId: nodeGesture.id, type: 'pointercancel', preventDefault: () => event.preventDefault(), stopImmediatePropagation: () => event.stopImmediatePropagation() }); }
     };
@@ -477,13 +492,13 @@ export default function GamePreview(inputProps) {
     controls.addEventListener('start', cameraStarted); controls.addEventListener('end', cameraEnded);
     const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode, rotating); }, setCameraAngles: values => { if (setEditorCameraAngles(camera, controls.target, values)) { if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); } controls.update(); cameraChanged(); } } }; runtime.current = state;
     observer = new ownerWindow.ResizeObserver(resize); observer.observe(host.current);
-    const saved = cameraMemory.current;
+    const saved = cameraMemory.current || latest.current.cameraHandoff?.current;
     // UV edits may rebuild geometry/materials, but never own the user's view.
     // Preserve the active projection as well as its orbit, pan and zoom; an
     // angled/standard projection need not equal the outer editor's view prop.
-    if (saved && latest.current.preserveCameraView) {
+    if (saved && (latest.current.preserveCameraView || latest.current.cameraHandoff?.current === saved)) {
       camera = restorePreviewCamera(saved, perspective, ortho, controls);
-      state.appliedView = saved.view; resize(); reportProjectionView();
+      state.appliedView = latest.current.view || saved.view; resize(); reportProjectionView();
     } else {
       fit();
       if (saved && saved.view === view) { camera = restorePreviewCamera(saved, perspective, ortho, controls); reportProjectionView(); }
@@ -672,6 +687,7 @@ export default function GamePreview(inputProps) {
         const markerOptions = { ...overlayOptions, wireframeMarkers: p.mode === 'wireframe' || p.mode === 'vertices', occludedMarkerEdges: p.mode === 'solid' || p.mode === 'textured' };
         rigMarkers.draw(camera, projectedNodes, p.selectedNodeIds || [], markerOptions);
         drawMovementOverlay(nodeCanvas.getContext('2d'), projectedNodes, p.selectedNodeIds || [], nodeHandles, width, height, canvas.width / Math.max(1, width), { ...markerOptions, glMarkers: true });
+        if (p.attachSourceId != null) drawAttachGuide(nodeCanvas.getContext('2d'), projectedNodes, p.attachSourceId, attachPointer, canvas.width / Math.max(1, width), now, visualOptions(p.preferences).helperSize);
       } else { nodePoints = []; nodeHandles = []; if (nodeCanvas) { nodeCanvas.remove(); nodeCanvas = null; } }
       }
       if (!captureOnly && playback.finished) { reportAt = now; reportedFrame = start; p.onTimeChange?.(start); p.onPlayingChange?.(false); }
@@ -680,7 +696,7 @@ export default function GamePreview(inputProps) {
     const contextLost = event => { event.preventDefault(); scheduler?.dispose(); setError('The graphics context was lost. Reopen this preview to restore it.'); };
     scheduler = state.scheduler = createRenderScheduler({ render,
       continuous: () => {
-        return latest.current.playing && !latest.current.restPose && !playbackStopped;
+        return latest.current.attachSourceId != null || latest.current.playing && !latest.current.restPose && !playbackStopped;
       },
       // Electron may report an owned about:blank window as hidden during focus
       // transfer. Only the main-document preview uses hidden-tab suspension;
@@ -730,6 +746,7 @@ export default function GamePreview(inputProps) {
       cameraMemory.current = portraitBackup
         ? { camera:portraitBackup.camera, view:portraitBackup.appliedView, perspective:portraitBackup.perspective.clone(), ortho:portraitBackup.ortho.clone(), target:portraitBackup.target.clone() }
         : { camera:camera === ortho ? 'ortho' : 'perspective', view:state.appliedView, perspective:perspective.clone(), ortho:ortho.clone(), target:controls.target.clone() };
+      if (latest.current.cameraHandoff) latest.current.cameraHandoff.current = cameraMemory.current;
       disposed = true; latest.current.onCaptureReady?.(null); backgroundCanvas.remove(); hoverCanvas?.remove(); nodeCanvas?.remove(); geometryCanvas?.remove(); cameraCanvas?.remove(); scheduler.dispose(); ownerDocument.removeEventListener('visibilitychange', scheduler.sync); window.removeEventListener('mdlvis-frame', fit); window.removeEventListener('mdlxl-view-camera', viewCamera); unbindScroll(); observer?.disconnect(); canvas.removeEventListener('pointerdown', pointerDown, true); canvas.removeEventListener('pointermove', suppressAdjustedMove, true); canvas.removeEventListener('pointerup', finishLeftGesture, true); canvas.removeEventListener('pointercancel', finishLeftGesture, true); canvas.removeEventListener('pointermove', nodePointerMove, true); canvas.removeEventListener('pointerup', finishNodeGesture, true); canvas.removeEventListener('pointercancel', finishNodeGesture, true); canvas.removeEventListener('keydown', cancelNodeGesture, true); controls.removeEventListener('change', cameraChanged); controls.removeEventListener('start', cameraStarted); controls.removeEventListener('end', cameraEnded); controls.dispose(); canvas.removeEventListener('webglcontextlost', contextLost); runtime.current = null; rigMarkers.dispose(); presentation.dispose(); nativeBackground.dispose(); eventPreview.dispose(); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas);
     };
   }, [rendererModel, rendererRevision, textureAssets, props.modelPath, graphics.antialias, graphics.particles, props.showParticles, graphics.lighting, graphics.textures, timelineStart, timelineEnd]);
@@ -751,7 +768,7 @@ export default function GamePreview(inputProps) {
   useEffect(() => { runtime.current?.drawBackground(); }, [props.preferences?.visuals?.background, props.preferences?.viewportAppearance?.background]);
   useEffect(() => { props.onCaptureReady?.(runtime.current?.captureApi || null); }, [props.onCaptureReady]);
   useEffect(() => { if (model) runtime.current?.updateUV(model); }, [model, revision]);
-  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.transformMode, props.transformSpace, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceId, props.transformMode, props.transformSpace, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];
   return <div ref={root} className={`game-preview-root${portrait ? ' portrait-preview-root' : ''}`} style={{ minHeight: props.presentation === 'preview' ? 0 : 180 }}>

@@ -79,7 +79,7 @@ export function drawMovementOverlay(context, nodes, selectedIds, handles, width,
   for (const point of nodes) if (point.visible && options[point.overlayKind || 'nodes']) {
     const isSelected = selected.has(point.node.ObjectId), emitter = (point.node.Flags & 4096) !== 0;
     const bone = point.overlayKind === 'bones';
-    context.fillStyle = point.displayColor || (bone ? highlights.get(point.node.ObjectId) || visual.bone : emitter || point.overlayKind === 'particles' ? visual.particle : point.eventNode ? visual.event : visual.node);
+    context.fillStyle = point.displayColor || (bone ? highlights.get(point.node.ObjectId) || (byId.get(point.node.Parent)?.overlayKind === 'bones' ? '#4cff59' : '#4cb259') : emitter || point.overlayKind === 'particles' ? visual.particle : point.eventNode ? visual.event : visual.node);
     context.strokeStyle = isSelected ? '#fff14e' : '#17263d'; context.lineWidth = isSelected ? 2.5 : 1.5;
     context.beginPath();
     if (options.glMarkers) { /* Shape rendering shares the mesh's actual GL depth. */ }
@@ -101,6 +101,24 @@ export function drawMovementOverlay(context, nodes, selectedIds, handles, width,
     context.beginPath(); context.arc(handle.x, handle.y, 10, 0, Math.PI * 2); context.fillStyle = handle.color; context.fill();
     context.lineWidth = 1; context.strokeStyle = '#162137'; context.stroke();
     context.font = 'bold 11px Tahoma, sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillStyle = '#fff'; context.fillText(handle.axis, handle.x, handle.y);
+  }
+  context.restore();
+}
+
+export function drawAttachGuide(context, nodes, sourceId, pointer, ratio = 1, time = 0, helperSize = 6) {
+  const source = nodes.find(point => point.node.ObjectId === sourceId);
+  if (!source?.visible) return;
+  context.save(); context.scale(ratio, ratio);
+  for (const point of nodes) {
+    if (!point.visible || point.overlayKind !== 'bones' || point.node.ObjectId === sourceId) continue;
+    const radius = movementMarkerRadius(point, helperSize);
+    context.strokeStyle = '#ffe600'; context.lineWidth = 3;
+    context.strokeRect(point.x - radius, point.y - radius, radius * 2, radius * 2);
+  }
+  if (pointer) {
+    context.beginPath(); context.moveTo(source.x, source.y); context.lineTo(pointer.x, pointer.y);
+    context.strokeStyle = '#ed2626'; context.lineWidth = 3; context.lineCap = 'round';
+    context.setLineDash([.1, 8]); context.lineDashOffset = -(time * .035 % 8); context.stroke();
   }
   context.restore();
 }

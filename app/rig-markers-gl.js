@@ -33,7 +33,10 @@ export function markerStyle(point, byId, preferences, highlightColors = new Map(
   const visual = visualOptions(preferences), highlighted = highlightColors.get(point.node.ObjectId);
   if (point.overlayKind === 'attachments') return { shape: TETRA, color: highlighted || visual.node };
   if (point.overlayKind === 'particles') return { shape: TETRA, color: highlighted || visual.particle };
-  if (point.overlayKind === 'bones') return { shape: CUBE, color: highlightColors.get(point.node.ObjectId) || visual.bone };
+  if (point.overlayKind === 'bones') {
+    const hasParentBone = byId.get(point.node.Parent)?.overlayKind === 'bones';
+    return { shape: CUBE, color: highlighted || (hasParentBone ? '#4cff59' : '#4cb259') };
+  }
   if (point.helperNode) return { shape: CUBE, color: highlighted || visual.bone };
   if (point.eventNode) return { shape: TETRA, color: highlighted || visual.event };
   return { shape: TETRA, color: highlighted || point.displayColor || visual.node };

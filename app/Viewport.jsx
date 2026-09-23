@@ -865,6 +865,10 @@ export default function Viewport(inputProps) {
       savePane();
       const remember = pane => ({ id: pane.id, view: pane.view, perspective: pane.perspective.clone(), ortho: pane.ortho.clone(), target: pane.controls.target.clone(), center: pane.center.clone(), radius: pane.radius });
       cameraMemory.current = { ...remember(singlePane), panes: panes.slice(1).map(remember) };
+      if (latest.current.cameraHandoff) {
+        const active = remember(activePane);
+        latest.current.cameraHandoff.current = { ...active, camera: activePane.camera === activePane.ortho ? 'ortho' : 'perspective' };
+      }
       state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); resizeObserver.disconnect(); panes.forEach(pane => { pane.dispose(); pane.grid.dispose(); });
       renderer.domElement.removeEventListener('webglcontextlost', contextLost);
       window.removeEventListener('mdlvis-frame', frameModel); window.removeEventListener('mdlxl-view-camera', viewCamera); window.removeEventListener('keydown', gestureKey, true); window.removeEventListener('keyup', gestureKey, true);
@@ -918,8 +922,8 @@ export default function Viewport(inputProps) {
     const signature = `${model.Info?.Name}|${model.Geosets?.map(g => g.Vertices.length).join(',')}`;
     if (state.loadedSignature === null) {
       state.loadedSignature = signature; state.fit();
-      const saved = cameraMemory.current;
-      if (saved && (latest.current.quadView || saved.view === latest.current.view)) { state.setView(saved.view); state.perspective.copy(saved.perspective); state.ortho.copy(saved.ortho); state.controls.target.copy(saved.target); state.center.copy(saved.center); state.radius=saved.radius; state.resize(); state.controls.update(); }
+      const saved = cameraMemory.current || latest.current.cameraHandoff?.current;
+      if (saved && (latest.current.quadView || saved.view === latest.current.view || latest.current.cameraHandoff?.current === saved)) { state.setView(saved.view); state.perspective.copy(saved.perspective); state.ortho.copy(saved.ortho); state.controls.target.copy(saved.target); if (saved.center) state.center.copy(saved.center); if (saved.radius) state.radius=saved.radius; state.resize(); state.controls.update(); }
     }
   }, [model, revision, shaded, graphics.lighting, graphics.antialias]);
 
