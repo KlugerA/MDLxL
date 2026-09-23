@@ -38,7 +38,7 @@ import { retainedForgeAssets, forgeExportArchive, isForgeAssetPath, missingForge
 import { applyMovementTransform, movementRestricted, constrainMovementVector } from '../src/movement.js';
 import { classicTimelineDomain } from '../src/classic-keyframes.js';
 import { beginUVPreview, applyUVPreviews, revertUVPreviews, uvPreviewModel, restoreUVPreviews, addLibraryTexture, validateUVPreview, captureUVPreviewGuard, validateUVPreviewGuard, getUVPreviewSelection } from '../src/uv-preview.js';
-import { uncoupleUVVertices } from '../src/uv-tools.js';
+import { setUVTextureWrapping, uncoupleUVVertices } from '../src/uv-tools.js';
 import './modules.css';
 import './texture-library.css';
 import Settings from './Settings.jsx';
@@ -862,6 +862,7 @@ export default function App() {
         onSelectionChange={next => setSelection(filterVertexSelection(next, new Set(Object.keys(uvEntrySelection).map(Number)), doc.model))}
         onWorkingSelectionChange={next => { const indices = new Set(Object.keys(next).map(Number)); setUVEntrySelection(next); setSelectable(indices); setSelection(filterVertexSelection(next, indices, doc.model)); setHidden({}); setActiveGeoset(indices.values().next().value ?? -1); setLiveUV(null); }}
         onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
+        onWrappingChange={(textureIDs, enabled) => edit(`${enabled ? 'Enable' : 'Disable'} UV texture wrapping`, ['Textures'], current => setUVTextureWrapping(current, textureIDs, enabled))}
         onGeosetChange={(index, coordId = 0) => { if (index < 0) return; setActiveGeoset(index); setUvSet(coordId); setLiveUV(null); }}
         textureAssets={session.assets} teamColor={teamColor} preferences={preferences} onPreferences={changePreferences} readOnly={doc.readOnly || saving}
         draftCount={Object.keys(session.uvPreviews).length} onLibrary={() => openLibrary(true)} onSavePreview={() => finishUVPreview()} onRevertPreview={() => finishUVPreview(true)} onExit={() => selectMode('vertices')}
