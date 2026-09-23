@@ -280,18 +280,64 @@ function sameOrientation(actual, expected, message) {
     await page.getByLabel('Quadview appearance',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'quad-appearance-settings.png')});
     await page.getByRole('button',{name:'Done',exact:true}).click();await idle();await page.screenshot({path:path.join(out,'quad-custom-appearance.png')});
     await dropdown.selectOption('top');await idle();
-    await page.getByRole('button',{name:'Bones',exact:true}).click();await idle();
+    await page.evaluate(()=>{window.previewCameraState=()=>{
+      const host=document.querySelector('.game-preview-surface');
+      let fiber=host?.[Object.keys(host).find(key=>key.startsWith('__reactFiber'))];
+      for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){
+        const state=hook.memoizedState?.current;
+        if(state?.native&&state?.controls){const camera=state.controls.object;return{cameraType:camera.isPerspectiveCamera?'perspective':'orthographic',position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),zoom:camera.zoom,target:state.controls.target.toArray()};}
+      }
+      throw Error('Preview camera not found');
+    };});
+    const previewCamera=()=>page.evaluate(()=>previewCameraState());
+    const shiftPan=async label=>{
+      await page.locator('[data-warmkey="camera:move"]').click();
+      const rect=await page.locator('.game-preview-surface canvas[data-clean-model-canvas]').boundingBox(),x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+      const initial=await previewCamera();
+      await page.mouse.move(x,y);await page.keyboard.down('Shift');await page.mouse.down();
+      await page.mouse.move(x+80,y,{steps:4});await idle();const horizontal=await previewCamera();
+      await page.mouse.move(x+80,y+80,{steps:4});await idle();const vertical=await previewCamera();
+      await page.mouse.up();await page.keyboard.up('Shift');await idle();
+      const moved=(a,b)=>Math.hypot(...a.target.map((value,index)=>value-b.target[index]));
+      assert.ok(moved(initial,horizontal)>.01,label+' Shift horizontal camera pan works');
+      assert.ok(moved(horizontal,vertical)>.01,label+' Shift vertical camera pan works');
+    };
+    const shiftRotate=async label=>{
+      await page.locator('[data-warmkey="camera:rotate"]').click();
+      const rect=await page.locator('.game-preview-surface canvas[data-clean-model-canvas]').boundingBox(),x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+      const before=await previewCamera();
+      await page.mouse.move(x,y);await page.keyboard.down('Shift');await page.mouse.down();
+      await page.mouse.move(x+80,y+60,{steps:5});await page.mouse.up();await page.keyboard.up('Shift');await idle();
+      const after=await previewCamera();
+      assert.ok(Math.hypot(...before.quaternion.map((value,index)=>value-after.quaternion[index]))>.001,label+' Shift camera rotation works');
+      await page.locator('[data-warmkey="camera:work"]').click();
+    };
+    await page.getByRole('button',{name:'Bones',exact:true}).click();
+    await page.getByLabel('Bones controller').waitFor({timeout:60000});
+    await page.waitForFunction(()=>{try{return !!previewCameraState()}catch{return false}},undefined,{timeout:60000});
     assert.equal(await dropdown.inputValue(),'perspective','Quad pane view does not change the Bones viewpoint');
+    const bonesCamera=await previewCamera();
+    assert.equal(bonesCamera.cameraType,'perspective','Bones inherits the single-view projection, not Quad Top');
+    sameCamera(bonesCamera,single,'Bones inherits the single-view camera, not Quad Top');
+    await shiftPan('Bones');
+    await shiftRotate('Bones');
+    await page.getByRole('button',{name:'Movement',exact:true}).click();
+    await page.getByLabel('Movement controller',{exact:true}).waitFor({timeout:60000});
+    await page.waitForFunction(()=>{try{return !!previewCameraState()}catch{return false}},undefined,{timeout:60000});
+    assert.equal(await dropdown.inputValue(),'perspective','Quad pane view does not change the Movement viewpoint');
+    assert.equal((await previewCamera()).cameraType,'perspective','Movement does not inherit a locked Quad plane');
+    await shiftPan('Movement');
+    await shiftRotate('Movement');
     await page.getByRole('button',{name:'Animations',exact:true}).click();await idle();
     assert.equal(await dropdown.inputValue(),'perspective','Quad pane view does not change the Animations viewpoint');
     assert.deepEqual(errors,[]);assert.deepEqual(await page.locator('[role="alert"]').allTextContents(),[]);
     assert.ok(fs.readFileSync(fixture).equals(original),'input file stays unchanged');
     fs.writeFileSync(path.join(out,'metrics.json'),JSON.stringify({metrics,shiftMetrics,latchMetrics,sizes,errors},null,2));
-    console.log('PASS',JSON.stringify({metrics,sizes,lockedPlaneDrags:shiftMetrics.length,shiftLatchDrags:latchMetrics.length,checks:'shared live preview, exact depth, undo/redo, cancel, selection, marquee, independent cameras, perspective orbit, toggle restore, resize, input preservation, permanent planes, disabled global workplane override, blocked orthographic orbit/angles, Quad Shift H/V and per-hold latch, classic single-view canvas and Workplane Shift, Bones and Animations viewpoint isolation, adaptive zoom, appearance bundles'}));
+    console.log('PASS',JSON.stringify({metrics,sizes,lockedPlaneDrags:shiftMetrics.length,shiftLatchDrags:latchMetrics.length,checks:'shared live preview, exact depth, undo/redo, cancel, selection, marquee, independent cameras, perspective orbit, toggle restore, resize, input preservation, permanent planes, disabled global workplane override, blocked orthographic orbit/angles, Quad Shift H/V and per-hold latch, classic single-view canvas and Workplane Shift, single-view camera handoff to Bones and Movement, Shift camera pan and rotation in Bones and Movement, adaptive zoom, appearance bundles'}));
   } catch(error) {
     console.error(error);
     const page=await app.firstWindow();await page.screenshot({path:path.join(out,'failure.png')});
-    console.error('Runtime',await page.evaluate(()=>({view:viewportState().appliedView,camera:cameraState(),point:vertexPoint(),coords:coordinates(),selection:Array.from(viewportState().entries[0].selectedPoints.geometry.index?.array||[]),pointerLog})));
+    console.error('Runtime',await page.evaluate(()=>({view:document.querySelector('[aria-label="3D model viewport"]')?viewportState().appliedView:null,preview:document.querySelector('.game-preview-surface')?(()=>{try{return previewCameraState()}catch{return null}})():null,pointerLog})));
     throw error;
   } finally {await app.evaluate(({app})=>app.exit(0));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { EditorCameraControls, zoomEditorCamera, editorCameraAngles, setEditorCameraAngles } from './editor-camera-controls.js';
+import { EditorCameraControls, zoomEditorCamera, editorCameraAngles, preserveShiftCameraAction, setEditorCameraAngles } from './editor-camera-controls.js';
 import { previewLighting, configurePreviewLights, applyPreviewMaterialLighting } from './preview-lighting.js';
 import { viewportCursor } from './viewport-cursors.js';
 import { createPreviewPlatform } from './preview-platform.js';
@@ -495,8 +495,9 @@ export default function Viewport(inputProps) {
       controls.enabled = true;
       controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(latest.current.preferences?.pointerSensitivity);
       const binding = cameraBindings(latest.current.preferences), mouseAction = value => value === 'pan' || value === 'rotate' && quad && boundPane.workplane ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
-      controls.mouseButtons.RIGHT = mouseAction(binding.right); controls.mouseButtons.MIDDLE = mouseAction(binding.middle);
-      controls.mouseButtons.LEFT = action === 'move' ? THREE.MOUSE.PAN : action === 'rotate' ? THREE.MOUSE.ROTATE : null;
+      const navigationAction = value => quad ? value : preserveShiftCameraAction(value, event);
+      controls.mouseButtons.RIGHT = navigationAction(mouseAction(binding.right)); controls.mouseButtons.MIDDLE = navigationAction(mouseAction(binding.middle));
+      controls.mouseButtons.LEFT = navigationAction(mouseAction(action === 'move' ? 'pan' : action));
       if (event.shiftKey && action !== 'work') controls.rotateSpeed = controls.panSpeed *= latest.current.preferences?.fineSensitivity ?? .2;
       if (action === 'move' || action === 'rotate') return;
       if (latest.current.presentation === 'preview' && action !== 'zoom') return;
@@ -887,8 +888,8 @@ export default function Viewport(inputProps) {
       const remember = pane => ({ id: pane.id, view: pane.view, perspective: pane.perspective.clone(), ortho: pane.ortho.clone(), target: pane.controls.target.clone(), center: pane.center.clone(), radius: pane.radius });
       cameraMemory.current = { ...remember(singlePane), panes: panes.slice(1).map(remember) };
       if (latest.current.cameraHandoff) {
-        const active = remember(activePane);
-        latest.current.cameraHandoff.current = { ...active, camera: activePane.camera === activePane.ortho ? 'ortho' : 'perspective' };
+        // Quad panes own their cameras. Other editors inherit the single view.
+        latest.current.cameraHandoff.current = { ...remember(singlePane), camera: singlePane.camera === singlePane.ortho ? 'ortho' : 'perspective' };
       }
       state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); resizeObserver.disconnect(); panes.forEach(pane => { pane.dispose(); pane.grid.dispose(); });
       renderer.domElement.removeEventListener('webglcontextlost', contextLost);

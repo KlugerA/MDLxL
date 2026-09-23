@@ -1,5 +1,12 @@
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Euler, Quaternion, Vector3 } from 'three';
+import { Euler, MOUSE, Quaternion, Vector3 } from 'three';
+
+/** OrbitControls swaps pan and rotate when Shift is held. Preselect the
+ * opposite action so Shift only changes fine sensitivity in single views. */
+export function preserveShiftCameraAction(action, event) {
+  if (!event.shiftKey || event.ctrlKey || event.metaKey) return action;
+  return action === MOUSE.PAN ? MOUSE.ROTATE : action === MOUSE.ROTATE ? MOUSE.PAN : action;
+}
 
 /** XYZ Euler angles in world space, in degrees. Editing orbits around the
  * existing target, preserving distance and zoom; roll remains editable. */
