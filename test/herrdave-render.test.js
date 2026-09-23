@@ -56,7 +56,21 @@ test('Helper roots are ordinary green bones for hierarchy highlighting while ref
   const model={Bones:[{ObjectId:1,Name:'Bone_Pelvis',Parent:0,PivotPoint:[0,0,4]}],Helpers:[{ObjectId:0,Name:'Bone_Root',PivotPoint:[0,0,0]}],Attachments:[{ObjectId:2,Parent:1,PivotPoint:[0,0,8]}],EventObjects:[{ObjectId:3,Parent:1,PivotPoint:[0,0,10]}],Geosets:[],Sequences:[],GlobalSequences:[],PivotPoints:[]};
   const points=projectMovementNodes(model,0,-1,camera(),400,400),byId=new Map(points.map(point=>[point.node.ObjectId,point])),colors=boneHighlightColors(points,[1]);
   assert.equal(points.find(point=>point.node.ObjectId===0).overlayKind,'bones');assert.equal(colors.get(0),'#000000');assert.equal(colors.get(1),'#ff0000');
-  assert.equal(markerStyle(byId.get(0),byId).color,'#4cff59');assert.equal(markerStyle(byId.get(2),byId).color,'#b2b2ff');assert.equal(markerStyle(byId.get(3),byId).color,'#ff9800');
+  assert.equal(markerStyle(byId.get(0),byId).color,'#4cb259');assert.equal(markerStyle(byId.get(2),byId).color,'#b2b2ff');assert.equal(markerStyle(byId.get(3),byId).color,'#ff9800');
+});
+test('rig marker lighting stays fixed when only the camera moves',()=>{
+  const model=renderFixture('rig'),front=camera(),side=camera();
+  side.position.set(-250,0,0);side.lookAt(0,0,0);side.updateMatrixWorld();
+  const options={bones:true,nodes:true,attachments:true,particles:true};
+  const first=rigMarkerGeometry(projectMovementNodes(model,0,-1,front,400,400),[],options);
+  const second=rigMarkerGeometry(projectMovementNodes(model,0,-1,side,400,400),[],options);
+  const colors=buffer=>Array.from(buffer.triangles).filter((_,index)=>index%6>=3);
+  assert.deepEqual(colors(first),colors(second));
+  const root=projectMovementNodes(model,0,-1,front,400,400).find(point=>point.overlayKind==='bones'&&point.node.Parent==null);
+  const green=rigMarkerGeometry([root],[],options);
+  const faceGreen=Array.from(green.triangles).filter((_,index)=>index%6===4);
+  assert.ok(Math.min(...faceGreen)>.5,'fixed light retains a bright green fill on side faces');
+  assert.ok(Math.max(...faceGreen)-Math.min(...faceGreen)>.05,'fixed light still shades differently oriented faces');
 });
 test('XYZ axes are expanded to exact three-pixel screen quads instead of implementation-limited GL lines',()=>{
   const triangles=axisScreenTriangles([{a:[-1,0,0],b:[1,0,0],color:'#ff0000',opacity:1,width:3}],new Matrix4(),200,100);

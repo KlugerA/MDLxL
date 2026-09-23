@@ -311,9 +311,14 @@ export function applyMovementTransform(model, ids, time, sequenceIndex, change =
       if (offset.lengthSq() < 1e-24) return null;
       return { node, value: vector(current).add(offset).toArray(), tangent: (input, lineType) => lineType === 3 ? vector(input).add(offset).toArray() : Array.from(input) };
     }
-    // WC3 scale is diagonal in node-local coordinates: a rotated world stretch
-    // requires shear, which WC3 cannot store. Keep scale explicitly local.
-    return { node, value: current.map((value, i) => value * values[i]), tangent: input => Array.from(input, (value, i) => value * values[i]) };
+    // WC3 stores diagonal local scale. Project requested world-axis factors
+    // onto each rotated local basis axis; right-angle rotations map exactly.
+    const worldRotation = new Quaternion(); matrices.get(node.ObjectId)?.decompose(new Vector3(), worldRotation, new Vector3());
+    const factors = space === 'world' ? axes.map((_, i) => {
+      const direction = new Vector3().setComponent(i, 1).applyQuaternion(worldRotation);
+      return values.reduce((factor, value, j) => factor + value * direction.getComponent(j) ** 2, 0);
+    }) : values;
+    return { node, value: current.map((value, i) => value * factors[i]), tangent: input => Array.from(input, (value, i) => value * factors[i]) };
   }).filter(Boolean);
   for (const { node, value, tangent } of changes) writeKey(model, node, property, time, sequenceIndex, value, tangent);
   return changes.length;

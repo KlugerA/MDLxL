@@ -10,7 +10,7 @@ import { normalSegments } from '../app/preview-overlays.js';
 import { needsSolidDepthPrepass } from '../app/preview-depth.js';
 import { platformGeometry, previewPlatformOptions } from '../app/preview-platform.js';
 import { projectPreviewGeosets, pickPreviewGeoset, selectPreviewVertices } from '../app/preview-selection.js';
-import { samplePreviewMatrices } from '../app/preview-pose.js';
+import { billboardCameraCorrection, samplePreviewMatrices } from '../app/preview-pose.js';
 import { skinGeoset, sampleNodeMatrices } from '../src/animation.js';
 import { createPreviewSceneGL } from '../app/preview-scene-gl.js';
 import { createViewportGrid } from '../app/viewport-grid.js';
@@ -62,13 +62,14 @@ test('bone/helper cubes retain reference size, roots differ, attachments are tet
   const model = { Bones: [{ ObjectId: 0, PivotPoint: [0, 0, 0] }, { ObjectId: 1, Parent: 0, PivotPoint: [4, 0, 0] }], Helpers: [{ ObjectId: 2, Parent: 0, PivotPoint: [0, 4, 0] }], Attachments: [{ ObjectId: 3, Parent: 0, PivotPoint: [0, 6, 0] }] };
   const before = structuredClone(model), points = projectMovementNodes(model, 0, -1, camera(), 400, 400);
   assert.equal(points[3].tetrahedron.length, 4);
-  const boxes = [], colors = [], stops = [], gradients = [];
-  const context = new Proxy({ rect(...args) { boxes.push(args); }, fill() { colors.push(this.fillStyle); }, createLinearGradient(...args) { gradients.push(args); return { addColorStop(...stop) { stops.push(stop); } }; } }, { get: (o, k) => k in o ? o[k] : () => {} });
+  const boxes = [], colors = [], pixels = [];
+  const context = new Proxy({ rect(...args) { boxes.push(args); }, fill() { colors.push(this.fillStyle); }, fillRect(...args) { pixels.push({ color: this.fillStyle, box: args }); } }, { get: (o, k) => k in o ? o[k] : () => {} });
   drawMovementOverlay(context, points, [], [], 400, 400, 1, { bones: true, nodes: true, attachments: true, boneLines: true });
   assert.deepEqual(boxes.map(box => box.slice(2)), [[18, 18], [18, 18], [18, 18]]);
-  assert.ok(colors.includes('#4cff59')); assert.ok(colors.includes('#b2b2ff')); assert.ok(!colors.includes('#4cb259'));
-  assert.deepEqual(stops, Array.from({length: 3}, () => [[0, '#000000'], [1, '#ffffff']]).flat());
-  assert.ok(gradients[0][0]!==points[0].x||gradients[0][1]!==points[0].y,'connector begins outside the parent marker'); assert.deepEqual(model, before);
+  assert.ok(colors.includes('#4cff59')); assert.ok(colors.includes('#b2b2ff')); assert.ok(colors.includes('#4cb259'));
+  assert.ok(pixels.some(pixel => pixel.color === 'rgb(0,0,0)'));
+  assert.ok(pixels.some(pixel => pixel.color === 'rgb(255,255,255)'));
+  assert.ok(pixels.every(pixel => pixel.box[2] === 3 && pixel.box[3] === 3)); assert.deepEqual(model, before);
 });
 
 test('normal indicators preserve split stored directions, normalize display length and leave data intact', () => {
@@ -97,13 +98,15 @@ test('billboard-bound mesh and children face changing cameras while ordinary bon
     const matrices = samplePreviewMatrices(model, 0, -1, 0, c), positions = skinGeoset(geo, matrices);
     const a = new Vector3().fromArray(positions), b = new Vector3().fromArray(positions, 3), d = new Vector3().fromArray(positions, 6);
     const normal = b.sub(a).cross(d.sub(a)).normalize(); near(Math.abs(normal.dot(c.getWorldDirection(new Vector3()))), 1);
+    const upright = new Vector3(0, 0, 1).transformDirection(matrices.get(0));
+    near(upright.dot(new Vector3(0, 1, 0).applyQuaternion(c.quaternion)), 1);
     assert.deepEqual(matrices.get(1), matrices.get(0)); assert.deepEqual(matrices.get(2), sampleNodeMatrices(model).get(2));
   }
   assert.deepEqual(model, before);
 });
 
 test('all billboard axis flags match native evaluated matrices, keep animated pivots and normalized normals', () => {
-  const correction = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.PI / 2);
+  const correction = billboardCameraCorrection;
   for (const flags of [8, 16, 32, 64]) for (const angle of [0, 40, 110]) {
     const model = createDemoDocument().model;
     for (const node of model.Nodes) if (node) node.Flags &= ~120;

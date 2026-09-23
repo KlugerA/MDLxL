@@ -3,12 +3,13 @@ import { allNodes, sampleNodeMatrices, sampleTrack } from '../src/animation.js';
 import { movementNodeCategories } from './preview-overlays.js';
 import { samplePreviewMatrices } from './preview-pose.js';
 import { visualOptions } from '../src/preferences.js';
-import { boneHighlightColors } from './rig-markers-gl.js';
+import { boneHighlightColors, markerStyle } from './rig-markers-gl.js';
+import { drawPixelLine } from './pixel-lines.js';
 
 const COLORS = { X: '#fa4343', Y: '#34cf59', Z: '#3588ff' };
 const AXES = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] };
 const WORKPLANE_NORMALS = { xy: 'Z', xz: 'Y', zx: 'Y', yz: 'X' };
-export const MOVEMENT_GIZMO_SCALE = .25;
+export const MOVEMENT_GIZMO_SCALE = 1;
 export function projectMovementNodes(model, frame, sequenceIndex, camera, width, height, globalTime = frame, suppliedMatrices) {
   const matrices = suppliedMatrices || samplePreviewMatrices(model, frame, sequenceIndex, globalTime, camera);
   const lightIds = new Set((model.Lights || []).map(node => node.ObjectId));
@@ -36,7 +37,7 @@ export function movementAxisHandles(active, camera, width, height, radius, space
   const unit = camera.isPerspectiveCamera ? 2 * distance * Math.tan(camera.fov * Math.PI / 360) / camera.zoom / height : (camera.top - camera.bottom) / camera.zoom / height;
   return Object.entries(AXES).map(([axis, values]) => {
     const direction = new Vector3().fromArray(values);
-    if (space === 'local' || mode === 'scale') direction.applyQuaternion(active.rotation);
+    if (space === 'local' && mode !== 'scale') direction.applyQuaternion(active.rotation);
     const end = active.world.clone().addScaledVector(direction, unit * 68 * MOVEMENT_GIZMO_SCALE).project(camera);
     let dx = (end.x + 1) * width / 2 - active.x, dy = (1 - end.y) * height / 2 - active.y;
     // An axis facing the camera still gets a usable short handle.
@@ -56,30 +57,16 @@ export function drawMovementOverlay(context, nodes, selectedIds, handles, width,
     if (!point.visible || !parent?.visible) continue;
     const line = boneConnectionEndpoints(parent, point, visual.helperSize);
     if (!line) continue;
-    context.beginPath(); context.moveTo(line.from.x, line.from.y); context.lineTo(line.to.x, line.to.y);
     const appearance = boneConnectionAppearance(parent, point, highlights);
-    if (appearance) {
-      context.lineWidth = 6; context.strokeStyle = appearance; context.stroke();
-    } else {
-      context.lineWidth = 3; context.strokeStyle = '#1a223fcc'; context.stroke();
-      const gradient = context.createLinearGradient(line.from.x, line.from.y, line.to.x, line.to.y); gradient.addColorStop(0, '#000000'); gradient.addColorStop(1, '#ffffff');
-      context.lineWidth = 1.2; context.strokeStyle = gradient; context.stroke();
-    }
-  }
-  // The native GL markers sit below this annotation canvas. Punch their
-  // silhouettes out of the connector layer so links also pass behind any
-  // intervening bone/node, not only behind their own endpoints.
-  if (options.glMarkers) {
-    context.save(); context.globalCompositeOperation = 'destination-out'; context.fillStyle = '#000';
-    for (const point of nodes) if (point.visible && options[point.overlayKind || 'nodes']) {
-      context.beginPath(); context.arc(point.x, point.y, movementMarkerRadius(point, visual.helperSize), 0, Math.PI * 2); context.fill();
-    }
-    context.restore();
+    drawPixelLine(context, line.from, line.to, {
+      color: appearance || (progress => { const shade = Math.round(progress * 255); return `rgb(${shade},${shade},${shade})`; }),
+      width: appearance ? 6 : 3, ratio,
+    });
   }
   for (const point of nodes) if (point.visible && options[point.overlayKind || 'nodes']) {
     const isSelected = selected.has(point.node.ObjectId), emitter = (point.node.Flags & 4096) !== 0;
     const bone = point.overlayKind === 'bones';
-    context.fillStyle = point.displayColor || (bone ? highlights.get(point.node.ObjectId) || visual.bone : emitter || point.overlayKind === 'particles' ? visual.particle : point.eventNode ? visual.event : visual.node);
+    context.fillStyle = point.displayColor || (bone ? highlights.get(point.node.ObjectId) || (byId.get(point.node.Parent)?.overlayKind === 'bones' ? '#4cff59' : '#4cb259') : emitter || point.overlayKind === 'particles' ? visual.particle : point.eventNode ? visual.event : visual.node);
     context.strokeStyle = isSelected ? '#fff14e' : '#17263d'; context.lineWidth = isSelected ? 2.5 : 1.5;
     context.beginPath();
     if (options.glMarkers) { /* Shape rendering shares the mesh's actual GL depth. */ }
@@ -105,15 +92,81 @@ export function drawMovementOverlay(context, nodes, selectedIds, handles, width,
   context.restore();
 }
 
-/** Stop a connector at the visible marker boundaries. Connectors are painted
- * after the native model for legibility, but never on top of or inside nodes. */
-export function boneConnectionEndpoints(parent, child, helperSize = 6) {
-  const dx = child.x - parent.x, dy = child.y - parent.y, distance = Math.hypot(dx, dy);
-  if (!(distance > 0)) return null;
-  const fromRadius = movementMarkerRadius(parent, helperSize), toRadius = movementMarkerRadius(child, helperSize);
-  if (distance <= fromRadius + toRadius) return null;
-  const ux = dx / distance, uy = dy / distance;
-  return { from: { x: parent.x + ux * fromRadius, y: parent.y + uy * fromRadius }, to: { x: child.x - ux * toRadius, y: child.y - uy * toRadius } };
+function convexHull(points) {
+  const sorted = points.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const half = list => { const out = []; for (const point of list) { while (out.length > 1 && cross(out.at(-2), out.at(-1), point) <= 0) out.pop(); out.push(point); } return out; };
+  return [...half(sorted).slice(0, -1), ...half(sorted.reverse()).slice(0, -1)];
+}
+
+/** Connectors occupy their own pixel layer below mesh wires and point overlays.
+ * Remove only the projected polyhedron footprints so GL markers remain in front. */
+export function drawBoneConnectors(context, nodes, selectedIds, camera, width, height, ratio = 1, options = {}) {
+  context.clearRect(0, 0, width * ratio, height * ratio);
+  if (!options.boneLines) return;
+  const byId = new Map(nodes.map(point => [point.node.ObjectId, point]));
+  const highlights = boneHighlightColors(nodes, selectedIds);
+  for (const point of nodes) {
+    const parent = byId.get(point.node.Parent);
+    if (!point.visible || !parent?.visible || !options[point.overlayKind || 'nodes']) continue;
+    const line = boneConnectionEndpoints(parent, point);
+    if (!line) continue;
+    const appearance = boneConnectionAppearance(parent, point, highlights);
+    drawPixelLine(context, line.from, line.to, {
+      color: appearance || (progress => { const shade = Math.round(progress * 255); return `rgb(${shade},${shade},${shade})`; }),
+      width: appearance ? 6 : 3, ratio,
+    });
+  }
+  const size = visualOptions(options.preferences).helperSize * 1.5;
+  context.save(); context.setTransform(1, 0, 0, 1, 0, 0); context.globalCompositeOperation = 'destination-out';
+  for (const point of nodes) {
+    if (!point.visible || !options[point.overlayKind || 'nodes']) continue;
+    const shape = markerStyle(point, byId, options.preferences, highlights).shape;
+    const hull = convexHull(shape.vertices.map(vertex => {
+      const p = new Vector3(...vertex).multiplyScalar(point.unitsPerPixel * size).applyQuaternion(point.rotation).add(point.world).project(camera);
+      return { x: (p.x + 1) * width * ratio / 2, y: (1 - p.y) * height * ratio / 2 };
+    }));
+    if (hull.length < 3) continue;
+    const minY = Math.max(0, Math.floor(Math.min(...hull.map(p => p.y))));
+    const maxY = Math.min(Math.ceil(height * ratio), Math.ceil(Math.max(...hull.map(p => p.y))));
+    for (let y = minY; y <= maxY; y++) {
+      const crossings = [];
+      for (let i = 0; i < hull.length; i++) {
+        const a = hull[i], b = hull[(i + 1) % hull.length], sample = y + .5;
+        if (sample >= Math.min(a.y, b.y) && sample < Math.max(a.y, b.y)) crossings.push(a.x + (sample - a.y) * (b.x - a.x) / (b.y - a.y));
+      }
+      if (crossings.length >= 2) {
+        const left = Math.ceil(Math.min(...crossings)), right = Math.floor(Math.max(...crossings));
+        if (right >= left) context.fillRect(left, y, right - left + 1, 1);
+      }
+    }
+  }
+  context.restore();
+}
+
+export function drawAttachGuide(context, nodes, sourceIds, pointer, ratio = 1, time = 0, helperSize = 6) {
+  const ids = new Set(Array.isArray(sourceIds) ? sourceIds : [sourceIds]);
+  const sources = nodes.filter(point => point.visible && ids.has(point.node.ObjectId));
+  if (!sources.length) return;
+  context.save(); context.scale(ratio, ratio);
+  for (const point of nodes) {
+    if (!point.visible || point.overlayKind !== 'bones' || ids.has(point.node.ObjectId)) continue;
+    const radius = movementMarkerRadius(point, helperSize);
+    context.strokeStyle = '#ffe600'; context.lineWidth = 3;
+    context.strokeRect(point.x - radius, point.y - radius, radius * 2, radius * 2);
+  }
+  if (pointer) {
+    context.strokeStyle = '#ed2626'; context.lineWidth = 3; context.lineCap = 'round';
+    context.setLineDash([.1, 8]); context.lineDashOffset = -(time * .035 % 8);
+    for (const source of sources) { context.beginPath(); context.moveTo(source.x, source.y); context.lineTo(pointer.x, pointer.y); context.stroke(); }
+  }
+  context.restore();
+}
+
+/** Connect pivots directly, even when their visible markers overlap. */
+export function boneConnectionEndpoints(parent, child) {
+  if (parent.x === child.x && parent.y === child.y) return null;
+  return { from: { x: parent.x, y: parent.y }, to: { x: child.x, y: child.y } };
 }
 
 export function movementMarkerRadius(point, helperSize = 6) {
@@ -162,10 +215,9 @@ export function movementWorkplaneHandle(workplane = 'xy', unitsPerPixel = 1) {
   return { axis: WORKPLANE_NORMALS[plane] || 'Z', dx: vertical ? 0 : 1, dy: vertical ? 1 : 0, unitsPerPixel };
 }
 
-/** Ignore the pointer component which classic MDLVis does not use for the
- * selected workplane: XY/YZ drag horizontally and ZX drags vertically. */
+/** The projected world-plane basis decides which screen components matter. */
 export function movementWorkplanePointer(workplane, dx, dy) {
-  return String(workplane).toLowerCase() === 'xz' || String(workplane).toLowerCase() === 'zx' ? [0, dy] : [dx, 0];
+  return [dx, dy];
 }
 
 function pointSegmentDistance(x, y, handle) {
