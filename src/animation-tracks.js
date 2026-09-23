@@ -1,4 +1,5 @@
 import { allNodes, sampleTrack, sampleGeosetAnimation } from './animation.js';
+import { createVisibilityGeosetAnimation } from './geoset-animation-defaults.js';
 
 // EditorDocument normalizes MDL and MDX animated colors into RGB order.
 // This editor's text fields deliberately use the same RGB order as its controls.
@@ -38,7 +39,7 @@ function resolveTarget(model, target, create = false) {
   if (existing.length > 1) throw new Error(`Geoset ${target.id + 1} has multiple geoset animations. Resolve the duplicate before editing its tracks.`);
   if (existing.length) return existing[0];
   if (!create) return null;
-  const anim = { GeosetId: target.id, Flags: 0, Alpha: 1, Color: null };
+  const anim = createVisibilityGeosetAnimation(target.id);
   (model.GeosetAnims ||= []).push(anim);
   if (model.Info) model.Info.NumGeosetAnims = model.GeosetAnims.length;
   return anim;
@@ -143,7 +144,8 @@ export function setAnimationInlineValues(model, targets, value) {
   return applyPrepared(model, targets.map(target => {
     const original = readAnimationTrack(model, target);
     if (isTrack(original)) throw new Error('This animation channel has keyframes. Edit it at the current frame or use Set Sequence / Set All.');
-    return { target, track: vectorValue(value, target.property) };
+    const vector = vectorValue(value, target.property);
+    return { target, track: dimensions(target.property) === 1 ? vector[0] : vector };
   }));
 }
 export function deleteAnimationKey(model, targets, frame, sequenceIndex) {

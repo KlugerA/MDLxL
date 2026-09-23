@@ -3,7 +3,7 @@ import { Buffer } from 'buffer';
 import { parseMDL, generateMDL } from 'war3-model';
 import { parseCompatibleMdx as parseMDX, generateCompatibleMdx as generateMDX } from './mdx-compatibility.js';
 import { prepareCompatibleMdl, finishCompatibleMdl, readMdlPivotPoints } from './mdl-compatibility.js';
-import { assertModelEquivalent } from './save-equivalence.js';
+import { assertModelEquivalent, formatSaveIssues } from './save-equivalence.js';
 import { preserveMdxRecords, preserveMdlRecords } from './record-preservation.js';
 import { parseMdx, SUPPORTED_FORMAT_VERSIONS } from './mdx-container.js';
 import { parseMdl, mdlStringEnd } from './mdl-lossless.js';
@@ -12,6 +12,7 @@ import { prepareMdlEventObject, restoreMdxEventGlobalSequences, writeMdlEventGlo
 import { prepareMdlPopcornColors, restoreMdlPopcornRotations } from './popcorn-rotation-codec.js';
 import { writeMdlUVSets } from './uv-coordinate-codec.js';
 import { convertMdxGeosetColorTracks } from './geoset-color-codec.js';
+import { geosetColorExportIssues, prepareGeosetAnimationColors } from './geoset-animation-defaults.js';
 
 const V3 = (x = 0, y = 0, z = 0) => new Float32Array([x, y, z]);
 const clone = (value) => structuredClone(value);
@@ -411,7 +412,11 @@ export class EditorDocument {
     if (conversion && unknown.length) warnings.push(`Cannot convert unrecognized source data: ${unknown.join(', ')}.`);
     return { format, conversion, exact: !conversion && changed.length === 0, readOnly: this.readOnly, changedSections: changed.map((key) => key === 'Info' ? 'Model' : key), preservedUnknown: unknown, warnings, canSave: ['mdl', 'mdx'].includes(format) && (!this.readOnly || !conversion && !changed.length) && !stringIssues.length && !(conversion && unknown.length) };
   }
-  serialize(format = this.format) {
+  serialize(format = this.format, { timings = {} } = {}) {
+    Object.assign(timings, { serializationMs: 0, reparsingMs: 0, verificationMs: 0, errorFormattingMs: 0 });
+    let stage = 'serializationMs', start = performance.now();
+    const nextStage = next => { const now = performance.now(); timings[stage] += now - start; stage = next; start = now; };
+    try {
     format = format.toLowerCase();
     const impact = this.saveImpact(format);
     if (!impact.canSave) throw new Error(`This document cannot be saved in that format. ${impact.warnings.at(-1) || 'An exact copy in its original format is available.'}`);
@@ -423,14 +428,20 @@ export class EditorDocument {
       return bytes;
     };
     if (impact.exact) return remember(this._original);
+    const colorIssues = geosetColorExportIssues(this.model.GeosetAnims, format);
+    if (colorIssues.length) {
+      nextStage('errorFormattingMs');
+      throw new Error(formatSaveIssues('Cannot export geoset colors', colorIssues));
+    }
     // MDL's Color property itself enables tinting. Omit disabled MDX colors on
     // text export without changing the editable model or its cached RGB values.
     // war3-model allocates 12 bytes for an empty Reforged BindPoses array but
     // emits no BPOS chunk. Omit that empty export-only property to avoid junk
     // trailing bytes; the editable model and any nonempty bind poses stay intact.
-    const exportModel = format === 'mdl' ? { ...this.model, ParticleEmitterPopcorns: prepareMdlPopcornColors(this.model.ParticleEmitterPopcorns), GeosetAnims: this.model.GeosetAnims.map(anim => (anim.Flags & 2) ? anim : { ...anim, Color: null }) } : { ...this.model, GeosetAnims: convertMdxGeosetColorTracks(this.model.GeosetAnims), BindPoses: this.model.BindPoses?.length ? this.model.BindPoses : undefined };
+    const animations = prepareGeosetAnimationColors(this.model.GeosetAnims, format);
+    const exportModel = format === 'mdl' ? { ...this.model, ParticleEmitterPopcorns: prepareMdlPopcornColors(this.model.ParticleEmitterPopcorns), GeosetAnims: animations } : { ...this.model, GeosetAnims: convertMdxGeosetColorTracks(animations), BindPoses: this.model.BindPoses?.length ? this.model.BindPoses : undefined };
     const mdlModel = format === 'mdl' ? { ...exportModel, Geosets: exportModel.Geosets.map(g=>({...g,TVertices:g.TVertices.length?g.TVertices:[new Float32Array()]})), CollisionShapes: exportModel.CollisionShapes.map(n=>[1,3].includes(n.Shape)?{...n,Shape:0}:n) } : null;
-    let generated = format === 'mdl' ? finishCompatibleMdl(Buffer.from(emptyFaceGroups(generateMDL(mdlModel)), 'utf8'), this.model) : Buffer.from(generateMDX(exportModel));
+    let generated = format === 'mdl' ? finishCompatibleMdl(Buffer.from(emptyFaceGroups(generateMDL(mdlModel)), 'utf8'), { ...this.model, GeosetAnims: animations }) : Buffer.from(generateMDX(exportModel));
     if (format === 'mdl') generated = writeMdlUVSets(generated, scanMdlSections(generated), exportModel);
     generated = format === 'mdl' ? writeMdlEventGlobalSequences(generated, scanMdlSections(generated), exportModel) : writeMdxEventGlobalSequences(generated, exportModel);
     if (!impact.conversion) generated = format === 'mdx' ? preserveMdxRecords(this._original, generated, this._savedModel, this.model, SECTION_TYPES) : preserveMdlRecords(this._original, generated, this._savedModel, this.model, SECTION_TYPES);
@@ -438,16 +449,33 @@ export class EditorDocument {
     const output = impact.conversion ? generated : format === 'mdl' ? surgicalMdl(this._original, this._sections, generated, keys) : surgicalMdx(this._original, this._container, generated, keys);
     // A writer can succeed while emitting a dialect the reader cannot parse.
     // Check the final surgical/conversion result before allowing it onto disk.
+    nextStage('reparsingMs');
     const reopened = openDocument(output, `validation.${format}`);
-    if (reopened.readOnly) throw new Error(`Save verification failed: ${reopened.diagnostics.filter((d) => d.severity === 'error').map((d) => d.message).join(' ') || 'Generated model is not editable.'}`);
+    nextStage('verificationMs');
+    if (reopened.readOnly) {
+      nextStage('errorFormattingMs');
+      throw new Error(formatSaveIssues('Save verification failed', reopened.diagnostics.filter(d => d.severity === 'error').map(d => d.message)));
+    }
     if (reopened.version !== this.version) throw new Error('Save verification failed: model version changed.');
-    assertModelEquivalent(this.model, reopened.model, { keys: Object.keys(SECTION_TYPES) });
+    assertModelEquivalent(this.model, reopened.model, { keys: Object.keys(SECTION_TYPES), timings });
     for (const key of Object.keys(SECTION_TYPES)) if (Array.isArray(this.model[key]) && this.model[key].length !== reopened.model[key]?.length) throw new Error(`Save verification failed: ${key} count changed during serialization.`);
     for (let index = 0; index < this.model.Geosets.length; index++) if (this.model.Geosets[index].TVertices.length !== reopened.model.Geosets[index].TVertices.length) throw new Error(`Save verification failed: Geoset ${index} UV set count changed during serialization.`);
     const existingErrors = new Set(validateModel(this.model).filter((d) => d.severity === 'error').map((d) => `${d.code}:${d.path}`));
     const newErrors = reopened.diagnostics.filter((d) => d.severity === 'error' && !existingErrors.has(`${d.code}:${d.path}`));
-    if (newErrors.length) throw new Error(`Save verification failed: ${newErrors.slice(0, 4).map((d) => d.message).join(' ')}`);
+    if (newErrors.length) {
+      nextStage('errorFormattingMs');
+      throw new Error(formatSaveIssues('Save verification failed', newErrors.map(d => d.message)));
+    }
     return remember(output);
+    } finally {
+      timings[stage] += performance.now() - start;
+      // assertModelEquivalent measures formatting within the verification stage.
+      if (stage === 'verificationMs') timings.verificationMs -= timings.errorFormattingMs;
+      this.lastSaveTimings = { ...timings };
+    }
+  }
+  rememberSerializedSnapshot(bytes, model, revision = this.revision) {
+    this._serializedStates.set(bytes, { model: clone(model), revision });
   }
   markSaved(bytes, name = this.name) {
     const savedBytes = bytes || this.serialize();
