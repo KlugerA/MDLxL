@@ -4,6 +4,10 @@
 .classic-reel-track { position:relative; flex:1 1 auto; height:48px; min-width:40px; touch-action:none; user-select:none; }
 .classic-reel-bar { position:absolute; inset:0 0 50%; overflow:hidden; background:white; border:1px solid #858585; box-sizing:border-box; }
 .classic-reel-key { position:absolute; top:1px; bottom:1px; width:1px; background:#0000ff; pointer-events:none; }
+.classic-reel-key.motion-key-highlight { background:#ae6800; width:3px; }
+.motion-reel-interval { position:absolute; inset-block:0; background:#f3ac303b; pointer-events:none; }
+.classic-keyframe-reel .motion-reel-warning { position:absolute; top:22px; transform:translateX(-50%); z-index:2; width:12px; min-width:12px; height:13px; min-height:13px; padding:0; border:0; background:transparent; color:#ac6500; font-size:13px; line-height:13px; }
+.classic-keyframe-reel .motion-reel-warning:focus { outline:2px solid #4582c6; }
 .classic-reel-cursor { position:absolute; top:0; bottom:0; width:2px; transform:translateX(-1px); background:#ff0000; cursor:ew-resize; }
 .classic-reel-selection { position:absolute; top:50%; bottom:0; background:#b5b5b5; pointer-events:none; }
 .classic-reel-ruler { position:absolute; inset:50% 0 0; cursor:pointer; font-size:10px; font-variant-numeric:tabular-nums; pointer-events:none; }

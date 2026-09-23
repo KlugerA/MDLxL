@@ -11,6 +11,7 @@ import { ModelRenderer } from 'war3-model';
 import { textureFromAsset } from './Viewport.jsx';
 import { drawGeosetHighlight } from './geoset-highlight.js';
 import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatrices, skinGeoset, skinGeosetNormals } from '../src/animation.js';
+import { motionPose } from '../src/motion-inspector.js';
 import { applyMovementTransform, movementRestricted } from '../src/movement.js';
 import { drawMovementOverlay, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from './movement-overlay.js';
 import { applyRestPoseMatrices, isUVOnlyPreviewChange, portraitBlankDragRotatesCamera, restorePreviewCamera } from './game-preview-data.js';
@@ -352,6 +353,7 @@ export default function GamePreview(inputProps) {
       restoreGestureTracks(nodeGesture);
       try {
         applyMovementTransform(ownedModel, nodeGesture.ids, nodeGesture.frame, nodeGesture.sequence, { mode: nodeGesture.mode, space: nodeGesture.space, axis: nodeGesture.handle.axis, amount: nodeGesture.amount, values: nodeGesture.values, restPose: nodeGesture.restPose, workplaneEnabled: nodeGesture.mode === 'scale' ? nodeGesture.scaleConstrained : nodeGesture.workplaneEnabled, workplane: nodeGesture.workplane, restrictions: p.restrictions });
+        if (!nodeGesture.restPose) p.onNodePosePreview?.(motionPose(ownedModel, nodeGesture.ids.at(-1), ({ move: 'Translation', rotate: 'Rotation', scale: 'Scaling' })[nodeGesture.mode], nodeGesture.frame, nodeGesture.sequence));
         const axisLabel = nodeGesture.freeScaleDrag && nodeGesture.scaleConstrained ? String(nodeGesture.workplane).toUpperCase().replace('XZ', 'ZX') : nodeGesture.handle.axis;
         setGestureLabel(`${nodeGesture.mode[0].toUpperCase() + nodeGesture.mode.slice(1)} ${axisLabel}: ${nodeGesture.amount.toFixed(2)}${nodeGesture.mode === 'rotate' ? '°' : nodeGesture.mode === 'scale' ? '×' : ''}`);
       } catch (cause) { setGestureLabel(cause.message); }
@@ -376,6 +378,7 @@ export default function GamePreview(inputProps) {
       if (!nodeGesture || event.pointerId !== nodeGesture.id) return;
       event.preventDefault(); event.stopImmediatePropagation();
       const gesture = nodeGesture; nodeGesture = null; controls.enabled = true; canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode); setGestureLabel('');
+      latest.current.onNodePosePreview?.(null);
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       if (event.type === 'pointercancel' || !gesture.moved || gesture.adjusted || movementRestricted(gesture.mode, latest.current.restrictions)) restoreGestureTracks(gesture);
       else {
@@ -550,7 +553,13 @@ export default function GamePreview(inputProps) {
       if (disposed) return;
       const p = latest.current;
       const selected = p.restPose ? 0 : p.sequenceIndex < 0 && timelineSequenceIndex >= 0 ? timelineSequenceIndex : Math.max(0, Math.min(ownedModel.Sequences.length - 1, p.sequenceIndex ?? 0));
-      const sequence = ownedModel.Sequences[selected], [start, end] = sequence.Interval;
+      const sequence = ownedModel.Sequences[selected];
+      // Restrict playback only. Keep the authored sequence interval for evaluation,
+      // so the focus edges never change interpolation partners or model data.
+      const range = p.playbackRange;
+      const focus = !p.restPose && p.sequenceIndex >= 0 && range?.[1] > sequence.Interval[0] && range?.[0] < sequence.Interval[1] ? range : null;
+      const start = focus ? Math.max(sequence.Interval[0], focus[0]) : sequence.Interval[0];
+      const end = focus ? Math.min(sequence.Interval[1], focus[1]) : sequence.Interval[1];
       const sequenceChanged = activeSequence !== selected;
       if (sequenceChanged) { native.setSequence(selected); activeSequence = selected; }
       // A previous All-line frame is left configured with its authored local
@@ -576,7 +585,7 @@ export default function GamePreview(inputProps) {
         }
       }
       externalFrame = p.time; lastPlaying = p.playing;
-      const playback = previewPlaybackStep(sequence.Interval, native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
+      const playback = previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
       const dt = playback.elapsed;
       globalClock += dt;
       controls.update();
@@ -751,7 +760,7 @@ export default function GamePreview(inputProps) {
   useEffect(() => { runtime.current?.drawBackground(); }, [props.preferences?.visuals?.background, props.preferences?.viewportAppearance?.background]);
   useEffect(() => { props.onCaptureReady?.(runtime.current?.captureApi || null); }, [props.onCaptureReady]);
   useEffect(() => { if (model) runtime.current?.updateUV(model); }, [model, revision]);
-  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.transformMode, props.transformSpace, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.transformMode, props.transformSpace, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];
   return <div ref={root} className={`game-preview-root${portrait ? ' portrait-preview-root' : ''}`} style={{ minHeight: props.presentation === 'preview' ? 0 : 180 }}>

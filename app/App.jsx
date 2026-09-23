@@ -32,10 +32,13 @@ const OptimizeModel = lazy(() => import('./OptimizeModel.jsx'));
 import { commitOptimization, OPTIMIZER_SECTIONS } from '../src/model-optimizer.js';
 const ShapingDialog = lazy(() => import('./ShapingDialog.jsx'));
 const KeyframeTimeline = lazy(() => import('./KeyframeTimeline.jsx'));
+const MotionInspector = lazy(() => import('./MotionInspector.jsx'));
+import useMotionInspector from './useMotionInspector.js';
+import { rememberMotionSave } from '../src/motion-decisions.js';
 import { commitForge } from '../src/forge.js';
 import { shapeGeosets, SHAPE_TOOLS } from '../src/shaping.js';
 import { retainedForgeAssets, forgeExportArchive, isForgeAssetPath, missingForgeAssetPaths } from '../src/forge-assets.js';
-import { applyMovementTransform, movementRestricted, constrainMovementVector } from '../src/movement.js';
+import { applyMovementTransform, movementRestricted, constrainMovementVector, movementProperties } from '../src/movement.js';
 import { classicTimelineDomain } from '../src/classic-keyframes.js';
 import { beginUVPreview, applyUVPreviews, revertUVPreviews, uvPreviewModel, restoreUVPreviews, addLibraryTexture, validateUVPreview, captureUVPreviewGuard, validateUVPreviewGuard, getUVPreviewSelection } from '../src/uv-preview.js';
 import { setUVTextureWrapping, uncoupleUVVertices } from '../src/uv-tools.js';
@@ -211,6 +214,32 @@ export default function App() {
   const [zoomAnchor, setZoomAnchor] = useState(null), [choosingZoomAnchor, setChoosingZoomAnchor] = useState(false);
   const files = useRef(), textures = useRef(), folder = useRef(), clipboard = useRef(null), latest = useRef(), commands = useRef({}), rangeAnchor = useRef(0), settings = useRef({}), textureResolutions = useRef(new WeakMap());
   const doc = session.doc, model = doc.model, geoset = model.Geosets[activeGeoset];
+  const motion = useMotionInspector(session, sequence, doc.revision);
+  const inspectingMotion = mode === 'animation' && animationPanel === 'movement' && globalSeqId === null;
+  const sharedMotionChannel = inspectingMotion && model.Nodes?.some(node => {
+    const global = node?.[movementProperties[movementMode]]?.GlobalSeqId;
+    return selectedNodeIds.includes(node?.ObjectId) && Number.isInteger(global) && global >= 0;
+  });
+  const [liveMotionPose, setLiveMotionPose] = useState(null);
+  useEffect(() => setLiveMotionPose(null), [session.id, sequence]);
+  const seekMotionTime = value => {
+    setPlaying(false); setTime(value);
+    if (motion.focus && (value < motion.focus[0] || value > motion.focus[1])) motion.setFocus(null);
+  };
+  const selectMotion = finding => {
+    seekMotionTime(Math.round(finding.time)); setSelectedNodeIds([finding.nodeId]);
+    setMovementMode(Object.keys(movementProperties).find(mode => movementProperties[mode] === finding.property) || 'rotate');
+    setHighlightKeyframes(true); setCameraMode('work'); setLiveMotionPose(null);
+    setShowNodes(true); setCleanViews(previous => ({ ...previous, animation: false }));
+    setOverlayModes(previous => setEditorDisplay(setEditorDisplay(previous, 'animation', 'bones', true), 'animation', 'nodes', true));
+  };
+  const replayMotion = finding => {
+    const interval = model.Sequences[sequence]?.Interval;
+    if (!interval) return;
+    const padding = Math.max(100, Math.round((finding.end - finding.start) * .2));
+    const focus = [Math.max(interval[0], Math.floor(finding.start - padding)), Math.min(interval[1], Math.ceil(finding.end + padding))];
+    motion.setFocus(focus); setTime(focus[0]); setPlaying(true);
+  };
   const duplicateAnimations = useMemo(() => scanGeosetAnimationDuplicates(model), [model, doc.revision]);
   const repairBlocked = duplicateAnimations.length > 0 || !!repairReceipt;
   useEffect(() => { if (!model.Cameras?.[portraitCameraIndex]) setPortraitCameraIndex(model.Cameras?.length ? 0 : -1); }, [model, doc.revision, portraitCameraIndex]);
@@ -522,6 +551,8 @@ export default function App() {
       // incorrectly leave an otherwise identical saved texture list dirty.
       if (staged !== target.doc) target.doc.rememberSerializedSnapshot(bytes, staged.model);
       target.uvPreviews = {}; target.doc.markSaved(bytes, savedName);
+      try { await rememberMotionSave(target, bytes, target.path, savedName); }
+      catch (error) { say(`Model saved; Motion Inspector decisions could not follow this save: ${error.message}`, true); }
       try { await checkpoint(target); } catch (error) { say(`Saved; recovery checkpoint failed: ${error.message}`, true); }
       if (latest.current.session.id === target.id) refresh(); return !target.doc.dirty;
     } catch (error) { say(error.message, true); return false; }
@@ -868,7 +899,7 @@ export default function App() {
         previewProps={{ ...cameraProps, previewMode:previewRenderModes.uv, modelPath:session.path, key: session.id, preferences, onSensitivityChange: changeSensitivity, onPointerSensitivityChange: changePointerSensitivity, onCameraModeToggle: toggleMiddleCamera, suspended: previewSuspended,
           revision: doc.revision, teamColor, textureAssets: session.assets, view, cameraMode }} />);
   const textureLibraryDialog = dialog?.type === 'library' && <Suspense fallback={<div className="classic-modal"><p>Loading texture library…</p></div>}><TextureLibrary model={model} modelPath={session.path} onClose={() => setDialog(dialog.returnTo)} onAddTexture={doc.readOnly ? undefined : addTexture} onPreviewTexture={dialog.preview ? previewTexture : undefined} previewEnabled={dialog.preview && previewSelection.enabled && !doc.readOnly} previewReason={doc.readOnly ? 'This model is read-only.' : previewSelection.reason} onOpenMaterials={() => setDialog({ type: 'resource', kind: 'Materials' })}/></Suspense>;
-  const timeline = (<Suspense fallback={<div>Loading keyframes…</div>}><KeyframeTimeline restrictions={rigWorkspace?restrictions:{}} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} selectedGeosets={[...selectable]} globalSeqId={globalSeqId} highlightKeyframes={highlightKeyframes} playing={playing} onPlayingChange={setPlaying} onStatus={say} activeController={animationPanel==='movement'?movementMode:'animations'} onEdit={edit} onSeek={value=>{setPlaying(false);setTime(value);}} onCommands={registerTimelineCommands} disabled={doc.readOnly||saving} preferences={preferences}/></Suspense>);
+  const timeline = (<Suspense fallback={<div>Loading keyframes…</div>}><KeyframeTimeline motionFindings={inspectingMotion ? motion.visible : []} motionActive={!inspectingMotion || motion.stale ? null : motion.active} onMotionFinding={finding => { motion.setActive(finding); selectMotion(finding); }} onSelectKey={mode === 'animation' && animationPanel === 'movement' ? selectMotion : undefined} restrictions={rigWorkspace?restrictions:{}} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} selectedGeosets={[...selectable]} globalSeqId={globalSeqId} highlightKeyframes={highlightKeyframes} playing={playing} onPlayingChange={setPlaying} onStatus={say} activeController={animationPanel==='movement'?movementMode:'animations'} onEdit={edit} onSeek={seekMotionTime} onCommands={registerTimelineCommands} disabled={doc.readOnly||saving} preferences={preferences}/></Suspense>);
   const activePortrait = portraitModeActive;
   const cameraPortraitActive = activePortrait && !!model.Cameras?.[portraitCameraIndex];
   // Gate BEFORE mounting the timeline/controllers. Their duplicate-owner edit
@@ -917,7 +948,7 @@ export default function App() {
       {mode === 'uv' && (window.desktop ? <div className="uv-detached-message">UV Wrapper is open in its own window.</div> : uvWorkspace)}
       {preferencesReady && mode === 'paint' && <Suspense fallback={<div className="classic-empty-view">{paintMessage('paint.loading')}</div>}><PaintBoundary key={session.id} onSave={()=>savePaintProject()} onExit={()=>selectMode('vertices')}><PaintWorkspace key={session.id} model={session.paintWorkingModel||model} originalModel={paintOriginalModel} revision={doc.revision+session.paintWorkingRevision} modelName={doc.name} modelPath={session.path} textureAssets={session.assets} project={session.paintProject} activeGeoset={activeGeoset} onGeosetChange={setActiveGeoset} onWorkingModelChange={value=>{session.paintWorkingModel=value;session.paintWorkingRevision++;refresh();}} onProjectChange={value=>{if(!session.paintProject&&value){session.paintOriginalModelBytes=doc.serialize(doc.format);session.paintWorkingModel ||= structuredClone(model);}if(!value){session.paintWorkingModel=null;session.paintWorkingRevision++;delete session.paintAppliedRevision;}session.paintProject=value;refresh();}} onEnsureTarget={ensurePaintTarget} onSaveProject={savePaintProject} onOpenProject={open} onExport={exportPaintProject} onApply={applyPaintToModel} onExit={()=>selectMode('vertices')} onStatus={say} preferences={preferences} cameraProps={{...cameraProps,onWorkMode:()=>setCameraMode('work'),onSensitivityChange:changeSensitivity,onPointerSensitivityChange:changePointerSensitivity,onCameraModeToggle:toggleMiddleCamera}} view={view} cameraMode={cameraMode} teamColor={teamColor} readOnly={doc.readOnly||saving||model.Version!==800}/></PaintBoundary></Suspense>}
       {(mode === 'animation' || mode === 'bones') && <Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview previewMode={previewRenderModes.animation} presentation={cleanAnimationPreview?"preview":"editor"} restPose={restPose} cleanAnimationPreview={cleanAnimationPreview} workplaneEnabled={workplaneEnabled} restrictions={restrictions} multiple={multipleNodes} {...cameraProps} onInspectGeoset={inspectGeoset} selectedGeoset={activeGeoset} selectionByGeoset={validSelection} selectableGeosets={selectable} onSelectionChange={next=>setSelection(filterVertexSelection(next,selectable,doc.model))} hiddenGeosets={showAllGeosets?new Set():new Set([...allGeosets(model.Geosets.length)].filter(i=>!selectable.has(i)))} modelPath={session.path} mode={cleanView ? 'textured' : renderMode} shaded={shaded} showGrid={cameraPortraitActive ? false : showGrid} showAxes={cameraPortraitActive ? false : showAxes} workplane={workplane} backgroundUrl={backgroundLibrary.url} backgroundType={backgroundLibrary.type} onCaptureReady={setCaptureAPI} timelineInterval={[animationDomain.start,animationDomain.end]} overlays={cameraPortraitActive ? portraitOverlays : panelOverlays} loop={previewLoop} hoveredGeoset={!cleanView && preferences.highlightSelection ? hoveredGeoset : null} preferences={preferences} onSensitivityChange={changeSensitivity} onPointerSensitivityChange={changePointerSensitivity} onCameraModeToggle={toggleMiddleCamera} suspended={previewSuspended} key={session.id} model={previewModel} revision={doc.revision} sequenceIndex={sequence} time={time} playing={playing} onTimeChange={setTime} onPlayingChange={setPlaying} teamColor={teamColor} textureAssets={session.assets} view={cameraPortraitActive ? portraitView : view} cameraMode={cameraMode}
-        portraitMode={activePortrait} portraitCameraIndex={portraitCameraIndex} portraitSnapRevision={portraitSnapRevision} liveMovementRevision={liveMovementRevision.current} globalSeqId={globalSeqId} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onNodeTransform={doc.readOnly || saving || !rigWorkspace || !restPose && globalSeqId !== null ? undefined : moveNodes} showNodes={showNodes} showParticles={preferences.graphics.particles} transformMode={rigWorkspace ? movementMode : 'select'} transformSpace={movementSpace} /></Suspense>}
+        portraitMode={activePortrait} portraitCameraIndex={portraitCameraIndex} portraitSnapRevision={portraitSnapRevision} liveMovementRevision={liveMovementRevision.current} playbackRange={inspectingMotion ? motion.focus : null} onNodePosePreview={setLiveMotionPose} globalSeqId={globalSeqId} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onNodeTransform={doc.readOnly || saving || sharedMotionChannel || !rigWorkspace || !restPose && globalSeqId !== null ? undefined : moveNodes} showNodes={showNodes} showParticles={preferences.graphics.particles} transformMode={rigWorkspace ? movementMode : 'select'} transformSpace={movementSpace} /></Suspense>}
     </section>{mode !== 'uv' && mode !== 'paint' && <aside className="classic-sidebar">
       {cameraRotating && cameraPanel}
       {!rigWorkspace && mode !== 'animation' && !cameraRotating && <><div className="classic-counts"><div>Vertices: <span>{totalVertices}</span></div><div>Selected: <span>{selectionCount}</span></div><div>Hidden: <span>{hiddenCount}</span></div><div>Triangles: <span>{totalFaces}</span></div><div>Selected: <span>{selectedFaces}</span></div></div>
@@ -932,6 +963,7 @@ export default function App() {
       {mode === 'bones' && !cameraRotating && <Suspense fallback={<p>Loading controller…</p>}><MovementController restPose={restPose} selectionByGeoset={validSelection} workplaneEnabled={workplaneEnabled} onWorkplaneEnabled={setWorkplaneEnabled} workplane={workplane} onWorkplane={setWorkplane} restrictions={restrictions} onRestrictions={setRestrictions} multiple={multipleNodes} onMultiple={setMultipleNodes} onVertexTransform={transform} globalSeqId={restPose ? null : globalSeqId} onTimelineChange={selectTimeline} highlightKeyframes={highlightKeyframes} onHighlightKeyframes={setHighlightKeyframes} preferences={preferences} disabled={doc.readOnly || saving} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onEdit={edit} onSeek={setTime} onSequenceChange={selectSequence} playing={playing} onPlayingChange={setPlaying} transformMode={movementMode} onTransformMode={value => setWorkTool(value==='move'?'translate':value)} transformSpace={movementSpace} onTransformSpace={setMovementSpace} showNodes={showNodes} onShowNodes={setShowNodes} showParticles={preferences.graphics.particles} onShowParticles={showParticlePreview} onOpenNodeManager={openNodeManager} /></Suspense>}
       {mode === 'animation' && !cameraRotating && <Suspense fallback={<p>Loading controller…</p>}>
 
+        {animationPanel === 'movement' && <MotionInspector model={model} revision={doc.revision} sequenceIndex={sequence} globalSeqId={globalSeqId} time={time} selectedNodeIds={selectedNodeIds} mode={movementMode} motion={motion} onSelect={selectMotion} onSeek={seekMotionTime} onReplay={replayMotion} onEdit={edit} onPlayingChange={setPlaying} disabled={doc.readOnly || saving} restrictions={restrictions} livePose={liveMotionPose}/>}
         {animationPanel === 'movement' ? !cameraRotating && <MovementController restPose={restPose} selectionByGeoset={validSelection} workplaneEnabled={workplaneEnabled} onWorkplaneEnabled={setWorkplaneEnabled} workplane={workplane} onWorkplane={setWorkplane} restrictions={restrictions} onRestrictions={setRestrictions} multiple={multipleNodes} onMultiple={setMultipleNodes} onVertexTransform={transform} globalSeqId={restPose ? null : globalSeqId} onTimelineChange={selectTimeline} highlightKeyframes={highlightKeyframes} onHighlightKeyframes={setHighlightKeyframes} preferences={preferences} disabled={doc.readOnly || saving} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onEdit={edit} onSeek={setTime} onSequenceChange={selectSequence} playing={playing} onPlayingChange={setPlaying} transformMode={movementMode} onTransformMode={value => setWorkTool(value==='move'?'translate':value)} transformSpace={movementSpace} onTransformSpace={setMovementSpace} showNodes={showNodes} onShowNodes={setShowNodes} showParticles={preferences.graphics.particles} onShowParticles={showParticlePreview} onOpenNodeManager={openNodeManager} portraitMode={activePortrait} /> : <>
           <AnimationController globalSeqId={globalSeqId} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedGeosets={[...selectable]} onEdit={edit} onTimelineChange={selectTimeline} onSeek={value => { setPlaying(false); setTime(value); }} disabled={doc.readOnly || saving} />
           {geosetPicker}

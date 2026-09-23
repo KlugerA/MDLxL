@@ -7,7 +7,7 @@ import './KeyframeTimeline.css';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 /** The original compact reel: time selection, with authoring in the controllers. */
-export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, globalSeqId = null, time = 0, selectedNodeIds = [], selectedGeosets = [], activeController = 'rotate', highlightKeyframes = true, playing = false, onPlayingChange, onEdit, onSeek, onCommands, onStatus, disabled = false, restrictions = {} }) {
+export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, globalSeqId = null, time = 0, selectedNodeIds = [], selectedGeosets = [], activeController = 'rotate', highlightKeyframes = true, playing = false, onPlayingChange, onEdit, onSeek, onCommands, onStatus, disabled = false, restrictions = {}, motionFindings = [], motionActive = null, onMotionFinding, onSelectKey }) {
   const [range, setRange] = useState(null), [context, setContext] = useState(null), [draftTime, setDraftTime] = useState('0');
   const [, refreshClipboard] = useState(0);
   const panel = useRef(null), reel = useRef(null), menu = useRef(null), clipboard = useRef(null), cleanup = useRef(null), editingTime = useRef(false), suppressContext = useRef(false);
@@ -37,7 +37,7 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
   const frame = domain ? Math.round(clamp(time, domain.start, domain.end)) : 0;
   const span = Math.max(1, (domain?.end || 0) - (domain?.start || 0));
   const percent = value => (value - (domain?.start || 0)) / span * 100;
-  const keyMarkers = useMemo(() => times.map(value => <span key={value} data-frame={value} className="classic-reel-key" style={{ left: `clamp(0px, ${(value - (domain?.start || 0)) / span * 100}%, calc(100% - 1px))` }}/>), [times, domain, span]);
+  const keyMarkers = useMemo(() => times.map(value => <span key={value} data-frame={value} className={`classic-reel-key${motionActive && value >= motionActive.start && value <= motionActive.end ? ' motion-key-highlight' : ''}`} style={{ left: `clamp(0px, ${(value - (domain?.start || 0)) / span * 100}%, calc(100% - 1px))` }}/>), [times, domain, span, motionActive]);
   const hasRange = range && range[0] !== range[1];
   const bounds = hasRange ? [Math.min(...range), Math.max(...range)] : [frame, frame];
   const mutationTargets = useMemo(() => unrestrictedTimelineTargets(targets, restrictions), [targets, restrictions]);
@@ -139,6 +139,15 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     const rect = reel.current.getBoundingClientRect(), upper = event.clientY - rect.top <= rect.height / 2;
     const at = pointer => Math.round(clamp(domain.start + (pointer.clientX - rect.left) / Math.max(1, rect.width) * span, domain.start, domain.end));
     const onCursor = Math.abs(event.clientX - rect.left - (frame - domain.start) / span * rect.width) <= 4;
+    if (event.button === 0 && upper && !event.shiftKey && onSelectKey && globalSeqId === null && sequenceIndex >= 0) {
+      const nearest = times.reduce((best, value) => Math.abs(value - at(event)) < Math.abs(best - at(event)) ? value : best, Infinity);
+      if (Math.abs(nearest - at(event)) / span * rect.width <= 4) {
+        const property = ({ move: 'Translation', rotate: 'Rotation', scale: 'Scaling' })[activeController];
+        const candidates = tracks.filter(target => target.kind === 'node' && ['Translation','Rotation','Scaling'].includes(target.property) && target.globalSeqId === null && timelineKeys(model, [target], domain).some(key => key.frame === nearest));
+        const target = candidates.find(t => selectedNodeIds.includes(t.id) && t.property === property) || candidates.find(t => selectedNodeIds.includes(t.id)) || candidates[0];
+        if (target) { event.preventDefault(); setRange(null); onSelectKey({ nodeId: target.id, property: target.property, time: nearest }); return; }
+      }
+    }
     if (event.button === 2 && (!upper || !onCursor)) return;
     event.preventDefault(); panel.current?.focus({ preventScroll: true }); setContext(null);
     if (!upper) { if (at(event) < frame) previous(event.shiftKey); else next(event.shiftKey); return; }
@@ -175,10 +184,12 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     <button type="button" className="classic-reel-play" aria-label={playing ? 'Stop' : 'Play'} title={playing ? 'Stop' : 'Play'} disabled={!domain} onClick={() => onPlayingChange?.(!playing)}>{playing ? '■' : '▶'}</button>
     <div ref={reel} className="classic-reel-track reel-scale" role="slider" aria-label="Animation frame" aria-valuemin={domain?.start || 0} aria-valuemax={domain?.end || 0} aria-valuenow={frame} onPointerDown={beginScrub}>
       <div className="classic-reel-bar" aria-hidden="true">
+        {motionActive && <span className="motion-reel-interval" style={{ left: `${percent(motionActive.start)}%`, width: `${percent(motionActive.end) - percent(motionActive.start)}%` }}/>}
         {hasRange && <span className="classic-reel-selection" data-range-start={bounds[0]} data-range-end={bounds[1]} style={{ left: `${percent(bounds[0])}%`, width: `${percent(bounds[1]) - percent(bounds[0])}%` }}/>}
         {keyMarkers}
         <span className="classic-reel-cursor" style={{ left: `clamp(1px, ${percent(frame)}%, calc(100% - 1px))` }}/>
       </div>
+      {motionFindings.map(finding => <button key={finding.signature} type="button" className="motion-reel-warning" aria-label={`Motion warning: ${finding.nodeName}, ${finding.property}, ${finding.time} ms, ${finding.kind}`} title={`${finding.nodeName} · ${finding.property} · ${finding.kind} · ${finding.time} ms`} style={{ left: `clamp(6px, ${percent(finding.time)}%, calc(100% - 6px))` }} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onMotionFinding?.(finding); }}>◆</button>)}
       <div className="classic-reel-ruler" aria-hidden="true" translate="no">{divisions.map((value, index) => <span key={value} className={index === divisions.length - 1 ? 'is-last' : ''} style={{ left: `${percent(value)}%` }}>{value}</span>)}</div>
     </div>
     <label className="classic-reel-frame"><span>Frame:</span><input type="number" inputMode="numeric" step="1" min={domain?.start || 0} max={domain?.end || 0} aria-label="Current animation frame" data-warmkey="keyframe:time" translate="no" className={timeSet.has(frame) ? 'is-keyframe' : ''} value={editingTime.current ? draftTime : String(frame)} disabled={!domain} onFocus={() => { setDraftTime(String(frame)); editingTime.current = true; onPlayingChange?.(false); }} onChange={event => { editingTime.current = true; setDraftTime(event.target.value); }} onBlur={() => commitTime()} onKeyDown={event => {
