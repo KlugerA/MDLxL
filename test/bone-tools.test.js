@@ -20,16 +20,42 @@ test('rig creation uses selected vertex center and sequential names', () => {
   assert.deepEqual([...attachment.PivotPoint], [0, -32, -32]);
 });
 
-test('only bones can be targets, cycles are rejected, and detaching leaves a root', () => {
+test('only bones can be targets and detaching leaves a root', () => {
   const doc = createStarterDocument(), model = doc.model;
   const child = createRigNode(model, 'Bone'), attachment = createRigNode(model, 'Attachment');
   attachToBone(model, child.ObjectId, model.Bones[0].ObjectId);
   attachToBone(model, attachment.ObjectId, child.ObjectId);
   assert.throws(() => attachToBone(model, child.ObjectId, attachment.ObjectId), /parent bone/);
-  assert.throws(() => attachToBone(model, model.Bones[0].ObjectId, child.ObjectId), /descendant/);
   detachFromBone(model, child.ObjectId);
   assert.equal(child.Parent, null);
   assert.equal(attachment.Parent, child.ObjectId);
+});
+
+test('attaching to a child bone lifts the target and preserves the remaining hierarchy', () => {
+  const doc = createStarterDocument(), model = doc.model, root = model.Bones[0];
+  const child = createRigNode(model, 'Bone'), grandchild = createRigNode(model, 'Bone');
+  const sibling = createRigNode(model, 'Bone');
+  attachToBone(model, child.ObjectId, root.ObjectId);
+  attachToBone(model, grandchild.ObjectId, child.ObjectId);
+  attachToBone(model, sibling.ObjectId, root.ObjectId);
+  attachToBone(model, root.ObjectId, grandchild.ObjectId);
+  assert.equal(grandchild.Parent, null);
+  assert.equal(root.Parent, grandchild.ObjectId);
+  assert.equal(child.Parent, root.ObjectId);
+  assert.equal(sibling.Parent, root.ObjectId);
+  attachToBone(model, child.ObjectId, grandchild.ObjectId);
+  assert.equal(child.Parent, grandchild.ObjectId);
+  assert.equal(openDocument(doc.serialize('mdx')).model.Bones.find(bone => bone.ObjectId === root.ObjectId).Parent, grandchild.ObjectId);
+  for (const order of [[root.ObjectId, child.ObjectId], [child.ObjectId, root.ObjectId]]) {
+    const copy = structuredClone(createStarterDocument().model);
+    const branch = createRigNode(copy, 'Bone'), tip = createRigNode(copy, 'Bone');
+    attachToBone(copy, branch.ObjectId, copy.Bones[0].ObjectId);
+    attachToBone(copy, tip.ObjectId, branch.ObjectId);
+    for (const id of order) attachToBone(copy, id === root.ObjectId ? copy.Bones[0].ObjectId : branch.ObjectId, tip.ObjectId);
+    assert.equal(copy.Bones[0].Parent, tip.ObjectId);
+    assert.equal(branch.Parent, tip.ObjectId);
+    assert.equal(tip.Parent, null);
+  }
 });
 
 test('soft, hard, detach-vertices and delete preserve unrelated vertices and clear links', () => {

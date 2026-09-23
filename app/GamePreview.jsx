@@ -178,13 +178,14 @@ export default function GamePreview(inputProps) {
     host.current.appendChild(canvas);
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false });
     if (!gl) { setError('This preview needs WebGL 2. The geometry editor remains available.'); canvas.remove(); backgroundCanvas.remove(); return; }
-    let native, disposed = false, observer, scheduler, hoverCanvas, connectorCanvas, nodeCanvas, geometryCanvas, cameraCanvas, nodePoints = [], nodeHandles = [], nodeGesture = null, selectionGesture = null, posedGeosets = [], rotating = false, portraitBackup = null, cameraGestureStart = null, attachPointer = null;
+    let native, disposed = false, observer, scheduler, hoverCanvas, connectorCanvas, nodeCanvas, geometryCanvas, cameraCanvas, nodePoints = [], nodeHandles = [], nodeGesture = null, selectionGesture = null, posedGeosets = [], posedGeometryCache = null, rotating = false, portraitBackup = null, cameraGestureStart = null, attachPointer = null;
     const invalidate = () => scheduler?.invalidate();
     const ownedModel = structuredClone(rendererModel);
     ownedModel.Nodes = []; for (const node of allNodes(ownedModel)) ownedModel.Nodes[node.ObjectId] = node;
     // Marker categories retain emitter membership even when effect simulation is
     // disabled; the shared node objects still receive the same live poses.
     const markerModel = { ...ownedModel };
+    const hasBillboardedNodes = allNodes(ownedModel).some(node => (node.Flags || 0) & 120);
     // Only the renderer's private clone changes; saved model data remains intact.
     const particlesEnabled = props.showParticles ?? graphics.particles;
     if (!particlesEnabled) { ownedModel.ParticleEmitters = []; ownedModel.ParticleEmitters2 = []; ownedModel.ParticleEmitterPopcorns = []; ownedModel.RibbonEmitters = []; }
@@ -288,6 +289,7 @@ export default function GamePreview(inputProps) {
           const ids = [...(p.selectedNodeIds || [])], snapshots = new Map();
           for (const node of allNodes(ownedModel)) if (ids.includes(node.ObjectId)) snapshots.set(node.ObjectId, structuredClone({ Translation: node.Translation, Rotation: node.Rotation, Scaling: node.Scaling, PivotPoint: node.PivotPoint }));
           nodeGesture = { id: event.pointerId, x, y, handle, ids, snapshots, frame: Math.round(native.getFrame()), sequence: editSequence, mode: p.transformMode || 'rotate', space: p.transformSpace || 'local', amount: p.transformMode === 'scale' ? 1 : 0, moved: false };
+          posedGeometryCache = null;
           Object.assign(nodeGesture, { restPose: !!p.restPose, workplaneEnabled: !!p.workplaneEnabled, workplane: p.workplane, pivotPoints: structuredClone(ownedModel.PivotPoints), origin: active.world.clone() });
           if (workplaneDrag && p.transformMode === 'move') {
             const axes = p.workplane === 'yz' ? [1,2] : ['xz','zx'].includes(p.workplane) ? [0,2] : [0,1];
@@ -393,6 +395,7 @@ export default function GamePreview(inputProps) {
       if (!nodeGesture || event.pointerId !== nodeGesture.id) return;
       event.preventDefault(); event.stopImmediatePropagation();
       const gesture = nodeGesture; nodeGesture = null; controls.enabled = true; canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode); setGestureLabel('');
+      posedGeometryCache = null;
       latest.current.onNodePosePreview?.(null);
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       if (event.type === 'pointercancel' || !gesture.moved || gesture.adjusted || movementRestricted(gesture.mode, latest.current.restrictions)) restoreGestureTracks(gesture);
@@ -669,30 +672,43 @@ export default function GamePreview(inputProps) {
       const hidden = new Set(p.hiddenGeosets || []);
       const presentationGuides = p.presentation === 'preview' && previewOverlaySettings(p.previewOverlay).mode !== 'none';
       const needsGeometry = presentationGuides || p.onSelectionChange || p.onSelectNodes || p.onInspectGeoset || overlayOptions.normals || overlayOptions.wires || overlayOptions.vertices || Object.values(p.selectionByGeoset || {}).some(ids => ids.length || ids.size);
-      posedGeosets = needsGeometry ? ownedModel.Geosets.flatMap((geo, index) => !hidden.has(index) && sampleGeosetAnimation(ownedModel, index, native.getFrame(), poseSequence, globalClock).alpha > .001 ? [{ index, faces: geo.Faces, vertices: skinGeoset(geo, getPoseMatrices()), normals: overlayOptions.normals && geo.Normals?.length === geo.Vertices.length ? skinGeosetNormals(geo, getPoseMatrices()) : null }] : []) : [];
+      if (needsGeometry) {
+        const cacheable = !p.playing && !nodeGesture && !hasBillboardedNodes;
+        const cacheKey = `${native.getFrame()}:${poseSequence}:${globalClock}:${!!overlayOptions.normals}`;
+        if (!cacheable || posedGeometryCache?.key !== cacheKey) {
+          const geosets = ownedModel.Geosets.flatMap((geo, index) => sampleGeosetAnimation(ownedModel, index, native.getFrame(), poseSequence, globalClock).alpha > .001 ? [{ index, faces: geo.Faces, vertices: skinGeoset(geo, getPoseMatrices()), normals: overlayOptions.normals && geo.Normals?.length === geo.Vertices.length ? skinGeosetNormals(geo, getPoseMatrices()) : null }] : []);
+          posedGeometryCache = cacheable ? { key: cacheKey, geosets } : null;
+          posedGeosets = geosets.filter(geo => !hidden.has(geo.index));
+        } else posedGeosets = posedGeometryCache.geosets.filter(geo => !hidden.has(geo.index));
+      } else posedGeosets = [];
       const hovered = p.hoveredGeoset == null ? null : ownedModel.Geosets[p.hoveredGeoset];
       if (hovered) {
         if (!hoverCanvas) { hoverCanvas=ownerDocument.createElement('canvas'); hoverCanvas.dataset.geosetOverlay=''; hoverCanvas.style.cssText='position:absolute;z-index:10;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(hoverCanvas); }
-        hoverCanvas.width=canvas.width; hoverCanvas.height=canvas.height;
+        if (hoverCanvas.width !== canvas.width) hoverCanvas.width = canvas.width;
+        if (hoverCanvas.height !== canvas.height) hoverCanvas.height = canvas.height;
         const matrices=getPoseMatrices();
         drawGeosetHighlight(hoverCanvas.getContext('2d'),hovered.Faces,skinGeoset(hovered,matrices),camera,canvas.width,canvas.height);
       } else if (hoverCanvas) { hoverCanvas.remove(); hoverCanvas=null; }
       if (presentationGuides || overlayOptions.normals || overlayOptions.wires || overlayOptions.vertices || Object.values(p.selectionByGeoset || {}).some(ids => ids.length || ids.size)) {
         if (!geometryCanvas) { geometryCanvas = ownerDocument.createElement('canvas'); geometryCanvas.dataset.geometryOverlay = ''; geometryCanvas.style.cssText = 'position:absolute;z-index:20;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(geometryCanvas); }
-        geometryCanvas.width = canvas.width; geometryCanvas.height = canvas.height;
+        if (geometryCanvas.width !== canvas.width) geometryCanvas.width = canvas.width;
+        if (geometryCanvas.height !== canvas.height) geometryCanvas.height = canvas.height;
         if (presentationGuides) drawPresentationOverlay(geometryCanvas.getContext('2d'), posedGeosets, camera, canvas.clientWidth, canvas.clientHeight, p.previewOverlay, canvas.width / Math.max(1, canvas.clientWidth));
         else drawPreviewGeometryOverlay(geometryCanvas.getContext('2d'), posedGeosets, camera, canvas.clientWidth, canvas.clientHeight, overlayOptions, center, radius, canvas.width / Math.max(1, canvas.clientWidth));
       } else if (geometryCanvas) { geometryCanvas.remove(); geometryCanvas = null; }
       if (p.overlays?.cameras ?? p.showCameras) {
         if (!cameraCanvas) { cameraCanvas = ownerDocument.createElement('canvas'); cameraCanvas.dataset.cameraOverlay = ''; cameraCanvas.style.cssText = 'position:absolute;z-index:30;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(cameraCanvas); }
-        cameraCanvas.width = canvas.width; cameraCanvas.height = canvas.height;
+        if (cameraCanvas.width !== canvas.width) cameraCanvas.width = canvas.width;
+        if (cameraCanvas.height !== canvas.height) cameraCanvas.height = canvas.height;
         drawModelCameraOverlay(cameraCanvas.getContext('2d'), ownedModel, camera, canvas.clientWidth, canvas.clientHeight, canvas.width / Math.max(1, canvas.clientWidth), native.getFrame(), poseSequence, globalClock, radius, visualOptions(p.preferences).node, p.portraitMode ? PORTRAIT_ASPECT : 4 / 3);
       } else if (cameraCanvas) { cameraCanvas.remove(); cameraCanvas = null; }
       if (overlayOptions.bones || overlayOptions.nodes || overlayOptions.attachments || overlayOptions.particles) {
         if (!connectorCanvas) { connectorCanvas = ownerDocument.createElement('canvas'); connectorCanvas.dataset.connectorOverlay = ''; connectorCanvas.style.cssText = 'position:absolute;z-index:15;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(connectorCanvas); }
-        connectorCanvas.width = canvas.width; connectorCanvas.height = canvas.height;
+        if (connectorCanvas.width !== canvas.width) connectorCanvas.width = canvas.width;
+        if (connectorCanvas.height !== canvas.height) connectorCanvas.height = canvas.height;
         if (!nodeCanvas) { nodeCanvas = ownerDocument.createElement('canvas'); nodeCanvas.dataset.nodeOverlay = ''; nodeCanvas.style.cssText = 'position:absolute;z-index:40;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(nodeCanvas); }
-        nodeCanvas.width = canvas.width; nodeCanvas.height = canvas.height;
+        if (nodeCanvas.width !== canvas.width) nodeCanvas.width = canvas.width;
+        if (nodeCanvas.height !== canvas.height) nodeCanvas.height = canvas.height;
         const width = canvas.clientWidth, height = canvas.clientHeight;
         const projectedNodes = projectMovementNodes(markerModel, native.getFrame(), poseSequence, camera, width, height, globalClock, getPoseMatrices());
         nodePoints = visibleMovementPoints(projectedNodes, overlayOptions);

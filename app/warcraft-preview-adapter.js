@@ -116,7 +116,9 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
           const tint = previewGeosetTint(model, geosetIndex, activeLayer, frame, sequenceIndex, globalTime);
           if (tint[3] <= 1e-6) return;
           this.uniform4fv(location, tint);
-          if (lightingLocation) this.uniform1f(lightingLocation, getClock().lighting !== false && !(activeLayer?.Shading & 1) ? 1 : 0);
+          // Surface View is an inspection material: its faces must remain
+          // shaded even when the authored texture layer is Unshaded.
+          if (lightingLocation) this.uniform1f(lightingLocation, surface || getClock().lighting !== false && !(activeLayer?.Shading & 1) ? 1 : 0);
           if (portraitLocation) this.uniform1f(portraitLocation, getClock().portrait ? 1 : 0);
           if (lightDirectionLocation) this.uniform3fv(lightDirectionLocation, getClock().lightDirection || [-.65, .55, 1]);
           const lighting = previewLighting(getClock().preferences);

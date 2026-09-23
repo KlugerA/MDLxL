@@ -4,7 +4,7 @@ import { gridSegments } from './viewport-grid.js';
 import { visualOptions, viewportAppearanceOptions } from '../src/preferences.js';
 import { previewOverlayGeometry, previewOverlaySettings } from './preview-presentation.js';
 import { wireDashArray } from '../src/wire-pattern.js';
-import { drawPixelLine } from './pixel-lines.js';
+import { createPixelLineBatch, drawPixelLine } from './pixel-lines.js';
 
 export function previewOverlayOptions(overlays, showNodes = false) {
   const markers = !!showNodes;
@@ -89,27 +89,41 @@ export function drawPreviewGeometryOverlay(context, geosets, camera, width, heig
       return { index, faces, points };
     });
     const depth = createOverlayDepth(projectedGeosets, width, height);
-    if (options.wires) for (const hidden of options.showHiddenWires === false ? [false] : [true, false]) {
+    const wireBatch = options.wires && !options.grid && !options.normals && context.canvas?.width && context.createImageData && context.putImageData ? createPixelLineBatch(context) : null;
+    const visibleSegments = wireBatch ? null : [];
+    if (options.wires) {
       for (const { index, faces, points } of projectedGeosets) {
         const wire = selected.has(index) ? appearance.selectedGeoset : appearance.otherGeoset;
-        context.globalAlpha = wire.opacity * (hidden ? visual.occludedOpacity : 1);
+        const dash = wireDashArray(wire);
         const seen = new Set();
         for (let i = 0; i < faces.length; i += 3) for (let j = 0; j < 3; j++) {
           const ia = faces[i + j], ib = faces[i + (j + 1) % 3], key = Math.min(ia, ib) + ':' + Math.max(ia, ib);
           if (seen.has(key)) continue; seen.add(key);
           const a = points[ia], b = points[ib]; if (!a?.visible || !b?.visible) continue;
+          if (wireBatch) {
+            wireBatch.draw(a, b, { color: wire.color, width: wire.thickness, ratio, dash, opacity: wire.opacity,
+              depth, hiddenOpacity: wire.opacity * visual.occludedOpacity, showHidden: options.showHiddenWires !== false });
+            continue;
+          }
           const count = Math.max(1, Math.min(64, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 12)));
           for (let part = 0; part < count; part++) {
             const t = (part + .5) / count, midpoint = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
-            if (depth.isOccluded(midpoint) !== hidden) continue;
-            drawPixelLine(context,
-              { x: a.x + (b.x - a.x) * part / count, y: a.y + (b.y - a.y) * part / count },
-              { x: a.x + (b.x - a.x) * (part + 1) / count, y: a.y + (b.y - a.y) * (part + 1) / count },
-              { color: wire.color, width: wire.thickness, ratio, dash: wireDashArray(wire) });
+            const hidden = depth.isOccluded(midpoint);
+            if (hidden && options.showHiddenWires === false) continue;
+            const opacity = wire.opacity * (hidden ? visual.occludedOpacity : 1);
+            const from = { x: a.x + (b.x - a.x) * part / count, y: a.y + (b.y - a.y) * part / count };
+            const to = { x: a.x + (b.x - a.x) * (part + 1) / count, y: a.y + (b.y - a.y) * (part + 1) / count };
+            if (hidden) { context.globalAlpha = opacity; drawPixelLine(context, from, to, { color: wire.color, width: wire.thickness, ratio, dash }); }
+            else visibleSegments.push({ from, to, wire, dash, opacity });
           }
         }
       }
+      if (visibleSegments) for (const { from, to, wire, dash, opacity } of visibleSegments) {
+        context.globalAlpha = opacity;
+        drawPixelLine(context, from, to, { color: wire.color, width: wire.thickness, ratio, dash });
+      }
     }
+    wireBatch?.flush();
     if (options.vertices) for (const hidden of options.showHiddenVertices ? [true, false] : [false]) {
       context.fillStyle = appearance.unselectedVertex.color; context.globalAlpha = 1;
       context.beginPath();

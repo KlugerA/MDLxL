@@ -52,19 +52,23 @@ export function rigMarkerGeometry(nodes, selectedIds, options = {}) {
   const triangles = [], edges = [], emphasizedEdges = [], size = visualOptions(options.preferences).helperSize * 3 / 2;
   for (const point of nodes) {
     if (!point.visible || !options[point.overlayKind || 'nodes']) continue;
-    const { shape, color } = markerStyle(point, byId, options.preferences, highlights), rgb = new Color(color).convertLinearToSRGB().toArray();
+    const { shape, color } = markerStyle(point, byId, options.preferences, highlights), baseColor = new Color(color);
+    const edgeRgb = baseColor.clone().convertLinearToSRGB().toArray();
     const points = shape.vertices.map(vertex => new Vector3(...vertex).multiplyScalar(point.unitsPerPixel * size).applyQuaternion(point.rotation).add(point.world));
     const seen = new Set();
     for (const face of shape.faces) {
       // Face illumination stays in model space while the camera moves.
       const normal = points[face[1]].clone().sub(points[face[0]]).cross(points[face[2]].clone().sub(points[face[0]])).normalize();
-      const illumination = color === '#ff0000' || color === '#ffff00' ? 1 : .42 + .58 * Math.max(0, normal.dot(MARKER_LIGHT));
-      for (let i = 1; i + 1 < face.length; i++) for (const id of [face[0],face[i],face[i+1]]) triangles.push(...points[id].toArray(), ...rgb.map(c => c * illumination));
+      // Shade in linear RGB, then encode for the canvas. Multiplying encoded
+      // green made the side faces far darker than the fixed-angle reference.
+      const illumination = color === '#ff0000' || color === '#ffff00' ? 1 : Math.min(1, .72 + .30 * Math.max(0, normal.dot(MARKER_LIGHT)));
+      const rgb = baseColor.clone().multiplyScalar(illumination).convertLinearToSRGB().toArray();
+      for (let i = 1; i + 1 < face.length; i++) for (const id of [face[0],face[i],face[i+1]]) triangles.push(...points[id].toArray(), ...rgb);
       for (let i = 0; i < face.length; i++) {
         const a = face[i], b = face[(i+1)%face.length], key = [a,b].sort().join(':');
         if (seen.has(key)) continue; seen.add(key);
-        for (const id of [a,b]) edges.push(...points[id].toArray(), ...rgb);
-        if (highlights.get(point.node.ObjectId) === '#000000') for (const id of [a,b]) emphasizedEdges.push(...points[id].toArray(), ...rgb);
+        for (const id of [a,b]) edges.push(...points[id].toArray(), ...edgeRgb);
+        if (highlights.get(point.node.ObjectId) === '#000000') for (const id of [a,b]) emphasizedEdges.push(...points[id].toArray(), ...edgeRgb);
       }
     }
   }

@@ -44,11 +44,15 @@ export function attachToBone(model, childId, parentId) {
   const child = model.Nodes?.[childId], parent = (model.Bones || []).find(bone => bone.ObjectId === parentId);
   if (!child || !parent || childId === parentId) throw new Error('Select one child and a different parent bone.');
   const seen = new Set();
-  for (let next = parent; next?.Parent != null; next = model.Nodes?.[next.Parent]) {
+  let parentIsDescendant = false;
+  for (let next = parent; next; next = model.Nodes?.[next.Parent]) {
     if (seen.has(next.ObjectId)) throw new Error('The parent chain already contains a cycle.');
     seen.add(next.ObjectId);
-    if (next.Parent === childId) throw new Error('A bone cannot be parented to its own descendant.');
+    if (next.ObjectId === childId) { parentIsDescendant = true; break; }
   }
+  // Lift the clicked descendant to the selected node's former parent before
+  // linking it. This keeps the rest of the hierarchy connected without a cycle.
+  if (parentIsDescendant) parent.Parent = child.Parent ?? null;
   child.Parent = parentId;
 }
 
