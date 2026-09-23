@@ -545,7 +545,12 @@ export default function Viewport(inputProps) {
       const drag = state.drag; if (!drag) return;
       const payload = { selections: drag.selections, geosetIndex: latest.current.selectedGeoset, indices: drag.selections[latest.current.selectedGeoset] || [], pivot: drag.pivot.toArray() };
       const rotation = new THREE.Euler(), scale = new THREE.Vector3(1, 1, 1), translation = new THREE.Vector3();
-      if (drag.action === 'translate') { translation.copy(translateInPlane(down, moveDragPoint(drag.move, end, event.shiftKey), drag, false)); payload.translation = translation.toArray(); }
+      if (drag.action === 'translate') {
+        translation.copy(quad
+          ? translateInPlane(down, moveDragPoint(drag.move, end, event.shiftKey), drag, false)
+          : translateInPlane(down, end, drag, event.shiftKey));
+        payload.translation = translation.toArray();
+      }
       if (drag.action === 'scale') { scale.fromArray(dragScale(dx, drag.workplane, event.shiftKey)); payload.scale = scale.toArray(); payload.allowSingularScale = true; }
       if (drag.action === 'rotate') {
         const a = new THREE.Vector2(down.x, down.y).sub(drag.pivotScreen), b = new THREE.Vector2(end.x, end.y).sub(drag.pivotScreen);
@@ -566,7 +571,7 @@ export default function Viewport(inputProps) {
         }
         position.needsUpdate = true; entry.geometry.computeBoundingSphere(); updateWideWireGeometry(entry);
       }
-      drag.payload = payload; drag.moved = drag.action === 'translate' ? Math.hypot(drag.move.point.x - down.x, drag.move.point.y - down.y) > 1 : Math.hypot(dx, dy) > 1;
+      drag.payload = payload; drag.moved = drag.action === 'translate' && quad ? Math.hypot(drag.move.point.x - down.x, drag.move.point.y - down.y) > 1 : Math.hypot(dx, dy) > 1;
       invalidate();
     }
     function pointerUp(event) {
@@ -648,7 +653,7 @@ export default function Viewport(inputProps) {
     const gestureKey = event => {
       if (event.key === 'Escape' && event.type === 'keydown' && down) { cancelGesture(); event.preventDefault(); event.stopPropagation(); }
       // Modifier transitions must reset the latch even if the mouse is still.
-      if (event.key === 'Shift' && state.drag?.action === 'translate') moveDragPoint(state.drag.move, state.drag.move.pointer, event.shiftKey);
+      if (quad && event.key === 'Shift' && state.drag?.action === 'translate') moveDragPoint(state.drag.move, state.drag.move.pointer, event.shiftKey);
     };
     // WarmKeys consumes Escape before viewport key listeners. Its Clear command
     // gives an in-progress drag first refusal through this cancelable event.

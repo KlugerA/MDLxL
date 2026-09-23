@@ -216,7 +216,23 @@ function sameOrientation(actual, expected, message) {
       await shiftLatchDrag(view,page.locator(`[data-viewport="${id}"]`),depthAxis);
     }
     await toggle();await idle();await page.evaluate(()=>{draws={};});
-    await shiftLatchDrag('single perspective',page.locator('[aria-label="3D model viewport"]'));
+    // Single view keeps the pre-Quad Shift behavior: direction follows the
+    // current pointer displacement rather than latching for the whole hold.
+    await page.keyboard.press('m');
+    const singleBefore=await page.evaluate(()=>({coordinates:coordinates(),point:vertexPoint(),camera:cameraState()}));
+    const sr=await page.locator('[aria-label="3D model viewport"]').boundingBox(),sx=Math.round(sr.x+sr.width/2),sy=Math.round(sr.y+sr.height/2);
+    await page.mouse.move(sx,sy);await page.keyboard.down('Shift');await page.mouse.down();
+    await page.mouse.move(sx-25,sy);await idle();
+    const singleHorizontal=await page.evaluate(()=>({coordinates:Array.from(viewportState().entries[0].geometry.attributes.position.array.slice(0,3)),point:vertexPoint()}));
+    assert.ok(singleHorizontal.point.x<singleBefore.point.x-2,'single-view Shift initially follows horizontal motion');
+    await page.mouse.move(sx-25,sy-65);await idle();
+    const singleVertical=await page.evaluate(()=>({coordinates:Array.from(viewportState().entries[0].geometry.attributes.position.array.slice(0,3)),point:vertexPoint()}));
+    assert.ok(Math.abs(singleVertical.point.x-singleBefore.point.x)<1e-3,'single-view Shift does not keep a horizontal latch');
+    assert.ok(singleVertical.point.y<singleBefore.point.y-2,'single-view Shift follows vertical motion');
+    await page.mouse.up();await page.keyboard.up('Shift');await idle();
+    assert.deepEqual(await page.evaluate(()=>coordinates()),singleVertical.coordinates);
+    sameCamera(await page.evaluate(()=>cameraState()),singleBefore.camera,'single-view Shift drag leaves camera unchanged');
+    await page.keyboard.press('Control+z');await idle();assert.deepEqual(await page.evaluate(()=>coordinates()),singleBefore.coordinates);
     await toggle();await idle();
     await dropdown.selectOption('front');await activate('front');
     const fr=await page.locator('[data-viewport="front"]').boundingBox(),cx=fr.x+fr.width/2,cy=fr.y+fr.height/2;
