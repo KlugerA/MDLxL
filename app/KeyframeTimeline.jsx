@@ -60,6 +60,8 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
 
   // Playback displays the live frame directly; only a focused edit owns a draft.
   useEffect(() => { setRange(null); setContext(null); editingTime.current = false; setDraftTime(String(frame)); }, [domainStamp]);
+  // Warning selection is one key, never an earlier Shift-selected interval.
+  useEffect(() => { if (motionActive) { setRange(null); setContext(null); } }, [motionActive?.signature]);
   useEffect(() => () => cleanup.current?.(), []);
   useEffect(() => {
     if (!context) return;
@@ -203,7 +205,7 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
         {keyMarkers}
         <span className="classic-reel-cursor" style={{ left: `clamp(1px, ${percent(frame)}%, calc(100% - 1px))` }}/>
       </div>
-      {warningMarkers.map(([at, findings]) => <button key={at} type="button" data-frame={at} className={`motion-reel-warning${findings.every(f => motionControls?.desired[f.signature]) ? ' motion-reel-desired' : ''}`} aria-label={`Motion warning: ${findings.map(f => `${f.nodeName}, ${f.property}, ${f.time} ms, ${f.kind}`).join('; ')}`} title={`${findings.length > 1 ? `${findings.length} motion warnings` : `${findings[0].nodeName} · ${findings[0].property}`} · ${at} ms — click to inspect`} style={{ left: `clamp(6px, ${percent(at)}%, calc(100% - 6px))` }} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onMotionFinding?.(findings[0], event.currentTarget); }}><span aria-hidden="true">◆</span><span className="motion-warning-underline" aria-hidden="true"/></button>)}
+      {warningMarkers.map(([at, findings]) => <button key={at} type="button" data-frame={at} className={`motion-reel-warning${findings.every(f => motionControls?.desired[f.signature]) ? ' motion-reel-desired' : ''}`} aria-pressed={!!motionActive && findings.some(f => f.signature === motionActive.signature)} aria-label={`Motion warning: ${findings.map(f => `${f.nodeName}, ${f.property}, ${f.time} ms, ${f.kind}`).join('; ')}`} title={`${findings.length > 1 ? `${findings.length} motion warnings` : `${findings[0].nodeName} · ${findings[0].property}`} · ${at} ms — click to inspect`} style={{ left: `clamp(6px, ${percent(at)}%, calc(100% - 6px))` }} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setRange(null); setContext(null); onMotionFinding?.(findings[0], event.currentTarget); }}><span aria-hidden="true">◆</span><span className="motion-warning-underline" aria-hidden="true"/></button>)}
       <div className="classic-reel-ruler" aria-hidden="true" translate="no">{divisions.map((value, index) => <span key={value} className={index === divisions.length - 1 ? 'is-last' : ''} style={{ left: `${percent(value)}%` }}>{value}</span>)}</div>
     </div>
     <label className="classic-reel-frame"><span>Frame:</span><input type="number" inputMode="numeric" step="1" min={domain?.start || 0} max={domain?.end || 0} aria-label="Current animation frame" data-warmkey="keyframe:time" translate="no" className={timeSet.has(frame) ? 'is-keyframe' : ''} value={editingTime.current ? draftTime : String(frame)} disabled={!domain} onFocus={() => { setDraftTime(String(frame)); editingTime.current = true; onPlayingChange?.(false); }} onChange={event => { editingTime.current = true; setDraftTime(event.target.value); }} onBlur={() => commitTime()} onKeyDown={event => {

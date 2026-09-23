@@ -20,23 +20,40 @@ const model = createDemoDocument().model, id = model.Bones[0].ObjectId;
 const finding = { signature: 'one', kind: 'holding-keys', nodeName: 'Arm', nodeId: id, property: 'Rotation', space: 'local', start: 0, end: 1100, time: 1000, explanation: 'Holding keys compress the transition.', evidence: '90° in 100 ms.' };
 const motion = { result: { findings: [finding], notes: [] }, visible: [finding], desired: {}, active: finding };
 function render(props = {}) { return renderToStaticMarkup(React.createElement(Inspector, { model, revision: 0, sequenceIndex: 0, globalSeqId: null, time: 1000, mode: 'rotate', selectedNodeIds: [id], motion, ...props })); }
-test('warning details stay absent until a marker is selected; keys require a second deliberate click', () => {
+test('warning click exposes the selected key deletion directly without an expanded inspector', () => {
   assert.equal(render({ motion: { ...motion, active: null } }), '');
   const html = render();
   assert.match(html, /Motion warning details/); assert.match(html, /Close motion warning/);
-  assert.match(html, /Mark Desired/); assert.match(html, /Show Keys/); assert.match(html, /Replay section/);
-  assert.match(html, /Previous warning/); assert.match(html, /Next warning/);
-  assert.doesNotMatch(html, /Motion findings|Find Motion Irregularities|Motion key inspector|Motion Z|quaternion/);
+  assert.match(html, /Mark Desired/); assert.match(html, /Delete selected key/); assert.match(html, /Replay section/);
+  assert.match(html, /keeps the old pose until 1000 ms, leaving only 100 ms/);
+  assert.doesNotMatch(html, /Previous warning|Next warning|Show Keys|<input|<select|Motion findings|Find Motion Irregularities|Motion key inspector|Motion Z|quaternion/);
 });
 test('changed or resolved evidence cannot be marked Desired', () => {
   const html = render({ motion: { ...motion, stale: true, visible: [] } });
   assert.match(html, /Motion changed/); assert.match(html, /disabled="">Mark Desired/);
-  assert.match(render({ motion: { ...motion, active: { ...finding, resolved: true } } }), /no longer appears/);
+  assert.match(html, /disabled="">Delete selected key/);
+  assert.match(render({ motion: { ...motion, active: { ...finding, resolved: true } } }), /no longer has a warning/);
 });
 test('clearing the selected bone while warning details are open does not crash', () => {
   const html = render({ selectedNodeIds: [], livePose: null });
   assert.match(html, /Motion warning details/);
-  assert.doesNotMatch(html, /Motion key inspector/);
+  assert.match(html, /disabled="">Delete selected key/);
+});
+test('inherited and curved motion cannot be mistaken for a single deletable bad key', () => {
+  for (const item of [{ ...finding, space: 'model' }, { ...finding, kind: 'curve-overshoot' }]) {
+    const html = render({ motion: { ...motion, active: item } });
+    assert.match(html, /No single bad key is identified/);
+    assert.doesNotMatch(html, /Delete selected key/);
+  }
+});
+test('spike wording describes the selected stray key and navigation appears only for multiple warnings', () => {
+  const html = render({ motion: { ...motion, active: { ...finding, kind: 'pose-spike' }, visible: [finding, { ...finding, signature: 'two' }] } });
+  assert.match(html, /This key briefly turns the bone, then the next key turns it back/);
+  assert.match(html, /Previous warning/); assert.match(html, /Next warning/);
+});
+test('deletion respects restricted channels and read-only documents', () => {
+  assert.match(render({ disabled: true }), /disabled="">Delete selected key/);
+  assert.match(render({ restrictions: { rotation: true } }), /disabled="">Delete selected key/);
 });
 test('only small warning markers show by default, underneath relevant existing keys', () => {
   const before = structuredClone(model);
@@ -56,4 +73,5 @@ test('clicking a warning can highlight its interval separately from ordinary key
   const html = renderToStaticMarkup(React.createElement(Timeline, { model, sequenceIndex: 0, motionFindings: [finding], motionActive: finding, selectedNodeIds: [id] }));
   assert.match(html, /Motion warning: Arm, Rotation, 1000 ms, holding-keys/);
   assert.match(html, /motion-reel-interval/); assert.match(html, /classic-reel-key motion-key-highlight/);
+  assert.match(html, /aria-pressed="true"/);
 });

@@ -11,6 +11,7 @@
 .motion-reel-desired .motion-warning-underline { background:#54956b; }
 .classic-keyframe-reel .motion-reel-warning:hover .motion-warning-underline { outline:1px solid currentColor; }
 .classic-keyframe-reel .motion-reel-warning:focus { outline:2px solid #4582c6; }
+.classic-keyframe-reel .motion-reel-warning[aria-pressed=true] { outline:2px solid #4582c6; }
 .classic-reel-cursor { position:absolute; top:0; bottom:0; width:2px; transform:translateX(-1px); background:#ff0000; cursor:ew-resize; }
 .classic-reel-selection { position:absolute; top:50%; bottom:0; background:#b5b5b5; pointer-events:none; }
 .classic-reel-ruler { position:absolute; inset:50% 0 0; cursor:pointer; font-size:10px; font-variant-numeric:tabular-nums; pointer-events:none; }

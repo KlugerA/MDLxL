@@ -1,32 +1,39 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { NumberField } from './Fields.jsx';
-import { motionChannels, motionParentChain, motionPose, setMotionPose } from '../src/motion-inspector.js';
+import { motionPose } from '../src/motion-inspector.js';
 import { deleteMovementKeys, movementProperties } from '../src/movement.js';
 import './motion-inspector.css';
 
 const modes = Object.fromEntries(Object.entries(movementProperties).map(([mode, property]) => [property, mode]));
-const labels = { Translation: 'Position', Rotation: 'Rotation (degrees, XYZ)', Scaling: 'Scale' };
-const rounded = value => Number(value.toFixed(4));
+const keyKinds = new Set(['holding-keys', 'pose-spike', 'abrupt-change', 'step']);
+
+function explanation(finding) {
+  if (finding.space !== 'local') return 'This bone jumps here, possibly because a parent moves. No single bad key is identified.';
+  switch (finding.kind) {
+    case 'pose-spike': return finding.property === 'Rotation'
+      ? 'This key briefly turns the bone, then the next key turns it back. Delete it if that twitch is unwanted.'
+      : 'This key briefly moves the bone away, then the next key brings it back. Delete it if that twitch is unwanted.';
+    case 'holding-keys': return `This key keeps the old pose until ${finding.time} ms, leaving only ${finding.end - finding.time} ms for the move. Delete it if that hold is unwanted.`;
+    case 'abrupt-change': return `The bone jumps to this pose in ${finding.end - finding.start} ms. This key may be too close to the previous one.`;
+    case 'step': return 'This track holds each pose, then jumps to the next. This key is where it switches.';
+    default: return 'The movement swings past the key poses here. No single bad key is identified.';
+  }
+}
 
 // Mounted only by a deliberate warning-marker click. Never owns sidebar space.
-export default function MotionInspector({ model, revision, sequenceIndex, globalSeqId, time, selectedNodeIds, mode, motion, onSelect, onSeek, onReplay, onEdit, onPlayingChange, onClose, anchor = 8, disabled, restrictions = {}, livePose }) {
-  const [keysOpen, setKeysOpen] = useState(false), [editError, setEditError] = useState('');
+export default function MotionInspector({ model, revision, sequenceIndex, globalSeqId, selectedNodeIds, mode, motion, onSelect, onReplay, onEdit, onPlayingChange, onClose, anchor = 8, disabled, restrictions = {}, livePose }) {
+  const [editError, setEditError] = useState('');
   const closeButton = useRef(null), popup = useRef(null);
-  const property = movementProperties[mode] || 'Rotation', id = selectedNodeIds.at(-1);
-  const storedPose = useMemo(() => motionPose(model, id, property, time, sequenceIndex), [model, revision, id, property, Math.round(time), sequenceIndex]);
-  const pose = livePose && livePose.node.ObjectId === id && livePose.property === property ? livePose : storedPose;
-  const chain = useMemo(() => motionParentChain(model, id), [model, revision, id]);
-  const valid = sequenceIndex >= 0 && globalSeqId === null;
-  const blocked = disabled || !valid || !pose || pose.shared || !!livePose || restrictions[property.toLowerCase()];
   const active = motion.active, desired = active && !!motion.desired[active.signature];
+  // Bind deletion to the identified key, never the moving playback cursor or
+  // the surrounding keys which only supply evidence for the warning.
+  const pose = useMemo(() => active && motionPose(model, active.nodeId, active.property, active.time, sequenceIndex), [model, revision, active, sequenceIndex]);
+  const identifiesKey = active?.space === 'local' && keyKinds.has(active.kind);
+  const valid = sequenceIndex >= 0 && globalSeqId === null;
   const outdated = motion.stale || active?.resolved;
+  const selected = selectedNodeIds.length === 1 && selectedNodeIds[0] === active?.nodeId && movementProperties[mode] === active?.property;
+  const blocked = disabled || !valid || !identifiesKey || !selected || !pose?.key || pose.shared || !!livePose || outdated || restrictions[active?.property.toLowerCase()];
   const activeIndex = motion.visible.findIndex(f => f.signature === active?.signature);
   const choose = finding => { motion.setActive(finding); onSelect(finding); setEditError(''); };
-  const nextIndex = pose?.keys.findIndex(k => k.Frame >= pose.keyTime) ?? -1;
-  const at = nextIndex < 0 ? Math.max(0, (pose?.keys.length || 0) - 1) : nextIndex;
-  const nearby = pose?.keys.slice(Math.max(0, at - 3), Math.max(7, at + 4)) || [];
-  const relevant = active && active.nodeId === id && active.property === property && !outdated;
-  const visibleKeys = relevant ? pose?.keys.filter(k => k.Frame >= active.start && k.Frame <= active.end).slice(0, 80) || [] : nearby;
   useEffect(() => { closeButton.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => {
     // Escape is owned by the existing Clear/cancel-gesture command. Claim it
@@ -37,37 +44,26 @@ export default function MotionInspector({ model, revision, sequenceIndex, global
     window.addEventListener('mdlxl-cancel-gesture', cancel);
     return () => window.removeEventListener('mdlxl-cancel-gesture', cancel);
   }, [onClose]);
-  function mutate(label, action) {
+  function deleteKey() {
     if (blocked) return;
     onPlayingChange(false); setEditError('');
-    try { onEdit(label, ['Nodes'], action, { rethrow: true }); }
+    onSelect(active);
+    try { onEdit('Delete inspected movement key', ['Nodes'], current => deleteMovementKeys(current, [active.nodeId], active.time, sequenceIndex, modes[active.property]), { rethrow: true }); }
     catch (error) { setEditError(error.message); }
   }
-  function selectKey(frame) { onSelect({ nodeId: id, property, time: frame }); }
   if (!active) return null;
-  return <section ref={popup} className="motion-inspector" role="dialog" aria-modal="false" aria-label="Motion warning details" style={{ left: `clamp(8px, ${anchor}px, max(8px, calc(100% - 368px)))` }} onKeyDown={event => {
+  return <section ref={popup} className="motion-inspector" role="dialog" aria-modal="false" aria-label="Motion warning details" style={{ left: `clamp(8px, ${anchor}px, max(8px, calc(100% - 328px)))` }} onKeyDown={event => {
     if (event.key === 'Escape' && !event.target.matches('input,select,textarea')) { event.stopPropagation(); onClose(); }
   }}>
-    <header><strong translate="no">{active.nodeName} · {active.time} ms</strong><button ref={closeButton} type="button" aria-label="Close motion warning" onClick={onClose}>×</button></header>
+    <header><div translate="no"><strong>{active.nodeName}</strong><small>{active.property} · {active.time} ms</small></div><button ref={closeButton} type="button" aria-label="Close motion warning" onClick={onClose}>×</button></header>
     <div className="motion-body">
-      <article aria-label="Selected motion finding">
-        {outdated ? <p>{motion.stale ? 'Motion changed. Checking again…' : 'This hint no longer appears after your edit.'}</p> : <><p>{active.explanation}</p><small>{active.evidence}</small></>}
+      <article aria-label="Selected motion finding" title={outdated ? undefined : active.evidence}>
+        <p>{identifiesKey && pose && !pose.key ? 'Key deleted. Replay to check the movement.' : outdated ? motion.stale ? 'Motion changed. Checking again…' : 'This key no longer has a warning.' : explanation(active)}</p>
       </article>
-      <div className="motion-row"><button disabled={!!outdated} onClick={() => onReplay(active)}>Replay section</button><button aria-expanded={keysOpen} onClick={() => { if (!keysOpen) onSelect(active); setKeysOpen(!keysOpen); }}>{keysOpen ? 'Hide Keys' : 'Show Keys'}</button><button disabled={!!outdated} onClick={() => motion.mark(active, !desired)}>{desired ? 'Restore warning' : 'Mark Desired'}</button></div>
-      <div className="motion-navigation"><button aria-label="Previous warning" title="Previous warning" disabled={!motion.visible.length} onClick={() => choose(motion.visible[activeIndex < 0 ? motion.visible.length - 1 : (activeIndex - 1 + motion.visible.length) % motion.visible.length])}>←</button><small>{desired ? 'Marked Desired' : activeIndex >= 0 ? `${activeIndex + 1} / ${motion.visible.length}` : 'Motion hint'}</small><button aria-label="Next warning" title="Next warning" disabled={!motion.visible.length} onClick={() => choose(motion.visible[(activeIndex + 1) % motion.visible.length])}>→</button></div>
-      {motion.focus && <div className="motion-focus"><label>Replay time<input aria-label="Focused motion time" type="range" min={motion.focus[0]} max={motion.focus[1]} step="1" value={Math.max(motion.focus[0], Math.min(motion.focus[1], Math.round(time)))} onChange={e => onSeek(Number(e.target.value))}/></label><button onClick={() => motion.setFocus(null)}>Full animation</button></div>}
-      {keysOpen && pose && valid && <section className="motion-pose" aria-label="Motion key inspector">
-        <strong translate="no">{pose.node.Name || `Node ${id}`} · {model.Sequences[sequenceIndex].Name} · {pose.frame} ms</strong>
-        <select aria-label="Motion channel" value={property} onChange={e => onSelect({ nodeId: id, property: e.target.value, time: pose.frame })}>{motionChannels.map(p => <option key={p} value={p}>{labels[p]}</option>)}</select>
-        <p className={pose.key ? 'motion-key-exists' : 'motion-interpolated'}>{livePose ? 'Posing preview — release to commit.' : pose.shared ? 'Shared global track — inspect here; edit in its global timeline.' : pose.key ? `Stored key at ${pose.keyTime} ms — edits update this key.` : `${pose.keys.length ? 'Interpolated/held pose' : 'Default pose'} — editing creates a key at ${pose.frame} ms.`}</p>
-        <small>Interpolation: {['Step (holds until next key)', 'Linear', 'Hermite', 'Bezier'][pose.lineType]}</small>
-        <div className="motion-values" onFocusCapture={() => onPlayingChange(false)}>{['X', 'Y', 'Z'].map((axis, i) => <NumberField key={`${id}:${property}:${pose.frame}:${axis}`} label={`Motion ${axis}${property === 'Rotation' ? ' (degrees)' : ''}`} value={rounded(pose.display[i])} disabled={blocked} onChange={value => { const values = [...pose.display]; values[i] = value; mutate(`Set ${pose.node.Name || id} ${property} key`, current => setMotionPose(current, id, property, pose.frame, sequenceIndex, values)); }}/>)}</div>
-        <div className="motion-row"><button disabled={!pose.previous || pose.shared} onClick={() => selectKey(pose.previous.Frame)}>← {pose.previous ? `${pose.previous.Frame} ms` : 'No earlier key'}</button><button disabled={!pose.next || pose.shared} onClick={() => selectKey(pose.next.Frame)}>{pose.next ? `${pose.next.Frame} ms` : 'No later key'} →</button></div>
-        <div className="motion-key-list" aria-label={relevant ? 'Keys in highlighted interval' : 'Nearby keys'}>{visibleKeys.map(key => <button key={key.Frame} disabled={pose.shared} aria-pressed={key.Frame === pose.keyTime} className={relevant ? 'motion-relevant-key' : ''} onClick={() => selectKey(key.Frame)}>{key.Frame} ms</button>)}</div>
-        <button disabled={blocked || !pose.key} onClick={() => mutate('Delete inspected movement key', current => deleteMovementKeys(current, [id], pose.frame, sequenceIndex, modes[property]))}>Delete this key</button>
-        {!!chain.length && <details className="motion-chain"><summary>Parent chain</summary>{chain.map(node => <button key={node.ObjectId} onClick={() => onSelect({ nodeId: node.ObjectId, property, time: pose.frame })}>{node.Name || `Node ${node.ObjectId}`}</button>)}</details>}
-        {editError && <p role="alert">{editError}</p>}
-      </section>}
+      {identifiesKey && <button disabled={!!blocked} onClick={deleteKey}>Delete selected key</button>}
+      <div className="motion-row"><button onClick={() => onReplay(active)}>Replay section</button><button disabled={!!outdated} onClick={() => motion.mark(active, !desired)}>{desired ? 'Restore warning' : 'Mark Desired'}</button></div>
+      {motion.visible.length > 1 && <div className="motion-navigation"><button aria-label="Previous warning" title="Previous warning" onClick={() => choose(motion.visible[activeIndex < 0 ? motion.visible.length - 1 : (activeIndex - 1 + motion.visible.length) % motion.visible.length])}>←</button><small>{activeIndex >= 0 ? `${activeIndex + 1} / ${motion.visible.length}` : 'Warnings'}</small><button aria-label="Next warning" title="Next warning" onClick={() => choose(motion.visible[(activeIndex + 1) % motion.visible.length])}>→</button></div>}
+      {editError && <p role="alert">{editError}</p>}
       {motion.error && <p role="alert">{motion.error}</p>}
     </div>
   </section>;

@@ -5,14 +5,20 @@ worker checks its motion and adds a small amber mark beneath an affected timelin
 diamond. There is no permanent inspector, warning list, scan button, or wider
 sidebar. Ordinary key selection does not open additional UI.
 
-Click a warning to open a dismissible explanation above the timeline. It shows
-the measured times and change, with **Replay section**, **Show Keys**, **Mark
-Desired**, and previous/next warning navigation. Coincident findings share one
-timeline marker. **Show Keys** reveals the affected interval, neighboring keys,
-channel, interpolation, and editable local values; rotations use XYZ degrees.
-Moving the bone and editing those numbers use the same animation tracks and
-undo workflow. The inspector distinguishes a stored key from an interpolated pose
-that will create a key. Nothing is automatically deleted, repaired, or baked.
+Click a warning to select its bone, channel, and suspect key directly. A small
+popup gives a plain explanation and **Delete selected key**, **Replay section**,
+and **Mark Desired**. The selected marker is outlined; surrounding evidence keys
+are amber. An old timeline range is cleared so keyboard Delete also targets just
+the selected key. Deletion is manual and uses the existing undo/redo workflow;
+other keys and channels stay intact. Replay remains available after deletion.
+
+There is no expanded key list, numeric inspector, parent tree, or second scrubber
+in the popup. The existing Movement controls remain available. Selecting another
+ordinary key dismisses the old warning. Previous/next arrows appear only when
+there are multiple warnings; coincident findings share one timeline marker.
+Measured evidence is retained in the explanation's tooltip. Inherited motion and
+curve overshoot do not identify one suspect key and offer no deletion button.
+Nothing is automatically deleted, repaired, or baked.
 
 After a warning is opened (or this animation has Desired decisions), the timeline
 context menu provides **Find Motion Irregularities** for an explicit rescan,
@@ -87,15 +93,19 @@ motion, repeated holds, inherited sword movement, equivalent rotations, sparse
 edits, undo/redo, Desired invalidation, and identical unchanged MDL/MDX exports.
 The Electron test uses a synthetic model in a separate profile and checks the
 markers-only default, original sidebar width, no layout change on opening details,
-explicit Show Keys, numeric/viewport posing, Desired/restore, replay, undo/redo,
-and save/reopen. It does not alter the user's model or testing window.
+direct key selection/deletion, Desired/restore, replay, undo/redo, and save/reopen.
+It also verifies deletion during playback uses the identified key rather than
+the moving cursor, and a same-time translation key is preserved. It does not
+alter the user's model or testing window.
 
-The focused regression run passed 129 tests. The rebuilt Electron synthetic
-workflow passed, including a measured 164-pixel sidebar, 30-to-70-degree visual
-posing, undo/redo, and repeated popup dismissal. A separate read-only Electron
-check confirmed the one Channel marker and zero markers in the other 13 Knight04
-animations; the source model's bytes were unchanged. Screenshots of the normal
-view and the explicitly opened warning were inspected.
+The focused regression run passed 132 tests. The rebuilt Electron synthetic
+workflow passed, including a measured 164-pixel sidebar and a popup under 230
+pixels tall, single-key deletion, undo/redo, and repeated popup dismissal.
+A separate read-only Electron check confirms the one Channel marker and zero
+markers in the other 13 Knight04 animations. An in-memory copy verifies that
+deleting just the 245377 ms rotation key clears the warning, and undo restores
+identical MDX output. The Desktop model is never written. Screenshots of the
+normal view and the explicitly opened warning are inspected separately.
 
 Broader legacy checks also encountered two failures in unchanged source/tests:
 inline RGB on All line expects 179 rather than the current mixed value, and a
