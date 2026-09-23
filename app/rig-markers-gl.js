@@ -3,7 +3,7 @@ import { visualOptions } from '../src/preferences.js';
 
 const CUBE = { vertices: [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]], faces: [[0,3,2,1],[4,5,6,7],[0,1,5,4],[3,7,6,2],[0,4,7,3],[1,2,6,5]] };
 const TETRA = { vertices: [[1,1,1],[-1,-1,1],[-1,1,-1],[1,-1,-1]], faces: [[0,2,1],[0,1,3],[0,3,2],[1,2,3]] };
-const MARKER_LIGHT = new Vector3(-.4, -.5, 1).normalize();
+const MARKER_LIGHT = new Vector3(-.35, -.45, 1.2).normalize();
 
 export function boneHighlightColors(nodes, selectedIds) {
   const byId = new Map(nodes.map(point => [point.node.ObjectId, point]));
@@ -32,7 +32,10 @@ export function boneHighlightColors(nodes, selectedIds) {
 
 export function markerStyle(point, byId, preferences, highlightColors = new Map()) {
   const visual = visualOptions(preferences), highlighted = highlightColors.get(point.node.ObjectId);
-  if (point.overlayKind === 'attachments') return { shape: TETRA, color: highlighted || visual.node };
+  if (point.overlayKind === 'attachments') {
+    const hasParentBone = byId.get(point.node.Parent)?.overlayKind === 'bones';
+    return { shape: TETRA, color: highlighted || (hasParentBone ? visual.node : '#6666e5') };
+  }
   if (point.overlayKind === 'particles') return { shape: TETRA, color: highlighted || visual.particle };
   if (point.overlayKind === 'bones') {
     const hasParentBone = byId.get(point.node.Parent)?.overlayKind === 'bones';
@@ -55,7 +58,7 @@ export function rigMarkerGeometry(nodes, selectedIds, options = {}) {
     for (const face of shape.faces) {
       // Face illumination stays in model space while the camera moves.
       const normal = points[face[1]].clone().sub(points[face[0]]).cross(points[face[2]].clone().sub(points[face[0]])).normalize();
-      const illumination = .58 + .42 * Math.max(0, normal.dot(MARKER_LIGHT));
+      const illumination = color === '#ff0000' || color === '#ffff00' ? 1 : .42 + .58 * Math.max(0, normal.dot(MARKER_LIGHT));
       for (let i = 1; i + 1 < face.length; i++) for (const id of [face[0],face[i],face[i+1]]) triangles.push(...points[id].toArray(), ...rgb.map(c => c * illumination));
       for (let i = 0; i < face.length; i++) {
         const a = face[i], b = face[(i+1)%face.length], key = [a,b].sort().join(':');

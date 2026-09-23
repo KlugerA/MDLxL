@@ -7,6 +7,7 @@ import { createDemoDocument, openDocument } from '../src/editor-document.js';
 import { MOVEMENT_GIZMO_SCALE, boneConnectionAppearance, boneConnectionEndpoints, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementMarkerRadius, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from '../app/movement-overlay.js';
 import { applyRestPoseMatrices, isUVOnlyPreviewChange, portraitBlankDragRotatesCamera } from '../app/game-preview-data.js';
 import { patchWarcraftMeshFragmentShader, previewGeosetTint } from '../app/warcraft-preview-adapter.js';
+import { projectedPlaneTranslation } from '../app/viewport-math.js';
 
 const near = (a, b, epsilon = 1e-5) => assert.ok(Math.abs(a - b) < epsilon, `${a} != ${b}`);
 const nearVector = (a, b) => Array.from(a).forEach((value, i) => near(value, b[i]));
@@ -190,8 +191,8 @@ test('viewport projects animated node positions and supplies usable XYZ handles'
   assert.equal(pickMovementNode(nodes, nodes[1].x + 4, nodes[1].y)?.node.ObjectId, 2);
   const handles = movementAxisHandles(nodes[1], camera, 400, 400, 50, 'local');
   assert.deepEqual(handles.map(handle => handle.axis), ['X', 'Y', 'Z']);
-  assert.equal(MOVEMENT_GIZMO_SCALE, .25);
-  assert.ok(handles.every(handle => Math.hypot(handle.dx, handle.dy) <= 18));
+  assert.equal(MOVEMENT_GIZMO_SCALE, 1);
+  assert.ok(handles.some(handle => Math.hypot(handle.dx, handle.dy) >= 50));
   for (const handle of handles) assert.ok(movementDragAmount(handle, handle.dx, handle.dy, 'rotate') > 0);
   const coincident = [nodes[0], { ...nodes[0], node: model.Bones[1] }];
   assert.equal(pickMovementNode(coincident, nodes[0].x, nodes[0].y, [0]).node.ObjectId, 2);
@@ -214,12 +215,20 @@ test('selected bone connector colors distinguish its parent and every child', ()
   assert.equal(boneConnectionAppearance(point(0), point(5), highlights), null);
 });
 
-test('movement workplanes use the requested screen drag direction and normal axis', () => {
-  assert.deepEqual(movementWorkplanePointer('xy', 12, 9), [12, 0]);
-  assert.deepEqual(movementWorkplanePointer('yz', 12, 9), [12, 0]);
-  assert.deepEqual(movementWorkplanePointer('xz', 12, 9), [0, 9]);
-  assert.deepEqual(movementWorkplanePointer('zx', 12, 9), [0, 9]);
+test('movement workplanes retain both screen drag components for the world-plane solver', () => {
+  for (const plane of ['xy', 'yz', 'xz', 'zx']) assert.deepEqual(movementWorkplanePointer(plane, 12, 9), [12, 9]);
   assert.deepEqual(['xy', 'xz', 'yz'].map(plane => movementWorkplaneHandle(plane).axis), ['Z', 'Y', 'X']);
+});
+
+test('YZ move keeps model X fixed when the camera looks along X', () => {
+  const camera = new PerspectiveCamera(40, 1, .1, 1000);
+  camera.up.set(0, 0, 1); camera.position.set(100, 0, 25); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+  const origin = new Vector3().project(camera);
+  const basis = [new Vector3(0, 1, 0), new Vector3(0, 0, 1)].map(point => {
+    const p = point.project(camera); return [(p.x - origin.x) * 200, (origin.y - p.y) * 200];
+  });
+  const delta = projectedPlaneTranslation('yz', basis, ...movementWorkplanePointer('yz', 35, 12));
+  near(delta[0], 0); assert.ok(Math.abs(delta[1]) > 0 || Math.abs(delta[2]) > 0);
 });
 
 test('rotate picks an axis bar while move requires its endpoint', () => {
@@ -243,6 +252,14 @@ test('bone connectors reach both pivot centers even when markers nearly overlap'
   assert.deepEqual(line, { from: { x: 0, y: 0 }, to: { x: 100, y: 0 } });
   assert.equal(boneConnectionEndpoints(parent, { ...child, x: 1 }).to.x, 1);
   assert.equal(boneConnectionEndpoints(parent, { ...child, x: 0 }), null);
+});
+
+test('world workplane resize keeps model axes after a bone turns ninety degrees', () => {
+  const model = fixture();
+  model.Bones[0].Rotation = track([500, rotation([0, 1, 0], 90)]);
+  applyMovementTransform(model, [0], 500, 0, { mode: 'scale', space: 'world', values: [2, 3, 1], workplaneEnabled: true, workplane: 'xy' });
+  const scaled = sampleMovement(model, model.Bones[0], 'Scaling', 500, 0);
+  near(scaled[0], 1); near(scaled[1], 3); near(scaled[2], 2);
 });
 
 test('UV fast path accepts UV overlays and rejects topology, material, and node changes', () => {

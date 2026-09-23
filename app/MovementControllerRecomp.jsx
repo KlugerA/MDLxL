@@ -12,7 +12,7 @@ import ModernIcon from './ModernIcon.jsx';
 import BoneToolIcon from './BoneToolIcon.jsx';
 
 const titles = { move: 'Move', rotate: 'Rotate', scale: 'Scale' };
-const icons = { select: 'sb_selbone', move: 'sb_bonemove', rotate: 'sb_bonerot', scale: 'sb_bonescale' };
+const icons = { select: 'sb_select', move: 'sb_bonemove', rotate: 'sb_bonerot', scale: 'sb_bonescale' };
 const labels = { Bones: 'Bone', Helpers: 'Helper Bone', Attachments: 'Ref Node', Lights: 'Light', ParticleEmitters: 'Particle Emitter', ParticleEmitters2: 'Particle Emitter', ParticleEmitterPopcorns: 'Popcorn Emitter', RibbonEmitters: 'Ribbon Emitter', EventObjects: 'Event Object', CollisionShapes: 'Collision Shape' };
 const lockNames = ['Translation', 'Rotation', 'Scaling'];
 const controllerOptions = [['Non-Interp', 0], ['Linear', 1], ['Bezier', 3], ['Hermite', 2]];
@@ -102,7 +102,7 @@ export default function MovementController({ model, revision = 0, sequenceIndex 
     const transformValues = transformMode === 'scale' ? [1, 1, 1] : [0, 0, 0];
     transformValues[index] = value;
     setValues(previous => previous.map((entry, i) => i === index ? value : entry));
-    if (!blocked(transformMode)) run(`${titles[transformMode]} bones and nodes`, current => applyMovementTransform(current, selectedNodeIds, frame, editSequenceIndex, { ...options, mode: transformMode, space: transformSpace, values: transformValues }));
+    if (!blocked(transformMode)) run(`${titles[transformMode]} bones and nodes`, current => applyMovementTransform(current, selectedNodeIds, frame, editSequenceIndex, { ...options, mode: transformMode, space: transformMode === 'rotate' ? transformSpace : 'world', values: transformValues }));
   };
   const chooseNode = event => {
     if (event.target.value === '') { if (!multiselect) onSelectNodes?.([]); return; }

@@ -4,6 +4,7 @@ import { gridSegments } from './viewport-grid.js';
 import { visualOptions, viewportAppearanceOptions } from '../src/preferences.js';
 import { previewOverlayGeometry, previewOverlaySettings } from './preview-presentation.js';
 import { wireDashArray } from '../src/wire-pattern.js';
+import { drawPixelLine } from './pixel-lines.js';
 
 export function previewOverlayOptions(overlays, showNodes = false) {
   const markers = !!showNodes;
@@ -30,12 +31,6 @@ export function movementNodeCategories(model) {
 }
 
 export const visibleMovementPoints = (points, options) => points.filter(point => options[point.overlayKind || 'nodes']);
-
-function canvasLineStyle(context, appearance) {
-  context.lineWidth = appearance.thickness; context.strokeStyle = appearance.color;
-  context.setLineDash(wireDashArray(appearance));
-  context.lineCap = appearance.style === 'dotted' ? 'round' : 'butt';
-}
 
 function markerPath(context, point, appearance) {
   const half = appearance.size / 2, x = Math.round(point.x), y = Math.round(point.y);
@@ -97,7 +92,7 @@ export function drawPreviewGeometryOverlay(context, geosets, camera, width, heig
     if (options.wires) for (const hidden of options.showHiddenWires === false ? [false] : [true, false]) {
       for (const { index, faces, points } of projectedGeosets) {
         const wire = selected.has(index) ? appearance.selectedGeoset : appearance.otherGeoset;
-        context.beginPath();
+        context.globalAlpha = wire.opacity * (hidden ? visual.occludedOpacity : 1);
         const seen = new Set();
         for (let i = 0; i < faces.length; i += 3) for (let j = 0; j < 3; j++) {
           const ia = faces[i + j], ib = faces[i + (j + 1) % 3], key = Math.min(ia, ib) + ':' + Math.max(ia, ib);
@@ -107,11 +102,12 @@ export function drawPreviewGeometryOverlay(context, geosets, camera, width, heig
           for (let part = 0; part < count; part++) {
             const t = (part + .5) / count, midpoint = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
             if (depth.isOccluded(midpoint) !== hidden) continue;
-            context.moveTo(a.x + (b.x - a.x) * part / count, a.y + (b.y - a.y) * part / count);
-            context.lineTo(a.x + (b.x - a.x) * (part + 1) / count, a.y + (b.y - a.y) * (part + 1) / count);
+            drawPixelLine(context,
+              { x: a.x + (b.x - a.x) * part / count, y: a.y + (b.y - a.y) * part / count },
+              { x: a.x + (b.x - a.x) * (part + 1) / count, y: a.y + (b.y - a.y) * (part + 1) / count },
+              { color: wire.color, width: wire.thickness, ratio, dash: wireDashArray(wire) });
           }
         }
-        canvasLineStyle(context, wire); context.globalAlpha = wire.opacity * (hidden ? visual.occludedOpacity : 1); context.stroke();
       }
     }
     if (options.vertices) for (const hidden of options.showHiddenVertices ? [true, false] : [false]) {

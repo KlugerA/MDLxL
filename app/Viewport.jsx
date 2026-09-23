@@ -205,7 +205,7 @@ export default function Viewport(inputProps) {
 
   useEffect(() => {
     let renderer;
-    try { renderer = new THREE.WebGLRenderer({ antialias: graphics.antialias, alpha: false, powerPreference: 'high-performance' }); }
+    try { renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'high-performance' }); }
     catch (cause) { setError(`The 3D viewport could not start: ${cause.message}. Model data and the other editors remain available.`); return; }
     setError('');
     renderer.setPixelRatio(viewportPixelRatio(graphics, window.devicePixelRatio));

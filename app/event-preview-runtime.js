@@ -4,6 +4,7 @@ import { allNodes, sampleNodeMatrices } from '../src/animation.js';
 import { EVENT_TABLE_PATHS, parseEventName, parseSlk, resolveEventDefinition, activeEventInstances, sampleEventDecal } from './event-preview-data.js';
 import { parseEventRenderModel } from './event-render-model.js';
 import { resetPreviewEffects } from './warcraft-preview-adapter.js';
+import { billboardCameraCorrection } from './preview-pose.js';
 
 const pathKey = path => String(path || '').replaceAll('/', '\\').toLowerCase();
 const readText = bytes => new TextDecoder().decode(bytes);
@@ -187,7 +188,7 @@ export function createEventPreview({ gl, model, modelPath, textureAssets, textur
         while (remaining > 1e-6) { const step = Math.min(20,remaining); native.update(step); remaining -= step; }
         native.setFrame(start + item.ageMs); native.update(0); state.age = item.ageMs;
         const inverse = state.world.clone().invert(), position = camera.position.clone().applyMatrix4(inverse);
-        const rotation = new Quaternion().setFromRotationMatrix(inverse).multiply(camera.quaternion).multiply(new Quaternion().setFromAxisAngle(new Vector3(0,1,0),-Math.PI/2));
+        const rotation = new Quaternion().setFromRotationMatrix(inverse).multiply(camera.quaternion).multiply(billboardCameraCorrection);
         native.setCamera(position.toArray(),rotation.toArray());
         const color = new Color(teamColor || '#ff0000'); native.setTeamColor([color.r,color.g,color.b]);
         const matrix = new Matrix4().multiplyMatrices(camera.matrixWorldInverse,state.world);

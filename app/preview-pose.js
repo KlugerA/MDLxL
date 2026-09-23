@@ -1,7 +1,14 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { allNodes, sampleNodeMatrices } from '../src/animation.js';
 
-const correction = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.PI / 2);
+// Warcraft billboards face along model +X while models use +Z as up.
+// Map model X to camera depth and model Z to camera up to avoid a quarter-turn roll.
+export const billboardCameraCorrection = new Quaternion().setFromRotationMatrix(new Matrix4().set(
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  1, 0, 0, 0,
+  0, 0, 0, 1,
+));
 const aroundPivot = (q, pivot) => new Matrix4().makeTranslation(...pivot.toArray()).multiply(new Matrix4().makeRotationFromQuaternion(q)).multiply(new Matrix4().makeTranslation(...pivot.clone().negate().toArray()));
 const inherited = (matrix, flags) => {
   if (!(flags & 7)) return matrix;
@@ -16,7 +23,7 @@ export function samplePreviewMatrices(model, frame, sequence, globalTime, camera
   const base = sampleNodeMatrices(model, frame, sequence, globalTime);
   const nodes = allNodes(model), byId = new Map(nodes.map(n => [n.ObjectId, n]));
   if (!camera || !nodes.some(n => n.Flags & 120)) return base;
-  const out = new Map(), visiting = new Set(), cameraQ = camera.quaternion.clone().multiply(correction);
+  const out = new Map(), visiting = new Set(), cameraQ = camera.quaternion.clone().multiply(billboardCameraCorrection);
   function resolve(id) {
     if (out.has(id)) return out.get(id);
     const node = byId.get(id); if (!node || visiting.has(id)) return new Matrix4(); visiting.add(id);
