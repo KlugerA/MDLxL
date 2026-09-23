@@ -6,6 +6,12 @@ const hash = value => crypto.createHash('sha256').update(value).digest('hex').sl
 const normalized = value => String(value || '').replaceAll('/','\\').toLowerCase();
 const imageKey = value => normalized(value).replace(/\.(?:dds|blp)$/i,'');
 const title = value => value.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/[_-]/g,' ');
+function textureVariant(sourcePath) {
+  const source = sourcePath.toLowerCase();
+  if (/(?:^|[\\/:])_de\.w3mod:|(?:^|[\\/])de\.w3addon[\\/]/.test(source)) return 'forsaken-kingdom';
+  if (/(?:^|[\\/:])_hd\.w3mod:|(?:^|[\\/])hd\.w3addon[\\/]/.test(source)) return 'reforged';
+  return source.startsWith('war3.w3mod:') ? 'classic' : 'unknown';
+}
 
 /** No model data is opened here. Custom textures are listed only beside an already-open model. */
 class TextureLibrary {
@@ -45,7 +51,7 @@ class TextureLibrary {
           const logical = sourcePath.replace(/^war3\.w3mod:/i,''), classic = /^war3\.w3mod:/i.test(sourcePath) && !logical.includes(':');
           const annotation = classic ? metadata.get(imageKey(logical)) : null;
           const leaf = logical.split(/[\\:]/).at(-1), nativeId = normalized(sourcePath);
-          const variant = /(?:^|:)_hd\.w3mod:/i.test(sourcePath) || /^_addons/i.test(sourcePath) ? 'reforged' : 'classic';
+          const variant = textureVariant(sourcePath);
           native.push({...annotation,id:'native:' + hash(nativeId),name:annotation?.name || title(leaf.replace(/\.[^.]+$/,'')),path:annotation?.path || logical,lookupName:sourcePath,sourcePath,sourceKey:source.key,sourceFolder:source.folder,folder:sourcePath.slice(0,sourcePath.length-leaf.length).replace(/[\\:]$/,''),source:'native',variant,cacheKey:hash(source.key+'|'+nativeId),kinds:annotation?.kinds || (/(?:^|\\)replaceabletextures\\commandbuttons/i.test(sourcePath)?['icons']:['other']),tags:annotation?.tags || [],models:annotation?.models || [],races:annotation?.races || [],available:true});
         }
         native.sort((a,b)=>(b.priority||0)-(a.priority||0)||a.sourcePath.localeCompare(b.sourcePath));

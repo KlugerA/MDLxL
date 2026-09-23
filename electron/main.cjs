@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, nativeTheme } = require('electron');
 const APPLICATION_THEMES = require('../src/application-themes.json');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -211,6 +211,10 @@ async function textureLibraryContext(payload){
 ipcMain.handle('texture:library',(_,payload)=>{
   const operation=textureLibraryContext(payload).then(context=>context.catalog);
   textureOperations.add(operation);operation.finally(()=>textureOperations.delete(operation)).catch(()=>{});return operation;
+});
+ipcMain.handle('texture:copyPath',(_,value)=>{
+  if(typeof value!=='string'||!value||value.length>1024)throw Error('Invalid texture path.');
+  clipboard.writeText(value);
 });
 ipcMain.handle('texture:preloadStatus',()=>texturePreviews.getStatus());
 ipcMain.handle('texture:preloadStart',(event,payload)=>{
