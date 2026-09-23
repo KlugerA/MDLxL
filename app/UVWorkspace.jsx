@@ -98,7 +98,7 @@ function GeosetPicker({ options, value, attention = false, onChoose, onHover }) 
 }
 
 export default function UVWorkspace({ model, materialModel = model, previewModel, revision = 0, eligibleSelection = {}, selectionByGeoset = {}, onSelectionChange,
-  onWorkingSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onEnableWrapping, textureAssets, teamColor, preferences, onPreferences,
+  onWorkingSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onWrappingChange, textureAssets, teamColor, preferences, onPreferences,
   draftCount = 0, onLibrary, onSavePreview, onRevertPreview, previewProps, readOnly = false, onExit }) {
   const [materialID, setMaterialID] = useState(null), [uvTool, setUVTool] = useState('select'), [foldDirection, setFoldDirection] = useState('right-to-left');
   const [selectingNew, setSelectingNew] = useState(false), [selectGeoset, setSelectGeoset] = useState(-1), [selectionDraft, setSelectionDraft] = useState({}), [hoveredGeoset, setHoveredGeoset] = useState(null);
@@ -222,9 +222,9 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   return <div className="uv-workspace" aria-label="UV wrapper workspace">
     <header className="uv-workspace-header" style={{ '--uv-side-width': `${sidePercent}%` }}>
       <div className="uv-map-header"><strong>UV Wrapper</strong><UVGridControls value={uvGrid} onChange={changeUVGrid}>
-        <button type="button" disabled={readOnly || !onEnableWrapping || !imageLayers.length || wrappingEnabled}
-          title="Enable Wrap U and Wrap V for this material's image textures. Shared uses of these textures also repeat."
-          onClick={() => onEnableWrapping?.([...new Set(imageLayers.map(layer => layer.textureID))])}>{wrappingEnabled ? 'Wrapping Enabled' : 'Enable Wrapping'}</button>
+        <button type="button" disabled={readOnly || !onWrappingChange || !imageLayers.length}
+          title="Toggle Wrap U and Wrap V for this material's image textures. Applies to all uses of these textures."
+          onClick={() => onWrappingChange?.([...new Set(imageLayers.map(layer => layer.textureID))], !wrappingEnabled)}>{wrappingEnabled ? 'Disable Wrapping' : 'Enable Wrapping'}</button>
       </UVGridControls></div>
       <div className="uv-header-divider" aria-hidden="true"/>
       <div className="uv-header-actions"><label>Material <select aria-label="UV material" value={current?.materialID ?? ''} disabled={selectingNew} onChange={event => chooseMaterial(event.target.value)}>{materialEntries.map(entry => <option key={entry.materialID} value={entry.materialID}>{entry.label}</option>)}</select></label><span className="uv-material-summary">{current ? `${current.geosetIndices.length} geoset${current.geosetIndices.length === 1 ? '' : 's'} · UV ${current.coordId}` : 'No material for this selection'}</span><button disabled={readOnly} onClick={onLibrary}>Replace Texture…</button>{draftCount > 0 && <><button disabled={readOnly} onClick={onSavePreview}>Save texture</button><button disabled={readOnly} onClick={onRevertPreview}>Revert texture</button></>}<button onClick={onExit}>Exit UV Wrapper</button></div>

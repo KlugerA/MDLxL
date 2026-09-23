@@ -3,11 +3,11 @@ import { sampleTrack } from './animation.js';
 const finiteIndex = value => Number.isSafeInteger(value) && value >= 0;
 const uniqueIndices = values => [...new Set(Array.from(values || []).filter(finiteIndex))];
 
-/** Enable both repeat axes without changing other texture flags or UVs. */
-export function enableUVTextureWrapping(model, textureIDs) {
+/** Set both repeat axes without changing other texture flags or UVs. */
+export function setUVTextureWrapping(model, textureIDs, enabled) {
   for (const id of uniqueIndices(textureIDs)) {
     const texture = model.Textures?.[id];
-    if (texture && !texture.ReplaceableId && texture.Image?.trim()) texture.Flags = (texture.Flags || 0) | 3;
+    if (texture && !texture.ReplaceableId && texture.Image?.trim()) texture.Flags = enabled ? (texture.Flags || 0) | 3 : (texture.Flags || 0) & ~3;
   }
 }
 

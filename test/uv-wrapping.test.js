@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDemoDocument, openDocument } from '../src/editor-document.js';
-import { enableUVTextureWrapping, uvMaterialLayers } from '../src/uv-tools.js';
+import { setUVTextureWrapping, uvMaterialLayers } from '../src/uv-tools.js';
 
 test('material wrapping preserves unrelated flags, textures, materials and geometry through save and undo', () => {
   const doc = createDemoDocument();
@@ -16,7 +16,7 @@ test('material wrapping preserves unrelated flags, textures, materials and geome
   });
   const before = structuredClone(doc.model);
   const ids = uvMaterialLayers(doc.model, 0).map(layer => layer.textureID);
-  doc.apply('Enable UV texture wrapping', ['Textures'], model => enableUVTextureWrapping(model, ids));
+  doc.apply('Enable UV texture wrapping', ['Textures'], model => setUVTextureWrapping(model, ids, true));
   const expected = structuredClone(before); expected.Textures[1].Flags = 3; expected.Textures[2].Flags = 3;
   assert.deepEqual(doc.model, expected);
   for (const format of ['mdx', 'mdl']) {
@@ -25,10 +25,18 @@ test('material wrapping preserves unrelated flags, textures, materials and geome
   }
   doc.undo(); assert.deepEqual(doc.model, before);
   doc.redo(); assert.deepEqual(doc.model, expected);
+  doc.apply('Disable UV texture wrapping', ['Textures'], model => setUVTextureWrapping(model, ids, false));
+  const disabled = structuredClone(expected); disabled.Textures[1].Flags = 0; disabled.Textures[2].Flags = 0;
+  assert.deepEqual(doc.model, disabled);
+  for (const format of ['mdx', 'mdl']) assert.deepEqual(openDocument(doc.serialize(format), `wrapping.${format}`).model.Textures, disabled.Textures);
+  doc.undo(); assert.deepEqual(doc.model, expected);
+  doc.redo(); assert.deepEqual(doc.model, disabled);
 });
 
-test('enabling repeat retains unknown texture flag bits', () => {
+test('enabling and disabling repeat retain unknown texture flag bits', () => {
   const model = { Textures: [{ Image: 'Body.blp', Flags: 4 }] };
-  enableUVTextureWrapping(model, [0]);
+  setUVTextureWrapping(model, [0], true);
   assert.equal(model.Textures[0].Flags, 7);
+  setUVTextureWrapping(model, [0], false);
+  assert.equal(model.Textures[0].Flags, 4);
 });

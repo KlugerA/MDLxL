@@ -27,7 +27,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
       window.uvState = () => {
         const root = document.querySelector('.uv-workspace');
         let fiber = root[Object.keys(root).find(key=>key.startsWith('__reactFiber'))];
-        for (;fiber;fiber=fiber.return) if (fiber.memoizedProps?.onEnableWrapping) return fiber.memoizedProps;
+        for (;fiber;fiber=fiber.return) if (fiber.memoizedProps?.onWrappingChange) return fiber.memoizedProps;
         throw Error('UV workspace props not found');
       };
       window.nativeState = () => {
@@ -57,21 +57,29 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     assert.deepEqual(order.slice(0,2), ['Enable Wrapping','Grid']);
     await uv.getByRole('button', {name:'Enable Wrapping', exact:true}).click();
     await uv.waitForFunction(()=>sampling()?.every(v=>v===10497)); // REPEAT
-    assert.ok(await uv.getByRole('button',{name:'Wrapping Enabled',exact:true}).isDisabled());
+    assert.ok(await uv.getByRole('button',{name:'Disable Wrapping',exact:true}).isEnabled());
     const after = await uv.evaluate(()=>JSON.stringify(uvState().model));
     const expected = JSON.parse(shifted); expected.Textures[1].Flags |= 3;
     assert.deepEqual(JSON.parse(after), expected);
     await uv.screenshot({path:path.join(out,'enabled.png')});
+    // Both states stay clickable: exercise the actual button in each direction.
+    await uv.getByRole('button',{name:'Disable Wrapping',exact:true}).click();
+    await uv.waitForFunction(()=>sampling()?.every(v=>v===33071));
+    assert.equal(await uv.evaluate(()=>JSON.stringify(uvState().model)), shifted);
+    await uv.screenshot({path:path.join(out,'disabled.png')});
+    await uv.getByRole('button',{name:'Enable Wrapping',exact:true}).click();
+    await uv.waitForFunction(()=>sampling()?.every(v=>v===10497));
+    assert.equal(await uv.evaluate(()=>JSON.stringify(uvState().model)), after);
     await uv.keyboard.press('Control+z');
     await uv.waitForFunction(()=>sampling()?.every(v=>v===33071));
     assert.equal(await uv.evaluate(()=>JSON.stringify(uvState().model)), shifted);
     await uv.keyboard.press('Control+y');
     await uv.waitForFunction(()=>sampling()?.every(v=>v===10497));
     assert.equal(await uv.evaluate(()=>JSON.stringify(uvState().model)), after);
-    await uv.keyboard.press('Control+z'); await uv.keyboard.press('Control+z');
+    for (let i=0;i<4;i++) await uv.keyboard.press('Control+z');
     await uv.waitForFunction(value=>JSON.stringify(uvState().model)===value,before);
     assert.ok(fs.readFileSync(input).equals(original));
-    console.log('PASS: button placement, out-of-tile edit, native WebGL clamp -> repeat, preserved model data, undo/redo, original file unchanged');
+    console.log('PASS: button placement, out-of-tile edit, repeated enable/disable clicks, native WebGL clamp -> repeat -> clamp -> repeat, preserved model data, undo/redo, original file unchanged');
   } catch (error) {
     if (uv) { await uv.screenshot({path:path.join(out,'failure.png')}); console.error(await uv.evaluate(()=>({sampling:sampling(),flags:uvState().model.Textures.map(t=>t.Flags),nativeFlags:nativeState()?.model.Textures.map(t=>t.Flags),revision:uvState().revision}))); }
     else console.error(await (await app.firstWindow()).locator('body').innerText());
