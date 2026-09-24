@@ -271,8 +271,8 @@ export default function App() {
     }
   }, [model, doc.revision, sequence, globalSeqId, animationDomain]);
   const selectionHistory = useMemo(() => new SelectionHistory(doc), [doc]);
-  const selectionState = { selectable, selection, hidden, activeGeoset, uvSet };
-  useLayoutEffect(() => { selectionHistory.settle(selectionState); });
+  const selectionState = { selectable, selection, hidden, activeGeoset, uvSet, selectedNodeIds };
+  useLayoutEffect(() => { if (selectionHistory.observe(selectionState)) setTick(value => value + 1); }, [selectionHistory, selectable, selection, hidden, activeGeoset, uvSet, selectedNodeIds, doc.revision]);
   latest.current = { session, doc, model, selection, selectable, hidden, mode, dialog, settingsTab, preferencesReady };
   const refresh = () => setTick(value => value + 1);
   const say = (message, error = false) => setStatus((error ? 'Error: ' : '') + message);
@@ -705,6 +705,7 @@ export default function App() {
     if (savingRef.current) return;
     try {
       if(mode==='paint'){
+        window.dispatchEvent(new CustomEvent('mdlxl-paint-flush'));
         const entry=session.paintProject&&travelPaintHistory(session.paintProject,redo);if(!entry){say(paintMessage(redo?'paint.redoEmpty':'paint.undoEmpty'));return;}
         refresh();say(redo?paintMessage('paint.redo'):paintMessage('paint.undo'));return;
       }
@@ -718,7 +719,7 @@ export default function App() {
         try { validateUVPreviewGuard(doc.model, session.uvPreviews, guard); }
         catch { selectionHistory.travel(redo ? 'undo' : 'redo', restored); refresh(); say('Save or Revert temporary UV textures before undoing a geometry structure change.'); return; }
       }
-      setSelection(restored.selection); setHidden(restored.hidden); setSelectable(restored.selectable); setActiveGeoset(restored.activeGeoset); setUvSet(restored.uvSet); setLiveUV(null); refresh(); say(redo ? 'Redo' : 'Undo');
+      setSelection(restored.selection); setHidden(restored.hidden); setSelectable(restored.selectable); setActiveGeoset(restored.activeGeoset); setUvSet(restored.uvSet); if(restored.selectedNodeIds)setSelectedNodeIds(restored.selectedNodeIds); setLiveUV(null); refresh(); say(redo ? 'Redo' : 'Undo');
     } catch (error) { refresh(); say(error.message, true); }
   };
   const transform = payload => { if (restPose) { if (restrictions.translation && payload.translation?.some(value=>value!==0) || restrictions.rotation && payload.rotation?.some(value=>value!==0) || restrictions.scaling && payload.scale?.some(value=>value!==1)) return false; if(payload.translation)payload={...payload,translation:constrainMovementVector(payload.translation,{workplaneEnabled,workplane})}; } const picked = payload.selections || validSelection; const result = edit('Transform vertices', ['Geosets'], m => { for (const [gi, ids] of Object.entries(picked)) if (ids.length) transformVertices(m.Geosets[gi], ids, payload.translation || [0, 0, 0], payload.scale || [1, 1, 1], payload.rotation || [0, 0, 0], payload.pivot || centroid, {allowSingularScale:payload.allowSingularScale===true}); }); return result; };
@@ -872,7 +873,7 @@ export default function App() {
     if (id==='anchorSelect') return editable && mode === 'vertices' && tool === 'scale' && selectionCount > 1;
     if (rigWorkspace && ['select','translate','rotate','scale'].includes(id)) return !movementRestricted(id === 'translate' ? 'move' : id, restrictions) && (!restPose || ['select','translate'].includes(id));
     if (id==='exit') return !!window.desktop;
-    if (['undo','redo'].includes(id)) return id==='undo'?doc.canUndo:doc.canRedo;
+    if (['undo','redo'].includes(id)) return mode==='paint' ? !!session.paintProject?.history?.[id==='undo'?'undo':'redo']?.length : id==='undo'?doc.canUndo:doc.canRedo;
     if (mode === 'animation' && ['Collapse','Delete vertices'].includes(id)) return !doc.readOnly && !saving;
     if(['forge','bitsAndParts','particles','GeosetAnims','convertVersion'].includes(id))return !doc.readOnly&&!saving;
     if(id.startsWith('shape:'))return !doc.readOnly&&!saving&&selectable.size>0;
@@ -897,7 +898,7 @@ export default function App() {
   }
   // Playback time changes do not change available commands or shortcut bindings.
   const settingsCommands = ['settings','warmkeys','graphics','captureSettings','appearanceSettings','configurationSettings','gridSettings','gameDataSettings'];
-  const commandCatalog = useMemo(() => COMMANDS.map(command => ({...command,label: mode === 'bones' ? ({ rotate: 'Hard Bind', 'Delete vertices': 'Delete object', 'Create triangle': 'Attach', Collapse: 'Soft Bind' }[command.id] || command.label) : command.label,allowInModal:settingsCommands.includes(command.id),enabled:commandEnabled(command.id)})), [doc, doc.revision, mode, tool, sequence, validSelection, selectable, hiddenCount, selectionCount, selectedNodeIds, singleRigNode, selectedBone, parentBone, multipleNodes, selectedFaces, geoset, clipboard.current, restrictions, restPose, rigWorkspace, cleanAnimationPreview, saving, repairBlocked, repairReceipt]);
+  const commandCatalog = useMemo(() => COMMANDS.map(command => ({...command,scope:['undo','redo'].includes(command.id)?'global':command.scope,label: mode === 'bones' ? ({ rotate: 'Hard Bind', 'Delete vertices': 'Delete object', 'Create triangle': 'Attach', Collapse: 'Soft Bind' }[command.id] || command.label) : command.label,allowInModal:settingsCommands.includes(command.id),enabled:commandEnabled(command.id)})), [doc, doc.revision, doc.historyStats.undoSteps, doc.historyStats.redoSteps, mode, tool, sequence, validSelection, selectable, hiddenCount, selectionCount, selectedNodeIds, singleRigNode, selectedBone, parentBone, multipleNodes, selectedFaces, geoset, clipboard.current, restrictions, restPose, rigWorkspace, cleanAnimationPreview, saving, repairBlocked, repairReceipt, session.paintProject?.revision]);
   const runCommand = id => { if(commandEnabled(id)) { if(repairBlocked && id==='saveAs') save(true); else commands.current[id]?.(); } };
   const runLatest = useRef(runCommand); runLatest.current = runCommand;
 
@@ -999,7 +1000,7 @@ export default function App() {
     <div className="classic-toolbar">
       <div className="classic-toolbar-group"><Tool action="new" icon="new-document" title="New" onClick={() => commands.current.new()}/><Tool action="open" icon="sb_open" title="Open" onClick={open}/><Tool action="save" icon="sb_save" title="Save" onClick={() => save()}/></div>
       <div className="classic-toolbar-group">{[['work', 'sb_cross', 'Work mode'], ['zoom', 'sb_zoom', 'Zoom'], ['rotate', 'sb_rot', 'Camera rotation'], ['move', 'sb_move', 'Move camera']].map(([value, icon, title]) => <Tool action={`camera:${value}`} key={value} icon={icon} title={title} active={cameraMode === value} onClick={() => setCameraMode(value)}/>)}</div>
-      <div className="classic-toolbar-group"><Tool action="undo" icon="sb_undo" title="Undo" disabled={!doc.canUndo} onClick={() => undo(false)}/><Tool action="redo" icon="sb_undo" flip title="Redo" disabled={!doc.canRedo} onClick={() => undo(true)}/><Tool action="copy" icon="sb_copy" title="Copy" disabled={mode!=='animation'&&!selectable.size} onClick={copy}/><Tool action="paste" icon="sb_paste" title="Paste" disabled={doc.readOnly||(mode!=='animation'&&!clipboard.current)} onClick={() => paste()}/></div>
+      <div className="classic-toolbar-group"><Tool action="undo" icon="sb_undo" title="Undo" disabled={!commandEnabled('undo')} onClick={() => undo(false)}/><Tool action="redo" icon="sb_undo" flip title="Redo" disabled={!commandEnabled('redo')} onClick={() => undo(true)}/><Tool action="copy" icon="sb_copy" title="Copy" disabled={mode!=='animation'&&!selectable.size} onClick={copy}/><Tool action="paste" icon="sb_paste" title="Paste" disabled={doc.readOnly||(mode!=='animation'&&!clipboard.current)} onClick={() => paste()}/></div>
       <div className="classic-toolbar-group toolbar-visibility"><button aria-pressed={visUI} onClick={() => setVisUI(value => !value)}>{visUI ? 'XL' : 'Vis'}</button><button data-warmkey="hide" onClick={hide} disabled={!selectionCount}>Hide</button><button data-warmkey="show" onClick={() => setHidden({})} disabled={!hiddenCount}>Show</button></div>
       <div className="classic-toolbar-group toolbar-modules"><Tool action="forge" icon="wc3-forge.gif" title="Forge" disabled={doc.readOnly||saving} onClick={()=>setDialog({type:'forge'})}/><Tool action="bitsAndParts" icon="wc3-bits-and-parts" title="BitsAndParts / Clockwork" disabled={doc.readOnly||saving} onClick={()=>setDialog({type:'bitsAndParts'})}/><Tool action="optimizeModel" icon="wc3-optimize" title="Optimize Model" disabled={!commandEnabled('optimizeModel')} onClick={()=>setDialog({type:'optimizeModel'})}/><PressedKeysTool icon={pressedKeysIcon} active={preferences.showPressedKeys} onClick={()=>commands.current.pressedKeys()}/><Tool action="textureLibrary" icon="wc3-library" title="Material and Texture Library" onClick={() => openLibrary()}/></div>
 

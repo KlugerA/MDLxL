@@ -349,7 +349,7 @@ export class EditorDocument {
     if (this._applying) throw new Error('Cannot undo inside a document edit.');
     const state = this._historyStore.undo((changes, direction) => this._applyHistory(changes, direction));
     if (!state) return false;
-    this.revision++;
+    if (state.changes.length) this.revision++;
     this._recordHistory({ label: `Undo: ${state.label}`, sections: state.sections, revision: this.revision });
     return true;
   }
@@ -357,7 +357,7 @@ export class EditorDocument {
     if (this._applying) throw new Error('Cannot redo inside a document edit.');
     const state = this._historyStore.redo((changes, direction) => this._applyHistory(changes, direction));
     if (!state) return false;
-    this.revision++;
+    if (state.changes.length) this.revision++;
     this._recordHistory({ label: `Redo: ${state.label}`, sections: state.sections, revision: this.revision });
     return true;
   }

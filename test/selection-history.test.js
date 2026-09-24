@@ -170,3 +170,43 @@ test('removing a UV layer restores the original active coordinate set when undon
   assert.deepEqual(history.travel('undo', after), initial);
   assert.deepEqual(history.travel('redo', initial), after);
 });
+
+test('selection-only vertex, UV and bone picks share document undo order without dirtying the model', () => {
+  const doc = createDemoDocument(), history = new SelectionHistory(doc);
+  const nodeIds = doc.model.Nodes.filter(Boolean).slice(0, 2).map(node => node.ObjectId);
+  const first = ui({ 0: [0] }, { selectedNodeIds: [] });
+  const second = ui({ 0: [1, 2] }, { selectedNodeIds: [] });
+  const third = ui({ 0: [1, 2] }, { selectedNodeIds: nodeIds.slice(0, 1) });
+  history.observe(first);
+  history.observe(second);
+  history.observe(third);
+  assert.equal(doc.historyStats.undoSteps, 2);
+  assert.equal(doc.revision, 0);
+  assert.equal(doc.dirty, false);
+  assert.deepEqual(history.travel('undo', third), second);
+  assert.deepEqual(history.travel('undo', second), first);
+  assert.deepEqual(history.travel('redo', first), second);
+  assert.deepEqual(history.travel('redo', second), third);
+  assert.equal(doc.revision, 0, 'selection travel does not rebuild an unchanged model');
+  assert.equal(doc.dirty, false);
+});
+
+test('selection picks interleave with model edits and survive recovery and redo replacement', () => {
+  const doc = createDemoDocument(), history = new SelectionHistory(doc);
+  const first = ui({ 0: [0] }), second = ui({ 0: [2] });
+  history.observe(first);
+  history.observe(second);
+  edit(history, second, 'Move vertex', model => { model.Geosets[0].Vertices[0] += 3; });
+  history.observe(second);
+  const third = ui({ 0: [3] });
+  history.observe(third);
+  const recovered = EditorDocument.restoreRecoveryState(doc.captureRecoveryState());
+  const recoveredHistory = new SelectionHistory(recovered);
+  assert.deepEqual(recoveredHistory.travel('undo', third), second);
+  assert.deepEqual(recoveredHistory.travel('undo', second), second);
+  assert.deepEqual(recoveredHistory.travel('undo', second), first);
+  assert.deepEqual(recoveredHistory.travel('redo', first), second);
+  recoveredHistory.observe(third);
+  assert.equal(recovered.canRedo, false);
+  assert.deepEqual(recoveredHistory.travel('undo', third), second);
+});
