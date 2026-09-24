@@ -16,7 +16,7 @@ test('Black is short and the collapsed toolbar stays compact',()=>{
   assert.match(css,/\.classic-toolbar \.quick-display-options label\{[^}]*font-size:9\.5px/);
   assert.ok(quick.indexOf('>Textured View</button>')<quick.indexOf('>Clear</button>'));
   assert.ok(quick.indexOf('>Clear</button>')<quick.indexOf('>Reveal</button>'));
-  for(const action of ['cleanView','grid:small','grid:xz','grid:yz','grid:xy','axes'])assert.match(quick,new RegExp(`HIDDEN_QUICK_ACTIONS = new Set\\(\\[[^\\]]*'${action}'`));
+  for(const action of ['cleanView','grid:small','grid:xz','grid:yz','grid:xy','axes','frameSelection'])assert.match(quick,new RegExp(`HIDDEN_QUICK_ACTIONS = new Set\\(\\[[^\\]]*'${action}'`));
 });
 
 test('Vis is a reversible presentation toggle, not a model or editing command',()=>{
