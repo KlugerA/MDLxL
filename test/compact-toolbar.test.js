@@ -6,11 +6,12 @@ const require=createRequire(import.meta.url);
 const app=readFileSync(new URL('../app/App.jsx',import.meta.url),'utf8');
 const css=readFileSync(new URL('../app/portrait-view.css',import.meta.url),'utf8');
 
-test('Black is short and the toolbar plus quick controls cannot wrap',()=>{
+test('Black is short and the collapsed toolbar stays compact',()=>{
   assert.match(app,/row.index === null \? row.name :/);
   assert.doesNotMatch(app,/Neutral Hostile/);
   assert.match(css,/\.classic-app>\.classic-toolbar\{flex-wrap:nowrap\}/);
   assert.match(css,/\.classic-toolbar \.quick-display\{[^}]*flex-wrap:nowrap/);
+  assert.match(css,/\.classic-toolbar \.quick-display\[data-expanded="true"\]\{[^}]*flex-wrap:wrap/);
 });
 
 test('Vis is a reversible presentation toggle, not a model or editing command',()=>{
@@ -22,7 +23,7 @@ test('Vis is a reversible presentation toggle, not a model or editing command',(
   assert.match(group,/onClick=\{hide\}/);
   assert.match(group,/onClick=\{\(\) => setHidden\(\{\}\)\}/);
   assert.match(css,/data-vis-ui\]>\.classic-modules/);
-  assert.match(css,/quick-display>:nth-child\(n\+3\)/);
+  assert.match(css,/quick-display>:not\(:last-child\):not\(:nth-last-child\(2\)\)/);
   assert.doesNotMatch(css,/data-vis-ui[^{}]*portrait-toolbar/);
 });
 

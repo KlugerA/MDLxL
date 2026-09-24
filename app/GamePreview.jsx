@@ -414,6 +414,18 @@ export default function GamePreview(inputProps) {
     };
     canvas.addEventListener('pointermove', nodePointerMove, true); canvas.addEventListener('pointerup', finishNodeGesture, true); canvas.addEventListener('pointercancel', finishNodeGesture, true); canvas.addEventListener('keydown', cancelNodeGesture, true);
     canvas.addEventListener('pointerdown', pointerDown, true); canvas.addEventListener('pointermove', suppressAdjustedMove, true); canvas.addEventListener('pointerup', finishLeftGesture, true); canvas.addEventListener('pointercancel', finishLeftGesture, true);
+    let viewHoveredGeoset = null;
+    const hoverGeoset = event => {
+      const p = latest.current;
+      const rect = canvas.getBoundingClientRect();
+      const hit = p.highlightSelection && !nodeGesture && !selectionGesture && p.onHoverGeoset
+        ? pickPreviewGeoset(projectPreviewGeosets(posedGeosets, camera, rect.width, rect.height), event.clientX - rect.left, event.clientY - rect.top)
+        : null;
+      const next = hit?.index ?? null;
+      if (viewHoveredGeoset !== next) { viewHoveredGeoset = next; p.onHoverGeoset?.(next); }
+    };
+    const leaveGeoset = () => { if (viewHoveredGeoset !== null) { viewHoveredGeoset = null; latest.current.onHoverGeoset?.(null); } };
+    canvas.addEventListener('pointermove', hoverGeoset); canvas.addEventListener('pointerleave', leaveGeoset);
     const bounds = new THREE.Box3(), point = new THREE.Vector3();
     for (const geo of ownedModel.Geosets) for (let i = 0; i < geo.Vertices.length; i += 3) bounds.expandByPoint(point.fromArray(geo.Vertices, i));
     if (bounds.isEmpty()) bounds.set(new THREE.Vector3(-50, -50, 0), new THREE.Vector3(50, 50, 100));
@@ -671,7 +683,7 @@ export default function GamePreview(inputProps) {
       const getPoseMatrices = () => poseMatrices ||= new Map((native.rendererData?.nodes || []).flatMap((node, index) => node?.matrix ? [[index, new THREE.Matrix4().fromArray(node.matrix)]] : []));
       const hidden = new Set(p.hiddenGeosets || []);
       const presentationGuides = p.presentation === 'preview' && previewOverlaySettings(p.previewOverlay).mode !== 'none';
-      const needsGeometry = presentationGuides || p.onSelectionChange || p.onSelectNodes || p.onInspectGeoset || overlayOptions.normals || overlayOptions.wires || overlayOptions.vertices || Object.values(p.selectionByGeoset || {}).some(ids => ids.length || ids.size);
+      const needsGeometry = presentationGuides || p.onSelectionChange || p.onSelectNodes || p.onInspectGeoset || p.highlightSelection && p.onHoverGeoset || overlayOptions.normals || overlayOptions.wires || overlayOptions.vertices || Object.values(p.selectionByGeoset || {}).some(ids => ids.length || ids.size);
       if (needsGeometry) {
         const cacheable = !p.playing && !nodeGesture && !hasBillboardedNodes;
         const cacheKey = `${native.getFrame()}:${poseSequence}:${globalClock}:${!!overlayOptions.normals}`;
@@ -687,7 +699,7 @@ export default function GamePreview(inputProps) {
         if (hoverCanvas.width !== canvas.width) hoverCanvas.width = canvas.width;
         if (hoverCanvas.height !== canvas.height) hoverCanvas.height = canvas.height;
         const matrices=getPoseMatrices();
-        drawGeosetHighlight(hoverCanvas.getContext('2d'),hovered.Faces,skinGeoset(hovered,matrices),camera,canvas.width,canvas.height);
+        drawGeosetHighlight(hoverCanvas.getContext('2d'),hovered.Faces,skinGeoset(hovered,matrices),camera,canvas.width,canvas.height,viewportAppearanceOptions(p.preferences).geosetHighlight);
       } else if (hoverCanvas) { hoverCanvas.remove(); hoverCanvas=null; }
       if (presentationGuides || overlayOptions.normals || overlayOptions.wires || overlayOptions.vertices || Object.values(p.selectionByGeoset || {}).some(ids => ids.length || ids.size)) {
         if (!geometryCanvas) { geometryCanvas = ownerDocument.createElement('canvas'); geometryCanvas.dataset.geometryOverlay = ''; geometryCanvas.style.cssText = 'position:absolute;z-index:20;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(geometryCanvas); }
@@ -784,7 +796,7 @@ export default function GamePreview(inputProps) {
         ? { camera:portraitBackup.camera, view:portraitBackup.appliedView, perspective:portraitBackup.perspective.clone(), ortho:portraitBackup.ortho.clone(), target:portraitBackup.target.clone() }
         : { camera:camera === ortho ? 'ortho' : 'perspective', view:state.appliedView, perspective:perspective.clone(), ortho:ortho.clone(), target:controls.target.clone() };
       if (latest.current.cameraHandoff) latest.current.cameraHandoff.current = cameraMemory.current;
-      disposed = true; latest.current.onCaptureReady?.(null); backgroundCanvas.remove(); hoverCanvas?.remove(); connectorCanvas?.remove(); nodeCanvas?.remove(); geometryCanvas?.remove(); cameraCanvas?.remove(); scheduler.dispose(); ownerDocument.removeEventListener('visibilitychange', scheduler.sync); window.removeEventListener('mdlvis-frame', fit); window.removeEventListener('mdlxl-view-camera', viewCamera); unbindScroll(); observer?.disconnect(); canvas.removeEventListener('pointerdown', pointerDown, true); canvas.removeEventListener('pointermove', suppressAdjustedMove, true); canvas.removeEventListener('pointerup', finishLeftGesture, true); canvas.removeEventListener('pointercancel', finishLeftGesture, true); canvas.removeEventListener('pointermove', nodePointerMove, true); canvas.removeEventListener('pointerup', finishNodeGesture, true); canvas.removeEventListener('pointercancel', finishNodeGesture, true); canvas.removeEventListener('keydown', cancelNodeGesture, true); controls.removeEventListener('change', cameraChanged); controls.removeEventListener('start', cameraStarted); controls.removeEventListener('end', cameraEnded); controls.dispose(); canvas.removeEventListener('webglcontextlost', contextLost); runtime.current = null; rigMarkers.dispose(); presentation.dispose(); nativeBackground.dispose(); eventPreview.dispose(); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas);
+      disposed = true; leaveGeoset(); canvas.removeEventListener('pointermove', hoverGeoset); canvas.removeEventListener('pointerleave', leaveGeoset); latest.current.onCaptureReady?.(null); backgroundCanvas.remove(); hoverCanvas?.remove(); connectorCanvas?.remove(); nodeCanvas?.remove(); geometryCanvas?.remove(); cameraCanvas?.remove(); scheduler.dispose(); ownerDocument.removeEventListener('visibilitychange', scheduler.sync); window.removeEventListener('mdlvis-frame', fit); window.removeEventListener('mdlxl-view-camera', viewCamera); unbindScroll(); observer?.disconnect(); canvas.removeEventListener('pointerdown', pointerDown, true); canvas.removeEventListener('pointermove', suppressAdjustedMove, true); canvas.removeEventListener('pointerup', finishLeftGesture, true); canvas.removeEventListener('pointercancel', finishLeftGesture, true); canvas.removeEventListener('pointermove', nodePointerMove, true); canvas.removeEventListener('pointerup', finishNodeGesture, true); canvas.removeEventListener('pointercancel', finishNodeGesture, true); canvas.removeEventListener('keydown', cancelNodeGesture, true); controls.removeEventListener('change', cameraChanged); controls.removeEventListener('start', cameraStarted); controls.removeEventListener('end', cameraEnded); controls.dispose(); canvas.removeEventListener('webglcontextlost', contextLost); runtime.current = null; rigMarkers.dispose(); presentation.dispose(); nativeBackground.dispose(); eventPreview.dispose(); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas);
     };
   }, [rendererModel, rendererRevision, textureAssets, props.modelPath, graphics.antialias, graphics.particles, props.showParticles, graphics.lighting, graphics.textures, timelineStart, timelineEnd]);
 

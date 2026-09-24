@@ -1,13 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
+import VIEW_MENU from '../src/view-menu.json';
 import './portrait-view.css';
 
-export default function QuickDisplay({ overlays, shadows, particles, cleanAnimationPreview, onOverlay, onShadows, onParticles, onClear }) {
-  return <div className="quick-display" role="group" aria-label="Quick display">
-    <label><input type="checkbox" data-warmkey="shaded" checked={cleanAnimationPreview || shadows} disabled={cleanAnimationPreview} onChange={event => onShadows(event.target.checked)}/>Shadows</label>
-    {[['vertices', 'Vertices', 'showVertices'], ['wires', 'Wireframe', 'display:wires'], ['nodes', 'Nodes', 'display:nodes'], ['particles', 'Emitters', 'display:particles']].map(([key, label, action]) =>
-      <label key={key}><input type="checkbox" data-warmkey={action} checked={!!overlays[key]} disabled={cleanAnimationPreview} onChange={event => onOverlay(key, event.target.checked)}/>{label}</label>)}
-    <label><input type="checkbox" data-warmkey="showParticles" checked={particles} onChange={event => onParticles(event.target.checked)}/>Particles</label>
-    <label><input type="checkbox" data-warmkey="display:bones" checked={!!overlays.bones} disabled={cleanAnimationPreview} onChange={event => onOverlay('bones', event.target.checked)}/>Bones</label>
+export default function QuickDisplay({ checks, shadows, cleanAnimationPreview, onCommand, isEnabled, onShadows, onClear }) {
+  const [expanded, setExpanded] = useState(false);
+  return <div className="quick-display" data-expanded={expanded} role="group" aria-label="Quick display">
+    {expanded && <>
+      <label><input type="checkbox" data-warmkey="shaded" checked={cleanAnimationPreview || shadows} disabled={cleanAnimationPreview} onChange={event => onShadows(event.target.checked)}/>Shadows</label>
+      {VIEW_MENU.filter(Boolean).map(([label, action]) => ['frame', 'frameSelection'].includes(action)
+        ? <button key={action} data-warmkey={action} aria-pressed={!!checks[action]} disabled={!isEnabled(action)} onClick={() => onCommand(action)}>{label}</button>
+        : <label key={action}><input type="checkbox" data-warmkey={action} checked={!!checks[action]} disabled={!isEnabled(action)} onChange={() => onCommand(action)}/>{label}</label>)}
+    </>}
     <button title="Turn off quick-display options; no model data is removed" onClick={onClear}>Clear all</button>
+    <button aria-expanded={expanded} aria-label="View controls" onClick={() => setExpanded(value => !value)}>View</button>
   </div>;
 }

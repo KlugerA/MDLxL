@@ -171,3 +171,14 @@ test('theme applies to each owning document and leaves viewport background uncha
     assert.equal(target.variables.get('--visual-background'), '#808a90');
   }
 });
+
+test('geoset highlight is opt-in and keeps at least one hover source', () => {
+  const fresh = normalizePreferences();
+  assert.equal(fresh.highlightSelection, false);
+  assert.deepEqual(fresh.viewportAppearance.geosetHighlight, { color: '#39ff14', type: 'wire-vertices', viaView: true, viaSelection: true });
+  const selected = normalizePreferences({ highlightSelection: true, viewportAppearance: { geosetHighlight: { color: '#bada55', type: 'fill', viaView: false, viaSelection: true } } });
+  assert.equal(selected.highlightSelection, true);
+  assert.deepEqual(selected.viewportAppearance.geosetHighlight, { color: '#bada55', type: 'fill', viaView: false, viaSelection: true });
+  assert.deepEqual(normalizePreferences({ viewportAppearance: { geosetHighlight: { viaView: false, viaSelection: false } } }).viewportAppearance.geosetHighlight,
+    { color: '#39ff14', type: 'wire-vertices', viaView: true, viaSelection: false });
+});
