@@ -717,9 +717,8 @@ export default function Viewport(inputProps) {
       const selectedMap = selections(p), active = editableGeosets(p);
       const selectionKey = `${JSON.stringify(selectedMap, (_, value) => value instanceof Set ? [...value] : value)}|${[...active].join(',')}|${JSON.stringify(p.hiddenVertices, (_, value) => value instanceof Set ? [...value] : value)}|${p.mode}|${p.sequenceIndex}|${p.transformMode}|${JSON.stringify(visual)}`;
       const rgbState = vertexRgbPreviewState(p.model, { enabled: p.rgbPreview, sequenceIndex: p.rgbPreview ? p.rgbPreviewSequenceIndex : p.sequenceIndex, frame: state.frame, globalTime: state.globalTime });
-      const previewChanged = state.rgbPreviewSequence !== rgbState.sequenceIndex || state.rgbPreviewFrame !== rgbState.frame;
-      const changed = state.dirty || state.nodes.some(node => node.Flags & 120) || p.playing || state.sampledFrame !== state.frame || state.sampledSequence !== p.sequenceIndex || previewChanged || (showMarkers && !state.sampledSkeleton) || state.sampledExplicitOverlays !== overlays.explicit;
-      const animOptions = { interval: rgbState.interval, globalSequences: p.model?.GlobalSequences, globalTime: rgbState.globalTime };
+      const changed = state.dirty || state.nodes.some(node => node.Flags & 120) || p.playing || state.sampledFrame !== state.frame || state.sampledSequence !== p.sequenceIndex || (showMarkers && !state.sampledSkeleton) || state.sampledExplicitOverlays !== overlays.explicit;
+      const animOptions = { interval: p.model?.Sequences?.[p.sequenceIndex]?.Interval, globalSequences: p.model?.GlobalSequences, globalTime: state.globalTime };
       if (changed && p.model && !state.drag) {
         state.matrices = samplePreviewMatrices(p.model, state.frame, p.sequenceIndex, state.globalTime, camera);
         for (const entry of state.entries) {
@@ -733,7 +732,7 @@ export default function Viewport(inputProps) {
             normals.needsUpdate = true;
           } else entry.geometry.computeVertexNormals();
         }
-        state.sampledFrame = state.frame; state.sampledSequence = p.sequenceIndex; state.rgbPreviewSequence = rgbState.sequenceIndex; state.rgbPreviewFrame = rgbState.frame; state.sampledSkeleton = showMarkers; state.sampledExplicitOverlays = overlays.explicit; state.dirty = false;
+        state.sampledFrame = state.frame; state.sampledSequence = p.sequenceIndex; state.sampledSkeleton = showMarkers; state.sampledExplicitOverlays = overlays.explicit; state.dirty = false;
       }
       const hidden = p.hiddenGeosets instanceof Set ? p.hiddenGeosets : new Set(p.hiddenGeosets || []);
       for (let index = 0; index < state.entries.length; index++) {
@@ -741,7 +740,7 @@ export default function Viewport(inputProps) {
         const chosen = active.has(index), selection = selectionArray(selectedMap[index]);
         const hovered = p.hoveredGeoset === index;
         const geosetAnim = state.geosetAnims.get(index);
-        const alpha = rgbState.sequenceIndex >= 0 ? sampleTrack(geosetAnim?.Alpha, rgbState.frame, { ...animOptions, fallback: 1 }) : typeof geosetAnim?.Alpha === 'number' ? geosetAnim.Alpha : 1;
+        const alpha = p.sequenceIndex >= 0 ? sampleTrack(geosetAnim?.Alpha, state.frame, { ...animOptions, fallback: 1 }) : typeof geosetAnim?.Alpha === 'number' ? geosetAnim.Alpha : 1;
         entry.group.visible = hovered || (!hidden.has(index) && (alpha > .001 || p.mode !== 'textured'));
         entry.hoverWire.visible = hovered; entry.hoverPoints.visible = hovered;
         const pureWireframe = p.mode === 'wireframe' || p.mode === 'vertices';
@@ -769,23 +768,19 @@ export default function Viewport(inputProps) {
         for (let layerIndex = 0; layerIndex < entry.meshes.length; layerIndex++) {
           const mesh = entry.meshes[layerIndex], material = mesh.material, layer = entry.layers[layerIndex];
           applyPreviewMaterialLighting(material, lighting);
-          mesh.visible = (p.rgbPreview || p.mode !== 'wireframe' && p.mode !== 'vertices') && (p.mode === 'textured' || layerIndex === 0);
-          if (p.rgbPreview) entry.depth.visible = false;
-          const textureIndex = Math.round(sampleTrack(layer.TextureID, rgbState.frame, { ...animOptions, fallback: 0 }));
+          mesh.visible = !pureWireframe && (p.mode === 'textured' || layerIndex === 0);
+          const textureIndex = Math.round(sampleTrack(layer.TextureID, state.frame, { ...animOptions, fallback: 0 }));
           const textureInfo = p.model?.Textures?.[textureIndex];
           const textured = p.mode === 'textured' && renderGraphics.textures;
           const map = !textured || textureInfo?.ReplaceableId === 1 ? null : textureInfo?.ReplaceableId === 2 ? state.teamGlow : state.textures.get(textureIndex) || state.checker;
           if (material.map !== map) { material.map = map; material.needsUpdate = true; }
-          material.color.set(textured ? textureInfo?.ReplaceableId === 1 || textureInfo?.ReplaceableId === 2 ? p.teamColor : 0xffffff : COLORS[index % COLORS.length]);
+          material.color.set(textured ? textureInfo?.ReplaceableId === 1 || textureInfo?.ReplaceableId === 2 ? p.teamColor : 0xffffff : p.rgbPreview ? 0xffffff : COLORS[index % COLORS.length]);
           material.userData.geosetTint.value.set(1, 1, 1);
-          if (textured || p.rgbPreview) {
+          if (p.rgbPreview && !pureWireframe) {
             const sampled = sampleGeosetAnimation(p.model, index, rgbState.frame, rgbState.sequenceIndex, rgbState.globalTime);
-            // RGB preview is a tint, including for the untextured Team Color
-            // layer. Starting from white here discarded the selected team.
-            if (p.rgbPreview) material.color.set(textureInfo?.ReplaceableId === 1 || textureInfo?.ReplaceableId === 2 ? p.teamColor : 0xffffff).multiply(new THREE.Color(...sampled.color));
-            else material.userData.geosetTint.value.fromArray(sampled.color);
+            material.userData.geosetTint.value.fromArray(sampled.color);
           }
-          material.opacity = textured ? Math.max(0, Math.min(1, alpha * sampleTrack(layer.Alpha, rgbState.frame, { ...animOptions, fallback: 1 }))) : 1;
+          material.opacity = textured ? Math.max(0, Math.min(1, alpha * sampleTrack(layer.Alpha, state.frame, { ...animOptions, fallback: 1 }))) : 1;
           const transparent = textured && ((layer.FilterMode || 0) >= 2 || material.opacity < 1);
           if (material.transparent !== transparent) { material.transparent = transparent; material.needsUpdate = true; }
           // Clockwise faces are culled; counterclockwise winding is front-facing.
@@ -797,10 +792,10 @@ export default function Viewport(inputProps) {
           if (changed && Number.isInteger(layer.TVertexAnimId) && layer.TVertexAnimId >= 0) {
             const uv = mesh.geometry.attributes.uv, baseUV = mesh.userData.baseUV, textureAnim = p.model?.TextureAnims?.[layer.TVertexAnimId];
             uv.array.set(baseUV);
-            if (textureAnim && rgbState.sequenceIndex >= 0) {
-              const translation = new THREE.Vector3().fromArray(sampleTrack(textureAnim.Translation, rgbState.frame, { ...animOptions, fallback: [0, 0, 0] }));
-              const rotation = new THREE.Quaternion().fromArray(sampleTrack(textureAnim.Rotation, rgbState.frame, { ...animOptions, fallback: [0, 0, 0, 1], quaternion: true }));
-              const scale = new THREE.Vector3().fromArray(sampleTrack(textureAnim.Scaling, rgbState.frame, { ...animOptions, fallback: [1, 1, 1] }));
+            if (textureAnim && p.sequenceIndex >= 0) {
+              const translation = new THREE.Vector3().fromArray(sampleTrack(textureAnim.Translation, state.frame, { ...animOptions, fallback: [0, 0, 0] }));
+              const rotation = new THREE.Quaternion().fromArray(sampleTrack(textureAnim.Rotation, state.frame, { ...animOptions, fallback: [0, 0, 0, 1], quaternion: true }));
+              const scale = new THREE.Vector3().fromArray(sampleTrack(textureAnim.Scaling, state.frame, { ...animOptions, fallback: [1, 1, 1] }));
               const transform = new THREE.Matrix4().compose(translation, rotation, scale), value = new THREE.Vector3();
               for (let vertex = 0; vertex < uv.count; vertex++) { value.set(baseUV[vertex * 2], baseUV[vertex * 2 + 1], 0).applyMatrix4(transform); uv.setXY(vertex, value.x, value.y); }
             }
