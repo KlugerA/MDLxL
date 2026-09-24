@@ -21,6 +21,7 @@ const profile = value => Object.freeze({
   background: Object.freeze({ ...value.background }),
   quadView: Object.freeze({ background: Object.freeze({ ...value.background }), grid: Object.freeze(quadDefaults(value.background).grid) }),
   xrayVertices: value.xrayVertices === true,
+  geosetHighlight: Object.freeze({ color: '#39ff14', type: 'wire-vertices', viaView: true, viaSelection: true }),
 });
 
 // The Vanilla colors are sampled from the supplied MDLVis reference: its
@@ -89,6 +90,7 @@ export const DEFAULT_VIEWPORT_PRESET_ID = 'mdlvis-vanilla';
 export const DEFAULT_VIEWPORT_APPEARANCE = BUILT_IN_VIEWPORT_PRESETS[DEFAULT_VIEWPORT_PRESET_ID].appearance;
 export const VIEWPORT_WIRE_STYLES = Object.freeze(['solid', 'dashed', 'dotted']);
 export const VIEWPORT_VERTEX_STYLES = Object.freeze(['square', 'circle', 'diamond']);
+export const GEOSET_HIGHLIGHT_TYPES = Object.freeze(['wire-vertices', 'wire', 'fill']);
 export const VIEWPORT_BACKGROUND_DISPLAYS = Object.freeze(['fit', 'fill', 'stretch', 'center']);
 export const MAX_VIEWPORT_PRESETS = 24;
 export const MAX_VIEWPORT_BACKGROUND_DATA_LENGTH = 12_000_000;
@@ -130,11 +132,15 @@ export function normalizeViewportAppearance(value, fallback = DEFAULT_VIEWPORT_A
   const input = record(value), base = record(fallback);
   const background = normalizeBackground(input.background, base.background || DEFAULT_VIEWPORT_APPEARANCE.background);
   const quad = record(input.quadView), grid = record(quad.grid), defaults = quadDefaults(background);
+  const highlight = record(input.geosetHighlight), highlightBase = base.geosetHighlight || DEFAULT_VIEWPORT_APPEARANCE.geosetHighlight;
+  const viaView = typeof highlight.viaView === 'boolean' ? highlight.viaView : highlightBase.viaView;
+  const viaSelection = typeof highlight.viaSelection === 'boolean' ? highlight.viaSelection : highlightBase.viaSelection;
   return {
     selectedGeoset: normalizeWire(input.selectedGeoset, base.selectedGeoset || DEFAULT_VIEWPORT_APPEARANCE.selectedGeoset),
     otherGeoset: normalizeWire(input.otherGeoset, base.otherGeoset || DEFAULT_VIEWPORT_APPEARANCE.otherGeoset),
     selectedVertex: normalizeVertex(input.selectedVertex, base.selectedVertex || DEFAULT_VIEWPORT_APPEARANCE.selectedVertex),
     unselectedVertex: normalizeVertex(input.unselectedVertex, base.unselectedVertex || DEFAULT_VIEWPORT_APPEARANCE.unselectedVertex),
+    geosetHighlight: { color: color(highlight.color, highlightBase.color), type: choice(highlight.type, GEOSET_HIGHLIGHT_TYPES, highlightBase.type), viaView: viaView || !viaSelection, viaSelection },
     background,
     quadView: {
       background: normalizeBackground(quad.background, defaults.background),

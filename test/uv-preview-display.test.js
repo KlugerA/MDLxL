@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeUVPreviewDisplay,occupiedUVTextureFrames,previewMeshDomain,uvPreviewOverlay} from '../src/uv-preview-display.js';
+import {hiddenUVPreviewGeosets,normalizeUVPreviewDisplay,occupiedUVTextureFrames,previewMeshDomain,uvPreviewOverlay} from '../src/uv-preview-display.js';
 import {normalizePreferences} from '../src/preferences.js';
 import {exportConfiguration,importConfiguration} from '../src/portable-settings.js';
 import {createRequire} from 'node:module';
@@ -26,6 +26,14 @@ test('Show mesh covers model geometry but Highlight Select contains only active 
   assert.equal(selected.allMesh,false);assert.equal(selected.highlightSelection,true);assert.deepEqual(selected.selectionByGeoset,{1:[0]});
   assert.deepEqual(uvPreviewOverlay(domain,-1,[],{mesh:'selected'}).selectionByGeoset,{});
   assert.deepEqual(model,before,'preview decoration never mutates geometry');
+});
+
+test('Only Selected hides other geosets without changing UV work or the model',()=>{
+  const model={Geosets:[{}, {}, {}]}, selection={0:[1],1:[],2:[3]}, before=structuredClone(model);
+  assert.equal(hiddenUVPreviewGeosets(model,selection,false),undefined);
+  assert.deepEqual(hiddenUVPreviewGeosets(model,selection,true),new Set([1]));
+  assert.deepEqual(model,before);
+  assert.deepEqual(selection,{0:[1],1:[],2:[3]});
 });
 
 test('texture-frame highlighting follows every repeated tile containing UV faces',()=>{

@@ -20,8 +20,11 @@
 .classic-app .classic-toolbar .classic-tool{width:24px;min-width:24px}
 .classic-app .classic-toolbar-group{margin-right:1px}
 .classic-app .classic-toolbar .toolbar-team-color{margin-left:2px;margin-right:2px}
-.classic-toolbar .quick-display{border:0;padding:0 2px;min-height:24px;gap:2px;flex:0 0 auto;flex-wrap:nowrap;background:transparent;font-size:10px}
-.classic-toolbar .quick-display label{gap:2px}
+.classic-toolbar .quick-display{border:0;padding:0 2px;min-height:24px;min-width:0;gap:2px;flex:1 1 auto;flex-wrap:nowrap;background:transparent;font-size:10px}
+.classic-toolbar .quick-display-options{display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden;white-space:nowrap}
+.classic-toolbar .quick-display-options label{gap:2px;font-size:9.5px}
+.classic-toolbar .quick-display-actions{display:flex;align-items:center;gap:3px;flex:0 0 auto;margin-left:auto}
+.classic-app>.classic-toolbar .language-switch{margin-left:3px}
 .classic-app .classic-toolbar>.addon-menu,.classic-app .classic-toolbar>[data-warmkey="convertVersion"]{flex-shrink:0}
 .classic-app .classic-toolbar .language-trigger{padding-left:3px;padding-right:3px;font-size:10px}
 .classic-app .classic-toolbar .quick-display button{min-width:0;height:21px;min-height:21px;padding:0 5px}
@@ -30,7 +33,7 @@
    toolbar stay available, and no renderer or editor state is remounted. */
 .classic-app[data-vis-ui]>.classic-modules,
 .classic-app[data-vis-ui]>.classic-toolbar :is(.toolbar-modules,.addon-menu,.language-switch,[data-warmkey="new"],[data-warmkey="redo"],[data-warmkey="copy"],[data-warmkey="paste"],[data-warmkey="convertVersion"]),
-.classic-app[data-vis-ui]>.classic-toolbar .quick-display>:nth-child(n+3),
+.classic-app[data-vis-ui]>.classic-toolbar .quick-display-options,
 .classic-app[data-vis-ui] .classic-view-label>:not(:first-child){display:none}
 .portrait-toolbar button{min-height:24px;padding:1px 10px}.portrait-toolbar button[aria-pressed=true]{font-weight:bold;background:var(--ui-selected,#eae6d8);border-color:var(--ui-accent,#5c87ad)}
 .portrait-camera{border:1px solid var(--ui-border,#888);margin:0 0 5px;padding:4px;display:grid;gap:4px}

@@ -50,6 +50,18 @@ test('shared geoset evaluator matches controls and native preview across sequenc
   close(sampleGeosetAnimation(model, 0, 550, 1).color, [1, 1, 1]);
 });
 
+test('Hide RGB neutralizes one preview tint while preserving alpha and authored color', () => {
+  const model = { Geosets: [{}, {}], Sequences: [], GlobalSequences: [], GeosetAnims: [
+    { GeosetId: 0, Flags: 2, Alpha: .5, Color: new Float32Array([.2, .4, .6]) },
+    { GeosetId: 1, Flags: 2, Alpha: .75, Color: new Float32Array([.7, .3, .1]) },
+  ] }, before = structuredClone(model), layer = { Alpha: .8 };
+  const first = previewGeosetTint(model, 0, layer, 0, -1);
+  const second = previewGeosetTint(model, 1, layer, 0, -1);
+  assert.deepEqual(previewGeosetTint(model, 0, layer, 0, -1, 0, true), [1, 1, 1, first[3]]);
+  assert.deepEqual(previewGeosetTint(model, 1, layer, 0, -1), second);
+  assert.deepEqual(model, before);
+});
+
 test('Unanimated geosets use MDX static bases instead of the first RGB and alpha keys', () => {
   const model = {
     Geosets: [{}], Sequences: [{ Interval: [333, 666] }], GlobalSequences: [],

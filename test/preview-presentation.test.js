@@ -27,6 +27,14 @@ test('interactive preview retains only the selection and geoset-hover inputs nee
   assert.deepEqual(preview.selectionByGeoset,{1:[2]});assert.deepEqual(preview.selectableGeosets,[1]);assert.equal(preview.hoveredGeoset,1);assert.equal(preview.onSelectionChange,change);assert.equal(preview.onNodeTransform,undefined);
 });
 
+test('UV Only Selected reaches the preview without changing other clean previews',()=>{
+  const hidden=new Set([1,3]), props={presentation:'preview',preferences:{graphics:{}},hiddenGeosets:hidden,hideRgbGeoset:2};
+  assert.equal(previewPresentationProps(props).hiddenGeosets,undefined);
+  const isolated=previewPresentationProps({...props,uvOnlySelected:true});
+  assert.equal(isolated.hiddenGeosets,hidden);
+  assert.equal(isolated.hideRgbGeoset,2);
+});
+
 test('clean is the preview overlay default; Highlight overrides All mesh even for empty selection',()=>{
   assert.deepEqual(previewOverlayGeometry(geosets(),{}),[]);
   assert.equal(previewOverlaySettings({allMesh:true,highlightSelection:true}).mode,'selection');

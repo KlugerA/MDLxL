@@ -9,6 +9,7 @@ import { previewPresentationProps, previewOverlaySettings } from './preview-pres
 import { drawMovementOverlay, projectMovementNodes } from './movement-overlay.js';
 import { samplePreviewMatrices } from './preview-pose.js';
 import { projectPreviewGeosets, pickPreviewGeoset } from './preview-selection.js';
+import { configureGeosetHighlightMaterial } from './geoset-highlight.js';
 import { configureEditorTexture, cameraLeftLight, viewportPixelRatio } from './viewport-quality.js';
 import { createRigMarkersGL } from './rig-markers-gl.js';
 import { drawModelCameraOverlay } from './model-camera-overlay.js';
@@ -742,7 +743,7 @@ export default function Viewport(inputProps) {
         const geosetAnim = state.geosetAnims.get(index);
         const alpha = p.sequenceIndex >= 0 ? sampleTrack(geosetAnim?.Alpha, state.frame, { ...animOptions, fallback: 1 }) : typeof geosetAnim?.Alpha === 'number' ? geosetAnim.Alpha : 1;
         entry.group.visible = hovered || (!hidden.has(index) && (alpha > .001 || p.mode !== 'textured'));
-        entry.hoverWire.visible = hovered; entry.hoverPoints.visible = hovered;
+        entry.hoverWire.visible = hovered; entry.hoverPoints.visible = hovered && appearance.geosetHighlight.type === 'wire-vertices';
         const pureWireframe = p.mode === 'wireframe' || p.mode === 'vertices';
         const activeAppearance = chosen ? appearance.selectedGeoset : appearance.otherGeoset;
         const pointDepth = viewportPointDepth(pureWireframe, appearance.xrayVertices);
@@ -764,7 +765,7 @@ export default function Viewport(inputProps) {
         entry.depth.visible = needsSolidDepthPrepass(p.mode);
         configureWideLine(entry.wire.material, activeAppearance, surface.clientWidth, surface.clientHeight);
         configureWideLine(entry.hiddenWire.material, activeAppearance, surface.clientWidth, surface.clientHeight, visual.occludedOpacity);
-        entry.hoverWire.material.color.set(visual.selectedGeometry); entry.hoverPoints.material.color.set(visual.selectedGeometry);
+        configureGeosetHighlightMaterial(entry.hoverWire.material, entry.hoverPoints.material, appearance.geosetHighlight);
         for (let layerIndex = 0; layerIndex < entry.meshes.length; layerIndex++) {
           const mesh = entry.meshes[layerIndex], material = mesh.material, layer = entry.layers[layerIndex];
           applyPreviewMaterialLighting(material, lighting);
@@ -928,7 +929,7 @@ export default function Viewport(inputProps) {
       const hiddenPoints = new THREE.Points(hiddenPointGeometry, pointMaterial({ depthFunc: THREE.GreaterDepth })); hiddenPoints.frustumCulled = false; hiddenPoints.renderOrder = 10999; group.add(hiddenPoints);
       const selectedPoints = new THREE.Points(selectedPointGeometry, pointMaterial()); selectedPoints.frustumCulled = false; selectedPoints.renderOrder = 11001; selectedPoints.userData.overlay = 'vertices'; group.add(selectedPoints);
       const hiddenSelectedPoints = new THREE.Points(hiddenSelectedPointGeometry, pointMaterial({ depthFunc: THREE.GreaterDepth })); hiddenSelectedPoints.frustumCulled = false; hiddenSelectedPoints.renderOrder = 11000; group.add(hiddenSelectedPoints);
-      const hoverWire = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0x39ff14, wireframe: true, depthTest: false, depthWrite: false, transparent: true }));
+      const hoverWire = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0x39ff14, wireframe: true, depthTest: false, depthWrite: false, transparent: true, side: THREE.DoubleSide }));
       hoverWire.renderOrder = 13000; hoverWire.frustumCulled = false; hoverWire.visible = false; group.add(hoverWire);
       const hoverGeometry = new THREE.BufferGeometry(); hoverGeometry.setAttribute('position', geometry.attributes.position);
       const hoverPoints = new THREE.Points(hoverGeometry, new THREE.PointsMaterial({ color: 0x39ff14, size: 6, sizeAttenuation: false, depthTest: false, depthWrite: false, transparent: true }));
