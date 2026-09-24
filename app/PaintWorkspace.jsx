@@ -16,7 +16,7 @@ import {usePreviewBackgrounds} from './usePreviewBackgrounds.js';
 import {paintBrushPreview} from './paint-brush-preview.js';
 import {paintDecalTransform,projectPaintDecal} from '../src/paint-decal.js';
 import {paintMessage as msg} from '../src/paint-messages.js';
-import {addPaintProjectTarget,compositePaintTarget,createPaintProject,paintProjectCoat,paintProjectTarget,recordPaintStroke,recordPaintStrokeGroup,recordPaintUV,travelPaintHistory} from '../src/paint-project.js';
+import {addPaintProjectTarget,compositePaintTarget,createPaintProject,paintProjectCoat,paintProjectTarget,recordPaintStroke,recordPaintStrokeGroup,recordPaintUV} from '../src/paint-project.js';
 import {buildSmartPaintMasks,fillPaintMask,interpolatePaintStroke,preparePaintProjection,prepareTexturePaintProjection,stampProjectedBrush} from '../src/paint-projection.js';
 import {paintGeosetMask,paintGeosetTarget,paintHalfModel,paintPartCenter,paintProjectModel,paintStandHidden} from '../src/paint-view.js';
 import {clonePaintRaster,resizePaintRaster} from '../src/paint-raster.js';
@@ -216,7 +216,6 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
     fillPaintMask(layer.raster,mask,brush,options);
     if(recordPaintStroke(project,activeTarget.id,layer.id,before,msg('paint.fillPart'),brush)){markPaintMaterialEdited(project,activeTarget);notify();onStatus?.(msg('paint.filled',{number:activeGeoset+1}));}
   }
-  function travel(redo){if(readOnly||busy)return;endStroke();if(travelPaintHistory(project,redo))notify();}
   function mutateCoat(change){if(!ready||!activeCoat)return;change(activeCoat);activeTarget.revision=(activeTarget.revision||0)+1;project.dirty=true;project.revision++;notify();}
   function editUV(next){if(!geosetReady)return;endStroke();const before=baseModel.Geosets[activeGeoset].TVertices[coordId];if(recordPaintUV(project,activeGeoset+':'+coordId,before,next))notify();}
   function hideHalf(){endStroke();setHalfHidden(value=>!value);}
@@ -258,7 +257,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
       <section><h3>{msg('paint.technique')}</h3><div className="paint-brush-grid">{BRUSH_PRESETS.map(brushButton)}</div>
         <Range id="size" min={1} max={2048} step={1} editable value={brush.size} percent={false} onChange={size=>setBrush(v=>({...v,size}))}/>{brush.materialId&&<Range id="brushZoom" min={.01} max={64} step={.01} editable value={brush.zoom} onChange={zoom=>setBrush(v=>({...v,zoom}))}/>}<Range id="opacity" value={brush.opacity} onChange={opacity=>setBrush(v=>({...v,opacity}))}/>
         <label className="paint-check" title={msg('paint.bleedHelp')}><input type="checkbox" checked={scene.textureSmoothing} onChange={e=>{endStroke();updateScene({...scene,textureSmoothing:e.target.checked});}}/>{msg('paint.bleed')}</label>
-        <p className="paint-help">{msg('paint.brushHelp')}</p><div className="paint-history"><button disabled={!project.history.undo.length} onClick={()=>travel(false)}>{msg('paint.undo')}</button><button disabled={!project.history.redo.length} onClick={()=>travel(true)}>{msg('paint.redo')}</button></div>
+        <p className="paint-help">{msg('paint.brushHelp')}</p>
       </section>
       <details open={halfHidden||undefined}><summary>{msg('paint.viewOptions')}</summary>
         <label className="paint-check"><input type="checkbox" checked={showHelpers} onChange={e=>setShowHelpers(e.target.checked)}/>{msg('paint.showHelpers')}</label>

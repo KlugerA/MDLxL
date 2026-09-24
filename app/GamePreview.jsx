@@ -804,7 +804,7 @@ export default function GamePreview(inputProps) {
   useEffect(() => { runtime.current?.resize(); }, [graphics.pixelRatio, props.showGrid, props.overlays?.grid, props.preferences?.grid]);
   useEffect(() => { runtime.current?.drawBackground(); }, [props.preferences?.visuals?.background, props.preferences?.viewportAppearance?.background]);
   useEffect(() => { props.onCaptureReady?.(runtime.current?.captureApi || null); }, [props.onCaptureReady]);
-  useEffect(() => { if (model) runtime.current?.updateUV(model); }, [model, revision]);
+  useEffect(() => { if (model) runtime.current?.updateUV(model); }, [model, revision, props.uvRevision]);
 
   useEffect(() => { runtime.current?.scheduler.sync(); }, [props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
 

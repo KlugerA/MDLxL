@@ -12,10 +12,15 @@ export function captureSelection(state, model) {
     .map(([gi, values]) => [gi, ids(values, value => value < geosets[gi].Vertices.length / 3)]));
   const activeGeoset = index(state.activeGeoset) && enabled.has(state.activeGeoset) ? state.activeGeoset : selectable[0] ?? -1;
   const uvCount = geosets[activeGeoset]?.TVertices?.length || 0;
-  return {
+  const snapshot = {
     selectable, selection: vertices(state.selection, true), hidden: vertices(state.hidden, false), activeGeoset,
     uvSet: Math.max(0, Math.min(index(state.uvSet) ? state.uvSet : 0, uvCount - 1)),
   };
+  if (state.selectedNodeIds) {
+    const nodes = new Set((model.Nodes || []).filter(Boolean).map(node => node.ObjectId));
+    snapshot.selectedNodeIds = ids(state.selectedNodeIds, value => nodes.has(value));
+  }
+  return snapshot;
 }
 
 /** Return fresh arrays/Sets for React state; clamp old/recovered UI IDs to the model. */
@@ -23,7 +28,8 @@ export function restoreSelection(snapshot, model) {
   const state = captureSelection(snapshot, model);
   return { ...state, selectable: new Set(state.selectable),
     selection: Object.fromEntries(Object.entries(state.selection).map(([gi, values]) => [gi, Array.from(values)])),
-    hidden: Object.fromEntries(Object.entries(state.hidden).map(([gi, values]) => [gi, Array.from(values)])) };
+    hidden: Object.fromEntries(Object.entries(state.hidden).map(([gi, values]) => [gi, Array.from(values)])),
+    ...(state.selectedNodeIds ? { selectedNodeIds: Array.from(state.selectedNodeIds) } : {}) };
 }
 
 export function validSelectionHistory(value) {
@@ -33,7 +39,8 @@ export function validSelectionHistory(value) {
     && Object.entries(value).every(([gi, values]) => index(Number(gi)) && validIds(values));
   const validSnapshot = value => !!value && validIds(value.selectable) && validMap(value.selection) && validMap(value.hidden)
     && (value.activeGeoset === -1 || index(value.activeGeoset)) && index(value.uvSet)
-    && onlyKeys(value, ['selectable', 'selection', 'hidden', 'activeGeoset', 'uvSet']);
+    && (value.selectedNodeIds === undefined || validIds(value.selectedNodeIds))
+    && onlyKeys(value, ['selectable', 'selection', 'hidden', 'activeGeoset', 'uvSet', 'selectedNodeIds']);
   return value?.version === 1 && validSnapshot(value.before) && validSnapshot(value.after) && onlyKeys(value, ['version', 'before', 'after']);
 }
 
@@ -55,7 +62,7 @@ export function changesSelectionIndices(changes) {
  * selection data. Ordinary transforms retain no additional selection history.
  */
 export class SelectionHistory {
-  constructor(doc) { this.doc = doc; this.pending = null; }
+  constructor(doc) { this.doc = doc; this.pending = null; this.observed = null; this.observedRevision = doc.revision; }
   captureEdit(state) {
     this.settle(state);
     return { revision: this.doc.revision, before: captureSelection(state, this.doc.model), entry: this.doc._historyStore.undoEntries.at(-1) };
@@ -74,6 +81,25 @@ export class SelectionHistory {
     if (!entry || this.doc._historyStore.undoEntries.at(-1) !== entry) return false;
     return this.doc._historyStore.setSelection(entry, { ...entry.selection, after: captureSelection(state, this.doc.model) });
   }
+  observe(state) {
+    const after = captureSelection(state, this.doc.model);
+    if (!this.observed) { this.observed = after; this.observedRevision = this.doc.revision; return false; }
+    const before = this.observed, changed = JSON.stringify(before) !== JSON.stringify(after);
+    if (this.pending) {
+      this.settle(state);
+    } else if (changed) {
+      const store = this.doc._historyStore;
+      if (this.doc.revision === this.observedRevision) {
+        const entry = store.prepare({ label: 'Change selection', sections: [], changes: [] });
+        store.commit(entry);
+        store.setSelection(entry, { version: 1, before, after });
+      } else if (this.doc.revision === this.observedRevision + 1 && store.undoEntries.length) {
+        store.setSelection(store.undoEntries.at(-1), { version: 1, before, after });
+      }
+    }
+    this.observed = after; this.observedRevision = this.doc.revision;
+    return changed;
+  }
   travel(direction, state) {
     if (!['undo', 'redo'].includes(direction)) throw new Error('Invalid selection history direction.');
     this.settle(state);
@@ -81,6 +107,9 @@ export class SelectionHistory {
     const entry = (direction === 'undo' ? store.undoEntries : store.redoEntries).at(-1);
     if (!entry || !this.doc[direction]()) return false;
     const saved = entry.selection?.[direction === 'undo' ? 'before' : 'after'];
-    return restoreSelection(saved || state, this.doc.model);
+    const restored = restoreSelection(saved || state, this.doc.model);
+    this.observed = captureSelection(restored, this.doc.model);
+    this.observedRevision = this.doc.revision;
+    return restored;
   }
 }
