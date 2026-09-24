@@ -30,6 +30,7 @@
 .classic-toolbar-group{margin-right:5px;flex-shrink:0}
 .classic-toolbar .language-switch{margin-left:auto;margin-right:4px;flex-shrink:0}
 .classic-app.rig-workspace .classic-sidebar{width:164px;min-width:164px;flex:0 0 164px}
+.classic-app.bones-workspace .classic-sidebar{width:max(240px,var(--panel-width));min-width:max(240px,var(--panel-width));flex:0 0 max(240px,var(--panel-width))}
 .classic-app.rig-workspace .classic-geosets{min-height:0;margin-top:3px}
 .classic-app.rig-workspace .classic-geosets [role=listbox]{display:flex;flex-wrap:wrap;align-content:flex-start;min-height:72px;max-height:112px;overflow:auto}
 .classic-app.rig-workspace .classic-geosets .geoset-row{flex:0 0 31px}
