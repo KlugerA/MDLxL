@@ -21,7 +21,7 @@ export function previewPresentationProps(props) {
     showNodes: display.nodes, showSkeleton: display.bones || display.nodes || display.attachments || display.particles,
     showVertices: vertices, showNormals: display.normals, showCameras: display.cameras,
     selectionByGeoset: interactive ? props.selectionByGeoset || EMPTY_MAP : EMPTY_MAP, selectedVertices: EMPTY_IDS, selectedNodeIds: EMPTY_IDS, selectableGeosets: props.selectableGeosets || EMPTY_IDS,
-    hiddenGeosets: undefined, hiddenVertices: undefined, hoveredGeoset: interactive ? props.hoveredGeoset ?? null : null,
+    hiddenGeosets: props.uvOnlySelected === true ? props.hiddenGeosets : undefined, hiddenVertices: undefined, hoveredGeoset: interactive ? props.hoveredGeoset ?? null : null,
     onNodeTransform: undefined, onVertexTransform: undefined, onTransform: undefined, onSelectNodes: undefined, onSelectionChange: interactive ? props.onSelectionChange : undefined, onSelectVertices: undefined, onSelectGeoset: undefined, onInspectGeoset: undefined,
   };
 }

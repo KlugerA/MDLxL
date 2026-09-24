@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'rea
 import UVEditor from './UVEditor.jsx';
 import { combineUVGeosets, projectUVFromView, relevantUVMaterials, splitCombinedUV } from '../src/uv-tools.js';
 import { uvToolState } from '../src/uv-tool-state.js';
-import { normalizeUVPreviewDisplay, previewMeshDomain, uvPreviewOverlay } from '../src/uv-preview-display.js';
+import { hiddenUVPreviewGeosets, normalizeUVPreviewDisplay, previewMeshDomain, uvPreviewOverlay } from '../src/uv-preview-display.js';
 import { renderUVMaterialTexture } from './uv-material-preview.js';
 import { normalizeUVGrid, UV_GRID_SPACING_MAX, UV_GRID_SPACING_MIN, uvGridSpacingFromSlider, uvGridSpacingSliderValue } from '../src/uv-grid.js';
 import {
@@ -97,11 +97,12 @@ function GeosetPicker({ options, value, attention = false, onChoose, onHover }) 
   </div>;
 }
 
-export default function UVWorkspace({ model, materialModel = model, previewModel, revision = 0, eligibleSelection = {}, selectionByGeoset = {}, onSelectionChange,
+export default function UVWorkspace({ model, materialModel = model, previewModel, revision = 0, activeGeoset = -1, eligibleSelection = {}, selectionByGeoset = {}, onSelectionChange,
   onWorkingSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onWrappingChange, textureAssets, teamColor, preferences, onPreferences,
   draftCount = 0, onLibrary, onSavePreview, onRevertPreview, previewProps, readOnly = false, onExit }) {
   const [materialID, setMaterialID] = useState(null), [uvTool, setUVTool] = useState('select'), [foldDirection, setFoldDirection] = useState('right-to-left');
   const [selectingNew, setSelectingNew] = useState(false), [selectGeoset, setSelectGeoset] = useState(-1), [selectionDraft, setSelectionDraft] = useState({}), [hoveredGeoset, setHoveredGeoset] = useState(null);
+  const [showOnlySelected, setShowOnlySelected] = useState(false), [hideRGB, setHideRGB] = useState(false);
   const [projectionPreset, setProjectionPreset] = useState({ name: '', revision: 0 });
   const [materialPreview, setMaterialPreview] = useState(null), [materialError, setMaterialError] = useState('');
   const [sidePercent, setSidePercent] = useState(() => storedLayout(LAYOUT_KEYS.side, UV_SIDE_DEFAULT, clampUVSidePercent));
@@ -156,6 +157,9 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   }, [current?.materialID, materialSignature, textureAssets, teamColor, preferences?.graphics?.textures]);
 
   const display = normalizeUVPreviewDisplay(preferences?.uvPreviewDisplay), uvGrid = normalizeUVGrid(preferences?.uvGrid), liveView = display.mesh === 'selected';
+  const selectedGeosets = Object.keys(eligibleSelection).filter(index => eligibleSelection[index]?.length).map(Number);
+  const rgbTarget = selectingNew ? selectGeoset : selectedGeosets.includes(activeGeoset) ? activeGeoset : selectedGeosets[0] ?? -1;
+  const hiddenPreviewGeosets = hiddenUVPreviewGeosets(model, eligibleSelection, showOnlySelected && !selectingNew);
   // UV-grid preferences belong only to the 2D texture canvas. Keep the 3D
   // renderer's preference object stable while a grid control is adjusted.
   const previewPreferencesInput = { ...(preferences || {}) }; delete previewPreferencesInput.uvGrid;
@@ -252,11 +256,12 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
         <section className="uv-live-preview" aria-label={selectingNew ? 'Select new vertices' : 'Live model preview'}>
           <div className="uv-panel-title"><strong>{selectingNew ? selectNewPrompt : 'Live Model Preview'}</strong>{selectingNew && selectNewCount > 0 ? <span className="uv-confirm-selection"><button onClick={finishSelectNew}>Yes</button><button onClick={clearSelectNew}>No</button></span> : selectingNew && <span className="uv-selection-hint">Drag selects · Shift/Ctrl modifies · Alt+drag rotates</span>}</div>
           <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} revision={previewWrappingRevision} uvRevision={revision} presentation="preview" preserveCameraView={true} interactivePreview={selectingNew} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
+            uvOnlySelected={showOnlySelected && !selectingNew} hiddenGeosets={hiddenPreviewGeosets} hideRgbGeoset={hideRGB && rgbTarget >= 0 ? rgbTarget : null}
             selectionByGeoset={selectionDraft} selectableGeosets={selectingNew && selectGeoset >= 0 ? [selectGeoset] : []} onSelectionChange={selectingNew && selectGeoset >= 0 ? next => setSelectionDraft({ [selectGeoset]: unique(next[selectGeoset]) }) : undefined}
             hoveredGeoset={selectingNew ? hoveredGeoset : null} cameraMode={selectingNew ? 'work' : previewProps?.cameraMode} transformMode="select" cameraPresetRequest={projectionPreset} onProjectionViewChange={value => { projectionView.current = value; }} /></Suspense></div>
           <div className="uv-preview-footer">
             {selectingNew ? <><GeosetPicker options={geosetOptions} value={selectGeoset} attention={selectGeoset < 0} onChoose={changeSelectGeoset} onHover={setHoveredGeoset}/><span className="uv-selection-count">{selectNewCount} selected</span><button disabled={!selectNewCount} onClick={finishSelectNew}>Done</button><button onClick={cancelSelectNew}>Cancel</button></>
-              : <button onClick={beginSelectNew}>Select New</button>}
+              : <><button onClick={beginSelectNew}>Select New</button><button aria-label="Show only selected geosets" aria-pressed={showOnlySelected} disabled={!selectedGeosets.length} onClick={() => setShowOnlySelected(value => !value)}>Only Selected</button><button aria-pressed={hideRGB} disabled={rgbTarget < 0} onClick={() => setHideRGB(value => !value)}>Hide RGB</button></>}
           </div>
         </section>
         <Splitter orientation="horizontal" label="Resize live model preview" value={activePreviewPercent} minimum={UV_PREVIEW_MIN} maximum={UV_PREVIEW_MAX} defaultValue={selectingNew ? UV_SELECT_PREVIEW_DEFAULT : UV_PREVIEW_DEFAULT}

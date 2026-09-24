@@ -25,6 +25,13 @@ export function previewMeshDomain(model) {
   return result;
 }
 
+/** Editor-only isolation for the geosets that supplied the current UV work. */
+export function hiddenUVPreviewGeosets(model, eligibleSelection, onlySelected) {
+  if (!onlySelected) return undefined;
+  const selected = new Set(Object.entries(eligibleSelection || {}).filter(([, ids]) => ids?.length).map(([index]) => Number(index)));
+  return new Set((model?.Geosets || []).flatMap((_, index) => selected.has(index) ? [] : [index]));
+}
+
 /** Return repeated texture tiles containing eligible UV faces. Exact edge
  * coordinates remain in the face they enclose, so a normal 0..1 island marks
  * one frame instead of the neighbouring repeats. */

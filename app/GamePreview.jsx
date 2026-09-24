@@ -200,7 +200,7 @@ export default function GamePreview(inputProps) {
       // the classic portrait scene maps this to (y,-x,-z), in model space.
       portrait: !!latest.current.portraitMode,
       lightDirection: latest.current.portraitMode ? [.3,-.3,.25] : cameraLeftLight(camera, controls.target, radius).direction.toArray(),
-      viewDirection: camera.getWorldDirection(new THREE.Vector3()).negate().toArray(), preferences: latest.current.preferences, hiddenGeosets: latest.current.hiddenGeosets, surface: latest.current.mode === 'solid', lighting: latest.current.portraitMode || latest.current.shaded !== false && graphicsOptions(latest.current.preferences).lighting }));
+      viewDirection: camera.getWorldDirection(new THREE.Vector3()).negate().toArray(), preferences: latest.current.preferences, hiddenGeosets: latest.current.hiddenGeosets, hideRgbGeoset: latest.current.hideRgbGeoset, surface: latest.current.mode === 'solid', lighting: latest.current.portraitMode || latest.current.shaded !== false && graphicsOptions(latest.current.preferences).lighting }));
     try {
       native = new ModelRenderer(ownedModel); native.initGL(gl); previewAdapter.ready(native);
       // Layered WC3 materials redraw the same triangles at identical depth.
@@ -818,7 +818,7 @@ export default function GamePreview(inputProps) {
   useEffect(() => { props.onCaptureReady?.(runtime.current?.captureApi || null); }, [props.onCaptureReady]);
   useEffect(() => { if (model) runtime.current?.updateUV(model); }, [model, revision, props.uvRevision]);
 
-  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
 
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];
