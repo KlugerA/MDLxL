@@ -5,13 +5,18 @@ import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
 const app=readFileSync(new URL('../app/App.jsx',import.meta.url),'utf8');
 const css=readFileSync(new URL('../app/portrait-view.css',import.meta.url),'utf8');
+const quick=readFileSync(new URL('../app/QuickDisplay.jsx',import.meta.url),'utf8');
 
 test('Black is short and the collapsed toolbar stays compact',()=>{
   assert.match(app,/row.index === null \? row.name :/);
   assert.doesNotMatch(app,/Neutral Hostile/);
   assert.match(css,/\.classic-app>\.classic-toolbar\{flex-wrap:nowrap\}/);
   assert.match(css,/\.classic-toolbar \.quick-display\{[^}]*flex-wrap:nowrap/);
-  assert.match(css,/\.classic-toolbar \.quick-display\[data-expanded="true"\]\{[^}]*flex-wrap:wrap/);
+  assert.doesNotMatch(css,/quick-display\[data-expanded="true"\][^\n]*flex-wrap:wrap/);
+  assert.match(css,/\.classic-toolbar \.quick-display-options label\{[^}]*font-size:9\.5px/);
+  assert.ok(quick.indexOf('>Textured View</button>')<quick.indexOf('>Clear</button>'));
+  assert.ok(quick.indexOf('>Clear</button>')<quick.indexOf('>Reveal</button>'));
+  for(const action of ['cleanView','grid:small','grid:xz','grid:yz','grid:xy','axes'])assert.match(quick,new RegExp(`HIDDEN_QUICK_ACTIONS = new Set\\(\\[[^\\]]*'${action}'`));
 });
 
 test('Vis is a reversible presentation toggle, not a model or editing command',()=>{
@@ -23,7 +28,7 @@ test('Vis is a reversible presentation toggle, not a model or editing command',(
   assert.match(group,/onClick=\{hide\}/);
   assert.match(group,/onClick=\{\(\) => setHidden\(\{\}\)\}/);
   assert.match(css,/data-vis-ui\]>\.classic-modules/);
-  assert.match(css,/quick-display>:not\(:last-child\):not\(:nth-last-child\(2\)\)/);
+  assert.match(css,/data-vis-ui\]>\.classic-toolbar \.quick-display-options/);
   assert.doesNotMatch(css,/data-vis-ui[^{}]*portrait-toolbar/);
 });
 
