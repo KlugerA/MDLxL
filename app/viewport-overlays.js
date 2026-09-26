@@ -10,6 +10,7 @@ export function viewportOverlayOptions(props) {
     nodes: explicit ? !!overlays.nodes : markers,
     attachments: explicit ? !!overlays.attachments : markers,
     particles: explicit ? !!overlays.particles : markers,
+    boneLines: explicit ? !!(overlays.skeleton ?? overlays.boneLines) : markers,
     wires: explicit ? !!overlays.wires : props.mode === 'wireframe' || props.mode === 'vertices',
     vertices: explicit ? !!overlays.vertices : props.mode === 'vertices' || !!props.showVertices,
     grid: explicit ? !!overlays.grid : !!props.showGrid,

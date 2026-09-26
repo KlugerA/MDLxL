@@ -53,7 +53,7 @@ export function drawMovementOverlay(context, nodes, selectedIds, handles, width,
   const visual = visualOptions(options.preferences), boxSize = visual.helperSize * 3;
   for (const point of nodes) {
     const parent = byId.get(point.node.Parent);
-    if (!options.boneLines || !options[point.overlayKind || 'nodes']) continue;
+    if (!options.boneLines) continue;
     if (!point.visible || !parent?.visible) continue;
     const line = boneConnectionEndpoints(parent, point, visual.helperSize);
     if (!line) continue;
@@ -108,7 +108,7 @@ export function drawBoneConnectors(context, nodes, selectedIds, camera, width, h
   const highlights = boneHighlightColors(nodes, selectedIds);
   for (const point of nodes) {
     const parent = byId.get(point.node.Parent);
-    if (!point.visible || !parent?.visible || !options[point.overlayKind || 'nodes']) continue;
+    if (!point.visible || !parent?.visible) continue;
     const line = boneConnectionEndpoints(parent, point);
     if (!line) continue;
     const appearance = boneConnectionAppearance(parent, point, highlights);

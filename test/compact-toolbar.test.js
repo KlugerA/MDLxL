@@ -7,16 +7,17 @@ const app=readFileSync(new URL('../app/App.jsx',import.meta.url),'utf8');
 const css=readFileSync(new URL('../app/portrait-view.css',import.meta.url),'utf8');
 const quick=readFileSync(new URL('../app/QuickDisplay.jsx',import.meta.url),'utf8');
 
-test('Black is short and the collapsed toolbar stays compact',()=>{
+test('Black is short and the display options remain visible',()=>{
   assert.match(app,/row.index === null \? row.name :/);
   assert.doesNotMatch(app,/Neutral Hostile/);
   assert.match(css,/\.classic-app>\.classic-toolbar\{flex-wrap:nowrap\}/);
   assert.match(css,/\.classic-toolbar \.quick-display\{[^}]*flex-wrap:nowrap/);
   assert.doesNotMatch(css,/quick-display\[data-expanded="true"\][^\n]*flex-wrap:wrap/);
   assert.match(css,/\.classic-toolbar \.quick-display-options label\{[^}]*font-size:9\.5px/);
-  assert.ok(quick.indexOf('>Textured View</button>')<quick.indexOf('>Clear</button>'));
-  assert.ok(quick.indexOf('>Clear</button>')<quick.indexOf('>Reveal</button>'));
-  for(const action of ['cleanView','grid:small','grid:xz','grid:yz','grid:xy','axes','frameSelection'])assert.match(quick,new RegExp(`HIDDEN_QUICK_ACTIONS = new Set\\(\\[[^\\]]*'${action}'`));
+  assert.match(quick,/VIEW_MENU\[viewMode\]/);
+  assert.match(quick,/>Clear<\/button>/);
+  assert.ok(quick.indexOf('>Clear</button>') < quick.indexOf('VIEW_MENU[viewMode]'));
+  assert.doesNotMatch(quick,/>Reveal<\/button>|>Textured View<\/button>/);
 });
 
 test('Vis is a reversible presentation toggle, not a model or editing command',()=>{

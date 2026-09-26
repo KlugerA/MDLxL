@@ -11,7 +11,7 @@ export function previewOverlayOptions(overlays, showNodes = false) {
   return {
     bones: overlays?.bones ?? markers, nodes: overlays?.nodes ?? markers,
     attachments: overlays?.attachments ?? markers, particles: overlays?.particles ?? markers,
-    boneLines: overlays?.boneLines ?? true,
+    boneLines: overlays?.skeleton ?? overlays?.boneLines ?? true,
     wires: overlays?.wires ?? false, vertices: overlays?.vertices ?? false, grid: overlays?.grid ?? false,
     normals: overlays?.normals ?? false, selectedVerticesOnly: overlays?.selectedVerticesOnly ?? false,
   };

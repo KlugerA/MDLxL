@@ -745,7 +745,7 @@ export default function GamePreview(inputProps) {
         if (cameraCanvas.height !== canvas.height) cameraCanvas.height = canvas.height;
         drawModelCameraOverlay(cameraCanvas.getContext('2d'), ownedModel, camera, canvas.clientWidth, canvas.clientHeight, canvas.width / Math.max(1, canvas.clientWidth), native.getFrame(), poseSequence, globalClock, radius, visualOptions(p.preferences).node, p.portraitMode ? PORTRAIT_ASPECT : 4 / 3);
       } else if (cameraCanvas) { cameraCanvas.remove(); cameraCanvas = null; }
-      if (overlayOptions.bones || overlayOptions.nodes || overlayOptions.attachments || overlayOptions.particles) {
+      if (overlayOptions.bones || overlayOptions.boneLines || overlayOptions.nodes || overlayOptions.attachments || overlayOptions.particles) {
         if (!connectorCanvas) { connectorCanvas = ownerDocument.createElement('canvas'); connectorCanvas.dataset.connectorOverlay = ''; connectorCanvas.style.cssText = 'position:absolute;z-index:15;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(connectorCanvas); }
         if (connectorCanvas.width !== canvas.width) connectorCanvas.width = canvas.width;
         if (connectorCanvas.height !== canvas.height) connectorCanvas.height = canvas.height;

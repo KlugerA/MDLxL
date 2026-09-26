@@ -77,12 +77,12 @@ test('camera toolbar renders inside Movement with one create-or-update action an
   assert.match(html,/<button disabled[^>]*>Set Current View/);
 });
 
-test('quick display separates emitter markers from emitted particles',()=>{
-  const html=renderToStaticMarkup(React.createElement(QuickDisplay,{overlays:{particles:true},shadows:false,particles:false}));
-  assert.equal((html.match(/type="checkbox"/g)||[]).length,7);
-  for(const label of ['Shadows','Vertices','Wireframe','Nodes','Emitters','Particles','Bones','Clear all']) assert.ok(html.includes(label));
+test('quick display shows only the active editor options without Reveal',()=>{
+  const html=renderToStaticMarkup(React.createElement(QuickDisplay,{viewMode:'animations',checks:{'display:particles':true},isEnabled:()=>true,onCommand:()=>{},onClear:()=>{}}));
+  assert.equal((html.match(/type="checkbox"/g)||[]).length,6);
+  for(const label of ['Bones','Skeleton','Nodes','Particles','Wireframe','Grid','Clear']) assert.ok(html.includes(label));
+  assert.doesNotMatch(html,/Reveal|Shadows|Vertices|Textured View/);
   assert.match(html,/<input[^>]*data-warmkey="display:particles"[^>]*checked=""/);
-  assert.doesNotMatch(html,/<input[^>]*data-warmkey="showParticles"[^>]*checked=""/);
 });
 
 test('timeline displays the live frame without an effect-driven duplicate frame state',()=>{
