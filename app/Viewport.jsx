@@ -333,9 +333,7 @@ export default function Viewport(inputProps) {
     function resizePane() {
       const width = Math.max(1, surface.clientWidth), height = Math.max(1, surface.clientHeight);
       perspective.aspect = width / height; perspective.updateProjectionMatrix();
-      const p = latest.current, gridVisible = !quad && (p.overlays?.grid ?? !!p.showGrid);
-      const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
-      const half = orthographicHalfHeight(framed, width / height); ortho.left = -half * width / height; ortho.right = half * width / height; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
+      const half = orthographicHalfHeight(state.radius, width / height); ortho.left = -half * width / height; ortho.right = half * width / height; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
     }
     function resize() {
       const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1);
@@ -711,7 +709,7 @@ export default function Viewport(inputProps) {
         if (now - callbackTime > 32) { callbackTime = now; state.lastReportedFrame = state.frame; p.onTimeChange?.(state.frame); }
       }
       const overlays = viewportOverlayOptions(p);
-      const showMarkers = overlays.bones || overlays.nodes || overlays.attachments || overlays.particles;
+      const showMarkers = overlays.bones || overlays.boneLines || overlays.nodes || overlays.attachments || overlays.particles;
       const clipRadius = modelClipRadius(p.model, state.center, state.radius);
       grid.update(p.preferences, p.workplane, overlays.grid, overlays.axes, surface.clientWidth, surface.clientHeight, quad ? { camera, target: controls.target, settings: appearance.quadView.grid } : null);
       platform.update(p.preferences, state.center, state.radius, state.floor || 0);
@@ -835,7 +833,7 @@ export default function Viewport(inputProps) {
           nodeCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); nodeCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
           const width = surface.clientWidth, height = surface.clientHeight;
           const nodes = projectMovementNodes(p.model, state.frame, p.sequenceIndex, camera, width, height, state.globalTime, state.matrices);
-          const options = { ...overlays, boneLines: true, preferences: p.preferences, glMarkers: true, wireframeMarkers: p.mode === 'wireframe' || p.mode === 'vertices', occludedMarkerEdges: p.mode === 'solid' || p.mode === 'textured' };
+          const options = { ...overlays, preferences: p.preferences, glMarkers: true, wireframeMarkers: p.mode === 'wireframe' || p.mode === 'vertices', occludedMarkerEdges: p.mode === 'solid' || p.mode === 'textured' };
           if (!quad) renderer.resetState();
           rigMarkers.draw(camera, nodes, p.selectedNodeIds || [], options); renderer.resetState(); renderer.setScissorTest(quad);
           drawMovementOverlay(nodeCanvas.getContext('2d'), nodes, p.selectedNodeIds || [], [], width, height, renderer.getPixelRatio(), options);

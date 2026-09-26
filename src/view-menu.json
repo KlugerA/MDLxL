@@ -1,22 +1,6 @@
-[
-  ["Bones", "display:bones"],
-  ["Wireframe Overlay", "display:wires"],
-  ["Nodes", "display:nodes"],
-  ["Attachments", "display:attachments"],
-  ["Emitters", "display:particles"],
-  ["Vertices", "showVertices"],
-  ["Grid", "grid"],
-
-  ["Normals", "normals"],
-  ["Show Particles", "showParticles"],
-  ["Clean View", "cleanView"],
-  null,
-  ["Small grid", "grid:small"],
-  ["XZ-grid", "grid:xz"],
-  ["YZ-grid", "grid:yz"],
-  ["XY-grid", "grid:xy"],
-  ["Axis", "axes"],
-  null,
-  ["Surface", "frameSelection"],
-  ["Textured View", "frame"]
-]
+{
+  "vertices": [["Shadows", "shaded"], ["Vertices", "showVertices"], ["Normals", "normals"], ["Wireframe Overlay", "display:wires"], ["Grid", "grid"], ["Clear", "clearDisplay"]],
+  "bones": [["Shadows", "shaded"], ["Vertices", "showVertices"], ["Bones", "display:bones"], ["Skeleton", "display:skeleton"], ["Nodes", "display:nodes"], ["Attachment", "display:attachments"], ["Grid", "grid"], ["Clear", "clearDisplay"]],
+  "movement": [["Shadows", "shaded"], ["Vertices", "showVertices"], ["Bones", "display:bones"], ["Skeleton", "display:skeleton"], ["Nodes", "display:nodes"], ["Attachment", "display:attachments"], ["Grid", "grid"], ["Clear", "clearDisplay"]],
+  "animations": [["Bones", "display:bones"], ["Skeleton", "display:skeleton"], ["Nodes", "display:nodes"], ["Particles", "display:particles"], ["Wireframe", "display:wires"], ["Grid", "grid"], ["Clear", "clearDisplay"]]
+}

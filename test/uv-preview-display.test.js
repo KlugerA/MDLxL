@@ -43,14 +43,15 @@ test('texture-frame highlighting follows every repeated tile containing UV faces
   assert.deepEqual(occupiedUVTextureFrames(new Float32Array([3.2,-2.4]),[],[0]),[[3,-3]]);
 });
 
-test('clean preview View controls cannot change the retained editing display',()=>{
-  const actions=[],menus=buildMenuTemplate({},id=>actions.push(id),'win32',[],x=>x,{preview:true,checks:{frame:true}});
-  const rows=menus.find(menu=>menu.label==='View').submenu.filter(row=>row.type!=='separator');
-  assert(rows.filter(row=>!['Textured View','Surface','Clean View'].includes(row.label)).every(row=>row.enabled===false));
-  assert.equal(rows.find(row=>row.label==='Textured View').checked,true);
-  for(const row of rows)row.click();
-  assert.deepEqual(actions,['cleanView','frameSelection','frame']);
-  const editor=buildMenuTemplate({},id=>actions.push(id),'win32',[],x=>x,{preview:false});
-  editor.find(menu=>menu.label==='View').submenu.find(row=>row.label==='Surface').click();
-  assert.deepEqual(actions,['cleanView','frameSelection','frame','frameSelection']);
+test('UV preview has no editor View toggles; Vertex View uses its own checked controls',()=>{
+  const actions=[],menus=buildMenuTemplate({},id=>actions.push(id),'win32',[],x=>x,{viewMode:'uv',preview:true});
+  assert.deepEqual(menus.find(menu=>menu.label==='View').submenu,[]);
+  const editor=buildMenuTemplate({},id=>actions.push(id),'win32',[],x=>x,{viewMode:'vertices',checks:{shaded:true,showVertices:true}});
+  const rows=editor.find(menu=>menu.label==='View').submenu;
+  assert.deepEqual(rows.map(row=>row.label),['Shadows','Vertices','Normals','Wireframe Overlay','Grid','Clear']);
+  assert.equal(rows.find(row=>row.label==='Shadows').checked,true);
+  assert.equal(rows.find(row=>row.label==='Clear').type,undefined);
+  rows.find(row=>row.label==='Shadows').click();
+  rows.find(row=>row.label==='Clear').click();
+  assert.deepEqual(actions,['shaded','clearDisplay']);
 });

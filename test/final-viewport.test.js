@@ -72,6 +72,23 @@ test('bone/helper cubes retain reference size, roots differ, attachments are tet
   assert.ok(pixels.every(pixel => pixel.box[2] === 3 && pixel.box[3] === 3)); assert.deepEqual(model, before);
 });
 
+test('Skeleton lines render without Bones markers, and Bones markers render without Skeleton lines', () => {
+  const model = { Bones: [{ ObjectId: 0, PivotPoint: [0, 0, 0] }, { ObjectId: 1, Parent: 0, PivotPoint: [4, 0, 0] }] };
+  const points = projectMovementNodes(model, 0, -1, camera(), 400, 400);
+  const output = options => {
+    const pixels = [], boxes = [];
+    const context = new Proxy({ rect(...args) { boxes.push(args); }, fillRect(...args) { pixels.push(args); } }, { get: (owner, key) => key in owner ? owner[key] : () => {} });
+    drawMovementOverlay(context, points, [], [], 400, 400, 1, options);
+    return { pixels, boxes };
+  };
+  const skeleton = output({ bones: false, nodes: false, attachments: false, particles: false, boneLines: true });
+  const bones = output({ bones: true, nodes: false, attachments: false, particles: false, boneLines: false });
+  assert.ok(skeleton.pixels.length > 0);
+  assert.equal(skeleton.boxes.length, 0);
+  assert.equal(bones.pixels.length, 0);
+  assert.equal(bones.boxes.length, 2);
+});
+
 test('normal indicators preserve split stored directions, normalize display length and leave data intact', () => {
   const vertices = new Float32Array([0, 0, 0, 0, 0, 0]), normals = new Float32Array([0, 0, 2, 0, -3, 0]);
   const before = new Float32Array(normals);

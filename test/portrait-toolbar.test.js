@@ -67,14 +67,11 @@ test('Set Current View authors one identical camera roll for every Portrait vari
   }
 });
 
-test('Clear all switches off helper overlays while preserving grid, selections and other workspaces',()=>{
-  const state={vertices:{grid:true},bones:{grid:true},animation:{grid:true,vertices:true,wires:true,bones:true,nodes:true,attachments:true,particles:true},uv:{vertices:true}};
-  const before=structuredClone(state),next=clearQuickDisplay(state,'animation');
-  assert.deepEqual(state,before);assert.deepEqual(next.uv,before.uv);
-  for(const mode of ['vertices','bones','animation']){
-    assert.equal(next[mode].grid,true);
-    for(const key of ['vertices','wires','bones','nodes','attachments','particles'])assert.equal(next[mode][key],false);
-  }
+test('Clear turns off the active view, including Shadows and Grid',()=>{
+  const state={vertices:{grid:true,shaded:true},bones:{grid:true},animations:{grid:true,shaded:true,vertices:true,wires:true,bones:true,skeleton:true,nodes:true,attachments:true,particles:true},uv:{vertices:true}};
+  const before=structuredClone(state),next=clearQuickDisplay(state,'animations');
+  assert.deepEqual(state,before);assert.deepEqual(next.vertices,before.vertices);assert.deepEqual(next.bones,before.bones);assert.deepEqual(next.uv,before.uv);
+  assert.ok(Object.values(next.animations).every(value=>!value));
 });
 
 test('Snap uses existing camera entry without altering document, playback or sequence',()=>{

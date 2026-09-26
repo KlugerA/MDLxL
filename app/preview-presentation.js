@@ -1,5 +1,5 @@
 const EMPTY_MAP = Object.freeze({}), EMPTY_IDS = Object.freeze([]), EMPTY_PREFERENCES = Object.freeze({});
-const CLEAN_DISPLAY = Object.freeze(Object.fromEntries(['bones', 'nodes', 'attachments', 'particles', 'emitters', 'boneLines', 'wires', 'vertices', 'grid', 'axes', 'normals', 'cameras'].map(key => [key, false])));
+const CLEAN_DISPLAY = Object.freeze(Object.fromEntries(['bones', 'skeleton', 'nodes', 'attachments', 'particles', 'emitters', 'boneLines', 'wires', 'vertices', 'grid', 'axes', 'normals', 'cameras'].map(key => [key, false])));
 const preferenceCache = new WeakMap();
 
 /** Preview presentation is readonly and independent of the editing display.
@@ -10,15 +10,15 @@ export function previewPresentationProps(props) {
   if (!preferenceCache.has(original)) preferenceCache.set(original, { ...original, graphics: { ...original.graphics, textures: true }, platform: { ...original.platform, enabled: false } });
   const interactive = props.interactivePreview === true;
   const neutralBackground = !props.backgroundUrl;
-  const previewMode = ['wireframe','solid','textured'].includes(props.previewMode) ? props.previewMode : 'textured';
+  const previewMode = props.cleanAnimationPreview && props.overlays?.wires ? 'wireframe' : ['wireframe','solid','textured'].includes(props.previewMode) ? props.previewMode : 'textured';
   const vertices = props.overlays?.vertices ?? !!props.showVertices;
   const wires = previewMode === 'wireframe' || !!props.overlays?.wires;
   const grid = neutralBackground && (props.overlays?.grid ?? props.showGrid ?? true);
-  const display = { ...CLEAN_DISPLAY, ...(props.overlays || {}), wires, vertices, grid, axes: neutralBackground };
+  const display = { ...CLEAN_DISPLAY, ...(props.overlays || {}), wires, vertices, grid, axes: grid && neutralBackground };
   return {
     ...props, preferences: preferenceCache.get(original), mode: previewMode, shaded: true, rgbPreview: false, restPose: props.restPose ?? false,
-    overlays: display, showGrid: grid, showAxes: neutralBackground,
-    showNodes: display.nodes, showSkeleton: display.bones || display.nodes || display.attachments || display.particles,
+    overlays: display, showGrid: grid, showAxes: grid && neutralBackground,
+    showNodes: display.nodes, showSkeleton: display.bones || display.skeleton || display.nodes || display.attachments || display.particles,
     showVertices: vertices, showNormals: display.normals, showCameras: display.cameras,
     selectionByGeoset: interactive ? props.selectionByGeoset || EMPTY_MAP : EMPTY_MAP, selectedVertices: EMPTY_IDS, selectedNodeIds: EMPTY_IDS, selectableGeosets: props.selectableGeosets || EMPTY_IDS,
     hiddenGeosets: props.uvOnlySelected === true ? props.hiddenGeosets : undefined, hiddenVertices: undefined, hoveredGeoset: interactive ? props.hoveredGeoset ?? null : null,

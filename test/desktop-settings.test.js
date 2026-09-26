@@ -11,11 +11,12 @@ const require = createRequire(import.meta.url);
 const { SettingsStore, applySettingsPatch } = require('../electron/settings.cjs');
 const { buildMenuTemplate, nativeAccelerator, normalizeMenuChecks } = require('../electron/menu.cjs');
 
-test('native View menu retains Bones and Vertices checkbox state', () => {
-  const checks = normalizeMenuChecks({ 'display:bones': true, showVertices: true });
+test('native View menu retains Bones, Skeleton and Vertices checkbox state', () => {
+  const checks = normalizeMenuChecks({ 'display:bones': true, 'display:skeleton': false, showVertices: true });
   assert.equal(checks['display:bones'], true);
+  assert.equal(checks['display:skeleton'], false);
   assert.equal(checks.showVertices, true);
-  assert.equal(checks.axes, false);
+  assert.equal(checks.grid, false);
 });
 
 async function scratch(t) {

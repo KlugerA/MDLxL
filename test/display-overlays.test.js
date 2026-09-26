@@ -1,38 +1,45 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { animationPanelDisplay, enterMovementDisplay, setEditorDisplay, synchronizeEditorDisplay } from '../src/display-overlays.js';
+import { clearQuickDisplay, defaultEditorDisplay, setEditorDisplay } from '../src/display-overlays.js';
+import { previewOverlayOptions } from '../app/preview-overlays.js';
 
-const modes = () => ({
-  vertices: { bones: false, wires: true, nodes: false, attachments: true, particles: false, vertices: true, grid: true, cameras: false, normals: true },
-  uv: { bones: true, wires: false, nodes: true, attachments: false, particles: true, vertices: false, grid: false, cameras: true, normals: false },
-  bones: { bones: true, wires: false, nodes: true, attachments: false, particles: true, vertices: false, grid: false, cameras: true, normals: false },
-  animation: { bones: true, wires: false, nodes: true, attachments: false, particles: true, vertices: false, grid: false, cameras: true, normals: false },
-});
-
-test('legacy editor display state migrates to one shared state without changing UV', () => {
-  const source = modes(), next = synchronizeEditorDisplay(source);
-  for (const mode of ['vertices', 'bones', 'animation']) assert.deepEqual(next[mode], source.vertices);
-  assert.deepEqual(next.uv, source.uv);
-  assert.notEqual(next.vertices, next.bones);
-});
-
-test('every editor display switch is synchronized across Vertices, Bones, Movement, and Animations', () => {
-  let state = synchronizeEditorDisplay(modes());
-  for (const key of ['bones', 'wires', 'nodes', 'attachments', 'particles', 'vertices', 'grid', 'cameras', 'normals']) {
-    state = setEditorDisplay(state, 'animation', key, previous => !previous);
-    for (const mode of ['vertices', 'bones', 'animation']) assert.equal(state[mode][key], state.animation[key], `${key} in ${mode}`);
+test('startup selects only Shadows and Vertices where those options exist', () => {
+  const state = defaultEditorDisplay();
+  for (const mode of ['vertices', 'bones', 'movement']) {
+    assert.deepEqual(Object.entries(state[mode]).filter(([, enabled]) => enabled).map(([key]) => key), ['shaded', 'vertices']);
   }
-  assert.deepEqual(state.uv, modes().uv);
+  assert.ok(Object.values(state.animations).every(enabled => !enabled));
 });
 
-test('Movement enables rig layers and renders only selected vertex squares', () => {
-  const entered = enterMovementDisplay({ bones: false, attachments: false, vertices: true, grid: true });
-  assert.equal(entered.bones, true); assert.equal(entered.attachments, true);
-  const display = animationPanelDisplay(entered, 'movement');
-  assert.equal(display.vertices, false); assert.equal(display.selectedVerticesOnly, true); assert.equal(display.grid, true);
+test('display switches belong to their respective editor', () => {
+  const initial = defaultEditorDisplay();
+  const bones = setEditorDisplay(initial, 'bones', 'bones', true);
+  const skeleton = setEditorDisplay(bones, 'bones', 'skeleton', true);
+  const movement = setEditorDisplay(skeleton, 'movement', 'nodes', true);
+  assert.equal(movement.bones.bones, true);
+  assert.equal(movement.bones.skeleton, true);
+  assert.equal(movement.movement.nodes, true);
+  assert.equal(movement.vertices.bones, false);
+  assert.equal(movement.animations.bones, false);
+  assert.deepEqual(initial, defaultEditorDisplay());
 });
 
-test('Animations suppresses every rig, node, emitter and vertex marker', () => {
-  const display = animationPanelDisplay({ bones: true, nodes: true, attachments: true, particles: true, vertices: true, cameras: true }, 'animations');
-  for (const key of ['bones', 'nodes', 'attachments', 'particles', 'vertices', 'cameras']) assert.equal(display[key], false, key);
+test('Bones and Skeleton independently control markers and connecting lines', () => {
+  const defaults = defaultEditorDisplay().bones;
+  assert.deepEqual(
+    [previewOverlayOptions({ ...defaults, bones: true }).bones, previewOverlayOptions({ ...defaults, bones: true }).boneLines],
+    [true, false],
+  );
+  assert.deepEqual(
+    [previewOverlayOptions({ ...defaults, skeleton: true }).bones, previewOverlayOptions({ ...defaults, skeleton: true }).boneLines],
+    [false, true],
+  );
+});
+
+test('Clear turns off only the active editor options', () => {
+  const state = setEditorDisplay(defaultEditorDisplay(), 'bones', 'skeleton', true);
+  const cleared = clearQuickDisplay(state, 'bones');
+  assert.ok(Object.values(cleared.bones).every(enabled => !enabled));
+  assert.deepEqual(cleared.vertices, state.vertices);
+  assert.deepEqual(cleared.movement, state.movement);
 });

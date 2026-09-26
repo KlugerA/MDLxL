@@ -1,6 +1,5 @@
 const VIEW_MENU = require('../src/view-menu.json');
-const PREVIEW_EDITOR_CONTROLS = new Set(VIEW_MENU.filter(row=>row && !['frame','frameSelection','wireframe','cleanView'].includes(row[1])).map(row=>row[1]));
-const VIEW_MENU_IDS = VIEW_MENU.filter(Boolean).map(row => row[1]);
+const VIEW_MENU_IDS = [...new Set(Object.values(VIEW_MENU).flat().map(row => row[1]))];
 
 function normalizeMenuChecks(checks) {
   return Object.fromEntries(VIEW_MENU_IDS.map(id => [id, checks?.[id] === true]));
@@ -16,9 +15,8 @@ function buildMenuTemplate(bindings, dispatch, platform = process.platform, rece
   const item = (label, id) => {
     const keys = (bindings[id] || []).filter(key => /^[A-Za-z0-9]$|^F(?:[1-9]|1\d|2[0-4])$/.test(key) || ['Delete','Escape','Insert','Tab'].includes(key));
     const requiresEditable = id === 'particles' || id === 'GeosetAnims';
-    const previewControl = !!editorState.preview && PREVIEW_EDITOR_CONTROLS.has(id);
-    const enabled = !previewControl && (id === 'uv' ? !!editorState.uvEnabled : !requiresEditable || (!editorState.readOnly && !editorState.saving));
-    const result = { label, click: () => { if (enabled) dispatch(id); }, ...((requiresEditable || id==='uv' || previewControl) ? { enabled } : {}) };
+    const enabled = id === 'uv' ? !!editorState.uvEnabled : !requiresEditable || (!editorState.readOnly && !editorState.saving);
+    const result = { label, click: () => { if (enabled) dispatch(id); }, ...((requiresEditable || id==='uv') ? { enabled } : {}) };
     // The renderer owns shortcuts so input fields, dialogs, and remapped keys use
     // the same rules as the browser build. Native accelerators only display them.
     const accelerator = keys.length ? nativeAccelerator(keys[0]) : null;
@@ -33,7 +31,7 @@ function buildMenuTemplate(bindings, dispatch, platform = process.platform, rece
     { label: '&File', submenu: [item('&Open…', 'open'), { label:'Recent Files', submenu: recentFiles.length ? [...recentFiles.map(file=>({label:file.replaceAll('&','&&'),click:()=>dispatch({action:'openRecent',path:file}),keepLabel:true})),separator(),item('Clear Recent Files','clearRecent')] : [{label:'No recent files',enabled:false}] }, item('&Save', 'save'), item('Save as…', 'saveAs'), separator(), item('New model', 'new'), item('Recovery…', 'recovery'), separator(), item('Exit', 'exit')] },
     { label: '&Edit', submenu: [item('Undo', 'undo'), item('Redo', 'redo'), separator(), item('Select all', 'selectAll'), item('Clear selection', 'clear'), item('Copy', 'copy'), item('Paste', 'paste'), item('Paste special…', 'pasteSpecial'), separator(), item('Undo cache…', 'history'), separator(), {label:'Keyframes',submenu:[['Copy','copy'],['Copy Frame','copyPose'],['Paste','paste'],['Delete','delete'],['Clear','clear']].map(([label,id])=>item(label,'keyframe:'+id))}] },
     { label: 'Shape', submenu: ['Bend','Warp','Dome','Wrap','Taper'].map(name=>item(name,'shape:'+name.toLowerCase())) },
-    { label: 'View', submenu: VIEW_MENU.map(row=>row?{...item(...row),type:'checkbox',checked:!!editorState.checks?.[row[1]]}:separator()) },
+    { label: 'View', submenu: (VIEW_MENU[editorState.viewMode] || []).map(row=>row[1]==='clearDisplay'?item(...row):{...item(...row),type:'checkbox',checked:!!editorState.checks?.[row[1]]}) },
     { label: 'Modules', submenu: [item('Vertex editor', 'vertices'), item('Bones', 'bones'), item('UV-maps', 'uv'), item('Movement', 'animation'), item('Animations: visibility and RGB', 'animations'), item('Particle Editor…', 'particles'), item('Material and Texture Library', 'textureLibrary')] },
     { label: 'Windows', submenu: [['Material Manager…', 'Materials'], ['Texture Manager…', 'Textures'], ['Node Manager…', 'Nodes'], ['Geoset Manager…', 'Geosets'], ['Geoset Animation Manager…', 'GeosetAnims'], ['Sequence Manager…', 'Sequences'], ['Texture Animation Manager…', 'TextureAnims'], ['Global Sequence Manager…', 'GlobalSequences']].map(([label, id]) => item(label, id)) },
     { label: 'Settings', submenu: [item('Mouse and general…', 'settings'), item('Keyboard Shortcuts…', 'warmkeys'), item('Graphical settings…', 'graphics'), item('Recording and screenshots…','captureSettings'), item('Appearance…','appearanceSettings'), item('Configuration…','configurationSettings'), item('Grid…','gridSettings'), item('Warcraft III…','gameDataSettings'), separator(), item('Undo cache…', 'history'), item('Show pressed keys','pressedKeys'), item('Choose Warcraft III folder…', 'gameData'), item('Rescan game data', 'game-data-rescan')] },

@@ -28,6 +28,11 @@
 .classic-app .classic-toolbar>.addon-menu,.classic-app .classic-toolbar>[data-warmkey="convertVersion"]{flex-shrink:0}
 .classic-app .classic-toolbar .language-trigger{padding-left:3px;padding-right:3px;font-size:10px}
 .classic-app .classic-toolbar .quick-display button{min-width:0;height:21px;min-height:21px;padding:0 5px}
+@media (max-width:1250px){
+  .classic-app>.classic-toolbar{flex-wrap:wrap}
+  .classic-toolbar .quick-display{order:1;flex-basis:100%}
+  .classic-toolbar .quick-display-options{overflow:visible}
+}
 .classic-app .classic-toolbar .toolbar-visibility button{min-width:38px;height:23px;min-height:23px;padding:0 6px}
 /* Vis trims only the top presentation. Menus/hotkeys and the Movement portrait
    toolbar stay available, and no renderer or editor state is remounted. */

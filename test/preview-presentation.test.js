@@ -18,7 +18,7 @@ test('Animations presentation shares editor display switches and uses the grid o
   const pictured=previewPresentationProps({...edit,presentation:'preview',backgroundUrl:'file:///background.png'});
   assert.equal(pictured.showGrid,false);assert.equal(pictured.showAxes,false);assert.equal(pictured.overlays.grid,false);assert.equal(pictured.overlays.axes,false);assert.equal(pictured.overlays.wires,true);assert.equal(pictured.overlays.vertices,true);
   const gridDisabled=previewPresentationProps({...edit,presentation:'preview',overlays:{...edit.overlays,grid:false}});
-  assert.equal(gridDisabled.showGrid,false);assert.equal(gridDisabled.overlays.grid,false);assert.equal(gridDisabled.showAxes,true);
+  assert.equal(gridDisabled.showGrid,false);assert.equal(gridDisabled.overlays.grid,false);assert.equal(gridDisabled.showAxes,false);
   assert.deepEqual(edit.preferences,before);assert.deepEqual(edit.selectionByGeoset,{0:[0]});
 });
 
