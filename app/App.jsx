@@ -949,8 +949,18 @@ export default function App() {
     try { result = edit(label, sections, operation, { rethrow: true }); }
     catch { return; }
     if (result === false) { say('No geosets share compatible materials and RGB.'); return; }
-    setSelection({}); setHidden({}); setSelectable(new Set(result.geosetIndices));
-    setActiveGeoset(result.geosetIndices[0] ?? -1); setUvSet(0); clearZoomAnchor();
+    const remapVertices = previous => {
+      const next = {};
+      for (const [oldIndex, vertices] of Object.entries(previous)) {
+        const newIndex = result.oldToNew[oldIndex];
+        if (newIndex === undefined) continue;
+        (next[newIndex] ||= []).push(...vertices.map(vertex => vertex + result.vertexOffsets[oldIndex]));
+      }
+      return next;
+    };
+    setSelection(remapVertices); setHidden(remapVertices);
+    setSelectable(previous => new Set([...previous].map(index => result.oldToNew[index]).filter(index => index !== undefined)));
+    setActiveGeoset(previous => result.oldToNew[previous] ?? -1); setUvSet(0); clearZoomAnchor();
     say(`Merged ${result.merged} geosets.`);
   };
   const separateSelectedGeosets = nuclear => {
@@ -1076,7 +1086,7 @@ export default function App() {
 
         </>}
       </Suspense>}
-      {mode === 'vertices' && !cameraRotating && <div className="classic-geoset-operations"><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(false)}>Seperate by Loose parts</button><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(true)}>Nuclear Seperation</button><button disabled={!editable} onClick={() => changeGeosetStructure('Merge geosets', ['Geosets', 'GeosetAnims', 'Bones', 'Gliders', 'Info'], mergeSimilarGeosets)}>Merge Geosets</button></div>}
+      {mode === 'vertices' && !cameraRotating && <div className="classic-geoset-operations"><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(false)}>Seperate by Loose parts</button><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(true)}>Nuclear Seperation</button><button disabled={!editable || !selectionCount} onClick={() => changeGeosetStructure('Merge geosets', ['Geosets', 'GeosetAnims', 'Bones', 'Gliders', 'Info'], current => mergeSimilarGeosets(current, validSelection))}>Merge Geosets</button></div>}
       {(mode !== 'animation' || animationPanel === 'movement' || cameraRotating) && geosetPicker}
       {rigWorkspace && bindingPanel}
     </aside>}</main>

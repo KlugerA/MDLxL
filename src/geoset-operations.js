@@ -55,19 +55,19 @@ function selectedComponents(g, indices, nuclear) {
   if (!Number.isInteger(count) || !count || g.Faces.length % 3) throw new Error('A geoset has invalid vertices or triangles.');
   const selected = new Set(indices);
   if ([...selected].some(index => !Number.isInteger(index) || index < 0 || index >= count)) throw new Error('Vertex selection is out of range.');
-  const chosen = [], retainedFaces = [], usedByFaces = new Set();
+  const faces = [], usedByFaces = new Set();
   for (let i = 0; i < g.Faces.length; i += 3) {
     const face = Array.from(g.Faces.subarray(i, i + 3));
     if (face.some(index => index >= count)) throw new Error('A geoset has a triangle with a missing vertex.');
     for (const index of face) usedByFaces.add(index);
-    (face.every(index => selected.has(index)) ? chosen : retainedFaces).push(face);
+    faces.push(face);
   }
-  const parent = chosen.map((_, index) => index);
+  const parent = faces.map((_, index) => index);
   const root = index => { while (parent[index] !== index) { parent[index] = parent[parent[index]]; index = parent[index]; } return index; };
   const join = (a, b) => { a = root(a); b = root(b); if (a !== b) parent[b] = a; };
   const vertexOwner = new Map(), edgeOwner = new Map();
   const point = index => Array.from(g.Vertices.subarray(index * 3, index * 3 + 3), value => Math.round(value * 1000)).join(',');
-  for (const [faceIndex, face] of chosen.entries()) {
+  for (const [faceIndex, face] of faces.entries()) {
     for (const vertex of face) {
       if (vertexOwner.has(vertex)) join(faceIndex, vertexOwner.get(vertex));
       else vertexOwner.set(vertex, faceIndex);
@@ -81,20 +81,28 @@ function selectedComponents(g, indices, nuclear) {
     }
   }
   const parts = new Map();
-  for (const [faceIndex, face] of chosen.entries()) {
+  for (const [faceIndex, face] of faces.entries()) {
     const id = root(faceIndex);
-    if (!parts.has(id)) parts.set(id, { vertices: new Set(), faces: [] });
+    if (!parts.has(id)) parts.set(id, { vertices: new Set(), faces: [], faceIndices: [] });
     const part = parts.get(id);
     for (const vertex of face) part.vertices.add(vertex);
     part.faces.push(...face);
+    part.faceIndices.push(faceIndex);
   }
-  for (const vertex of selected) if (!usedByFaces.has(vertex)) parts.set(`loose:${vertex}`, { vertices: new Set([vertex]), faces: [] });
-  const retainedVertices = new Set(Array.from({ length: count }, (_, index) => index).filter(index => !selected.has(index)));
-  for (const face of retainedFaces) for (const vertex of face) retainedVertices.add(vertex);
-  const orderedParts = [...parts.values()].map(part => ({ vertices: [...part.vertices].sort((a, b) => a - b), faces: part.faces })).sort((a, b) => a.vertices[0] - b.vertices[0]);
+  for (let vertex = 0; vertex < count; vertex++) if (!usedByFaces.has(vertex)) parts.set(`loose:${vertex}`, { vertices: new Set([vertex]), faces: [], faceIndices: [] });
+  const chosen = [], retained = [];
+  for (const part of parts.values()) {
+    const vertices = [...part.vertices].sort((a, b) => a - b);
+    const entry = { vertices, faces: part.faces, faceIndices: part.faceIndices };
+    (vertices.filter(vertex => selected.has(vertex)).length * 2 >= vertices.length ? chosen : retained).push(entry);
+  }
+  const orderedParts = chosen.sort((a, b) => a.vertices[0] - b.vertices[0]);
   return {
     parts: nuclear ? orderedParts : groupSmallDetails(orderedParts),
-    retained: { vertices: [...retainedVertices].sort((a, b) => a - b), faces: retainedFaces.flat() },
+    retained: {
+      vertices: retained.flatMap(part => part.vertices).sort((a, b) => a - b),
+      faces: retained.flatMap(part => part.faceIndices).sort((a, b) => a - b).flatMap(index => faces[index]),
+    },
   };
 }
 
@@ -186,15 +194,17 @@ function canAppend(target, source) {
 }
 
 /** Merge only geosets with equivalent material, RGB/visibility and mesh settings. */
-export function mergeSimilarGeosets(model) {
+export function mergeSimilarGeosets(model, selectionByGeoset) {
   const original = model.Geosets, animations = animationIndices(model);
-  const byKey = new Map(), leaders = original.map((_, index) => index), targets = new Set();
+  const byKey = new Map(), leaders = original.map((_, index) => index), targets = new Set(), vertexOffsets = original.map(() => 0);
   for (let index = 0; index < original.length; index++) {
+    if (!selectionByGeoset?.[index]?.length) continue;
     const key = appearanceKey(model, index, animations);
     if (key == null) continue;
     const candidates = byKey.get(key) || [];
     const leader = candidates.find(other => canAppend(original[other], original[index]));
     if (leader === undefined) { candidates.push(index); byKey.set(key, candidates); continue; }
+    vertexOffsets[index] = original[leader].Vertices.length / 3;
     appendGeosetGeometry(original[leader], original[index]);
     unionAnimatedExtents(original[leader], original[index]);
     original[leader].PrimitiveTypes = Uint32Array.of(4);
@@ -223,5 +233,5 @@ export function mergeSimilarGeosets(model) {
   for (const glider of model.Gliders || []) if (oldToNew.has(glider.GeosetId)) glider.GeosetId = oldToNew.get(glider.GeosetId);
   model.Info.NumGeosets = kept.length;
   model.Info.NumGeosetAnims = keptAnimations.length;
-  return { merged: original.length - kept.length, geosetIndices: [...targets].map(index => oldToNew.get(index)) };
+  return { merged: original.length - kept.length, geosetIndices: [...targets].map(index => oldToNew.get(index)), oldToNew: Object.fromEntries(oldToNew), vertexOffsets };
 }

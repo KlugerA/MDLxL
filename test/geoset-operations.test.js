@@ -99,6 +99,36 @@ test('refined separation keeps repeated small trim details in one geoset', () =>
   assert.equal(openDocument(doc.serialize('mdx'), 'trim.mdx').model.Geosets.length, 6);
 });
 
+test('half of a loose part selects the whole part, while less than half leaves it untouched', () => {
+  const prepare = () => {
+    const doc = createDemoDocument();
+    doc.apply('Prepare two loose parts', ['Geosets'], model => {
+      const g = model.Geosets[0];
+      Object.assign(g, gather(g, Array.from({ length: 9 }, (_, index) => index)));
+      g.Vertices.set([0, 0, 0, 2, 0, 0, 2, 2, 0, 0, 0, 0, 2, 2, 0, 0, 2, 0, 10, 0, 0, 11, 0, 0, 10, 1, 0]);
+      g.Faces = Uint16Array.from(Array.from({ length: 9 }, (_, index) => index));
+      g.PrimitiveTypes = Uint32Array.of(4); g.PrimitiveCounts = Uint32Array.of(9);
+      updateBounds(g);
+    });
+    return doc;
+  };
+  const belowHalf = prepare(), original = structuredClone(belowHalf.model.Geosets[0]);
+  assert.equal(separateGeosetsByLoosePart(belowHalf.model, { 0: [0, 1] }), false);
+  assert.deepEqual(belowHalf.model.Geosets[0], original);
+  const half = prepare(), untouched = structuredClone(half.model.Geosets[1]);
+  const result = half.apply('Separate half-selected square', ['Geosets', 'GeosetAnims', 'Info'], model => separateGeosetsByLoosePart(model, { 0: [0, 1, 2] }));
+  assert.equal(result.parts, 1);
+  assert.equal(half.model.Geosets[0].Faces.length, 3);
+  assert.equal(half.model.Geosets[5].Faces.length, 6);
+  assert.equal(half.model.Geosets[5].Vertices.length / 3, 6);
+  assert.deepEqual(half.model.Geosets[1], untouched);
+  assert.equal(openDocument(half.serialize('mdx'), 'half-selected.mdx').model.Geosets.length, 6);
+  const nuclear = prepare();
+  assert.equal(nuclearSeparateGeosets(nuclear.model, { 0: [0] }), false);
+  assert.equal(nuclearSeparateGeosets(nuclear.model, { 0: [0, 1] }).parts, 1);
+  assert.equal(nuclear.model.Geosets[5].Vertices.length / 3, 3);
+});
+
 test('merge resolves equivalent texture records but keeps team color, RGB and visibility differences separate', () => {
   const doc = createDemoDocument();
   doc.apply('Prepare merge cases', ['Geosets', 'GeosetAnims', 'Materials', 'Textures', 'Bones', 'Info'], model => {
@@ -115,9 +145,10 @@ test('merge resolves equivalent texture records but keeps team color, RGB and vi
     sameMaterial.Layers[0].TextureID = sameTexture;
     const matchingMaterialId = model.Materials.push(sameMaterial) - 1;
     const matching = copy(matchingMaterialId);
+    copy(matchingMaterialId); // Compatible but never selected.
     model.Geosets[matching].Groups = [[model.Bones[1].ObjectId]];
     model.Bones[0].GeosetId = matching;
-    model.Bones[0].GeosetAnimId = model.GeosetAnims.length - 1;
+    model.Bones[0].GeosetAnimId = model.GeosetAnims.findIndex(record => record.GeosetId === matching);
     const ordinaryTexture = model.Textures.push({ ...structuredClone(model.Textures[0]), ReplaceableId: 0 }) - 1;
     const ordinaryMaterial = structuredClone(model.Materials[0]);
     ordinaryMaterial.Layers[0].TextureID = ordinaryTexture;
@@ -126,20 +157,26 @@ test('merge resolves equivalent texture records but keeps team color, RGB and vi
     copy(0, record => { record.Alpha = 0.5; });
   });
   const before = structuredClone(doc.model.Geosets[0]);
-  const result = doc.apply('Merge', ['Geosets', 'GeosetAnims', 'Bones', 'Info'], mergeSimilarGeosets);
+  const unselected = structuredClone(doc.model.Geosets[6]);
+  assert.equal(mergeSimilarGeosets(doc.model, { 0: [0] }), false);
+  assert.equal(mergeSimilarGeosets(doc.model, {}), false);
+  const result = doc.apply('Merge', ['Geosets', 'GeosetAnims', 'Bones', 'Info'], model => mergeSimilarGeosets(model, { 0: [0], 5: [0] }));
   assert.equal(result.merged, 1);
-  assert.equal(doc.model.Geosets.length, 8);
-  assert.equal(doc.model.GeosetAnims.length, 8);
+  assert.equal(doc.model.Geosets.length, 9);
+  assert.equal(doc.model.GeosetAnims.length, 9);
+  assert.deepEqual(doc.model.Geosets[5], unselected);
+  assert.equal(result.oldToNew[6], 5);
+  assert.equal(result.vertexOffsets[5], before.Vertices.length / 3);
   assert.equal(doc.model.Bones[0].GeosetId, 0);
   assert.equal(doc.model.Bones[0].GeosetAnimId, 0);
   assert.deepEqual(Array.from(doc.model.Geosets[0].Vertices), [...before.Vertices, ...before.Vertices]);
   assert.deepEqual(Array.from(doc.model.Geosets[0].Faces.slice(before.Faces.length)), Array.from(before.Faces, index => index + before.Vertices.length / 3));
   assert.deepEqual(doc.model.Geosets[0].Groups[doc.model.Geosets[0].VertexGroup[before.Vertices.length / 3]], [doc.model.Bones[1].ObjectId]);
-  assert.equal(mergeSimilarGeosets(doc.model), false);
+  assert.equal(mergeSimilarGeosets(doc.model, { 0: [0] }), false);
   for (const format of ['mdx', 'mdl']) {
     const reopened = openDocument(doc.serialize(format), `merged.${format}`);
     assert.equal(reopened.readOnly, false);
-    assert.equal(reopened.model.Geosets.length, 8);
+    assert.equal(reopened.model.Geosets.length, 9);
     assert.equal(reopened.model.Bones[0].GeosetId, 0);
   }
 });
