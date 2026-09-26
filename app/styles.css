@@ -81,3 +81,7 @@
 .quad-pane-label{position:absolute;top:4px;left:6px;padding:2px 5px;background:var(--ui-field,#e7e7e7);color:var(--ui-text,#222);font-weight:bold;pointer-events:none;z-index:3}
 .quad-pane.active>.quad-pane-label{outline:1px solid var(--ui-accent,#215e9e)}
 .quad-workspace .classic-view-label{position:relative;left:0;top:0;flex:none;height:26px;padding:2px 3px;background:#d4d0c8}
+
+/* Appears only while choosing the three NormalsXL direction references. */
+.normals-xl-prompt{position:absolute;z-index:5;top:34px;left:8px;max-width:500px;display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--ui-field,#eee);color:var(--ui-text,#111);border:1px solid var(--ui-border,#888);font-size:12px;box-shadow:0 2px 6px #0003}
+.normals-xl-prompt b{display:block;margin-bottom:3px}

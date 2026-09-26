@@ -506,7 +506,7 @@ export default function Viewport(inputProps) {
       controls.enabled = false; surface.setPointerCapture(event.pointerId);
       if (action === 'zoom') { down.zoom = camera.zoom; down.cameraPosition = camera.position.clone(); return; }
       if (p.choosingZoomAnchor) { down.action = 'anchor'; state.anchorCandidate = null; return; }
-      if (p.transformMode === 'select' || p.sequenceIndex >= 0 || p.playing || down.ctrl && p.onInspectGeoset) { down.action = 'select'; return; }
+      if (p.onPickNormalReference || p.transformMode === 'select' || p.sequenceIndex >= 0 || p.playing || down.ctrl && p.onInspectGeoset) { down.action = 'select'; return; }
       const active = editableGeosets(p), selected = selections(p), snapshots = {}, selectedMap = {}, pivot = new THREE.Vector3(); let count = 0;
       for (const [key, ids] of Object.entries(selected)) {
         const index = Number(key), entry = state.entries[index], invisible = new Set(p.hiddenVertices?.[key] || []);
@@ -604,7 +604,7 @@ export default function Viewport(inputProps) {
       }
       if (start.action !== 'select') return;
       const end = point(event), distance = Math.hypot(end.x - start.x, end.y - start.y), p = latest.current;
-      if (distance <= 5 && start.ctrl && p.onInspectGeoset) {
+      if (distance <= 5 && start.ctrl && p.onInspectGeoset && !p.onPickNormalReference) {
         const geometry = state.entries.flatMap((entry, index) => entry?.group.visible ? [{ index, faces: entry.geometry.index.array, vertices: entry.geometry.attributes.position.array }] : []);
         const hit = pickPreviewGeoset(projectPreviewGeosets(geometry, camera, end.width, end.height), end.x, end.y);
         if (hit) p.onInspectGeoset(hit.index);
@@ -623,6 +623,10 @@ export default function Viewport(inputProps) {
             if (distance > 5) { if (marqueeContainsPoint([x, y], start, end, marqueeRadius)) found[geosetIndex].push(i); }
             else { const d = Math.abs(x - end.x) + Math.abs(y - end.y); if (d < closest) { closest = d; nearest = [geosetIndex, i]; } }
           }
+        }
+        if (p.onPickNormalReference) {
+          if (nearest) p.onPickNormalReference({ geosetIndex: nearest[0], vertexIndex: nearest[1] });
+          return;
         }
         if (nearest) found[nearest[0]].push(nearest[1]);
         else if (distance <= 5) {
