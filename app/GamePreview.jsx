@@ -477,7 +477,7 @@ export default function GamePreview(inputProps) {
       canvas.height = Math.round(height * pixelRatio); canvas.width = latest.current.portraitMode ? Math.round(canvas.height * PORTRAIT_ASPECT) : Math.round(width * pixelRatio); gl.viewport(0, 0, canvas.width, canvas.height);
       perspective.aspect = latest.current.portraitMode ? PORTRAIT_ASPECT : width / height; perspective.updateProjectionMatrix();
       const aspect = latest.current.portraitMode ? PORTRAIT_ASPECT : width / height;
-      const half = orthographicHalfHeight(fitRadius(), aspect);
+      const half = orthographicHalfHeight(radius, aspect);
       ortho.left = -half * aspect; ortho.right = -ortho.left; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
       drawBackground(); reportProjectionView();
       scheduler?.resize();

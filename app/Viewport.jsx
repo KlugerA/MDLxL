@@ -333,9 +333,7 @@ export default function Viewport(inputProps) {
     function resizePane() {
       const width = Math.max(1, surface.clientWidth), height = Math.max(1, surface.clientHeight);
       perspective.aspect = width / height; perspective.updateProjectionMatrix();
-      const p = latest.current, gridVisible = !quad && (p.overlays?.grid ?? !!p.showGrid);
-      const framed = gridVisible ? Math.max(state.radius, gridFrameRadius(state.center, gridOptions(p.preferences).extent)) : state.radius;
-      const half = orthographicHalfHeight(framed, width / height); ortho.left = -half * width / height; ortho.right = half * width / height; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
+      const half = orthographicHalfHeight(state.radius, width / height); ortho.left = -half * width / height; ortho.right = half * width / height; ortho.top = half; ortho.bottom = -half; ortho.updateProjectionMatrix();
     }
     function resize() {
       const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1);

@@ -7,7 +7,7 @@ export function defaultEditorDisplay() {
     bones: { ...base },
     movement: { ...base },
     animations: { ...base, shaded: false, vertices: false },
-    uv: { ...base },
+    uv: { ...base, grid: true },
     paint: { ...base, shaded: false, vertices: false },
   };
 }

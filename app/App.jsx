@@ -174,7 +174,7 @@ export default function App() {
   const receiveCameraAngles = useCallback(value => setCameraAngles(previous => ['x','y','z'].some(axis=>Math.abs(previous[axis]-value[axis])>.001)?value:previous), []);
   const cameraProps = {onCameraAnglesChange:receiveCameraAngles,cameraAnglesRequest,onCameraGestureChange:setCameraGesture,onSensitivityIndicator:setAdjustingInput};
   useEffect(()=>setCameraGesture(false),[mode,session.id]);
-  const [tool, setTool] = useState('select'), [teamColor, setTeamColor] = useState('#ff0303'), [renderMode, setRenderMode] = useState('solid');
+  const [tool, setTool] = useState('select'), [teamColor, setTeamColor] = useState('#ff0303'), [renderMode, setRenderMode] = useState('wireframe');
   const [previewRenderModes, setPreviewRenderModes] = useState({});
   const [selectable, setSelectable] = useState(new Set()), [selection, setSelection] = useState({}), [hidden, setHidden] = useState({}), [activeGeoset, setActiveGeoset] = useState(0), [uvSet, setUvSet] = useState(0);
   const [showAllGeosets, setShowAllGeosets] = useState(true);
@@ -210,7 +210,7 @@ export default function App() {
   const panelOverlays = overlays;
   function changeOverlay(key, value) { setOverlayModes(previous => setEditorDisplay(previous, displayMode, key, value)); setCleanViews(previous => ({ ...previous, [mode]: false })); }
   const shaded = overlays.shaded, setShaded = value => changeOverlay('shaded', value);
-  const showAxes = !cleanView && !cleanAnimationPreview && overlays.grid && Object.values(preferences.grid.axes).some(Boolean);
+  const showAxes = !cleanView && !cleanAnimationPreview && Object.values(preferences.grid.axes).some(Boolean);
   const showGrid = overlays.grid, setShowGrid = value => changeOverlay('grid', value), showVertices = overlays.vertices, setShowVertices = value => changeOverlay('vertices', value);
   const portraitOverlays = { ...panelOverlays, grid: false, cameras: false };
   const [liveUV, setLiveUV] = useState(null), [saving, setSaving] = useState(false);
@@ -463,7 +463,7 @@ export default function App() {
     if (isPreviewMode) setPreviewRenderModes(previous=>({...previous,[mode]:next}));
     else { setRenderMode(next); setCleanViews(previous=>({...previous,[mode]:false})); }
   };
-  const toggleTextured = () => { const next=effectiveRenderMode==='textured'?'solid':'textured';setViewRenderMode(next); };
+  const toggleTextured = () => { const next=effectiveRenderMode==='textured'?'wireframe':'textured';setViewRenderMode(next); };
   const uvAction = (kind, value) => window.dispatchEvent(new CustomEvent('mdlvis-uv-action', { detail: { kind, value } }));
 
   function releaseUnusedTextureUrls() {
@@ -521,7 +521,7 @@ export default function App() {
     setRepairReceipt(null); setPortraitEnabled(false);
     const history = settings.current; next.doc.configureHistory({ budgetBytes: history.historyBudgetBytes ?? 512 * 1024 * 1024, maxSteps: history.historyMaxSteps ?? 10000 });
     setSelectedNodeIds([]); setLiveUV(null);
-    const citadelModel=next.doc.model.Textures.some(t=>/^MDLxL_Citadel[\\/]/i.test(t.Image||'')),initialGeosets=initialGeosetSelection(next.doc.model.Geosets.length);setCleanViews({}); setRenderMode(citadelModel?'textured':'solid');if(citadelModel)setShowAllGeosets(false);setSelectedNodeIds([]); setSession(next); setSelectable(initialGeosets); setSelection({}); setHidden({}); setActiveGeoset(initialGeosets.size?0:-1); setUvSet(0); setGlobalSeqId(null); setHighlightByPanel({ movement: false, animations: false }); setSequence(-1); setTime(0); setPlaying(false); setMode('vertices'); setDialog(null); rangeAnchor.current = 0; say(next.doc.readOnly ? 'Read-only model; original data retained.' : `Opened ${next.doc.name}`);
+    const citadelModel=next.doc.model.Textures.some(t=>/^MDLxL_Citadel[\\/]/i.test(t.Image||'')),initialGeosets=initialGeosetSelection(next.doc.model.Geosets.length);setCleanViews({}); setRenderMode(citadelModel?'textured':'wireframe');if(citadelModel)setShowAllGeosets(false);setSelectedNodeIds([]); setSession(next); setSelectable(initialGeosets); setSelection({}); setHidden({}); setActiveGeoset(initialGeosets.size?0:-1); setUvSet(0); setGlobalSeqId(null); setHighlightByPanel({ movement: false, animations: false }); setSequence(-1); setTime(0); setPlaying(false); setMode('vertices'); setDialog(null); rangeAnchor.current = 0; say(next.doc.readOnly ? 'Read-only model; original data retained.' : `Opened ${next.doc.name}`);
     // The boot effect resolves once after installing the initial model and settings.
     if (latest.current.preferencesReady) resolveTextures(next);
   }
