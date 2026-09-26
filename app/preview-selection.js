@@ -43,7 +43,7 @@ export function selectPreviewVertices(geosets, previous, start, end, selectable)
 }
 
 /** Pick the UVs of a visible face, or the visible vertex markers when shown.
- * The UV workspace's entry selection is the editing boundary. */
+ * The active material's mesh and available UV coordinates define pickability. */
 export function selectPreviewUVCoordinates(geosets, previous, start, end, eligibleByGeoset, showVertices, width, height) {
   const allowed = new Map(Object.entries(eligibleByGeoset || {}).map(([index, ids]) => [Number(index), new Set(ids)]));
   const pickable = geosets.filter(geo => allowed.has(geo.index));

@@ -98,7 +98,7 @@ function GeosetPicker({ options, value, attention = false, onChoose, onHover }) 
 }
 
 export default function UVWorkspace({ model, materialModel = model, previewModel, revision = 0, activeGeoset = -1, eligibleSelection = {}, selectionByGeoset = {}, onSelectionChange,
-  onWorkingSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onWrappingChange, textureAssets, teamColor, preferences, onPreferences,
+  onPreviewSelectionChange, onWorkingSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onWrappingChange, textureAssets, teamColor, preferences, onPreferences,
   draftCount = 0, onLibrary, onSavePreview, onRevertPreview, previewProps, readOnly = false, onExit }) {
   const [materialID, setMaterialID] = useState(null), [uvTool, setUVTool] = useState('select'), [foldDirection, setFoldDirection] = useState('right-to-left');
   const [selectingNew, setSelectingNew] = useState(false), [selectGeoset, setSelectGeoset] = useState(-1), [selectionDraft, setSelectionDraft] = useState({}), [hoveredGeoset, setHoveredGeoset] = useState(null);
@@ -144,7 +144,10 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
     for (const index of current?.geosetIndices || []) result[index] = unique(activeSelection[index]).filter(id => editingDomain[index]?.includes(id));
     return result;
   }, [current?.materialID, activeSelectionKey, editingDomainKey]);
-  const materialEligible = useMemo(() => Object.fromEntries((current?.geosetIndices || []).map(index => [index, unique(editingDomain[index])])), [current?.materialID, editingDomainKey]);
+  const materialEligible = useMemo(() => Object.fromEntries((current?.geosetIndices || []).map(index => {
+    const uv = model.Geosets[index]?.TVertices?.[current.coordId] || [];
+    return [index, (previewDomain[index] || []).filter(id => id * 2 + 1 < uv.length && Number.isFinite(uv[id * 2]) && Number.isFinite(uv[id * 2 + 1]))];
+  })), [current?.materialID, current?.coordId, model, previewDomain]);
   const materialSelectionKey = JSON.stringify(materialSelection);
   const combined = useMemo(() => current ? combineUVGeosets(model, current.geosetIndices, editingDomain, materialSelection, current.coordId) : null,
     [model, revision, current?.materialID, current?.coordId, editingDomainKey, materialSelectionKey]);
@@ -279,7 +282,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
             uvOnlySelected={showOnlySelected && !selectingNew} hiddenGeosets={hiddenPreviewGeosets} hideRgbGeoset={hideRGB && rgbTarget >= 0 ? rgbTarget : null}
             selectionByGeoset={activeSelection} selectableGeosets={selectingNew ? selectGeoset >= 0 ? [selectGeoset] : [] : current?.geosetIndices || []}
             previewSelectionMode={selectingNew ? undefined : showVerticles ? 'vertices' : 'polygons'} previewEligibleByGeoset={materialEligible}
-            onSelectionChange={selectingNew ? selectGeoset >= 0 ? next => setSelectionDraft({ [selectGeoset]: unique(next[selectGeoset]) }) : undefined : onSelectionChange}
+            onSelectionChange={selectingNew ? selectGeoset >= 0 ? next => setSelectionDraft({ [selectGeoset]: unique(next[selectGeoset]) }) : undefined : onPreviewSelectionChange}
             hoveredGeoset={selectingNew ? hoveredGeoset : null} cameraMode={selectingNew ? 'work' : 'rotate'} transformMode="select" cameraPresetRequest={projectionPreset} onProjectionViewChange={value => { projectionView.current = value; }} /></Suspense></div>
           <div className="uv-preview-footer">
             {selectingNew ? <><GeosetPicker options={geosetOptions} value={selectGeoset} attention={selectGeoset < 0} onChoose={changeSelectGeoset} onHover={setHoveredGeoset}/><span className="uv-selection-count">{selectNewCount} selected</span><button disabled={!selectNewCount} onClick={finishSelectNew}>Done</button><button onClick={cancelSelectNew}>Cancel</button></>

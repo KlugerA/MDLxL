@@ -977,6 +977,17 @@ export default function App() {
   };
   const uvWorkspace = (<UVWorkspace key={session.id+':'+uvEntryId} model={model} materialModel={texturedModel} previewModel={previewModel} revision={doc.revision} activeGeoset={activeGeoset} eligibleSelection={uvEntrySelection} selectionByGeoset={validSelection}
         onSelectionChange={next => setSelection(filterVertexSelection(next, new Set(Object.keys(uvEntrySelection).map(Number)), doc.model))}
+        onPreviewSelectionChange={next => {
+          setUVEntrySelection(previous => {
+            let expanded = previous;
+            for (const [index, ids] of Object.entries(next)) if (ids?.some(id => previous[index] && !previous[index].includes(id))) {
+              if (expanded === previous) expanded = { ...previous };
+              expanded[index] = [...new Set([...previous[index], ...ids])];
+            }
+            return expanded;
+          });
+          setSelection(filterVertexSelection(next, new Set(Object.keys(uvEntrySelection).map(Number)), doc.model));
+        }}
         onWorkingSelectionChange={next => { const indices = new Set(Object.keys(next).map(Number)); setUVEntrySelection(next); setSelectable(indices); setSelection(filterVertexSelection(next, indices, doc.model)); setHidden({}); setActiveGeoset(indices.values().next().value ?? -1); setLiveUV(null); }}
         onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
         onWrappingChange={(textureIDs, enabled) => edit(`${enabled ? 'Enable' : 'Disable'} UV texture wrapping`, ['Textures'], current => setUVTextureWrapping(current, textureIDs, enabled))}
