@@ -58,14 +58,28 @@ async function waitFor(cdp, expression) {
     cdp = await connect((await target(port)).webSocketDebuggerUrl);
     await waitFor(cdp, `document.querySelectorAll('.classic-geoset-list [role="option"]').length === 5`);
     const controls = await evaluate(cdp, `(() => { const buttons = [...document.querySelectorAll('.classic-geoset-operations button')]; const list = document.querySelector('.classic-geosets'); return { labels: buttons.map(button => button.textContent.trim()), beforeList: buttons.every(button => !!(button.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING)), sidebarWidth: getComputedStyle(document.querySelector('.classic-sidebar')).width }; })()`);
-    assert.deepEqual(controls.labels, ['Separate by Loose Part', 'Merge Geosets']);
+    assert.deepEqual(controls.labels, ['Seperate by Loose parts', 'Nuclear Seperation', 'Merge Geosets']);
     assert.equal(controls.beforeList, true);
+    assert.equal(await evaluate(cdp, `document.querySelector('.classic-geoset-operations button:first-child').disabled`), true);
+    await evaluate(cdp, `document.querySelector('[data-warmkey="geosetsClear"]').click()`);
+    await evaluate(cdp, `document.querySelector('[aria-label="Select geoset 0"]').click()`);
+    const selectAll = async () => {
+      await evaluate(cdp, `document.querySelector('[aria-label="3D model viewport"]').focus()`);
+      const data = { key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65, modifiers: 2 };
+      await cdp.send('Input.dispatchKeyEvent', { ...data, type: 'rawKeyDown' });
+      await cdp.send('Input.dispatchKeyEvent', { ...data, type: 'keyUp' });
+      await waitFor(cdp, `!document.querySelector('.classic-geoset-operations button:first-child').disabled`);
+    };
+    await selectAll();
     await evaluate(cdp, `document.querySelector('.classic-geoset-operations button:first-child').click()`);
     await waitFor(cdp, `document.querySelectorAll('.classic-geoset-list [role="option"]').length === 6`);
     await evaluate(cdp, `document.querySelector('.classic-geoset-operations button:last-child').click()`);
     await waitFor(cdp, `document.querySelectorAll('.classic-geoset-list [role="option"]').length === 5`);
+    await selectAll();
+    await evaluate(cdp, `document.querySelector('.classic-geoset-operations button:nth-child(2)').click()`);
+    await waitFor(cdp, `document.querySelectorAll('.classic-geoset-list [role="option"]').length === 6`);
     assert.equal(await evaluate(cdp, `getComputedStyle(document.querySelector('.classic-sidebar')).width`), controls.sidebarWidth);
     assert.ok(fs.readFileSync(fixture).equals(original));
-    console.log('PASS rebuilt Electron: both Vertex Editor buttons split and merge, sidebar width and input file preserved');
+    console.log('PASS rebuilt Electron: selection required, refined and nuclear split, merge, sidebar width and input file preserved');
   } finally { cdp?.close(); electron.kill(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

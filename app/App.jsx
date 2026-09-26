@@ -53,7 +53,7 @@ import { COMMANDS } from '../src/commands.js';
 import VIEW_MENU from '../src/view-menu.json';
 import { SelectionHistory } from '../src/selection-history.js';
 import { EditorDocument, openDocument, importGeosets, deleteGeoset, recalculateExtents, recalculateNormals } from '../src/editor-document.js';
-import { separateGeosetsByLoosePart, mergeSimilarGeosets } from '../src/geoset-operations.js';
+import { separateGeosetsByLoosePart, nuclearSeparateGeosets, mergeSimilarGeosets } from '../src/geoset-operations.js';
 import { transformVertices, deleteVertices, addTriangle } from '../src/editor-commands.js';
 import { detachFaces, extrudeFaces } from '../src/mesh-tools.js';
 import { captureMeshSelection } from '../src/mesh-clipboard.js';
@@ -948,10 +948,22 @@ export default function App() {
     let result;
     try { result = edit(label, sections, operation, { rethrow: true }); }
     catch { return; }
-    if (result === false) { say(label === 'Separate geosets by loose part' ? 'All geosets are already separate by loose part.' : 'No geosets share compatible materials and RGB.'); return; }
+    if (result === false) { say('No geosets share compatible materials and RGB.'); return; }
     setSelection({}); setHidden({}); setSelectable(new Set(result.geosetIndices));
     setActiveGeoset(result.geosetIndices[0] ?? -1); setUvSet(0); clearZoomAnchor();
-    say(label === 'Separate geosets by loose part' ? `Separated ${result.parts} loose parts into geosets.` : `Merged ${result.merged} geosets.`);
+    say(`Merged ${result.merged} geosets.`);
+  };
+  const separateSelectedGeosets = nuclear => {
+    const label = nuclear ? 'Nuclear Seperation' : 'Seperate by Loose parts';
+    let result;
+    try { result = edit(label, ['Geosets', 'GeosetAnims', 'Gliders', 'Info'], current => (nuclear ? nuclearSeparateGeosets : separateGeosetsByLoosePart)(current, validSelection), { rethrow: true }); }
+    catch { return; }
+    if (result === false) { say('The selected vertices contain no parts to separate.'); return; }
+    setSelection(previous => { const next = { ...previous }; for (const index of result.touched) delete next[index]; return { ...next, ...result.selection }; });
+    setHidden(previous => { const next = { ...previous }; for (const index of result.touched) delete next[index]; return next; });
+    setSelectable(previous => new Set([...previous, ...result.geosetIndices]));
+    setActiveGeoset(result.geosetIndices[0] ?? activeGeoset); setUvSet(0); clearZoomAnchor();
+    say(`Separated selected geometry into ${result.parts} new geoset${result.parts === 1 ? '' : 's'}.`);
   };
   const commitUVChanges = (changes, label = 'Edit UV coordinates') => {
     setLiveUV(null);
@@ -1064,7 +1076,7 @@ export default function App() {
 
         </>}
       </Suspense>}
-      {mode === 'vertices' && !cameraRotating && <div className="classic-geoset-operations"><button disabled={!editable} onClick={() => changeGeosetStructure('Separate geosets by loose part', ['Geosets', 'GeosetAnims', 'Gliders', 'Info'], separateGeosetsByLoosePart)}>Separate by Loose Part</button><button disabled={!editable} onClick={() => changeGeosetStructure('Merge geosets', ['Geosets', 'GeosetAnims', 'Bones', 'Gliders', 'Info'], mergeSimilarGeosets)}>Merge Geosets</button></div>}
+      {mode === 'vertices' && !cameraRotating && <div className="classic-geoset-operations"><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(false)}>Seperate by Loose parts</button><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(true)}>Nuclear Seperation</button><button disabled={!editable} onClick={() => changeGeosetStructure('Merge geosets', ['Geosets', 'GeosetAnims', 'Bones', 'Gliders', 'Info'], mergeSimilarGeosets)}>Merge Geosets</button></div>}
       {(mode !== 'animation' || animationPanel === 'movement' || cameraRotating) && geosetPicker}
       {rigWorkspace && bindingPanel}
     </aside>}</main>
