@@ -53,6 +53,7 @@ import { COMMANDS } from '../src/commands.js';
 import VIEW_MENU from '../src/view-menu.json';
 import { SelectionHistory } from '../src/selection-history.js';
 import { EditorDocument, openDocument, importGeosets, deleteGeoset, recalculateExtents, recalculateNormals } from '../src/editor-document.js';
+import { separateGeosetsByLoosePart, nuclearSeparateGeosets, mergeSimilarGeosets } from '../src/geoset-operations.js';
 import { transformVertices, deleteVertices, addTriangle } from '../src/editor-commands.js';
 import { detachFaces, extrudeFaces } from '../src/mesh-tools.js';
 import { captureMeshSelection } from '../src/mesh-clipboard.js';
@@ -943,6 +944,37 @@ export default function App() {
   const highlightedFromSelection = !cleanView && preferences.highlightSelection && highlightAppearance.viaSelection ? selectionHoveredGeoset : null;
   const inputStrength = <div className="compact-input-strength" aria-label="Input strengths" title="Adjust in Settings → Mouse, or use the existing input hotkeys"><span className={adjustingInput?.kind === 'pointer' ? 'adjusting' : ''}>DPI {preferences.pointerSensitivity}×</span><span className={adjustingInput?.kind === 'scroll' ? 'adjusting' : ''}>Scroll {preferences.scrollSensitivity}×</span></div>;
   const geosetPicker = <div className="classic-geosets" onContextMenu={event => { event.preventDefault(); setContext({ x: event.clientX, y: event.clientY }); }}><div className="classic-geosets-heading">Geosets</div><div className="geoset-options"><label className="check"><input data-warmkey="showAllGeosets" aria-label="Show all geosets" type="checkbox" checked={showAllGeosets} onChange={event => setShowAllGeosets(event.target.checked)}/>Show all</label><label className="check"><input data-warmkey="highlightSelection" aria-label={geosetHighlightLabel} type="checkbox" checked={preferences.highlightSelection} onChange={event => changePreferences(previous => ({ ...previous, highlightSelection: event.target.checked }))}/>{geosetHighlightLabel}</label></div><div className="classic-selection-actions"><button data-warmkey="geosetsAll" onClick={() => chooseSets(allGeosets(model.Geosets.length))}>All</button><button data-warmkey="geosetsClear" onClick={() => chooseSets(new Set())}>Clear</button><button data-warmkey="geosetsInvert" onClick={() => chooseSets(invertGeosets(selectable, model.Geosets.length))}>Invert</button></div><div className="classic-geoset-list" style={{ '--geoset-rows': Math.max(1, Math.ceil(model.Geosets.length / 4)) }} role="listbox" aria-label="Geosets" aria-multiselectable="true">{model.Geosets.map((g, i) => <div key={i} className={`geoset-row${activeGeoset === i ? ' selected' : ''}${!cleanView && preferences.highlightSelection && highlightAppearance.viaView && viewHoveredGeoset === i ? ' hovered' : ''}`} role="option" aria-selected={selectable.has(i)} ><span className="geoset-hover-target" onMouseEnter={() => setSelectionHoveredGeoset(i)} onMouseLeave={() => setSelectionHoveredGeoset(null)}><input data-warmkey={`geoset:${i}`} type="checkbox" aria-label={`Select geoset ${i}`} checked={selectable.has(i)} onChange={event => chooseSet(i, event, event.target.checked)}/><span>{i + 1}</span></span></div>)}</div></div>;
+  const changeGeosetStructure = (label, sections, operation) => {
+    let result;
+    try { result = edit(label, sections, operation, { rethrow: true }); }
+    catch { return; }
+    if (result === false) { say('No geosets share compatible materials and RGB.'); return; }
+    const remapVertices = previous => {
+      const next = {};
+      for (const [oldIndex, vertices] of Object.entries(previous)) {
+        const newIndex = result.oldToNew[oldIndex];
+        if (newIndex === undefined) continue;
+        (next[newIndex] ||= []).push(...vertices.map(vertex => vertex + result.vertexOffsets[oldIndex]));
+      }
+      return next;
+    };
+    setSelection(remapVertices); setHidden(remapVertices);
+    setSelectable(previous => new Set([...previous].map(index => result.oldToNew[index]).filter(index => index !== undefined)));
+    setActiveGeoset(previous => result.oldToNew[previous] ?? -1); setUvSet(0); clearZoomAnchor();
+    say(`Merged ${result.merged} geosets.`);
+  };
+  const separateSelectedGeosets = nuclear => {
+    const label = nuclear ? 'Nuclear Seperation' : 'Seperate by Loose parts';
+    let result;
+    try { result = edit(label, ['Geosets', 'GeosetAnims', 'Gliders', 'Info'], current => (nuclear ? nuclearSeparateGeosets : separateGeosetsByLoosePart)(current, validSelection), { rethrow: true }); }
+    catch { return; }
+    if (result === false) { say('The selected vertices contain no parts to separate.'); return; }
+    setSelection(previous => { const next = { ...previous }; for (const index of result.touched) delete next[index]; return { ...next, ...result.selection }; });
+    setHidden(previous => { const next = { ...previous }; for (const index of result.touched) delete next[index]; return next; });
+    setSelectable(previous => new Set([...previous, ...result.geosetIndices]));
+    setActiveGeoset(result.geosetIndices[0] ?? activeGeoset); setUvSet(0); clearZoomAnchor();
+    say(`Separated selected geometry into ${result.parts} new geoset${result.parts === 1 ? '' : 's'}.`);
+  };
   const commitUVChanges = (changes, label = 'Edit UV coordinates') => {
     setLiveUV(null);
     return edit(label, ['Geosets'], current => {
@@ -1054,6 +1086,7 @@ export default function App() {
 
         </>}
       </Suspense>}
+      {mode === 'vertices' && !cameraRotating && <div className="classic-geoset-operations"><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(false)}>Seperate by Loose parts</button><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(true)}>Nuclear Seperation</button><button disabled={!editable || !selectionCount} onClick={() => changeGeosetStructure('Merge geosets', ['Geosets', 'GeosetAnims', 'Bones', 'Gliders', 'Info'], current => mergeSimilarGeosets(current, validSelection))}>Merge Geosets</button></div>}
       {(mode !== 'animation' || animationPanel === 'movement' || cameraRotating) && geosetPicker}
       {rigWorkspace && bindingPanel}
     </aside>}</main>

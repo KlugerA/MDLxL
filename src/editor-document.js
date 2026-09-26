@@ -758,7 +758,7 @@ export function transformGeoset(geoset, { translation = [0, 0, 0], rotation = [0
   return geoset;
 }
 
-function appendGeosetGeometry(target, source) {
+export function appendGeosetGeometry(target, source) {
   const targetCount = target.Vertices.length / 3, sourceCount = source.Vertices.length / 3;
   if (targetCount + sourceCount > 65536) throw new Error('Pasted geometry would exceed the geoset 16-bit vertex limit.');
   if (target.TVertices.length !== source.TVertices.length) throw new Error('Pasted geometry must have the same UV set count as its destination geoset.');
