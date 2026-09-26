@@ -228,6 +228,7 @@ export default function GamePreview(inputProps) {
     const cameraChanged = () => { latest.current.onCameraAnglesChange?.(editorCameraAngles(camera)); reportProjectionView(); invalidate(); };
     controls.addEventListener('change', cameraChanged);
     let leftGesture = null;
+    const previewClickThreshold = 8;
     const cancelPreviewGesture = () => {
       if (nodeGesture) {
         restoreGestureTracks(nodeGesture); nodeGesture.adjusted = true; setGestureLabel(''); invalidate(); return;
@@ -247,9 +248,10 @@ export default function GamePreview(inputProps) {
       if (event.type === 'pointercancel') { leftGesture = null; return; }
       if (event.button !== 0 || leftGesture?.id !== event.pointerId) return;
       const gesture = leftGesture; leftGesture = null;
+      if (gesture.previewSelect && canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       const p = latest.current;
-      if (!p.previewSelectionMode || !p.onSelectionChange || p.suspended || gesture.adjusted || gesture.alt || Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 5) return;
-      const rect = canvas.getBoundingClientRect(), point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      if (!p.previewSelectionMode || !p.onSelectionChange || p.suspended || gesture.adjusted || gesture.alt || gesture.dragging || Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > previewClickThreshold) return;
+      const rect = canvas.getBoundingClientRect(), point = { x: gesture.x - rect.left, y: gesture.y - rect.top };
       const geometry = projectPreviewGeosets(posedGeosets, camera, rect.width, rect.height);
       p.onSelectionChange(selectPreviewUVCoordinates(geometry, p.selectionByGeoset || {}, { ...point, shift: gesture.shift, ctrl: gesture.ctrl }, point,
         p.previewEligibleByGeoset, p.previewSelectionMode === 'vertices', rect.width, rect.height));
@@ -325,6 +327,13 @@ export default function GamePreview(inputProps) {
         controls.enabled = false; canvas.setPointerCapture(event.pointerId);
         event.preventDefault(); event.stopImmediatePropagation(); return;
       }
+      if (event.button === 0 && p.previewSelectionMode && p.onSelectionChange) {
+        leftGesture = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY,
+          shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey, alt: event.altKey, previewSelect: true, dragging: false,
+          position: camera.position.clone(), quaternion: camera.quaternion.clone(), target: controls.target.clone(), zoom: camera.zoom, adjusted: false };
+        canvas.setPointerCapture(event.pointerId);
+        event.preventDefault(); event.stopImmediatePropagation(); return;
+      }
       if (event.button === 0) leftGesture = { id: event.pointerId, x: event.clientX, y: event.clientY, shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey, alt: event.altKey,
         position: camera.position.clone(), quaternion: camera.quaternion.clone(), target: controls.target.clone(), zoom: camera.zoom, adjusted: false };
       const binding = cameraBindings(p.preferences), mouseAction = value => value === 'pan' ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
@@ -346,6 +355,18 @@ export default function GamePreview(inputProps) {
     }
     const nodePointerMove = event => {
       const p = latest.current;
+      if (leftGesture?.previewSelect && leftGesture.id === event.pointerId) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (leftGesture.adjusted || Math.hypot(event.clientX - leftGesture.x, event.clientY - leftGesture.y) <= previewClickThreshold && !leftGesture.dragging) return;
+        if (!leftGesture.dragging) {
+          leftGesture.dragging = true; rotating = true; p.onCameraGestureChange?.(true); canvas.style.cursor = cursorFor(p);
+        }
+        const speed = pointerSensitivityValue(p.preferences?.pointerSensitivity) * (leftGesture.shift ? p.preferences?.fineSensitivity ?? .2 : 1);
+        controls.rotateLeft(2 * Math.PI * (event.clientX - leftGesture.lastX) * speed / Math.max(1, canvas.clientHeight));
+        controls.rotateUp(2 * Math.PI * (event.clientY - leftGesture.lastY) * speed / Math.max(1, canvas.clientHeight));
+        leftGesture.lastX = event.clientX; leftGesture.lastY = event.clientY;
+        return;
+      }
       if (p.attachSourceIds?.length) {
         const rect = canvas.getBoundingClientRect();
         attachPointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
