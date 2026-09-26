@@ -101,23 +101,33 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     const zoomBefore = await uv.evaluate(() => previewState().controls.object.zoom);
     await uv.mouse.wheel(0, -250);
     await uv.waitForFunction(value => previewState().controls.object.zoom !== value, zoomBefore);
+    const moveTool = uv.getByRole('button', { name: 'Move', exact: true });
+    await moveTool.click();
+    const mapBox = await uv.locator('.uv-map-pane canvas').first().boundingBox();
+    await uv.mouse.move(mapBox.x + 20, mapBox.y + 20);
+    await uv.keyboard.down('a'); await uv.keyboard.up('a');
+    assert.equal(await moveTool.getAttribute('aria-pressed'), 'true', 'A over the UV map must not change its tool');
+    await uv.getByRole('button', { name: 'Select', exact: true }).click();
     const location = await uv.evaluate(() => pickLocations());
     assert.ok(location.faces.length, 'Projected Warcraft model polygons must be visible');
     let pickedFace = null;
     const firstFace = location.faces[0], faceX = location.rect.x + firstFace.x, faceY = location.rect.y + firstFace.y;
-    await uv.mouse.move(faceX, faceY); await uv.mouse.down();
+    await uv.mouse.click(faceX, faceY);
+    assert.equal(await uv.evaluate(() => uvState().selectionByGeoset[15]?.length), 248, 'ordinary preview clicks leave UV selection unchanged');
+    await uv.keyboard.down('a');
     const clickCamera = await uv.evaluate(() => previewState().controls.object.quaternion.toArray());
-    await uv.mouse.move(faceX + 6, faceY + 1);
-    assert.deepEqual(await uv.evaluate(() => previewState().controls.object.quaternion.toArray()), clickCamera, 'small hand movement during a click must not rotate the camera');
-    await uv.mouse.up();
-    if (await uv.evaluate(() => uvState().selectionByGeoset[15]?.length === 3)) pickedFace = firstFace;
     for (const face of location.faces.slice(0, 100)) {
       if (pickedFace) break;
       await uv.mouse.click(location.rect.x + face.x, location.rect.y + face.y);
       if (await uv.evaluate(() => uvState().selectionByGeoset[15]?.length === 3)) { pickedFace = face; break; }
     }
-    assert.ok(pickedFace, 'Model polygons must select while other geosets remain visible');
+    assert.ok(pickedFace, 'holding A selects model polygons while other geosets remain visible');
+    assert.deepEqual(await uv.evaluate(() => previewState().controls.object.quaternion.toArray()), clickCamera, 'A selection must not rotate the camera');
+    await uv.keyboard.up('a');
     await uv.waitForFunction(() => uvMapSelection().length === 3);
+    const selectedWithA = await uv.evaluate(() => JSON.stringify(uvState().selectionByGeoset));
+    await uv.mouse.click(faceX, faceY);
+    assert.equal(await uv.evaluate(() => JSON.stringify(uvState().selectionByGeoset)), selectedWithA, 'releasing A returns clicks to camera control');
     assert.equal(await selectedOnly.getAttribute('aria-pressed'), 'false');
     assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
     await uv.getByLabel('Highlight selected vertices in live preview').check();
@@ -143,16 +153,20 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     const firstVertex = location.points.find(point => point.x > 10 && point.x < location.rect.width - 10 && point.y > 10 && point.y < location.rect.height - 10 && point.z >= -1 && point.z <= 1);
     assert.ok(firstVertex, 'A selectable Warcraft model vertex is on screen');
     const vertexX = location.rect.x + firstVertex.x, vertexY = location.rect.y + firstVertex.y;
+    await uv.keyboard.down('a');
     await uv.mouse.move(vertexX, vertexY); await uv.mouse.down();
     const vertexCamera = await uv.evaluate(() => previewState().controls.object.quaternion.toArray());
-    await uv.mouse.move(vertexX + 6, vertexY + 1);
-    assert.deepEqual(await uv.evaluate(() => previewState().controls.object.quaternion.toArray()), vertexCamera, 'a vertex click must not rotate the camera');
+    await uv.mouse.move(vertexX + 3, vertexY + 1);
+    assert.deepEqual(await uv.evaluate(() => previewState().controls.object.quaternion.toArray()), vertexCamera, 'A vertex selection must not rotate the camera');
     await uv.mouse.up();
-    assert.equal(await uv.evaluate(() => uvState().selectionByGeoset[15]?.length), 1, 'a vertex press with slight hand movement selects its UV coordinate');
+    await uv.keyboard.up('a');
+    assert.equal(await uv.evaluate(() => uvState().selectionByGeoset[15]?.length), 1, 'holding A selects a model vertex on the UV map');
     await uv.waitForFunction(() => uvMapSelection().length === 1);
     await toggle.click();
     assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
+    await uv.keyboard.down('a');
     await uv.mouse.click(location.rect.x + pickedFace.x, location.rect.y + pickedFace.y);
+    await uv.keyboard.up('a');
     await uv.waitForFunction(() => uvState().selectionByGeoset[15]?.length === 3);
     await toggle.click();
     assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
@@ -163,6 +177,6 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     assert.equal(await canvas.evaluate(element => element.style.cursor), 'default', 'Live Select restores the normal pointer after rotation');
     assert.equal(await uv.evaluate(() => JSON.stringify(uvState().model)), before);
     assert.ok(fs.readFileSync(fixture).equals(original));
-    console.log('PASS Electron UV: normal Warcraft model, clicks select without rotation, drags rotate, wheel zooms, visible vertex markers, shared highlight, unchanged model');
+    console.log('PASS Electron UV: normal Warcraft model, hold A selects only in Live View, ordinary drags rotate, wheel zooms, visible vertex markers, shared highlight, unchanged model');
   } finally { await app.evaluate(({ app }) => app.exit(0)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
