@@ -28,7 +28,7 @@ function validate(g, indices) {
   return { count, selected };
 }
 
-function updateBounds(g) {
+export function updateBounds(g) {
   const minimum = new Float32Array([Infinity, Infinity, Infinity]);
   const maximum = new Float32Array([-Infinity, -Infinity, -Infinity]);
   for (let i = 0; i < g.Vertices.length; i++) { const axis = i % 3; minimum[axis] = Math.min(minimum[axis], g.Vertices[i]); maximum[axis] = Math.max(maximum[axis], g.Vertices[i]); }
@@ -38,7 +38,7 @@ function updateBounds(g) {
 }
 
 /** Copy every standard SD/HD vertex stream, retaining each typed array type. */
-function gather(g, sourceIndices) {
+export function gather(g, sourceIndices) {
   const take = (array, stride) => {
     const out = new array.constructor(sourceIndices.length * stride);
     sourceIndices.forEach((old, i) => out.set(array.subarray(old * stride, old * stride + stride), i * stride));
