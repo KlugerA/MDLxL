@@ -31,31 +31,39 @@ test('only bones can be targets and detaching leaves a root', () => {
   assert.equal(attachment.Parent, child.ObjectId);
 });
 
-test('attaching to a child bone lifts the target and preserves the remaining hierarchy', () => {
-  const doc = createStarterDocument(), model = doc.model, root = model.Bones[0];
-  const child = createRigNode(model, 'Bone'), grandchild = createRigNode(model, 'Bone');
-  const sibling = createRigNode(model, 'Bone');
-  attachToBone(model, child.ObjectId, root.ObjectId);
-  attachToBone(model, grandchild.ObjectId, child.ObjectId);
-  attachToBone(model, sibling.ObjectId, root.ObjectId);
-  attachToBone(model, root.ObjectId, grandchild.ObjectId);
-  assert.equal(grandchild.Parent, null);
-  assert.equal(root.Parent, grandchild.ObjectId);
-  assert.equal(child.Parent, root.ObjectId);
-  assert.equal(sibling.Parent, root.ObjectId);
-  attachToBone(model, child.ObjectId, grandchild.ObjectId);
-  assert.equal(child.Parent, grandchild.ObjectId);
-  assert.equal(openDocument(doc.serialize('mdx')).model.Bones.find(bone => bone.ObjectId === root.ObjectId).Parent, grandchild.ObjectId);
-  for (const order of [[root.ObjectId, child.ObjectId], [child.ObjectId, root.ObjectId]]) {
-    const copy = structuredClone(createStarterDocument().model);
-    const branch = createRigNode(copy, 'Bone'), tip = createRigNode(copy, 'Bone');
-    attachToBone(copy, branch.ObjectId, copy.Bones[0].ObjectId);
-    attachToBone(copy, tip.ObjectId, branch.ObjectId);
-    for (const id of order) attachToBone(copy, id === root.ObjectId ? copy.Bones[0].ObjectId : branch.ObjectId, tip.ObjectId);
-    assert.equal(copy.Bones[0].Parent, tip.ObjectId);
-    assert.equal(branch.Parent, tip.ObjectId);
-    assert.equal(tip.Parent, null);
-  }
+test('attaching Upper Body to descendant Wrist disconnects Shoulder, not Wrist from Elbow', () => {
+  const doc = createStarterDocument(), model = doc.model, waist = model.Bones[0];
+  const upperBody = createRigNode(model, 'Bone'), shoulder = createRigNode(model, 'Bone');
+  const elbow = createRigNode(model, 'Bone'), wrist = createRigNode(model, 'Bone');
+  const otherChild = createRigNode(model, 'Bone');
+  attachToBone(model, upperBody.ObjectId, waist.ObjectId);
+  attachToBone(model, shoulder.ObjectId, upperBody.ObjectId);
+  attachToBone(model, elbow.ObjectId, shoulder.ObjectId);
+  attachToBone(model, wrist.ObjectId, elbow.ObjectId);
+  attachToBone(model, otherChild.ObjectId, upperBody.ObjectId);
+
+  attachToBone(model, upperBody.ObjectId, wrist.ObjectId);
+  assert.equal(waist.Parent, null);
+  assert.equal(upperBody.Parent, wrist.ObjectId);
+  assert.equal(shoulder.Parent, null);
+  assert.equal(elbow.Parent, shoulder.ObjectId);
+  assert.equal(wrist.Parent, elbow.ObjectId);
+  assert.equal(otherChild.Parent, upperBody.ObjectId);
+  const reopened = openDocument(doc.serialize('mdx')).model;
+  assert.equal(reopened.Nodes[shoulder.ObjectId].Parent, null);
+  assert.equal(reopened.Nodes[wrist.ObjectId].Parent, elbow.ObjectId);
+  assert.equal(reopened.Nodes[upperBody.ObjectId].Parent, wrist.ObjectId);
+});
+
+test('attaching to a direct child disconnects that child from the selected bone', () => {
+  const model = createStarterDocument().model, waist = model.Bones[0];
+  const upperBody = createRigNode(model, 'Bone'), shoulder = createRigNode(model, 'Bone');
+  attachToBone(model, upperBody.ObjectId, waist.ObjectId);
+  attachToBone(model, shoulder.ObjectId, upperBody.ObjectId);
+  attachToBone(model, upperBody.ObjectId, shoulder.ObjectId);
+  assert.equal(upperBody.Parent, shoulder.ObjectId);
+  assert.equal(shoulder.Parent, null);
+  assert.equal(waist.Parent, null);
 });
 
 test('soft, hard, detach-vertices and delete preserve unrelated vertices and clear links', () => {

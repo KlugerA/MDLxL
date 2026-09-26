@@ -44,15 +44,18 @@ export function attachToBone(model, childId, parentId) {
   const child = model.Nodes?.[childId], parent = (model.Bones || []).find(bone => bone.ObjectId === parentId);
   if (!child || !parent || childId === parentId) throw new Error('Select one child and a different parent bone.');
   const seen = new Set();
-  let parentIsDescendant = false;
+  let branchRoot = null;
   for (let next = parent; next; next = model.Nodes?.[next.Parent]) {
     if (seen.has(next.ObjectId)) throw new Error('The parent chain already contains a cycle.');
     seen.add(next.ObjectId);
-    if (next.ObjectId === childId) { parentIsDescendant = true; break; }
+    if (next.ObjectId === childId) {
+      // Break the descendant branch at its link to the selected node. The
+      // clicked parent keeps its own parent and the rest of its chain.
+      branchRoot.Parent = null;
+      break;
+    }
+    branchRoot = next;
   }
-  // Lift the clicked descendant to the selected node's former parent before
-  // linking it. This keeps the rest of the hierarchy connected without a cycle.
-  if (parentIsDescendant) parent.Parent = child.Parent ?? null;
   child.Parent = parentId;
 }
 
