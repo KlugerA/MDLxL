@@ -10,6 +10,8 @@
 .geoset-hover-target { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 2px; min-width: 48px; }
 
 .geoset-options { display: flex; align-items: center; gap: 4px; font-size: 10px; }
+.classic-geoset-operations { display: grid; gap: 2px; margin-top: 6px; }
+.classic-geoset-operations button { min-width: 0; padding: 2px; }
 .geoset-options .check { display: flex; align-items: center; gap: 0; padding: 1px 0; margin: 0; }
 
 .classic-sidebar { width: 148px; min-width: 148px; }
