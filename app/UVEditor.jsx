@@ -11,7 +11,7 @@ import { normalizeUVGrid, snapUVCoordinates, visibleUVGridLines } from '../src/u
 const indicesOf = selection => Array.from(selection || []);
 
 /** Classic select/move/rotate/scale tools. UV V retains Warcraft's top-down convention. */
-export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, uvGrid, showTextureFrame = false, textureFrameColor = '#ff3030' }) {
+export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, uvGrid, showTextureFrame = false, textureFrameColor = '#4cff59' }) {
   const host = useRef(null), canvas = useRef(null);
   const state = useRef({ zoom: .55, panX: 0, panY: 0, uv: new Float32Array(), drag: null, image: null, draw: () => {} });
   const current = useRef({}); current.current = { geoset, uvSet, textureSize, selectedVertices, eligibleVertices, hiddenVertices, onSelectVertices, onChange, onPreviewChange, transformMode, cameraMode, preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended, showWires, showVertices, uvGrid, showTextureFrame, textureFrameColor };
@@ -87,7 +87,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
       if (p.showTextureFrame) {
         // Mark every repeated texture frame used by this UV topology.
         const bounds={minU:(-x)/sizeX-1,maxU:(width-x)/sizeX+1,minV:(-y)/sizeY-1,maxV:(height-y)/sizeY+1};
-        context.save(); context.strokeStyle = /^#[0-9a-f]{6}$/i.test(p.textureFrameColor) ? p.textureFrameColor : '#ff3030'; context.lineWidth = 3;
+        context.save(); context.strokeStyle = /^#[0-9a-f]{6}$/i.test(p.textureFrameColor) ? p.textureFrameColor : '#4cff59'; context.lineWidth = 3;
         for(const [frameU,frameV] of occupiedUVTextureFrames(uv,faces,allowed,bounds))context.strokeRect(x+frameU*sizeX,y+frameV*sizeY,sizeX,sizeY);
         context.restore();
       }

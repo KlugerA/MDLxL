@@ -11,9 +11,9 @@ test('preview options default clean and persist independently of editor mesh siz
   assert.deepEqual(next.uvPreviewDisplay,{mesh:'selected',size:2.5,textureFrame:true});
   assert.equal(next.visuals.vertexSize,4);assert.equal(next.visuals.lineWidth,.5);
   assert.deepEqual(importConfiguration(exportConfiguration(next)).uvPreviewDisplay,next.uvPreviewDisplay);
-  assert.deepEqual(normalizeUVPreviewDisplay({mesh:'bad',size:Infinity,textureFrame:'yes'}),{mesh:'none',size:1,textureFrame:false});
+  assert.deepEqual(normalizeUVPreviewDisplay({mesh:'bad',size:Infinity,textureFrame:'yes'}),{mesh:'none',size:.25,textureFrame:false});
   assert.deepEqual(normalizeUVPreviewDisplay({size:-2,textureFrame:true}),{mesh:'none',size:.25,textureFrame:true});
-  assert.deepEqual(normalizeUVPreviewDisplay(),{mesh:'none',size:1,textureFrame:false});
+  assert.deepEqual(normalizeUVPreviewDisplay(),{mesh:'none',size:.25,textureFrame:false});
 });
 
 test('Show mesh covers model geometry but Highlight Select contains only active selected UV points',()=>{

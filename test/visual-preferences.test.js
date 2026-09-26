@@ -24,7 +24,7 @@ test('MDLVis Vanilla is the default and uses colors sampled from the supplied re
   assert.equal(prefs.visuals.node, '#b2b2ff');
   assert.equal(prefs.visuals.particle, '#4cff59');
   assert.equal(prefs.visuals.event, '#ff9800');
-  assert.equal(prefs.visuals.uvSelection, '#ff3030');
+  assert.equal(prefs.visuals.uvSelection, '#4cff59');
   assert.equal(prefs.visuals.occludedOpacity, 1);
   assert.equal(prefs.viewportAppearance.xrayVertices, false);
   assert.ok(BUILT_IN_VIEWPORT_PRESETS['blender-style']);

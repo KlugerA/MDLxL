@@ -33,7 +33,7 @@ export function previewOverlaySettings(value) {
     size: Math.max(.25, Math.min(3, Number.isFinite(Number(value?.size)) ? Number(value.size) : 1)),
     eligibleByGeoset: value?.eligibleByGeoset || EMPTY_MAP,
     selectionByGeoset: value?.selectionByGeoset || EMPTY_MAP,
-    color: /^#[0-9a-f]{6}$/i.test(value?.color) ? value.color : '#ff3030',
+    color: /^#[0-9a-f]{6}$/i.test(value?.color) ? value.color : '#4cff59',
   };
 }
 

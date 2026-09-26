@@ -46,17 +46,25 @@ export function selectPreviewVertices(geosets, previous, start, end, selectable)
  * The UV workspace's entry selection is the editing boundary. */
 export function selectPreviewUVCoordinates(geosets, previous, start, end, eligibleByGeoset, showVertices, width, height) {
   const allowed = new Map(Object.entries(eligibleByGeoset || {}).map(([index, ids]) => [Number(index), new Set(ids)]));
+  const pickable = geosets.filter(geo => allowed.has(geo.index));
+  const polygons = showVertices ? [] : pickable.map(geo => {
+    const faces = [];
+    for (let offset = 0; offset + 2 < geo.faces.length; offset += 3) {
+      const ids = Array.from(geo.faces.subarray(offset, offset + 3));
+      if (ids.every(id => allowed.get(geo.index).has(id))) faces.push(...ids);
+    }
+    return { ...geo, faces: new Uint32Array(faces) };
+  });
   const found = new Map([...allowed.keys()].map(index => [index, new Set()]));
   const marquee = Math.hypot(end.x - start.x, end.y - start.y) > 5;
-  const depth = showVertices || marquee ? createOverlayDepth(geosets, width, height) : null;
+  const depth = marquee && !showVertices ? createOverlayDepth(polygons, width, height) : null;
   if (showVertices) {
     let nearest = null, distance = 7;
-    for (const geo of geosets) {
+    for (const geo of pickable) {
       const eligible = allowed.get(geo.index);
-      if (!eligible) continue;
       for (const index of eligible) {
         const point = geo.points[index];
-        if (!point?.visible || depth.isOccluded(point)) continue;
+        if (!point?.visible) continue;
         if (marquee) {
           if (point.x >= Math.min(start.x, end.x) && point.x <= Math.max(start.x, end.x) && point.y >= Math.min(start.y, end.y) && point.y <= Math.max(start.y, end.y)) found.get(geo.index).add(index);
         } else {
@@ -67,12 +75,9 @@ export function selectPreviewUVCoordinates(geosets, previous, start, end, eligib
     }
     if (nearest) found.get(nearest[0]).add(nearest[1]);
   } else if (marquee) {
-    for (const geo of geosets) {
-      const eligible = allowed.get(geo.index);
-      if (!eligible) continue;
+    for (const geo of polygons) {
       for (let offset = 0; offset + 2 < geo.faces.length; offset += 3) {
         const ids = Array.from(geo.faces.subarray(offset, offset + 3));
-        if (!ids.every(id => eligible.has(id))) continue;
         const points = ids.map(id => geo.points[id]);
         if (points.some(point => !point?.visible)) continue;
         const center = { x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3, z: points.reduce((sum, point) => sum + point.z, 0) / 3 };
@@ -81,7 +86,7 @@ export function selectPreviewUVCoordinates(geosets, previous, start, end, eligib
       }
     }
   } else {
-    const hit = pickPreviewGeoset(geosets, end.x, end.y);
+    const hit = pickPreviewGeoset(polygons, end.x, end.y);
     if (hit && hit.ids.every(id => allowed.get(hit.index)?.has(id))) hit.ids.forEach(id => found.get(hit.index).add(id));
   }
   const next = { ...previous };

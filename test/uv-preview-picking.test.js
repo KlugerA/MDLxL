@@ -22,8 +22,8 @@ test('polygon clicks select all three UV corners and keep other material selecti
   assert.deepEqual(pick(geosets, {}, 50, 40, { 0: [0, 1] }), { 0: [] });
 });
 
-test('front polygons block UV picking through unrelated geosets', () => {
-  assert.deepEqual(pick([face(0, 0), face(1, -.5)], {}, 50, 40, { 0: [0, 1, 2] }), { 0: [] });
+test('unrelated visible geosets do not block UV picking for the active map', () => {
+  assert.deepEqual(pick([face(0, 0), face(1, -.5)], {}, 50, 40, { 0: [0, 1, 2] }), { 0: [0, 1, 2] });
 });
 
 test('show verticles picks individual visible UV vertices and respects the entry selection', () => {
@@ -32,5 +32,6 @@ test('show verticles picks individual visible UV vertices and respects the entry
   assert.deepEqual(pick(geosets, { 0: [1] }, 21, 21, eligible, true, { shift: true }), { 0: [1, 0] });
   assert.deepEqual(pick(geosets, { 0: [0, 1] }, 21, 21, eligible, true, { ctrl: true }), { 0: [1] });
   assert.deepEqual(pick(geosets, {}, 21, 21, { 0: [1, 2] }, true), { 0: [] });
+  assert.deepEqual(pick([face(0, 0), face(1, -.5)], {}, 21, 21, eligible, true), { 0: [0] });
   assert.deepEqual(pick([face(0, 0), face(1, -.5)], {}, 50, 49, { 0: [0, 1, 2] }, true), { 0: [] });
 });

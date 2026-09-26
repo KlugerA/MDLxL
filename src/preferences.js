@@ -12,7 +12,7 @@ export const DEFAULT_VISUALS = Object.freeze({
   background: '#cccccc', vertex: '#167bff', selectedVertex: '#ff0000', occludedVertex: '#8cacd0',
   wireframe: '#eeeeee', occludedWireframe: '#67717f', selectedGeometry: '#ff9d36',
   gridMinor: '#808080', gridMajor: '#000000', axisX: '#ff0000', axisY: '#008000', axisZ: '#0000ff',
-  keyframe: '#0000ff', activeKeyframe: '#ff0000', bone: '#4cff59', node: '#b2b2ff', particle: '#4cff59', event: '#ff9800', selection: '#67c9ff', uvSelection: '#ff3030',
+  keyframe: '#0000ff', activeKeyframe: '#ff0000', bone: '#4cff59', node: '#b2b2ff', particle: '#4cff59', event: '#ff9800', selection: '#67c9ff', uvSelection: '#4cff59',
   vertexSize: 6, keyframeSize: 10, lineWidth: 1, helperSize: 6, occludedOpacity: 1,
 });
 export const DEFAULT_GRID = Object.freeze({ spacing: 8, majorEvery: 8, extent: 256, followWorkplane: false, small: true,

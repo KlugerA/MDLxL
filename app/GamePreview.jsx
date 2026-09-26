@@ -243,7 +243,16 @@ export default function GamePreview(inputProps) {
       if (leftGesture?.adjusted && leftGesture.id === event.pointerId) { event.preventDefault(); event.stopImmediatePropagation(); }
     };
     const finishLeftGesture = event => {
-      if (event.type === 'pointercancel' || (event.button === 0 && leftGesture?.id === event.pointerId)) leftGesture = null;
+      if (event.type === 'pointercancel') { leftGesture = null; return; }
+      if (event.button !== 0 || leftGesture?.id !== event.pointerId) return;
+      const gesture = leftGesture; leftGesture = null;
+      const p = latest.current;
+      if (!p.previewSelectionMode || !p.onSelectionChange || p.suspended || gesture.adjusted || gesture.alt || Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 5) return;
+      const rect = canvas.getBoundingClientRect(), point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      const geometry = projectPreviewGeosets(posedGeosets, camera, rect.width, rect.height);
+      p.onSelectionChange(selectPreviewUVCoordinates(geometry, p.selectionByGeoset || {}, { ...point, shift: gesture.shift, ctrl: gesture.ctrl }, point,
+        p.previewEligibleByGeoset, p.previewSelectionMode === 'vertices', rect.width, rect.height));
+      invalidate();
     };
     const unbindScroll = bindScrollSensitivity(canvas, {
       getPreferences: () => latest.current.preferences,
@@ -309,13 +318,14 @@ export default function GamePreview(inputProps) {
           event.preventDefault(); event.stopImmediatePropagation(); return;
         }
       }
-      if (event.button === 0 && work && !portraitCameraDrag && (p.onSelectionChange || p.onSelectNodes || p.onInspectGeoset)) {
+      if (event.button === 0 && work && !portraitCameraDrag && !p.previewSelectionMode && (p.onSelectionChange || p.onSelectNodes || p.onInspectGeoset)) {
         const rect = canvas.getBoundingClientRect();
         selectionGesture = { id: event.pointerId, x: event.clientX - rect.left, y: event.clientY - rect.top, shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey };
         controls.enabled = false; canvas.setPointerCapture(event.pointerId);
         event.preventDefault(); event.stopImmediatePropagation(); return;
       }
-      if (event.button === 0) leftGesture = { id: event.pointerId, position: camera.position.clone(), quaternion: camera.quaternion.clone(), target: controls.target.clone(), zoom: camera.zoom, adjusted: false };
+      if (event.button === 0) leftGesture = { id: event.pointerId, x: event.clientX, y: event.clientY, shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey, alt: event.altKey,
+        position: camera.position.clone(), quaternion: camera.quaternion.clone(), target: controls.target.clone(), zoom: camera.zoom, adjusted: false };
       const binding = cameraBindings(p.preferences), mouseAction = value => value === 'pan' ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
       controls.mouseButtons.RIGHT = preserveShiftCameraAction(mouseAction(binding.right), event); controls.mouseButtons.MIDDLE = preserveShiftCameraAction(mouseAction(binding.middle), event);
       const action = event.altKey || portraitCameraDrag ? 'rotate' : p.cameraMode ?? 'rotate';
@@ -388,9 +398,7 @@ export default function GamePreview(inputProps) {
         if (start.ctrl && p.onInspectGeoset && Math.hypot(end.x - start.x, end.y - start.y) <= 5) {
           const hit = pickPreviewGeoset(geometry, end.x, end.y); if (hit) p.onInspectGeoset(hit.index);
         } else {
-          p.onSelectionChange?.(p.previewSelectionMode
-            ? selectPreviewUVCoordinates(geometry, p.selectionByGeoset || {}, start, end, p.previewEligibleByGeoset, p.previewSelectionMode === 'vertices', rect.width, rect.height)
-            : selectPreviewVertices(geometry, p.selectionByGeoset || {}, start, end, p.selectableGeosets));
+          p.onSelectionChange?.(selectPreviewVertices(geometry, p.selectionByGeoset || {}, start, end, p.selectableGeosets));
         }
         invalidate(); return;
       }
@@ -434,6 +442,7 @@ export default function GamePreview(inputProps) {
     const center = bounds.getCenter(new THREE.Vector3()), radius = Math.max(1, bounds.getSize(new THREE.Vector3()).length() / 2);
     const fitRadius = () => {
       const p = latest.current, gridVisible = p.overlays?.grid ?? !!p.showGrid;
+      if (p.previewSelectionMode) return radius;
       return gridVisible ? Math.max(radius, gridFrameRadius(center, gridOptions(p.preferences).extent)) : radius;
     };
     function drawBackground() {
