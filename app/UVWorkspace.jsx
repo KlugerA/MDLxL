@@ -102,7 +102,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   draftCount = 0, onLibrary, onSavePreview, onRevertPreview, previewProps, readOnly = false, onExit }) {
   const [materialID, setMaterialID] = useState(null), [uvTool, setUVTool] = useState('select'), [foldDirection, setFoldDirection] = useState('right-to-left');
   const [selectingNew, setSelectingNew] = useState(false), [selectGeoset, setSelectGeoset] = useState(-1), [selectionDraft, setSelectionDraft] = useState({}), [hoveredGeoset, setHoveredGeoset] = useState(null);
-  const [showOnlySelected, setShowOnlySelected] = useState(false), [hideRGB, setHideRGB] = useState(false);
+  const [showOnlySelected, setShowOnlySelected] = useState(false), [hideRGB, setHideRGB] = useState(false), [showVerticles, setShowVerticles] = useState(false);
   const [projectionPreset, setProjectionPreset] = useState({ name: '', revision: 0 });
   const [materialPreview, setMaterialPreview] = useState(null), [materialError, setMaterialError] = useState('');
   const [sidePercent, setSidePercent] = useState(() => storedLayout(LAYOUT_KEYS.side, UV_SIDE_DEFAULT, clampUVSidePercent));
@@ -144,6 +144,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
     for (const index of current?.geosetIndices || []) result[index] = unique(activeSelection[index]).filter(id => editingDomain[index]?.includes(id));
     return result;
   }, [current?.materialID, activeSelectionKey, editingDomainKey]);
+  const materialEligible = useMemo(() => Object.fromEntries((current?.geosetIndices || []).map(index => [index, unique(editingDomain[index])])), [current?.materialID, editingDomainKey]);
   const materialSelectionKey = JSON.stringify(materialSelection);
   const combined = useMemo(() => current ? combineUVGeosets(model, current.geosetIndices, editingDomain, materialSelection, current.coordId) : null,
     [model, revision, current?.materialID, current?.coordId, editingDomainKey, materialSelectionKey]);
@@ -166,8 +167,10 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   const previewPreferencesKey = JSON.stringify(previewPreferencesInput);
   const previewPreferences = useMemo(() => previewPreferencesInput, [previewPreferencesKey]);
   const liveOverlay = selectingNew
-    ? { allMesh: true, interactiveSelection: true, highlightSelection: false, size: Math.max(1, display.size), color: preferences?.visuals?.uvSelection, eligibleByGeoset: selectDomain, selectionByGeoset: selectionDraft }
-    : uvPreviewOverlay(previewDomain, materialSelection, null, { ...display, mesh: liveView ? 'selected' : 'none' }, preferences?.visuals?.uvSelection);
+    ? { allMesh: true, interactiveSelection: true, highlightSelection: false, size: display.size, color: preferences?.visuals?.uvSelection, eligibleByGeoset: selectDomain, selectionByGeoset: selectionDraft }
+    : showVerticles
+      ? { allMesh: true, interactiveSelection: true, highlightSelection: false, size: display.size, color: preferences?.visuals?.uvSelection, eligibleByGeoset: materialEligible, selectionByGeoset: materialSelection }
+      : uvPreviewOverlay(previewDomain, materialSelection, null, { ...display, mesh: liveView ? 'selected' : 'none' }, preferences?.visuals?.uvSelection);
 
   const dispatch = (kind, value) => window.dispatchEvent(new CustomEvent('mdlvis-uv-action', { detail: { kind, value } }));
   const chooseMaterial = value => {
@@ -245,23 +248,25 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
       </section>
       <Splitter orientation="vertical" label="Resize texture and live-view columns" value={sidePercent} minimum={UV_SIDE_MIN} maximum={UV_SIDE_MAX} defaultValue={UV_SIDE_DEFAULT}
         onValue={value => setSidePercent(clampUVSidePercent(value))} onPointerValue={event => { const rect = workspaceBody.current?.getBoundingClientRect(); if (rect) setSidePercent(uvSidePercentAtPointer(event.clientX, rect)); }}/>
-      <aside ref={sidePanel} className={`uv-side-panel${selectingNew ? ' selecting-new' : ''}`} style={{ '--uv-preview-height': `${activePreviewPercent}%`, '--uv-selection-color': preferences?.visuals?.uvSelection || '#ff3030' }}>
+      <aside ref={sidePanel} className={`uv-side-panel${selectingNew ? ' selecting-new' : ''}`} style={{ '--uv-preview-height': `${activePreviewPercent}%`, '--uv-selection-color': preferences?.visuals?.uvSelection || '#4cff59' }}>
         <section className="uv-live-options" aria-label="Live view options"><div className="uv-panel-title"><strong>Live View</strong></div>
           <div className="uv-live-toggles">
             <label><input aria-label="Highlight selected vertices in live preview" type="checkbox" checked={liveView} onChange={event => changeLiveDisplay({ mesh: event.target.checked ? 'selected' : 'none' })}/>Highlight Live</label>
             <label><input aria-label="Highlight texture frame" type="checkbox" checked={display.textureFrame} onChange={event => changeLiveDisplay({ textureFrame: event.target.checked })}/>Highlight Texture Frame</label>
           </div>
-          <label className="uv-thickness"><span>Thickness</span><input aria-label="Live selection thickness" type="range" min="0.25" max="3" step="0.25" value={display.size} onChange={event => changeLiveDisplay({ size: Number(event.target.value) })}/><output>{display.size.toFixed(2)}×</output><input className="uv-color-button" aria-label="Live selection and texture-frame color" title="Choose live selection and texture-frame color" type="color" value={preferences?.visuals?.uvSelection || '#ff3030'} onChange={event => changeLiveColor(event.target.value)}/></label>
+          <label className="uv-thickness"><span>Thickness</span><input aria-label="Live selection thickness" type="range" min="0.25" max="3" step="0.25" value={display.size} onChange={event => changeLiveDisplay({ size: Number(event.target.value) })}/><output>{display.size.toFixed(2)}×</output><input className="uv-color-button" aria-label="Live selection and texture-frame color" title="Choose live selection and texture-frame color" type="color" value={preferences?.visuals?.uvSelection || '#4cff59'} onChange={event => changeLiveColor(event.target.value)}/></label>
         </section>
         <section className="uv-live-preview" aria-label={selectingNew ? 'Select new vertices' : 'Live model preview'}>
           <div className="uv-panel-title"><strong>{selectingNew ? selectNewPrompt : 'Live Model Preview'}</strong>{selectingNew && selectNewCount > 0 ? <span className="uv-confirm-selection"><button onClick={finishSelectNew}>Yes</button><button onClick={clearSelectNew}>No</button></span> : selectingNew && <span className="uv-selection-hint">Drag selects · Shift/Ctrl modifies · Alt+drag rotates</span>}</div>
-          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} revision={previewWrappingRevision} uvRevision={revision} presentation="preview" preserveCameraView={true} interactivePreview={selectingNew} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
+          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} revision={previewWrappingRevision} uvRevision={revision} presentation="preview" preserveCameraView={true} interactivePreview={selectingNew || !!current} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
             uvOnlySelected={showOnlySelected && !selectingNew} hiddenGeosets={hiddenPreviewGeosets} hideRgbGeoset={hideRGB && rgbTarget >= 0 ? rgbTarget : null}
-            selectionByGeoset={selectionDraft} selectableGeosets={selectingNew && selectGeoset >= 0 ? [selectGeoset] : []} onSelectionChange={selectingNew && selectGeoset >= 0 ? next => setSelectionDraft({ [selectGeoset]: unique(next[selectGeoset]) }) : undefined}
-            hoveredGeoset={selectingNew ? hoveredGeoset : null} cameraMode={selectingNew ? 'work' : previewProps?.cameraMode} transformMode="select" cameraPresetRequest={projectionPreset} onProjectionViewChange={value => { projectionView.current = value; }} /></Suspense></div>
+            selectionByGeoset={activeSelection} selectableGeosets={selectingNew ? selectGeoset >= 0 ? [selectGeoset] : [] : current?.geosetIndices || []}
+            previewSelectionMode={selectingNew ? undefined : showVerticles ? 'vertices' : 'polygons'} previewEligibleByGeoset={materialEligible}
+            onSelectionChange={selectingNew ? selectGeoset >= 0 ? next => setSelectionDraft({ [selectGeoset]: unique(next[selectGeoset]) }) : undefined : onSelectionChange}
+            hoveredGeoset={selectingNew ? hoveredGeoset : null} cameraMode={selectingNew ? 'work' : 'rotate'} transformMode="select" cameraPresetRequest={projectionPreset} onProjectionViewChange={value => { projectionView.current = value; }} /></Suspense></div>
           <div className="uv-preview-footer">
             {selectingNew ? <><GeosetPicker options={geosetOptions} value={selectGeoset} attention={selectGeoset < 0} onChoose={changeSelectGeoset} onHover={setHoveredGeoset}/><span className="uv-selection-count">{selectNewCount} selected</span><button disabled={!selectNewCount} onClick={finishSelectNew}>Done</button><button onClick={cancelSelectNew}>Cancel</button></>
-              : <><button onClick={beginSelectNew}>Select New</button><button aria-label="Show only selected geosets" aria-pressed={showOnlySelected} disabled={!selectedGeosets.length} onClick={() => setShowOnlySelected(value => !value)}>Only Selected</button><button aria-pressed={hideRGB} disabled={rgbTarget < 0} onClick={() => setHideRGB(value => !value)}>Hide RGB</button></>}
+              : <><button onClick={beginSelectNew}>Select New</button><button aria-label="Live Select" aria-pressed={showVerticles} disabled={!current} onClick={() => setShowVerticles(value => !value)}>Live Select</button><button aria-label="Selected Only" aria-pressed={showOnlySelected} disabled={!selectedGeosets.length} onClick={() => setShowOnlySelected(value => !value)}>Selected Only</button><button aria-pressed={hideRGB} disabled={rgbTarget < 0} onClick={() => setHideRGB(value => !value)}>Hide RGB</button></>}
           </div>
         </section>
         <Splitter orientation="horizontal" label="Resize live model preview" value={activePreviewPercent} minimum={UV_PREVIEW_MIN} maximum={UV_PREVIEW_MAX} defaultValue={selectingNew ? UV_SELECT_PREVIEW_DEFAULT : UV_PREVIEW_DEFAULT}

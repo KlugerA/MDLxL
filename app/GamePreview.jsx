@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { EditorCameraControls, editorCameraAngles, preserveShiftCameraAction, setEditorCameraAngles } from './editor-camera-controls.js';
 import { viewportCursor } from './viewport-cursors.js';
 import { createPreviewSceneGL } from './preview-scene-gl.js';
-import { projectPreviewGeosets, pickPreviewGeoset, selectPreviewVertices } from './preview-selection.js';
+import { projectPreviewGeosets, pickPreviewGeoset, selectPreviewUVCoordinates, selectPreviewVertices } from './preview-selection.js';
 import { cameraLeftLight, improveNativeTexture, captureDimensions, nativeTeamColor, viewportPixelRatio } from './viewport-quality.js';
 import { createRigMarkersGL } from './rig-markers-gl.js';
 import { boneVertexHighlights } from '../src/bone-tools.js';
@@ -179,6 +179,7 @@ export default function GamePreview(inputProps) {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false });
     if (!gl) { setError('This preview needs WebGL 2. The geometry editor remains available.'); canvas.remove(); backgroundCanvas.remove(); return; }
     let native, disposed = false, observer, scheduler, hoverCanvas, connectorCanvas, nodeCanvas, geometryCanvas, cameraCanvas, nodePoints = [], nodeHandles = [], nodeGesture = null, selectionGesture = null, posedGeosets = [], posedGeometryCache = null, rotating = false, portraitBackup = null, cameraGestureStart = null, attachPointer = null;
+    const cursorFor = (p, active = rotating) => p.previewSelectionMode && !active ? 'default' : viewportCursor(p.cameraMode, p.transformMode, active);
     const invalidate = () => scheduler?.invalidate();
     const ownedModel = structuredClone(rendererModel);
     ownedModel.Nodes = []; for (const node of allNodes(ownedModel)) ownedModel.Nodes[node.ObjectId] = node;
@@ -226,7 +227,7 @@ export default function GamePreview(inputProps) {
     };
     const cameraChanged = () => { latest.current.onCameraAnglesChange?.(editorCameraAngles(camera)); reportProjectionView(); invalidate(); };
     controls.addEventListener('change', cameraChanged);
-    let leftGesture = null;
+    let leftGesture = null, previewSelectHeld = false;
     const cancelPreviewGesture = () => {
       if (nodeGesture) {
         restoreGestureTracks(nodeGesture); nodeGesture.adjusted = true; setGestureLabel(''); invalidate(); return;
@@ -243,7 +244,9 @@ export default function GamePreview(inputProps) {
       if (leftGesture?.adjusted && leftGesture.id === event.pointerId) { event.preventDefault(); event.stopImmediatePropagation(); }
     };
     const finishLeftGesture = event => {
-      if (event.type === 'pointercancel' || (event.button === 0 && leftGesture?.id === event.pointerId)) leftGesture = null;
+      if (event.type === 'pointercancel') { leftGesture = null; return; }
+      if (event.button !== 0 || leftGesture?.id !== event.pointerId) return;
+      leftGesture = null;
     };
     const unbindScroll = bindScrollSensitivity(canvas, {
       getPreferences: () => latest.current.preferences,
@@ -264,7 +267,7 @@ export default function GamePreview(inputProps) {
       canvas.focus();
       const p = latest.current;
       if (p.suspended) return;
-      canvas.style.cursor = viewportCursor(p.cameraMode, p.transformMode, rotating);
+      canvas.style.cursor = cursorFor(p);
       const work = (p.cameraMode ?? 'work') === 'work' && !event.altKey;
       const portraitCameraDrag = portraitBlankDragRotatesCamera(p, event);
       const overlayOptions = previewOverlayOptions(p.overlays, p.showNodes), pickable = visibleMovementPoints(nodePoints, overlayOptions);
@@ -309,18 +312,27 @@ export default function GamePreview(inputProps) {
           event.preventDefault(); event.stopImmediatePropagation(); return;
         }
       }
-      if (event.button === 0 && work && !portraitCameraDrag && (p.onSelectionChange || p.onSelectNodes || p.onInspectGeoset)) {
+      if (event.button === 0 && work && !portraitCameraDrag && !p.previewSelectionMode && (p.onSelectionChange || p.onSelectNodes || p.onInspectGeoset)) {
         const rect = canvas.getBoundingClientRect();
         selectionGesture = { id: event.pointerId, x: event.clientX - rect.left, y: event.clientY - rect.top, shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey };
         controls.enabled = false; canvas.setPointerCapture(event.pointerId);
         event.preventDefault(); event.stopImmediatePropagation(); return;
       }
-      if (event.button === 0) leftGesture = { id: event.pointerId, position: camera.position.clone(), quaternion: camera.quaternion.clone(), target: controls.target.clone(), zoom: camera.zoom, adjusted: false };
+      if (event.button === 0 && p.previewSelectionMode && p.onSelectionChange && previewSelectHeld) {
+        const rect = canvas.getBoundingClientRect();
+        selectionGesture = { id: event.pointerId, x: event.clientX - rect.left, y: event.clientY - rect.top,
+          shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey, uv: true };
+        controls.enabled = false;
+        canvas.setPointerCapture(event.pointerId);
+        event.preventDefault(); event.stopImmediatePropagation(); return;
+      }
+      if (event.button === 0) leftGesture = { id: event.pointerId, x: event.clientX, y: event.clientY, shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey, alt: event.altKey,
+        position: camera.position.clone(), quaternion: camera.quaternion.clone(), target: controls.target.clone(), zoom: camera.zoom, adjusted: false };
       const binding = cameraBindings(p.preferences), mouseAction = value => value === 'pan' ? THREE.MOUSE.PAN : value === 'rotate' ? THREE.MOUSE.ROTATE : value === 'zoom' ? THREE.MOUSE.DOLLY : null;
       controls.mouseButtons.RIGHT = preserveShiftCameraAction(mouseAction(binding.right), event); controls.mouseButtons.MIDDLE = preserveShiftCameraAction(mouseAction(binding.middle), event);
       const action = event.altKey || portraitCameraDrag ? 'rotate' : p.cameraMode ?? 'rotate';
       rotating = event.button === 0 ? action === 'rotate' : event.button === 1 ? binding.middle === 'rotate' : binding.right === 'rotate';
-      p.onCameraGestureChange?.(rotating); canvas.style.cursor = viewportCursor(p.cameraMode, 'select', rotating);
+      p.onCameraGestureChange?.(rotating); canvas.style.cursor = cursorFor(p);
       controls.mouseButtons.LEFT = preserveShiftCameraAction(mouseAction(action === 'move' ? 'pan' : action), event);
       controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(p.preferences?.pointerSensitivity) * (event.shiftKey ? p.preferences?.fineSensitivity ?? .2 : 1);
     };
@@ -347,7 +359,7 @@ export default function GamePreview(inputProps) {
       }
       if (!nodeGesture) {
         const pickable = visibleMovementPoints(nodePoints, previewOverlayOptions(p.overlays, p.showNodes));
-        if (!pickable.length || rotating || (p.cameraMode ?? 'work') !== 'work') { canvas.style.cursor = viewportCursor(p.cameraMode, p.transformMode, rotating); return; }
+        if (!pickable.length || rotating || (p.cameraMode ?? 'work') !== 'work') { canvas.style.cursor = cursorFor(p); return; }
         const rect = canvas.getBoundingClientRect(), x = event.clientX - rect.left, y = event.clientY - rect.top;
         const overHandle = pickMovementHandle(nodeHandles, x, y, p.transformMode);
         canvas.style.cursor = overHandle || p.workplaneEnabled && ['move', 'rotate', 'scale'].includes(p.transformMode) || p.transformMode === 'scale' && p.selectedNodeIds?.length ? viewportCursor('work', p.transformMode) : pickMovementNode(pickable, x, y) ? 'pointer' : viewportCursor(p.cameraMode, p.transformMode);
@@ -377,15 +389,20 @@ export default function GamePreview(inputProps) {
       canvas.style.cursor = viewportCursor('work', nodeGesture.mode); invalidate();
     };
     const finishNodeGesture = event => {
-      rotating = false; latest.current.onCameraGestureChange?.(false); canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode);
+      rotating = false; latest.current.onCameraGestureChange?.(false); canvas.style.cursor = cursorFor(latest.current);
       if (selectionGesture?.id === event.pointerId) {
         const start = selectionGesture; selectionGesture = null; setSelectionBox(null); controls.enabled = true;
         if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
         event.preventDefault(); event.stopImmediatePropagation();
         if (event.type === 'pointercancel') return;
         const p = latest.current, rect = canvas.getBoundingClientRect(), end = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        if (start.uv && (!previewSelectHeld || end.x < 0 || end.y < 0 || end.x > rect.width || end.y > rect.height)) return;
         const geometry = projectPreviewGeosets(posedGeosets, camera, rect.width, rect.height);
-        if (start.ctrl && p.onInspectGeoset && Math.hypot(end.x - start.x, end.y - start.y) <= 5) {
+        if (start.uv) {
+          const point = Math.hypot(end.x - start.x, end.y - start.y) <= 5 ? { x: start.x, y: start.y } : end;
+          p.onSelectionChange?.(selectPreviewUVCoordinates(geometry, p.selectionByGeoset || {}, start, point,
+            p.previewEligibleByGeoset, p.previewSelectionMode === 'vertices', rect.width, rect.height));
+        } else if (start.ctrl && p.onInspectGeoset && Math.hypot(end.x - start.x, end.y - start.y) <= 5) {
           const hit = pickPreviewGeoset(geometry, end.x, end.y); if (hit) p.onInspectGeoset(hit.index);
         } else {
           p.onSelectionChange?.(selectPreviewVertices(geometry, p.selectionByGeoset || {}, start, end, p.selectableGeosets));
@@ -394,7 +411,7 @@ export default function GamePreview(inputProps) {
       }
       if (!nodeGesture || event.pointerId !== nodeGesture.id) return;
       event.preventDefault(); event.stopImmediatePropagation();
-      const gesture = nodeGesture; nodeGesture = null; controls.enabled = true; canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode); setGestureLabel('');
+      const gesture = nodeGesture; nodeGesture = null; controls.enabled = true; canvas.style.cursor = cursorFor(latest.current); setGestureLabel('');
       posedGeometryCache = null;
       latest.current.onNodePosePreview?.(null);
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
@@ -414,6 +431,19 @@ export default function GamePreview(inputProps) {
     };
     canvas.addEventListener('pointermove', nodePointerMove, true); canvas.addEventListener('pointerup', finishNodeGesture, true); canvas.addEventListener('pointercancel', finishNodeGesture, true); canvas.addEventListener('keydown', cancelNodeGesture, true);
     canvas.addEventListener('pointerdown', pointerDown, true); canvas.addEventListener('pointermove', suppressAdjustedMove, true); canvas.addEventListener('pointerup', finishLeftGesture, true); canvas.addEventListener('pointercancel', finishLeftGesture, true);
+    const previewKeyDown = event => {
+      if (event.key?.toLowerCase() === 'a' && !event.ctrlKey && !event.metaKey && !event.altKey &&
+          !event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) previewSelectHeld = true;
+    };
+    const previewKeyUp = event => {
+      if (event.key?.toLowerCase() !== 'a') return;
+      previewSelectHeld = false;
+      if (selectionGesture?.uv) finishNodeGesture({ pointerId: selectionGesture.id, type: 'pointercancel', preventDefault() {}, stopImmediatePropagation() {} });
+    };
+    const previewWindowBlur = () => { previewSelectHeld = false; };
+    ownerWindow.addEventListener('keydown', previewKeyDown, true);
+    ownerWindow.addEventListener('keyup', previewKeyUp, true);
+    ownerWindow.addEventListener('blur', previewWindowBlur);
     let viewHoveredGeoset = null;
     const hoverGeoset = event => {
       const p = latest.current;
@@ -432,6 +462,7 @@ export default function GamePreview(inputProps) {
     const center = bounds.getCenter(new THREE.Vector3()), radius = Math.max(1, bounds.getSize(new THREE.Vector3()).length() / 2);
     const fitRadius = () => {
       const p = latest.current, gridVisible = p.overlays?.grid ?? !!p.showGrid;
+      if (p.previewSelectionMode) return radius;
       return gridVisible ? Math.max(radius, gridFrameRadius(center, gridOptions(p.preferences).extent)) : radius;
     };
     function drawBackground() {
@@ -511,7 +542,7 @@ export default function GamePreview(inputProps) {
       state.cameraEditing = false; reportProjectionView(); invalidate();
     };
     controls.addEventListener('start', cameraStarted); controls.addEventListener('end', cameraEnded);
-    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = viewportCursor(latest.current.cameraMode, latest.current.transformMode, rotating); }, setCameraAngles: values => { if (setEditorCameraAngles(camera, controls.target, values)) { if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); } controls.update(); cameraChanged(); } } }; runtime.current = state;
+    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = cursorFor(latest.current); }, setCameraAngles: values => { if (setEditorCameraAngles(camera, controls.target, values)) { if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); } controls.update(); cameraChanged(); } } }; runtime.current = state;
     observer = new ownerWindow.ResizeObserver(resize); observer.observe(host.current);
     const saved = cameraMemory.current || latest.current.cameraHandoff?.current;
     // UV edits may rebuild geometry/materials, but never own the user's view.
@@ -796,7 +827,7 @@ export default function GamePreview(inputProps) {
         ? { camera:portraitBackup.camera, view:portraitBackup.appliedView, perspective:portraitBackup.perspective.clone(), ortho:portraitBackup.ortho.clone(), target:portraitBackup.target.clone() }
         : { camera:camera === ortho ? 'ortho' : 'perspective', view:state.appliedView, perspective:perspective.clone(), ortho:ortho.clone(), target:controls.target.clone() };
       if (latest.current.cameraHandoff) latest.current.cameraHandoff.current = cameraMemory.current;
-      disposed = true; leaveGeoset(); canvas.removeEventListener('pointermove', hoverGeoset); canvas.removeEventListener('pointerleave', leaveGeoset); latest.current.onCaptureReady?.(null); backgroundCanvas.remove(); hoverCanvas?.remove(); connectorCanvas?.remove(); nodeCanvas?.remove(); geometryCanvas?.remove(); cameraCanvas?.remove(); scheduler.dispose(); ownerDocument.removeEventListener('visibilitychange', scheduler.sync); window.removeEventListener('mdlvis-frame', fit); window.removeEventListener('mdlxl-view-camera', viewCamera); unbindScroll(); observer?.disconnect(); canvas.removeEventListener('pointerdown', pointerDown, true); canvas.removeEventListener('pointermove', suppressAdjustedMove, true); canvas.removeEventListener('pointerup', finishLeftGesture, true); canvas.removeEventListener('pointercancel', finishLeftGesture, true); canvas.removeEventListener('pointermove', nodePointerMove, true); canvas.removeEventListener('pointerup', finishNodeGesture, true); canvas.removeEventListener('pointercancel', finishNodeGesture, true); canvas.removeEventListener('keydown', cancelNodeGesture, true); controls.removeEventListener('change', cameraChanged); controls.removeEventListener('start', cameraStarted); controls.removeEventListener('end', cameraEnded); controls.dispose(); canvas.removeEventListener('webglcontextlost', contextLost); runtime.current = null; rigMarkers.dispose(); presentation.dispose(); nativeBackground.dispose(); eventPreview.dispose(); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas);
+      disposed = true; leaveGeoset(); canvas.removeEventListener('pointermove', hoverGeoset); canvas.removeEventListener('pointerleave', leaveGeoset); latest.current.onCaptureReady?.(null); backgroundCanvas.remove(); hoverCanvas?.remove(); connectorCanvas?.remove(); nodeCanvas?.remove(); geometryCanvas?.remove(); cameraCanvas?.remove(); scheduler.dispose(); ownerDocument.removeEventListener('visibilitychange', scheduler.sync); window.removeEventListener('mdlvis-frame', fit); window.removeEventListener('mdlxl-view-camera', viewCamera); unbindScroll(); observer?.disconnect(); ownerWindow.removeEventListener('keydown', previewKeyDown, true); ownerWindow.removeEventListener('keyup', previewKeyUp, true); ownerWindow.removeEventListener('blur', previewWindowBlur); canvas.removeEventListener('pointerdown', pointerDown, true); canvas.removeEventListener('pointermove', suppressAdjustedMove, true); canvas.removeEventListener('pointerup', finishLeftGesture, true); canvas.removeEventListener('pointercancel', finishLeftGesture, true); canvas.removeEventListener('pointermove', nodePointerMove, true); canvas.removeEventListener('pointerup', finishNodeGesture, true); canvas.removeEventListener('pointercancel', finishNodeGesture, true); canvas.removeEventListener('keydown', cancelNodeGesture, true); controls.removeEventListener('change', cameraChanged); controls.removeEventListener('start', cameraStarted); controls.removeEventListener('end', cameraEnded); controls.dispose(); canvas.removeEventListener('webglcontextlost', contextLost); runtime.current = null; rigMarkers.dispose(); presentation.dispose(); nativeBackground.dispose(); eventPreview.dispose(); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas);
     };
   }, [rendererModel, rendererRevision, textureAssets, props.modelPath, graphics.antialias, graphics.particles, props.showParticles, graphics.lighting, graphics.textures, timelineStart, timelineEnd]);
 

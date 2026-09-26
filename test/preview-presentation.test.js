@@ -65,7 +65,7 @@ test('preview Size scales canvas points and portable line width, leaving project
     const counts=drawPresentationOverlay(context,input,camera,400,400,{highlightSelection:true,eligibleByGeoset:domain,selectionByGeoset:{0:[0]},size},1.5);assert.deepEqual(counts,{points:1,edges:3});runs.push(calls);
   }
   assert.deepEqual(runs[0].filter(c=>c[0]==='moveTo'||c[0]==='lineTo'),runs[1].filter(c=>c[0]==='moveTo'||c[0]==='lineTo'));
-  assert.equal(runs[1].find(c=>c[0]==='lineWidth')[1],12*runs[0].find(c=>c[0]==='lineWidth')[1]);assert.equal(runs[1].find(c=>c[0]==='rect')[3],12*runs[0].find(c=>c[0]==='rect')[3]);assert.deepEqual(input,before);
+  assert.equal(runs[1].find(c=>c[0]==='lineWidth')[1],12*runs[0].find(c=>c[0]==='lineWidth')[1]);assert.equal(runs[0].find(c=>c[0]==='rect')[3],4);assert.equal(runs[1].find(c=>c[0]==='rect')[3],15);assert.deepEqual(input,before);
 });
 
 test('Select New overlay draws every eligible vertex and a larger contrasting selected layer',()=>{

@@ -190,13 +190,13 @@ export function drawPresentationOverlay(context, geosets, camera, width, height,
   context.globalAlpha = 1; context.lineWidth = 1.25 * settings.size;
   context.strokeStyle = settings.mode === 'selection' ? settings.color : '#164d85';
   context.fillStyle = settings.mode === 'selection' ? settings.color : '#086fd1';
-  drawEdges(geometry); drawPoints(geometry, 5 * settings.size, settings.interactiveSelection);
+  drawEdges(geometry); drawPoints(geometry, Math.max(4, 5 * settings.size), settings.interactiveSelection);
   if (settings.interactiveSelection) {
     const selected = previewOverlayGeometry(geosets, { ...options, allMesh: false, highlightSelection: true, interactiveSelection: false });
     if (selected.length) {
       context.globalAlpha = .95; context.strokeStyle = settings.color; context.lineWidth = 2 * settings.size; drawEdges(selected);
       context.globalAlpha = 1; context.fillStyle = settings.color; context.strokeStyle = '#fff'; context.lineWidth = Math.max(1, settings.size);
-      drawPoints(selected, 8 * settings.size, true);
+      drawPoints(selected, Math.max(6, 8 * settings.size), true);
     }
   }
   context.globalAlpha = 1; context.restore();
