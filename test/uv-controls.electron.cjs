@@ -39,7 +39,7 @@ async function chord(cdp,key,code,virtualKey){const data={key,code,windowsVirtua
     await waitFor(uv,`!!document.querySelector('.uv-preview-footer [aria-label="Show only selected geosets"]')`);
     await waitFor(uv,`!!document.querySelector('.game-preview-root')`);
     const buttons=await evaluate(uv,`[...document.querySelectorAll('.uv-preview-footer>button')].map(e=>e.textContent.trim())`);
-    assert.deepEqual(buttons,['Select New','Only Selected','Hide RGB']);
+    assert.deepEqual(buttons,['Select New','show verticles','Only Selected','Hide RGB']);
     const state=`(() => { const e=document.querySelector('.game-preview-root'); let f=e[Object.keys(e).find(k=>k.startsWith('__reactFiber'))]; for(;f;f=f.return)if(f.memoizedProps?.uvOnlySelected!==undefined){const p=f.memoizedState?.next?.next?.next?.memoizedState?.current||f.memoizedProps;return {only:p.uvOnlySelected,hidden:p.hiddenGeosets?[...p.hiddenGeosets]:null,rgb:p.hideRgbGeoset,model:p.model.GeosetAnims[3]?.Color};}throw Error('Preview props unavailable'); })()`;
     const before=await evaluate(uv,state);
     assert.equal(before.only,false);assert.equal(before.hidden,null);assert.equal(before.rgb,null);

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { EditorCameraControls, editorCameraAngles, preserveShiftCameraAction, setEditorCameraAngles } from './editor-camera-controls.js';
 import { viewportCursor } from './viewport-cursors.js';
 import { createPreviewSceneGL } from './preview-scene-gl.js';
-import { projectPreviewGeosets, pickPreviewGeoset, selectPreviewVertices } from './preview-selection.js';
+import { projectPreviewGeosets, pickPreviewGeoset, selectPreviewUVCoordinates, selectPreviewVertices } from './preview-selection.js';
 import { cameraLeftLight, improveNativeTexture, captureDimensions, nativeTeamColor, viewportPixelRatio } from './viewport-quality.js';
 import { createRigMarkersGL } from './rig-markers-gl.js';
 import { boneVertexHighlights } from '../src/bone-tools.js';
@@ -388,7 +388,9 @@ export default function GamePreview(inputProps) {
         if (start.ctrl && p.onInspectGeoset && Math.hypot(end.x - start.x, end.y - start.y) <= 5) {
           const hit = pickPreviewGeoset(geometry, end.x, end.y); if (hit) p.onInspectGeoset(hit.index);
         } else {
-          p.onSelectionChange?.(selectPreviewVertices(geometry, p.selectionByGeoset || {}, start, end, p.selectableGeosets));
+          p.onSelectionChange?.(p.previewSelectionMode
+            ? selectPreviewUVCoordinates(geometry, p.selectionByGeoset || {}, start, end, p.previewEligibleByGeoset, p.previewSelectionMode === 'vertices', rect.width, rect.height)
+            : selectPreviewVertices(geometry, p.selectionByGeoset || {}, start, end, p.selectableGeosets));
         }
         invalidate(); return;
       }
