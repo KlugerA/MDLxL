@@ -193,6 +193,23 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   const currentSelectionCount = selectedCount(selectedForCurrent);
   const toolState = uvToolState({ readOnly, selectingNew, selectionCount: currentSelectionCount, draftCount });
   useEffect(() => {
+    const body = workspaceBody.current;
+    if (!body) return;
+    const trackPointer = event => {
+      body.dataset.pointerRegion = event.target.closest('.uv-live-preview') ? 'preview' :
+        event.target.closest('.uv-map-pane') ? 'map' : '';
+    };
+    const clearPointer = () => { body.dataset.pointerRegion = ''; };
+    body.addEventListener('pointermove', trackPointer, true);
+    body.addEventListener('pointerdown', trackPointer, true);
+    body.addEventListener('pointerleave', clearPointer);
+    return () => {
+      body.removeEventListener('pointermove', trackPointer, true);
+      body.removeEventListener('pointerdown', trackPointer, true);
+      body.removeEventListener('pointerleave', clearPointer);
+    };
+  }, []);
+  useEffect(() => {
     const action = event => {
       if (selectingNew) return;
       const { kind, value } = event.detail || {};
