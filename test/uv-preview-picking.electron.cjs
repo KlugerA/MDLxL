@@ -90,7 +90,11 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     const canvas = uv.locator('[data-clean-model-canvas]'), box = await canvas.boundingBox();
     const cameraBefore = await uv.evaluate(() => previewState().controls.object.quaternion.toArray());
     await uv.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await uv.mouse.down(); await uv.mouse.move(box.x + box.width / 2 + 90, box.y + box.height / 2 + 45, { steps: 8 }); await uv.mouse.up();
+    assert.equal(await canvas.evaluate(element => element.style.cursor), 'default', 'idle polygon selection uses the normal pointer');
+    await uv.mouse.down(); await uv.mouse.move(box.x + box.width / 2 + 90, box.y + box.height / 2 + 45, { steps: 8 });
+    assert.match(await canvas.evaluate(element => element.style.cursor), /data:image\/svg\+xml/, 'polygon mode shows the rotate pointer during a rotation drag');
+    await uv.mouse.up();
+    assert.equal(await canvas.evaluate(element => element.style.cursor), 'default', 'releasing a rotation restores the normal pointer');
     const cameraAfter = await uv.evaluate(() => previewState().controls.object.quaternion.toArray());
     assert.notDeepEqual(cameraAfter, cameraBefore, 'dragging the preview must rotate the camera');
     assert.equal(await uv.evaluate(() => uvState().selectionByGeoset[15]?.length), 248, 'camera drag must not change UV selection');
@@ -116,6 +120,8 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await toggle.click();
     assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
     await uv.waitForFunction(() => previewProps().previewSelectionMode === 'vertices');
+    await uv.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    assert.equal(await canvas.evaluate(element => element.style.cursor), 'default', 'idle Live Select uses the normal pointer');
     assert.equal(await uv.evaluate(() => previewProps().previewSelectionMode), 'vertices');
     assert.equal(await uv.evaluate(() => previewProps().previewOverlay.color), '#33cc66');
     assert.equal(await uv.evaluate(() => previewProps().previewOverlay.size), .5);
@@ -133,6 +139,11 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await uv.waitForFunction(() => uvState().selectionByGeoset[15]?.length === 3);
     await toggle.click();
     assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
+    await uv.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await uv.mouse.down(); await uv.mouse.move(box.x + box.width / 2 + 30, box.y + box.height / 2 + 20, { steps: 3 });
+    assert.match(await canvas.evaluate(element => element.style.cursor), /data:image\/svg\+xml/, 'Live Select shows the rotate pointer during a rotation drag');
+    await uv.mouse.up();
+    assert.equal(await canvas.evaluate(element => element.style.cursor), 'default', 'Live Select restores the normal pointer after rotation');
     assert.equal(await uv.evaluate(() => JSON.stringify(uvState().model)), before);
     assert.ok(fs.readFileSync(fixture).equals(original));
     console.log('PASS Electron UV: normal Warcraft model, free rotation and zoom, polygon and vertex picking with other geosets visible, shared green highlight, repeated toggle, unchanged model');
