@@ -8,7 +8,7 @@ import './KeyframeTimeline.css';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 /** The original compact reel: time selection, with authoring in the controllers. */
-export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, globalSeqId = null, time = 0, selectedNodeIds = [], selectedGeosets = [], activeController = 'rotate', highlightKeyframes = true, playing = false, onPlayingChange, onEdit, onSeek, onCommands, onStatus, disabled = false, restrictions = {}, motionFindings = [], motionActive = null, motionControls = null, onMotionFinding, onSelectKey, children }) {
+export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, globalSeqId = null, time = 0, selectedNodeIds = [], selectedGeosets = [], activeController = 'rotate', highlightKeyframes = true, playing = false, onPlayingChange, onEdit, onSeek, onCommands, onStatus, disabled = false, restrictions = {}, motionFindings = [], motionActive = null, motionControls = null, onMotionFinding, onKeyClick, children }) {
   const [range, setRange] = useState(null), [context, setContext] = useState(null), [draftTime, setDraftTime] = useState('0');
   const [keySelection, setKeySelection] = useState(null);
   const [, refreshClipboard] = useState(0);
@@ -26,14 +26,14 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     const options = { tracks, nodeIds: selectedNodeIds, geosetIds: selectedGeosets, activeController, highlightKeyframes, domain };
     const authored = domain ? classicTimelineTargets(model, { ...options, highlightKeyframes: false }) : [];
     const selectedTargets = domain ? classicTimelineTargets(model, { ...options, highlightKeyframes: true }) : [];
-    const targets = highlightKeyframes ? selectedTargets : authored;
     const selectedBoneTargets = activeController === 'animations' ? selectedTargets : domain ? ['move', 'rotate', 'scale'].flatMap(controller => classicTimelineTargets(model, { ...options, activeController: controller, highlightKeyframes: true })) : [];
+    const targets = !highlightKeyframes ? authored : activeController === 'select' ? selectedBoneTargets : selectedTargets;
     const copyTargets = highlightKeyframes ? [...new Map(selectedBoneTargets.map(target => [target.trackId, target])).values()] : authored;
     const poseTargets = [...new Map((highlightKeyframes ? copyTargets : [...authored, ...selectedTargets]).map(target => [target.trackId, target])).values()];
     const keys = domain ? timelineKeys(model, targets, domain) : [];
     const copyKeysInDomain = domain ? timelineKeys(model, copyTargets, domain) : [];
-    // Highlight KF is both a visual filter and a bone-only clipboard scope.
-    const timeSet = new Set(highlightKeyframes ? copyKeysInDomain.map(key => key.frame) : domain ? animationMarkerTimes(model, domain, tracks) : []);
+    // Highlight KF shows the keys that the active Movement scope can edit.
+    const timeSet = new Set(highlightKeyframes ? keys.map(key => key.frame) : domain ? animationMarkerTimes(model, domain, tracks) : []);
     return { targets, copyTargets, poseTargets, keys, copyKeysInDomain, times: [...timeSet].sort((a, b) => a - b), timeSet };
   }, [model, revision, tracks, domain, selectionStamp, activeController, highlightKeyframes]);
   const frame = domain ? Math.round(clamp(time, domain.start, domain.end)) : 0;
@@ -162,13 +162,11 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     const rect = reel.current.getBoundingClientRect(), upper = event.clientY - rect.top <= rect.height / 2;
     const at = pointer => Math.round(clamp(domain.start + (pointer.clientX - rect.left) / Math.max(1, rect.width) * span, domain.start, domain.end));
     const onCursor = Math.abs(event.clientX - rect.left - (frame - domain.start) / span * rect.width) <= 4;
-    if (event.button === 0 && upper && !event.shiftKey && onSelectKey && globalSeqId === null && sequenceIndex >= 0) {
+    if (event.button === 0 && upper && !event.shiftKey) {
       const nearest = times.reduce((best, value) => Math.abs(value - at(event)) < Math.abs(best - at(event)) ? value : best, Infinity);
       if (Math.abs(nearest - at(event)) / span * rect.width <= 4) {
-        const property = ({ move: 'Translation', rotate: 'Rotation', scale: 'Scaling' })[activeController];
-        const candidates = tracks.filter(target => target.kind === 'node' && ['Translation','Rotation','Scaling'].includes(target.property) && target.globalSeqId === null && timelineKeys(model, [target], domain).some(key => key.frame === nearest));
-        const target = candidates.find(t => selectedNodeIds.includes(t.id) && t.property === property) || candidates.find(t => selectedNodeIds.includes(t.id)) || candidates[0];
-        if (target) { event.preventDefault(); setRange(null); onSelectKey({ nodeId: target.id, property: target.property, time: nearest }); return; }
+        event.preventDefault(); panel.current?.focus({ preventScroll: true }); setContext(null);
+        seek(nearest); onKeyClick?.(); return;
       }
     }
     if (event.button === 2 && (!upper || !onCursor)) return;
