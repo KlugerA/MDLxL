@@ -7,10 +7,12 @@ import descriptors from './locales/ru-descriptors.json' with { type: 'json' };
 import materials from './locales/ru-materials.json' with { type: 'json' };
 import previewCache from './locales/ru-preview-cache.json' with { type: 'json' };
 import optimizer from './locales/ru-optimizer.json' with { type: 'json' };
+import reviewedRussian from './locales/ru-reviewed.json' with { type: 'json' };
+import reviewedSpanish from './locales/es-reviewed.json' with { type: 'json' };
 import { chinese, mordor, spanish } from './locales/short-ui-locales.js';
 import { broadChinese, broadMordor, broadSpanish } from './locales/broad-ui-locales.js';
 
-export const russian = Object.freeze({ ...core, ...editor, ...engine, ...additions, ...forge, ...descriptors, ...materials, ...previewCache, ...optimizer });
+export const russian = Object.freeze({ ...core, ...editor, ...engine, ...additions, ...forge, ...descriptors, ...materials, ...previewCache, ...optimizer, ...reviewedRussian });
 export const LANGUAGES = Object.freeze([
   Object.freeze({ id: 'en', label: 'English', nativeLabel: 'English' }),
   Object.freeze({ id: 'ru', label: 'Russian', nativeLabel: 'Русский' }),
@@ -23,18 +25,22 @@ export const LANGUAGES = Object.freeze([
 // keeps the joke consistently unreadable without falsely presenting invented
 // sentences as canonical Tolkien text.
 const blackSpeechWords = Object.freeze(['ash', 'nazg', 'durb', 'atulûk', 'gimb', 'krimp', 'burzum', 'ishi', 'agh', 'ghâsh', 'snaga', 'uruk', 'lugbúrz', 'nazgûl']);
+// Keep recognizable formats, axes, shortcuts, and file paths useful in joke mode.
+const blackSpeechLiterals = new Set(['MDLxL','MDLVis','MdlVis','Warcraft','III','RGB','UV','XYZ','XYZW','XY','XZ','ZX','YZ','DPI','MDL','MDX','BLP','DDS','DXT','PNG','JPG','JPEG','GIF','WebP','BMP','CASC','MPQ','JSON','API','UTF','Ctrl','Alt','Shift','Win','Enter','Escape','Delete','Backspace','Tab','Space','Page','Up','Down','Home','End','MB','MiB','KB','KiB','ID','IDs','GPU','FPS','ms','px']);
 function blackSpeechCipher(text) {
-  return text.replace(/[A-Za-z]{2,}/g, word => {
+  if (/^[A-Za-z]:[\\/]/.test(text)) return text;
+  return text.replace(/(?:[\w.-]+[\\/])+[\w.-]+|\b[\w-]+\.(?:mdl|mdx|blp|dds|png|jpe?g|gif|webp|bmp|json|zip|txt|wav|mp3|w3x|w3m)\b|[A-Za-z]{2,}/gi, word => {
+    if (/[\\/.]/.test(word) || blackSpeechLiterals.has(word)) return word;
     let hash = 0;
     for (const letter of word.toLowerCase()) hash = (hash * 31 + letter.charCodeAt(0)) >>> 0;
     return blackSpeechWords[hash % blackSpeechWords.length];
   });
 }
-const mordorKeys = Object.freeze({ ...mordor, ...broadMordor });
+const mordorKeys = Object.freeze({ ...russian, ...reviewedSpanish, ...mordor, ...broadMordor });
 const blackSpeech = Object.freeze(Object.fromEntries(Object.keys(mordorKeys).map(key => [key, blackSpeechCipher(key)])));
 const dictionaries = Object.freeze({
   ru: russian,
-  es: Object.freeze({ ...spanish, ...broadSpanish }),
+  es: Object.freeze({ ...spanish, ...broadSpanish, ...reviewedSpanish }),
   zh: Object.freeze({ ...chinese, ...broadChinese }),
   mordor: blackSpeech,
 });
@@ -59,6 +65,13 @@ export function translate(text, locale = language, depth = 0) {
   if (locale === 'en' || !dictionaries[locale] || typeof text !== 'string' || !/[a-z]/i.test(text)) return text;
   const trimmed=text.trim(), before=text.slice(0,text.indexOf(trimmed)), after=text.slice(text.indexOf(trimmed)+trimmed.length);
   let translated=dictionaries[locale][trimmed];
+  // A complete reviewed label beats a generic template such as "Material {0}".
+  // Keep the community Chinese lookup behavior exactly as supplied.
+  if (translated === undefined && (locale === 'ru' || locale === 'es')) {
+    const decorated = /^(.*?)(:|…|\.\.\.)$/.exec(trimmed);
+    const label = decorated && dictionaries[locale][decorated[1]];
+    if (label !== undefined && label !== null) translated = label + decorated[2];
+  }
   if(translated===undefined && depth<3) for(const pattern of patternsFor(locale)){
     const match=pattern.regex.exec(trimmed);if(!match)continue;
     translated=pattern.value.replace(/\{\d+\}/g,id=>{const index=pattern.ids.indexOf(id);return index<0?id:translate(match[index+1],locale,depth+1);});break;

@@ -20,7 +20,7 @@ import AnimationPreviewTools from './AnimationPreviewTools.jsx';
 import PressedKeys from './PressedKeys.jsx';
 import LanguageSwitch from './LanguageSwitch.jsx';
 import ModernIcon, { hasModernIcon } from './ModernIcon.jsx';
-import { setLanguage } from '../src/localization.js';
+import { setLanguage, translate } from '../src/localization.js';
 import { usePreviewBackgrounds } from './usePreviewBackgrounds.js';
 const GamePreview = lazy(() => import('./GamePreview.jsx'));
 const ResourceEditor = lazy(() => import('./ResourceEditors.jsx'));
@@ -1069,7 +1069,7 @@ export default function App() {
     </section>{mode !== 'uv' && mode !== 'paint' && <aside className="classic-sidebar">
       {cameraRotating && cameraPanel}
       {!rigWorkspace && mode !== 'animation' && !cameraRotating && <><div className="classic-counts"><div>Vertices: <span>{totalVertices}</span></div><div>Selected: <span>{selectionCount}</span></div><div>Hidden: <span>{hiddenCount}</span></div><div>Triangles: <span>{totalFaces}</span></div><div>Selected: <span>{selectedFaces}</span></div></div>
-      <div className="classic-coordinates">{['X', 'Y', 'Z'].map((axis, i) => <Coordinate key={axis} axis={axis} value={centroid[i]} disabled={!editable || !selectionCount || mode === 'uv'} onCommit={value => { const translation = [0, 0, 0]; translation[i] = value - centroid[i]; transform({ translation }); }}/>)}</div>
+      <div className="classic-coordinates" data-label={preferences.language === 'zh' ? 'Coords:' : translate('Coords:')}>{['X', 'Y', 'Z'].map((axis, i) => <Coordinate key={axis} axis={axis} value={centroid[i]} disabled={!editable || !selectionCount || mode === 'uv'} onCommit={value => { const translation = [0, 0, 0]; translation[i] = value - centroid[i]; transform({ translation }); }}/>)}</div>
       <fieldset className="classic-planes"><legend><label><input data-warmkey="workplaneEnabled" aria-label="Workplane" type="checkbox" disabled={!!lockedVertexPlane} checked={!!lockedVertexPlane || workplaneEnabled} onChange={event => setWorkplaneEnabled(event.target.checked)}/>Workplane</label></legend>{[['xy', 'XY'], ['xz', 'ZX'], ['yz', 'YZ']].map(([value, label]) => <label key={value}><input data-warmkey={`plane:${value}`} aria-label={`${label} workplane`} type="radio" name="workplane" disabled={!!lockedVertexPlane} checked={(lockedVertexPlane || workplane) === value} onChange={() => setWorkplane(value)}/>{label}</label>)}</fieldset>
       {!cameraRotating && <div className="classic-tools">{[['select', 'sb_select', 'Select'], ['translate', 'sb_move', 'Move'], ['rotate', 'sb_rot', 'Rotate'], ['scale', 'sb_zoom', 'Resize']].map(([value, icon, title]) => <Tool action={value} key={value} icon={icon} title={title} active={tool === value} onClick={() => setWorkTool(value)}/>)}<Tool action="normalRotate" icon="sb_nrot" title="Rotate normals" disabled={!editable || !selectionCount || mode === 'uv'} onClick={() => setDialog({ type: 'normalRotate' })}/>
         {toolButton('sb_del', 'Delete vertices', 'Delete vertices')}{toolButton('sb_uncouple', 'Uncouple', 'Uncouple vertices')}<Tool action="Mirror" icon="sb_mirror" title="Mirror in workplane" disabled={!editable || !selectionCount} onClick={() => mode === 'uv' ? uvAction('flip-u') : meshAction('Mirror')}/>{toolButton('b_extrude', 'Extrude', 'Extrude 10 units, then move', selectedFaces > 0)}{toolButton('b_detach', 'Detach', 'Detach as new geoset', selectedFaces > 0)}
