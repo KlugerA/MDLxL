@@ -66,7 +66,8 @@ export function resetPreviewEffects(native) {
 export function installWarcraftPreviewAdapter(gl, model, getClock) {
   const original = { shaderSource: gl.shaderSource, bindBuffer: gl.bindBuffer, useProgram: gl.useProgram, drawElements: gl.drawElements };
   gl.shaderSource = function (shader, source) { return original.shaderSource.call(this, shader, patchWarcraftMeshVertexShader(patchWarcraftMeshFragmentShader(source))); };
-  let native, location, lightingLocation, lightDirectionLocation, portraitLocation, coverageLocation, surfaceLocation, lightUniforms, activeProgram, elementBuffer, activeLayer, byIndexBuffer, setLayerProps, setLayerPropsHD, renderRibbons, updateRibbons;
+  let native, location, lightingLocation, lightDirectionLocation, portraitLocation, coverageLocation, surfaceLocation, lightUniforms, activeProgram, elementBuffer, activeLayer, byIndexBuffer, setLayerProps, setLayerPropsHD, renderRibbons, updateRibbons, renderParticles, render;
+  let meshPass = null;
   return {
     ready(renderer) {
       native = renderer; gl.shaderSource = original.shaderSource;
@@ -80,8 +81,32 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
       if (!location) throw new Error('The Warcraft preview shader is incompatible with geoset color editing.');
       byIndexBuffer = new Map(native.indexBuffer.map((buffer, index) => [buffer, index]));
       setLayerProps = native.setLayerProps; setLayerPropsHD = native.setLayerPropsHD;
-      native.setLayerProps = function (layer, textureID) { activeLayer = layer; return setLayerProps.call(this, layer, textureID); };
+      native.setLayerProps = function (layer, textureID) {
+        activeLayer = layer;
+        const result = setLayerProps.call(this, layer, textureID);
+        // Additive is ONE + ONE, as in the vertex editor. SRC_COLOR squares
+        // the texture/tint and suppresses the soft edges of glow textures.
+        if (layer.FilterMode === 3) gl.blendFunc(gl.ONE, gl.ONE);
+        return result;
+      };
       native.setLayerPropsHD = function (materialID, layers) { activeLayer = layers[0]; return setLayerPropsHD.call(this, materialID, layers); };
+      // Upstream draws in geoset file order. Finish opaque depth first so a
+      // later face cannot paint over an earlier glow. Each mesh layer draws
+      // once; original IDs, buffer mappings and within-pass order stay intact.
+      render = native.render;
+      native.render = function (mvMatrix, pMatrix, options) {
+        try {
+          meshPass = 'opaque'; render.call(this, mvMatrix, pMatrix, options);
+          meshPass = 'blended'; return render.call(this, mvMatrix, pMatrix, { ...options, env: false });
+        } finally { meshPass = null; }
+      };
+      if (native.particlesController) {
+        renderParticles = native.particlesController.render;
+        native.particlesController.render = function (...args) {
+          if (meshPass === 'opaque') return;
+          return renderParticles.apply(this, args);
+        };
+      }
       if (native.ribbonsController) {
         updateRibbons = native.ribbonsController.update;
         let ribbonWallClock = Date.now();
@@ -94,6 +119,7 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
         };
         renderRibbons = native.ribbonsController.render;
         native.ribbonsController.render = function (...args) {
+          if (meshPass === 'opaque') return;
           const { frame, sequenceIndex, globalTime } = getClock(), replacements = [];
           for (const emitter of this.emitters || []) if (emitter.props.Color?.Keys) {
             const color = emitter.props.Color; replacements.push([emitter.props, color]);
@@ -115,6 +141,8 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
           const { frame, sequenceIndex, globalTime } = getClock();
           const tint = previewGeosetTint(model, geosetIndex, activeLayer, frame, sequenceIndex, globalTime, getClock().hideRgbGeoset === geosetIndex);
           if (tint[3] <= 1e-6) return;
+          const blended = (activeLayer?.FilterMode ?? 0) >= 2 || tint[3] < .999999;
+          if (meshPass && blended !== (meshPass === 'blended')) return;
           this.uniform4fv(location, tint);
           // Surface View is an inspection material: its faces must remain
           // shaded even when the authored texture layer is Unshaded.
@@ -140,6 +168,8 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
     },
     dispose() {
       Object.assign(gl, original);
+      if (native && render) native.render = render;
+      if (native?.particlesController && renderParticles) native.particlesController.render = renderParticles;
       if (native && setLayerProps) native.setLayerProps = setLayerProps;
       if (native && setLayerPropsHD) native.setLayerPropsHD = setLayerPropsHD;
       if (native?.ribbonsController && renderRibbons) native.ribbonsController.render = renderRibbons;
