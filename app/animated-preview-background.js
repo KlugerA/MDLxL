@@ -7,7 +7,8 @@ export function createAnimatedPreviewBackground(url, {
   now = () => performance.now(),
 } = {}) {
   const abort = new AbortController();
-  let disposed = false, decoder, timer, pendingFrame, canvas, resolveReady, rejectReady, readySettled = false;
+  let disposed = false, paused = false, decoder, timer, pendingFrame, canvas, resolveReady, rejectReady, readySettled = false;
+  let currentIndex = 0, timerDue = 0, resumeIndex = null, resumeDelay = 0;
   const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; }); ready.catch(() => {});
   const settleReady = error => { if (readySettled) return; readySettled = true; error ? rejectReady(error) : resolveReady(); };
   const stop = () => {
@@ -20,8 +21,9 @@ export function createAnimatedPreviewBackground(url, {
     try {
       const { image } = await decoder.decode({ frameIndex: index, completeFramesOnly: true });
       if (disposed) { image.close(); return; }
+      if (paused) { resumeIndex = index; resumeDelay = Math.max(0, due - now()); image.close(); return; }
       pendingFrame = image;
-      timer = schedule(() => {
+      timerDue = due; timer = schedule(() => {
         timer = undefined; const frame = pendingFrame; pendingFrame = null;
         if (disposed) { frame?.close(); return; }
         present(frame, index);
@@ -36,7 +38,7 @@ export function createAnimatedPreviewBackground(url, {
       if (canvas.height !== height) canvas.height = height;
       const context = canvas.getContext('2d');
       context.clearRect(0, 0, width, height); context.drawImage(frame, 0, 0, width, height);
-      onFrame(canvas); settleReady();
+      currentIndex = index; onFrame(canvas); settleReady();
     } catch (error) { fail(error); }
     finally { frame.close(); }
     if (!disposed && decoder.tracks.selectedTrack.frameCount > 1) {
@@ -64,6 +66,19 @@ export function createAnimatedPreviewBackground(url, {
   })();
   return {
     ready,
+    pause() {
+      if (disposed || paused) return;
+      paused = true;
+      resumeIndex = (currentIndex + 1) % decoder.tracks.selectedTrack.frameCount;
+      resumeDelay = Math.max(0, timerDue - now());
+      if (timer !== undefined) { cancel(timer); timer = undefined; }
+      pendingFrame?.close(); pendingFrame = null;
+    },
+    resume() {
+      if (disposed || !paused) return;
+      paused = false;
+      if (resumeIndex !== null) { const index = resumeIndex, delay = resumeDelay; resumeIndex = null; void prepare(index, now() + delay); }
+    },
     dispose() {
       if (disposed) return; disposed = true; stop();
       if (canvas) { canvas.width = 0; canvas.height = 0; }

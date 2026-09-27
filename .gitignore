@@ -21,3 +21,6 @@ release/
 Thumbs.db
 .idea/
 .vscode/
+
+# User-created Showcase exports
+Showcase Recordings/

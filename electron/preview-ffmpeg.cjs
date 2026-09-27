@@ -3,7 +3,7 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
-const { savePreviewCaptureFile, validateGIFFile } = require('./preview-capture.cjs');
+const { savePreviewCaptureFile, validateGIFFile, showcaseDirectory } = require('./preview-capture.cjs');
 const { encodeCaptureQOI } = require('./capture-qoi.cjs');
 
 const MAX_TEMP_BYTES = 8 * 1024 ** 3;
@@ -67,7 +67,7 @@ class PreviewRecordingStore {
     return job;
   }
   async begin(owner, options) {
-    const { width, height, quality, loop } = options || {};
+    const { width, height, quality, loop, modelName } = options || {};
     if (![width,height].every(n => Number.isInteger(n) && n > 0 && n <= 1920) || !['low','medium','high'].includes(quality) || typeof loop !== 'boolean') throw Error('Invalid recording settings.');
     if (this.starting.has(owner) || [...this.jobs.values()].some(job => job.owner === owner)) throw Error('Finish and save the previous recording first.');
     this.starting.add(owner);
@@ -80,7 +80,7 @@ class PreviewRecordingStore {
       if (budget < width * height * 4 + 54) throw Error('Not enough temporary disk space to record. Free some disk space and try again.');
       const directory = await fs.mkdtemp(path.join(this.temporaryRoot, 'recording-'));
       const id = crypto.randomBytes(18).toString('hex');
-      this.jobs.set(id, { id, owner, directory, width, height, quality, loop, budget, bytes: 0, accountedBytes: 0, frames: [], phase: 'recording', queue: Promise.resolve(), pending: 0 });
+      this.jobs.set(id, { id, owner, directory, width, height, quality, loop, modelName, budget, bytes: 0, accountedBytes: 0, frames: [], phase: 'recording', queue: Promise.resolve(), pending: 0 });
       return { jobId: id, storageBudget: budget };
     } finally { this.starting.delete(owner); }
   }
@@ -141,7 +141,7 @@ class PreviewRecordingStore {
     if (job.phase !== 'ready') throw Error('The recording is not ready to save.');
     job.phase = 'saving';
     try {
-      const result = await savePreviewCaptureFile(this.destination, job.output);
+      const result = await savePreviewCaptureFile(showcaseDirectory(this.destination, job.modelName), job.output);
       await this.discard(owner, id).catch(error => console.warn(`Saved capture; temporary cleanup failed: ${error.message}`)); return result;
     } catch (error) { job.phase = 'ready'; throw error; }
   }

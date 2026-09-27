@@ -27,10 +27,10 @@ test('Capture writes unique preview-only filenames and validates data before wri
     const gif = createPreviewGIF(); gif.add(frame([20,40,80]),8,6,0); const {bytes} = gif.finish(100);
     const first = await savePreviewCapture(directory,{format:'gif',bytes,path:'../forbidden.mdx',name:'forbidden.mdx'});
     const second = await savePreviewCapture(directory,{format:'gif',bytes});
-    assert.equal(path.dirname(first.path),directory); assert.match(first.name,/^Preview-.*\.gif$/); assert.notEqual(first.path,second.path);
+    assert.equal(path.dirname(first.path),path.join(directory, 'Untitled')); assert.match(first.name,/^Preview-.*\.gif$/); assert.notEqual(first.path,second.path);
     assert.deepEqual(new Uint8Array(await readFile(first.path)),bytes);
     await assert.rejects(savePreviewCapture(directory,{format:'mdx',bytes}),/PNG or GIF/);
     await assert.rejects(savePreviewCapture(directory,{format:'png',bytes}),/Invalid capture/);
-    assert.equal((await readdir(directory)).length,2);
+    assert.equal((await readdir(path.join(directory, 'Untitled'))).length,2);
   } finally { await rm(directory,{recursive:true,force:true}); }
 });

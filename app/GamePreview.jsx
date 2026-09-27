@@ -10,6 +10,7 @@ import { boneVertexHighlights } from '../src/bone-tools.js';
 import { billboardCameraCorrection } from './preview-pose.js';
 import { drawModelCameraOverlay } from './model-camera-overlay.js';
 import { ModelRenderer } from 'war3-model';
+import { advanceShowcaseModel } from './showcase-playback.js';
 import { textureFromAsset } from './Viewport.jsx';
 import { drawGeosetHighlight } from './geoset-highlight.js';
 import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatrices, skinGeoset, skinGeosetNormals } from '../src/animation.js';
@@ -93,7 +94,9 @@ function releasePreviewGraphics(native, gl, canvas) {
 export default function GamePreview(inputProps) {
   const presentationProps = previewPresentationProps(inputProps);
   // Portrait keeps the v4 camera/frame path and normal Movement editing props.
+  const [showcasePortrait, setShowcasePortrait] = useState(false);
   const props = presentationProps;
+  if (props.showcase) props.portraitMode = showcasePortrait;
   const { model, revision = 0, sequenceIndex = -1, textureAssets, view = 'perspective' } = props;
   const root = useRef(null), host = useRef(null), runtime = useRef(null), latest = useRef(props); latest.current = props;
   const [error, setError] = useState(''), [warnings, setWarnings] = useState([]), [eventWarnings, setEventWarnings] = useState([]), [adjustingSensitivity, setAdjustingSensitivity] = useState(null), [gestureLabel, setGestureLabel] = useState('');
@@ -136,12 +139,12 @@ export default function GamePreview(inputProps) {
   }, [props.portraitMode]);
 
   useEffect(() => {
-    if (!props.portraitMode || portraitFrame.current.status !== 'idle') return;
+    if (!(props.portraitMode || props.preparePortraitFrame) || portraitFrame.current.status !== 'idle') return;
     const entry = portraitFrame.current = { status: 'loading', canvas: null, url: '', error: '', promise: null };
     humanFramePromise ||= loadHumanFrame().catch(error => { humanFramePromise = null; throw error; });
     entry.promise = humanFramePromise.then(result => { if (portraitFrame.current !== entry) return; Object.assign(entry, result, { status: 'ready' }); setPortraitFrameVersion(value => value + 1); })
       .catch(error => { if (portraitFrame.current !== entry) return; entry.status = 'failed'; entry.error = error.message; setPortraitFrameVersion(value => value + 1); });
-  }, [props.portraitMode]);
+  }, [props.portraitMode, props.preparePortraitFrame]);
 
   useEffect(() => {
     setBackgroundError('');
@@ -158,6 +161,7 @@ export default function GamePreview(inputProps) {
         onFrame: image => { if (!active) return; entry.status = 'ready'; entry.image = image; resolve(); runtime.current?.drawBackground(); runtime.current?.scheduler.invalidate(); },
         onError: cause => { if (!active) return; entry.status = 'failed'; entry.error = cause; setBackgroundError(cause.message); reject(cause); },
       });
+      entry.animation = animation;
       runtime.current?.drawBackground();
       return () => { active = false; animation.dispose(); resolve(); };
     }
@@ -179,7 +183,7 @@ export default function GamePreview(inputProps) {
     const backgroundCanvas = ownerDocument.createElement('canvas'); backgroundCanvas.dataset.previewBackground = ''; backgroundCanvas.style.cssText = 'position:absolute;z-index:0;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(backgroundCanvas);
     const canvas = ownerDocument.createElement('canvas'); canvas.dataset.cleanModelCanvas = ''; canvas.style.cssText = 'position:relative;z-index:1;width:100%;height:100%;display:block;touch-action:none;outline:none'; canvas.tabIndex = 0;
     host.current.appendChild(canvas);
-    const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false });
+    const gl = canvas.getContext('webgl2', { antialias: graphicsOptions(latest.current.preferences).antialias, alpha: false, premultipliedAlpha: false });
     if (!gl) { setError('This preview needs WebGL 2. The geometry editor remains available.'); canvas.remove(); backgroundCanvas.remove(); return; }
     let native, disposed = false, observer, scheduler, hoverCanvas, connectorCanvas, nodeCanvas, geometryCanvas, cameraCanvas, nodePoints = [], nodeHandles = [], nodeGesture = null, selectionGesture = null, posedGeosets = [], posedGeometryCache = null, rotating = false, portraitBackup = null, cameraGestureStart = null, attachPointer = null;
     const cursorFor = (p, active = rotating) => p.previewSelectionMode && !active ? 'default' : viewportCursor(p.cameraMode, p.transformMode, active);
@@ -479,7 +483,7 @@ export default function GamePreview(inputProps) {
       nativeBackground.update(backgroundCanvas);
     }
     function resize() {
-      const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1), pixelRatio = viewportPixelRatio(graphicsOptions(latest.current.preferences), ownerWindow.devicePixelRatio);
+      const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1), pixelRatio = latest.current.showcase ? graphicsOptions(latest.current.preferences).pixelRatio : viewportPixelRatio(graphicsOptions(latest.current.preferences), ownerWindow.devicePixelRatio);
       canvas.height = Math.round(height * pixelRatio); canvas.width = latest.current.portraitMode ? Math.round(canvas.height * PORTRAIT_ASPECT) : Math.round(width * pixelRatio); gl.viewport(0, 0, canvas.width, canvas.height);
       perspective.aspect = latest.current.portraitMode ? PORTRAIT_ASPECT : width / height; perspective.updateProjectionMatrix();
       const aspect = latest.current.portraitMode ? PORTRAIT_ASPECT : width / height;
@@ -599,6 +603,7 @@ export default function GamePreview(inputProps) {
     });
     const texturePromise = Promise.all(jobs).then(() => { texturesReady = true; if (!disposed) setWarnings([...(missing ? [`${missing} textures unresolved · load the model's texture files`] : []), ...failures]); });
     let reportAt = performance.now(), activeSequence = -99, externalFrame, reportedFrame, lastPlaying = false, globalClock = 0, playbackStopped = false;
+    let showcaseSample;
     const color = new THREE.Color(), cameraQuaternion = new THREE.Quaternion();
     function setPreviewFrame(frame) {
       native.setFrame(frame);
@@ -623,6 +628,17 @@ export default function GamePreview(inputProps) {
     function render(now, delta, { captureOnly = false } = {}) {
       if (disposed) return;
       const p = latest.current;
+      let showcaseNext;
+      if (p.showcase) {
+        showcaseNext = p.showcase.sample(captureOnly ? 0 : delta);
+        p.sequenceIndex = showcaseNext.sequenceIndex; p.time = showcaseNext.frame;
+        p.portraitMode = !!showcaseNext.portrait;
+        if (p.portraitMode !== state.portraitActive) {
+          setShowcasePortrait(p.portraitMode);
+          if (p.portraitMode) enterPortrait(evaluateModelCamera(p.model, p.model.Cameras?.[p.portraitCameraIndex], p.time, p.sequenceIndex, showcaseNext.globalTime));
+          else exitPortrait();
+        }
+      }
       const selected = p.restPose ? 0 : p.sequenceIndex < 0 && timelineSequenceIndex >= 0 ? timelineSequenceIndex : Math.max(0, Math.min(ownedModel.Sequences.length - 1, p.sequenceIndex ?? 0));
       const sequence = ownedModel.Sequences[selected];
       // Restrict playback only. Keep the authored sequence interval for evaluation,
@@ -632,7 +648,7 @@ export default function GamePreview(inputProps) {
       const start = focus ? Math.max(sequence.Interval[0], focus[0]) : sequence.Interval[0];
       const end = focus ? Math.min(sequence.Interval[1], focus[1]) : sequence.Interval[1];
       const sequenceChanged = activeSequence !== selected;
-      if (sequenceChanged) { native.setSequence(selected); activeSequence = selected; }
+      if (sequenceChanged && !p.showcase) { native.setSequence(selected); activeSequence = selected; }
       // A previous All-line frame is left configured with its authored local
       // interval for rendering. Restore the private reel before advancing so
       // playback can cross sequence gaps without looping at a local endpoint.
@@ -640,11 +656,11 @@ export default function GamePreview(inputProps) {
         native.rendererData.animation = timelineSequenceIndex;
         native.rendererData.animationInfo = sequence;
       }
-      const userSeek = p.time !== externalFrame && Math.abs((p.time || 0) - (reportedFrame ?? -Infinity)) > 1;
+      const userSeek = !p.showcase && p.time !== externalFrame && Math.abs((p.time || 0) - (reportedFrame ?? -Infinity)) > 1;
       if (sequenceChanged || userSeek || p.playing && !lastPlaying) playbackStopped = false;
-      if (sequenceChanged || userSeek) resetPreviewEffects(native);
+      if (!p.showcase && (sequenceChanged || userSeek)) resetPreviewEffects(native);
       const requestedSeek = sequenceChanged || userSeek || !p.playing || !lastPlaying;
-      if (nodeGesture || requestedSeek) {
+      if (!p.showcase && (nodeGesture || requestedSeek)) {
         const frame = p.restPose ? start : nodeGesture?.frame ?? Math.min(end, Math.max(start, p.time ?? start));
         setPreviewFrame(frame); globalClock = frame;
         // The pinned upstream renderer exposes no public global-sequence seek.
@@ -657,14 +673,17 @@ export default function GamePreview(inputProps) {
       }
       externalFrame = p.time; lastPlaying = p.playing;
       const playback = previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
-      const dt = playback.elapsed;
+      const dt = p.showcase ? 0 : playback.elapsed;
       globalClock += dt;
       controls.update();
       let poseSequence = selected;
       try {
         // Narrow particle/ribbon visibility windows must survive a slow frame.
         // Substep effects during long frames rather than jumping over their keys.
-        if (dt > 0) {
+        if (p.showcase) {
+          showcaseSample = advanceShowcaseModel(native, ownedModel, showcaseNext, showcaseSample);
+          activeSequence = selected; globalClock = showcaseSample.globalTime;
+        } else if (dt > 0) {
           let remaining = dt;
           while (remaining > 1e-7) {
             if (native.getFrame() >= end) setPreviewFrame(start);
@@ -673,16 +692,19 @@ export default function GamePreview(inputProps) {
             native.update(step); remaining -= step;
           }
         } else native.update(0);
-        if (playback.finished) {
+        if (!p.showcase && playback.finished) {
           playbackStopped = true; setPreviewFrame(start); globalClock = start; resetPreviewEffects(native);
           const clocks = native.rendererData?.globalSequencesFrames;
           if (clocks) for (let i = 0; i < (ownedModel.GlobalSequences?.length || 0); i++) { const duration = ownedModel.GlobalSequences[i]; if (duration > 0) clocks[i] = start % duration; }
           native.update(0);
-        } else if (Math.abs(native.getFrame() - playback.frame) > 1e-5) { setPreviewFrame(playback.frame); native.update(0); }
+        } else if (!p.showcase && Math.abs(native.getFrame() - playback.frame) > 1e-5) { setPreviewFrame(playback.frame); native.update(0); }
         poseSequence = useAuthoredSequenceInterval(native.getFrame());
         if (poseSequence !== selected) native.update(0);
         applyRestPoseMatrices(native.rendererData, p.restPose);
-        if (p.portraitMode && !state.cameraEditing && !state.cameraDetached) {
+        if (showcaseNext?.camera) {
+          camera = perspective; controls.object = camera;
+          applyEvaluatedModelCamera(camera, controls, showcaseNext.camera, p.portraitMode ? PORTRAIT_ASPECT : canvas.width / canvas.height);
+        } else if (p.portraitMode && !state.cameraEditing && !state.cameraDetached) {
           const evaluated = evaluateModelCamera(p.model, p.model?.Cameras?.[p.portraitCameraIndex], native.getFrame(), poseSequence, globalClock);
           if (evaluated) applyEvaluatedModelCamera(camera, controls, evaluated, PORTRAIT_ASPECT);
         } else if (!p.portraitMode) {
@@ -696,7 +718,7 @@ export default function GamePreview(inputProps) {
         native.setLightPosition(cameraLeftLight(camera, controls.target, radius).position.toArray());
         const background = new THREE.Color(p.portraitMode ? '#000000' : visualOptions(p.preferences).background).convertLinearToSRGB();
         gl.viewport(0, 0, canvas.width, canvas.height); gl.clearColor(background.r, background.g, background.b, 1); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        if (!p.portraitMode) nativeBackground.draw();
+        if (!p.portraitMode || p.showcase && p.backgroundUrl) nativeBackground.draw();
         if (!captureOnly) presentation.draw(camera, p.preferences, p.workplane, p.overlays?.grid ?? !!p.showGrid, center, radius, bounds.min.z, { gridOnly: true, showAxes: p.showAxes ?? p.overlays?.axes ?? !!p.showGrid });
         const wireframe = !captureOnly && (p.mode === 'wireframe' || p.mode === 'vertices');
         if (wireframe) gl.colorMask(false, false, false, false);
@@ -786,7 +808,7 @@ export default function GamePreview(inputProps) {
     const contextLost = event => { event.preventDefault(); scheduler?.dispose(); setError('The graphics context was lost. Reopen this preview to restore it.'); };
     scheduler = state.scheduler = createRenderScheduler({ render,
       continuous: () => {
-        return !!latest.current.attachSourceIds?.length || latest.current.playing && !latest.current.restPose && !playbackStopped;
+        return !!latest.current.showcase?.playing || !!latest.current.attachSourceIds?.length || latest.current.playing && !latest.current.restPose && !playbackStopped;
       },
       // Electron may report an owned about:blank window as hidden during focus
       // transfer. Only the main-document preview uses hidden-tab suspension;
@@ -799,6 +821,13 @@ export default function GamePreview(inputProps) {
     state.captureApi = {
       get isReady() { return !disposed && texturesReady && eventPreview.isReady && backgroundState.current.status === 'ready' && (!latest.current.portraitMode || portraitFrame.current.status !== 'loading'); },
       cameraView() { return state.cameraView(); },
+      invalidate() { state.scheduler.invalidate(); },
+      fit() { fit(); },
+      setCameraView(view) { camera = perspective; controls.object = camera; state.cameraDetached = true; applyEvaluatedModelCamera(camera, controls, view, canvas.width / canvas.height); invalidate(); },
+      beginRecording() { backgroundState.current.animation?.pause(); latest.current.showcase?.begin(state.cameraView()); },
+      endRecording() { latest.current.showcase?.end(); backgroundState.current.animation?.resume(); invalidate(); },
+      recordingFrame(time, options) { latest.current.showcase?.seekRecording(time); render(performance.now(), 0, { captureOnly: true }); return state.captureApi.captureFrame(options); },
+      playbackState() { return showcaseSample; },
       focusPoint(values) {
         const next = new THREE.Vector3().fromArray(values), offset = next.clone().sub(controls.target);
         perspective.position.add(offset); ortho.position.add(offset); controls.target.copy(next);
@@ -806,7 +835,7 @@ export default function GamePreview(inputProps) {
       },
       async whenReady() {
         while (!disposed) {
-          const entry = backgroundState.current, human = portraitFrame.current; await Promise.all([entry.promise, texturePromise, eventPreview.ready, latest.current.portraitMode ? human.promise?.catch(() => {}) : undefined]);
+          const entry = backgroundState.current, human = portraitFrame.current; await Promise.all([entry.promise, texturePromise, eventPreview.ready, (latest.current.portraitMode || latest.current.preparePortraitFrame) ? human.promise : undefined]);
           if (disposed) break;
           if (entry === backgroundState.current && (!latest.current.portraitMode || human === portraitFrame.current)) { if (entry.status === 'failed') throw entry.error; return; }
         }
@@ -849,6 +878,7 @@ export default function GamePreview(inputProps) {
   useEffect(() => {
     const current = runtime.current;
     if (!current) return;
+    if (props.showcase) { current.scheduler.invalidate(); return; }
     if (!props.portraitMode) { current.exitPortrait(); return; }
     const evaluated = evaluateModelCamera(model, model?.Cameras?.[props.portraitCameraIndex], props.time, sequenceIndex, props.time);
     current.enterPortrait(evaluated);
@@ -864,7 +894,7 @@ export default function GamePreview(inputProps) {
   useEffect(() => { props.onCaptureReady?.(runtime.current?.captureApi || null); }, [props.onCaptureReady]);
   useEffect(() => { if (model) runtime.current?.updateUV(model); }, [model, revision, props.uvRevision]);
 
-  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.rotateOnOwnAxis, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.showcasePlaying, props.showcaseConfig, props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.rotateOnOwnAxis, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
 
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];
@@ -873,7 +903,7 @@ export default function GamePreview(inputProps) {
       <div ref={host} className={`game-preview-surface${portrait ? ' portrait-model-surface' : ''}`} />
       {selectionBox && <div className={`game-preview-selection-layer${portrait ? ' portrait-model-surface' : ''}`}><div data-selection-marquee="" style={{ position: 'absolute', zIndex: 90, pointerEvents: 'none', boxSizing: 'border-box', border: `1px dashed ${marqueeColor}`, background: `${marqueeColor}24`, boxShadow: '0 0 0 1px #fff', ...selectionBox }} /></div>}
       {portrait && frame.status === 'ready' && <img className="portrait-human-frame" src={frame.url} alt="" aria-hidden="true" data-frame-version={portraitFrameVersion}/>} 
-      {portrait && !hasCamera && <div className="portrait-message" role="status">Create or select a camera to view the portrait</div>}
+      {portrait && !hasCamera && !props.showcase && <div className="portrait-message" role="status">Create or select a camera to view the portrait</div>}
       {portrait && frame.status === 'loading' && <div className="portrait-frame-status" role="status">Loading Human UI frame from installed Warcraft III data…</div>}
       {portrait && frame.status === 'failed' && <div className="portrait-frame-status portrait-frame-error" role="status">{frame.error}</div>}
     </div>

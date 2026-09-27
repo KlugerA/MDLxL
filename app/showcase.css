@@ -1,0 +1,16 @@
+.showcase-workspace { position: absolute; inset: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 0; }
+.showcase-sidebar { overflow: auto; padding: 8px; background: var(--panel, #eee); border-right: 1px solid #8886; }
+.showcase-sidebar fieldset { margin: 0 0 10px; min-width: 0; padding: 8px; border: 1px solid #8887; }
+.showcase-sidebar legend { font-weight: 600; }
+.showcase-sidebar label { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 5px 0; }
+.showcase-sidebar select { max-width: 155px; min-width: 0; }
+.showcase-sidebar input[type=number] { width: 73px; }
+.showcase-sidebar button { margin: 3px 3px 3px 0; }
+.showcase-sidebar small { display: block; line-height: 1.4; opacity: .8; }
+.showcase-list { padding: 0; list-style: none; }
+.showcase-list li { border-top: 1px solid #8885; padding: 7px 0; }
+.showcase-list strong { display: block; }
+.showcase-preview { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.showcase-sidebar .animation-preview-tools { display: block; }
+.showcase-sidebar .preview-recording-timer { position: static; margin-top: 6px; }
+.classic-workspace.showcase-immersive { grid-template-columns: minmax(0, 1fr); }

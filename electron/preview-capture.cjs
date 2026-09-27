@@ -2,17 +2,25 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
+function showcaseDirectory(root, modelName) {
+  let name = String(modelName || 'Untitled').split(/[\\/]/).at(-1).replace(/\.(mdl|mdx)$/i, '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/g, '').trim();
+  if (!name || /^\.+$/.test(name)) name = 'Untitled';
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)) name = '_' + name;
+  return path.join(root, name.slice(0, 120));
+}
+
 async function savePreviewCapture(directory, payload) {
   if (!payload || !['png', 'gif'].includes(payload.format)) throw Error('Choose PNG or GIF capture.');
   const bytes = Buffer.from(payload.bytes || []);
   if (bytes.length < 10 || bytes.length > 256 * 1024 * 1024) throw Error('Capture must be smaller than 256 MB.');
   const valid = payload.format === 'png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : ['GIF87a','GIF89a'].includes(bytes.subarray(0, 6).toString('ascii')) && bytes.at(-1) === 0x3b;
   if (!valid) throw Error('Invalid capture image.');
+  directory = showcaseDirectory(directory, payload.modelName);
   await fs.mkdir(directory, { recursive: true });
   const name = `Preview-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(3).toString('hex')}.${payload.format}`;
   const destination = path.join(directory, name);
   try { await fs.writeFile(destination, bytes, { flag: 'wx' }); }
-  catch (error) { throw Error(`Could not write Screenshots: ${error.message}`); }
+  catch (error) { throw Error(`Could not write Showcase Recordings: ${error.message}`); }
   return { name, path: destination };
 }
 const MAX_CAPTURE_BYTES = 256 * 1024 * 1024;
@@ -34,7 +42,7 @@ async function savePreviewCaptureFile(directory, source) {
   const destination = path.join(directory, name);
   // COPYFILE_EXCL preserves unique/no-overwrite semantics, including retries.
   try { await fs.copyFile(source, destination, 1); }
-  catch (error) { throw Error(`Could not write Screenshots: ${error.message}`); }
+  catch (error) { throw Error(`Could not write Showcase Recordings: ${error.message}`); }
   return { name, path: destination, size };
 }
-module.exports = { savePreviewCapture, savePreviewCaptureFile, validateGIFFile, MAX_CAPTURE_BYTES };
+module.exports = { savePreviewCapture, savePreviewCaptureFile, validateGIFFile, MAX_CAPTURE_BYTES, showcaseDirectory };
