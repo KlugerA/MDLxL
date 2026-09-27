@@ -36,7 +36,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
   const tinted=await uv.evaluate(()=>JSON.stringify(uvState().model));
   await uv.screenshot({path:path.join(out,'uv-blue.png')});
   const placement=await uv.evaluate(()=>{const side=document.querySelector('.uv-side-panel')||document.querySelector('.uv-live-preview');return {material:document.querySelector('[aria-label="UV material"]').getBoundingClientRect().toJSON(),properties:document.querySelector('[aria-label="Material Properties"]').getBoundingClientRect().toJSON(),header:document.querySelector('.uv-header-actions').getBoundingClientRect().toJSON(),side:side?.getBoundingClientRect().toJSON()};});
-  assert.ok(placement.material.x-placement.header.x<75);assert.ok(placement.properties.x>placement.material.x);
+  assert.ok(placement.material.x-placement.header.x<75);assert.ok(placement.properties.x>placement.material.x);assert.ok(placement.material.y>=placement.header.bottom, 'material controls sit below Replace Texture and Exit UV Wrapper');
   await uv.getByLabel('Material Properties',{exact:true}).selectOption('Team Color');
   await uv.waitForFunction(()=>nativeState()?.model.Materials[4].Layers.length===2);
   assert.equal(await uv.getByLabel('Tint color',{exact:true}).count(),0);
