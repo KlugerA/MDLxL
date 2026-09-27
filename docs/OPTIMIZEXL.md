@@ -8,6 +8,8 @@ The left viewport is the last approved model; the right is the current proposal.
 
 **Approve** keeps the current proposal. **Skip stage** advances without applying it. Repair stages also have **Skip fix** and **Next stage**. **Back** undoes the last approval or skipped stage. The stage buttons allow returning directly to a particular operation; leaving a stage discards its unapproved proposal.
 
+Selecting a repair finding temporarily jumps to its animation and frame. Leaving the inspection, clearing the finding, skipping it or approving it restores the animation and frame you were viewing beforehand. Camera angle, zoom, speed and loop settings stay unchanged. Switching between several findings retains the original return point. **Back** reopens the undone finding for inspection. Ordinary stage changes keep animations you selected manually.
+
 **Simple** offers a fine strength slider for duplicate merging, animation reduction and polygon reduction. **Advanced** exposes the actual tolerances and protection options. Zero strength performs exact cleanup in the first two stages; zero nuclear strength performs no polygon reduction. Unused-data removal is an exact operation, with individual categories in Advanced.
 
 | Stage | What is proposed |

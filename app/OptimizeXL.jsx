@@ -18,7 +18,7 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
   const [candidate,setCandidate]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(initial.error||''),[saved,setSaved]=useState(null),[saving,setSaving]=useState(false);
   const [sequence,setSequence]=useState(0),[time,setTime]=useState(0),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1),[seekId,setSeekId]=useState(0),[loop,setLoop]=useState(true);
   const [selectedFix,setSelectedFix]=useState(null),[skippedFixes,setSkippedFixes]=useState(new Set()),[hive,setHive]=useState(null),[hiveBusy,setHiveBusy]=useState(false),[finished,setFinished]=useState(false);
-  const root=useRef(null),spherePreset=useRef(null),camera=useRef({saved:null,listeners:new Set()}),request=useRef(0),worker=useRef(null);
+  const root=useRef(null),spherePreset=useRef(null),camera=useRef({saved:null,listeners:new Set()}),request=useRef(0),worker=useRef(null),inspection=useRef(null);
   // Review viewports always use the wheel to zoom. Keep the main editor's
   // persistent sensitivity-adjustment mode outside this detached editor.
   const previewPreferences=useMemo(()=>({...preferences,wheelMode:'rotate'}),[preferences]);
@@ -28,7 +28,11 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
   const available=findings.filter(f=>!skippedFixes.has(f.id)),fix=available.find(f=>f.id===selectedFix)||null;
   const sequenceInfo=before?.Sequences[sequence],interval=sequenceInfo?.Interval||[0,1000];
   const seek=(frame)=>{setTime(frame);setSeekId(v=>v+1);};
-  function enter(next,restore){worker.current?.terminate();session.candidate=null;request.current++;setCandidate(null);setBusy(false);setError('');setSaved(null);setFinished(false);setStage(next);setSettings(restore||freshSettings(next,before));setStrength(0);setCustom(!!restore);setSelectedFix(null);setPlaying(false);}
+  // A finding borrows the timeline. Keep the user's return point through
+  // multiple findings, without overriding authored geoset visibility.
+  function inspectFix(f,returnView){inspection.current??=returnView||{sequence,time};setSequence(f.sequence);seek(f.frame);setPlaying(false);}
+  function restoreInspection(){const view=inspection.current;inspection.current=null;if(view){setSequence(view.sequence);seek(view.time);setPlaying(false);}return view;}
+  function enter(next,restore){const returnView=restoreInspection();worker.current?.terminate();session.candidate=null;request.current++;setCandidate(null);setBusy(false);setError('');setSaved(null);setFinished(false);setStage(next);setSettings(restore||freshSettings(next,before));setStrength(0);setCustom(!!restore);setSelectedFix(restore?.fix?.id||null);setPlaying(false);if(restore?.fix)inspectFix(restore.fix,returnView);}
   useEffect(()=>{if(before?.Sequences.length){setSequence(i=>Math.min(i,before.Sequences.length-1));}},[before]);
   useEffect(()=>{
     const select=spherePreset.current;if(!select)return;
@@ -39,7 +43,7 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
   useEffect(()=>{if(time<interval[0]||time>interval[1])seek(interval[0]);},[before,sequence]);
   useEffect(()=>{if(!playing||!before)return;const owner=root.current?.ownerDocument.defaultView||window;let id,last;const tick=now=>{if(last!==undefined)setTime(frame=>{const next=frame+Math.min(100,now-last)*speed;if(next>interval[1]){if(loop)return interval[0]+(next-interval[0])%(interval[1]-interval[0]||1);setPlaying(false);return interval[1];}return next;});last=now;id=owner.requestAnimationFrame(tick);};id=owner.requestAnimationFrame(tick);return()=>owner.cancelAnimationFrame(id);},[playing,speed,sequence,loop,before]);
   useEffect(()=>{
-    if(!session||finished||repairStages.has(stage)&&!fix){setCandidate(null);session&&(session.candidate=null);return;}
+    if(!session||finished||repairStages.has(stage)&&!fix){request.current++;setCandidate(null);setBusy(false);session&&(session.candidate=null);return;}
     const id=++request.current,sessionRevision=session.revision;setBusy(true);setError('');session.candidate=null;
     const timer=setTimeout(()=>{
       const w=new Worker(new URL('./optimizexl-worker.js',import.meta.url),{type:'module'});worker.current=w;
@@ -50,13 +54,13 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
     return()=>{clearTimeout(timer);worker.current?.terminate();};
   },[session,revision,stage,settings,selectedFix,finished]);
   useEffect(()=>{if(stage!=='sanity'||!session)return;let active=true;setHive(null);setHiveBusy(true);hiveSanity(session.accepted).then(result=>{if(active)setHive(result);}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setHiveBusy(false);});return()=>{active=false;};},[stage,revision]);
-  function chooseFix(id){const f=findings.find(f=>f.id===id);setSelectedFix(id);setSettings(f?.kind==='gravity'?{gravity:f.value}:{});if(f){setSequence(f.sequence);seek(f.frame);setPlaying(false);}}
+  function chooseFix(id){const f=findings.find(f=>f.id===id);setSelectedFix(id);setSettings(f?.kind==='gravity'?{gravity:f.value}:{});if(f)inspectFix(f);else restoreInspection();}
   function adjust(key,value){setCustom(true);setSettings(s=>({...s,[key]:value}));setSaved(null);}
   function adjustStrength(value){setStrength(value);setCustom(false);setSettings(simpleSettings(stage,value,before));setSaved(null);}
   function advance(){const index=STAGES.findIndex(s=>s.id===stage);if(index===STAGES.length-1){setFinished(true);setCandidate(null);setPlaying(false);}else enter(STAGES[index+1].id);}
-  function approve(){if(busy||!candidate||repairStages.has(stage)&&!fix)return;session.approve(stage,{...settings,fix});refresh(v=>v+1);setSaved(null);setCandidate(null);if(repairStages.has(stage)){setSelectedFix(null);setPlaying(false);}else advance();}
-  function skip(){if(repairStages.has(stage)&&fix){setSkippedFixes(s=>new Set([...s,fix.id]));setSelectedFix(null);setCandidate(null);session.candidate=null;setBusy(false);return;}session.skip(stage);advance();}
-  function back(){const step=session.back();if(step){refresh(v=>v+1);enter(step.stage,step.settings);if(step.settings?.fix)setSelectedFix(step.settings.fix.id);}else enter('duplicates');}
+  function approve(){if(busy||!candidate||repairStages.has(stage)&&!fix)return;session.approve(stage,{...settings,fix});refresh(v=>v+1);setSaved(null);setCandidate(null);if(repairStages.has(stage)){setSelectedFix(null);restoreInspection();setPlaying(false);}else advance();}
+  function skip(){if(repairStages.has(stage)&&fix){setSkippedFixes(s=>new Set([...s,fix.id]));setSelectedFix(null);restoreInspection();setCandidate(null);session.candidate=null;setBusy(false);return;}session.skip(stage);advance();}
+  function back(){const step=session.back();if(step){refresh(v=>v+1);enter(step.stage,step.settings);}else enter('duplicates');}
   async function save(){setSaving(true);setError('');try{if(!window.desktop?.saveOptimizeXL)throw Error('Saving two protected copies requires the desktop app.');const result=await window.desktop.saveOptimizeXL(session.savePayload());if(result)setSaved(result);}catch(e){setError(e.message);}finally{setSaving(false);}}
   if(!session)return <div className="ox-root"><header><h1>OptimizeXL</h1><button onClick={onClose}>Close</button></header><p role="alert">{error}</p></div>;
   const previewProps={textureAssets,preferences:previewPreferences,teamColor,presentation:'preview',overlays:{grid:false,axes:false,boneLines:false},showGrid:false,showAxes:false,playing:false,syncPlayback:true,playbackRunning:playing,seekId,sequenceIndex:sequence,time,compareCamera:camera.current,preserveCameraView:true,cameraMode:'rotate',showCollisionSpheres:stage==='spheres'&&!finished,loop};

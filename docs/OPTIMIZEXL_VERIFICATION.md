@@ -8,11 +8,10 @@ The initial camera test proved that the two camera states matched but did not pr
 
 The strengthened Electron regression failed against the original build with `Left drag must actually rotate the camera`. It passes after the correction and explicitly verifies changed camera positions from a drag on either viewport, changed zoom, matching paired states, camera preservation through candidate updates, and the main editor's persisted wheel setting remaining unchanged. This correction does not alter models, reduction algorithms, repair visibility, sphere rendering or saving behavior.
 
-The user accepted the viewport correction and authorized the next visible correction. Remaining review work is recorded here so it is not lost:
+The user accepted the viewport and Nuclear corrections and authorized the next visible correction. Remaining review work is recorded here so it is not lost:
 
-- The replacement Nuclear reducer below is ready for visual review; it is not yet user-accepted.
+- Inspection-exit restoration below is ready for visual review; it is not yet user-accepted.
 - Inspect the supplied Magos installation and modernize its familiar collision-sphere display. The shortcut resolves to `D:\WarcraftStuff\War3 Model Editor\War3ModelEditor\War3ModelEditor.exe`; Windows computer-use initialization currently fails with `failed to write kernel assets: The system cannot find the path specified. (os error 3)`, including after a reset. No visual reference inspection is claimed.
-- Restore the whole model when leaving irregularity/geoset inspection.
 - Show which records Duplicate data and Unused data propose deleting.
 - Add a clickable **I** explanation next to every Advanced option.
 - Make top-right **Optimize New Copy** the only save action, available at any stage and saving approved changes. Retain exactly two new files and never overwrite originals.
@@ -26,7 +25,15 @@ Simple retains its 0.01%-step slider. Its combined error budget grows quadratica
 
 Five new regressions cover surface-feature retention, secondary-UV distortion, normal interpolation, complete authored records and bone boundaries, and odd triangle targets. The packaged test exercises medium strength, full strength, restoring zero and then full strength again before approval/saving. The vendored module's SHA-256 is `C3098EE4CB4FC242B84F064C88898E76E44BF58B0E1F693507F323C08CDBB5ED`; its license and npm package integrity are shipped alongside it.
 
-Enlarged flail comparisons were inspected in Stand from front and side, and at midpoints of Walk, Attack - 1 and Death. The original shield distortion is substantially reduced in these sampled views, with normal loss of detail still visible at maximum strength. This is finite visual evidence, not acceptance of every pose or view. User review remains the next gate. Other requested interface/sphere/visibility changes have not been bundled into this correction.
+Enlarged flail comparisons were inspected in Stand from front and side, and at midpoints of Walk, Attack - 1 and Death. The original shield distortion is substantially reduced in these sampled views, with normal loss of detail still visible at maximum strength. This is finite visual evidence, not acceptance of every pose or view. The user accepted this iteration and authorized continuing with the next issue.
+
+## Third review correction: leaving repair inspection
+
+The reported partial-model view was reproduced in the previous Nuclear review EXE. Selecting `decay:37` moved both previews from Stand/frame 2000 into Decay Bone/frame 176667. Clicking Duplicate data left that temporary animation selected, so the body remained hidden by its authored decay visibility. The regression failed with `Leaving a finding must restore the previous whole-model animation` (`10` instead of `1`). No stuck geoset filter was present in OptimizeXL.
+
+The correction is confined to OptimizeXL's inspection state. The first finding saves a return animation/frame, which persists through multiple finding selections. Leaving via stage buttons or Next stage, clearing a finding, Skip fix and Approve restore that return point. Back reopens the undone finding and establishes a new return point. The camera remains untouched and ordinary stage changes preserve manually selected animations. No model visibility, geometry, animation keys or renderer behavior was changed by this patch.
+
+The focused Electron regression passes against the rebuilt source bundle and packaged EXE. It checks exits to all six other stages, multiple findings, clearing, skipping, approving, Back, exact restored native-renderer sequence/frame on both sides, matching camera position/target/zoom, preserved speed/loop settings, and unchanged source bytes. Screenshots confirm that the complete model returns. The existing full packaged workflow also passes. This correction is ready for the next user visual check.
 
 ## Automated checks
 
@@ -65,6 +72,8 @@ node scripts/package.mjs --out out/optimizexl-nuclear-review
 ```
 
 Set `MDLXL_PLAYWRIGHT_MODULE` to an installed Playwright module path, `MDLXL_OPTIMIZEXL_MODEL` to the flail review fixture, and optionally `MDLXL_OPTIMIZEXL_EXE` to a packaged EXE. Then run `node test/optimizexl.electron.cjs`. The specific desktop repair assertion expects the earlier flail fixture's geoset and sequence indices; the reusable model integration script accepts arbitrary input paths.
+
+Run `node test/optimizexl-inspection.electron.cjs` with the same environment for the inspection-exit regression. It also expects the flail review fixture. Its screenshots and result are in `out/optimizexl-inspection-proof/`; `regression-before.png` captures the previous EXE's stuck decay view. The current review package is `out/optimizexl-inspection-review/MDLxL-win32-x64/`.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 
