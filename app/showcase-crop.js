@@ -13,3 +13,15 @@ export function cropBetween(start, end) {
   const x = Math.min(clamp(start.x), clamp(end.x)), y = Math.min(clamp(start.y), clamp(end.y));
   return { x, y, width: Math.abs(clamp(end.x) - clamp(start.x)), height: Math.abs(clamp(end.y) - clamp(start.y)) };
 }
+
+export const SHOWCASE_CROP_PRESETS = Object.freeze({ square: 1, classic: 4 / 3, wide: 16 / 9, portrait: 3 / 4 });
+
+/** Center the chosen aspect inside the preview, leaving a little breathing room. */
+export function cropPresetRect(width, height, aspect) {
+  if (!(width > 0 && height > 0 && aspect > 0)) return null;
+  const availableWidth = width * .9, availableHeight = height * .9;
+  const cropWidth = Math.min(availableWidth, availableHeight * aspect);
+  const cropHeight = cropWidth / aspect;
+  const normalizedWidth = cropWidth / width, normalizedHeight = cropHeight / height;
+  return { x: (1 - normalizedWidth) / 2, y: (1 - normalizedHeight) / 2, width: normalizedWidth, height: normalizedHeight };
+}

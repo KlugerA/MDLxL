@@ -1,10 +1,14 @@
 import React, { lazy, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import AnimationPreviewTools from './AnimationPreviewTools.jsx';
-import { cropBetween } from './showcase-crop.js';
+import { cropBetween, cropPresetRect, SHOWCASE_CROP_PRESETS } from './showcase-crop.js';
 import { createShowcaseDirector, overflowEntries, SHOWCASE_QUALITY } from './showcase-director.js';
 import './showcase.css';
 
 const GamePreview = lazy(() => import('./GamePreview.jsx'));
+const SHOWCASE_COLORS = [
+  ['Black','#101216'], ['Charcoal','#292f38'], ['Slate','#546477'],
+  ['Gray','#858d91'], ['Warm gray','#b5aa99'], ['Light','#e4e0d7'],
+];
 const CLEAN = Object.fromEntries(['bones','nodes','attachments','particles','boneLines','wires','vertices','grid','axes','normals','cameras'].map(key => [key, false]));
 function NumberField({ label, value, onChange, min, max, step = 1, ...rest }) {
   return <label>{label}<input aria-label={label} type="number" value={value} min={min} max={max} step={step} onChange={event => onChange(event.target.value === '' ? '' : Number(event.target.value))} {...rest}/></label>;
@@ -33,7 +37,14 @@ function AnimationDialog({ model, initial, onSave, onRemove, onClose }) {
 }
 export default function ShowcaseWorkspace({ model, modelName, modelPath, revision, textureAssets, preferences, teamColor, sessionId, background, backgroundLibrary, onBackground, onStatus }) {
   const [api,setAPI] = useState(null), [playing,setPlaying] = useState(false), [busy,setBusy] = useState(false);
-  const [crop,setCrop] = useState(null), [cropEditing,setCropEditing] = useState(false), cropDrag = useRef(null);
+  const [crop,setCrop] = useState(null), [cropPreset,setCropPreset] = useState('free'), [cropEditing,setCropEditing] = useState(false), cropDrag = useRef(null);
+  const previewRef = useRef(null), [previewSize,setPreviewSize] = useState({width:1,height:1});
+  const selectedCrop = cropPreset === 'free' ? crop : cropPresetRect(previewSize.width,previewSize.height,SHOWCASE_CROP_PRESETS[cropPreset]);
+  useEffect(() => {
+    const node = previewRef.current; if (!node) return;
+    const observer = new ResizeObserver(([entry]) => setPreviewSize({width:entry.contentRect.width,height:entry.contentRect.height}));
+    observer.observe(node); return () => observer.disconnect();
+  }, []);
   const [length,setLength] = useState(10), [orbitSpeed,setOrbitSpeed] = useState(100), [orbitRadius,setOrbitRadius] = useState(0), [light,setLight] = useState('ingame');
   const [playlist,setPlaylist] = useState(() => model.Sequences?.length ? [{sequence:0,seconds:3,speed:1,loop:true}] : []);
   const [selected,setSelected] = useState(0), [animationDialog,setAnimationDialog] = useState(null);
@@ -46,19 +57,20 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   };
   function startCrop(event) {
     if (event.button !== 0) return;
-    cropDrag.current = { start: cropPoint(event), previous: crop };
+    cropDrag.current = { start: cropPoint(event), previous: crop, previousPreset: cropPreset };
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
   }
   function moveCrop(event) {
     if (!cropDrag.current) return;
     const selection = cropBetween(cropDrag.current.start, cropPoint(event));
-    if (selection.width >= .05 && selection.height >= .05) setCrop(selection);
+    if (selection.width >= .05 && selection.height >= .05) { setCropPreset('free'); setCrop(selection); }
   }
   function finishCrop(event) {
     if (!cropDrag.current) return;
     const selection = cropBetween(cropDrag.current.start, cropPoint(event));
-    setCrop(selection.width >= .05 && selection.height >= .05 ? selection : cropDrag.current.previous);
+    if (selection.width >= .05 && selection.height >= .05) { setCropPreset('free'); setCrop(selection); }
+    else { setCropPreset(cropDrag.current.previousPreset); setCrop(cropDrag.current.previous); }
     cropDrag.current = null;
   }
   useEffect(() => () => { if (media?.url) URL.revokeObjectURL(media.url); }, [media?.url]);
@@ -95,13 +107,13 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   }),[preferences,quality,fps,color]);
   return <div className="showcase-workspace">
     <aside className="showcase-sidebar" aria-label="Showcase controls">
-      <AnimationPreviewTools active sessionId={sessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={crop} disabled={overflow.some(Boolean) || !playlist.length || backgroundMode === 'folder' && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)setPlaying(false);}}/>
+      <AnimationPreviewTools active sessionId={sessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={selectedCrop} disabled={overflow.some(Boolean) || !playlist.length || backgroundMode === 'folder' && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)setPlaying(false);}}/>
       <fieldset disabled={busy} className="showcase-fields">
         <NumberField label="Length" aria-label="Record length seconds" min={.02} step={.01} value={length} onChange={setLength}/>
         <section className="showcase-section" aria-label="Background">
           <label>Background<select aria-label="Background source" value={backgroundMode} onChange={event=>setBackgroundMode(event.target.value)}><option value="folder">Backgrounds</option><option value="color">Color</option><option value="media">Image/Video</option></select></label>
           {backgroundMode === 'folder' && <select className="showcase-wide" aria-label="Backgrounds" value={background} onFocus={backgroundLibrary.refresh} onChange={event=>onBackground(event.target.value)}><option value="">None</option>{backgroundLibrary.items.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select>}
-          {backgroundMode === 'color' && <label>Color<input aria-label="Background color" type="color" value={color} onChange={event=>setColor(event.target.value)}/></label>}
+          {backgroundMode === 'color' && <><div className="showcase-color-swatches" role="group" aria-label="Preset colors">{SHOWCASE_COLORS.map(([name,value])=><button key={name} type="button" aria-label={name} aria-pressed={color===value} title={name} style={{backgroundColor:value}} onClick={()=>setColor(value)}/>)}</div><label>Custom color<input aria-label="Background color" type="color" value={color} onChange={event=>setColor(event.target.value)}/></label></>}
           {backgroundMode === 'media' && <><button className="showcase-wide showcase-file" onClick={()=>mediaInput.current.click()} title={media?.name}>{media?.name || 'Choose image/video…'}</button><input hidden ref={mediaInput} type="file" accept="image/*,video/*,.mp4,.webm,.mov,.m4v,.ogv,.avi,.mkv,.wmv,.wav" onChange={chooseFile}/>
             {backgroundType?.startsWith('video/') && videoDuration > 0 && <div className="showcase-trim"><NumberField label="From (s)" min={0} max={Math.max(0,(trim.end || videoDuration)-.02)} step={.1} value={trim.start} onChange={value=>setTrim({...trim,start:Math.max(0,Math.min(Number(value)||0,(trim.end||videoDuration)-.02))})}/><NumberField label="To (s)" min={trim.start+.02} max={videoDuration} step={.1} value={trim.end || videoDuration} onChange={value=>setTrim({...trim,end:Math.max(trim.start+.02,Math.min(videoDuration,Number(value)||videoDuration))})}/></div>}
           </>}
@@ -121,7 +133,8 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
           <Slider label="Radius" value={orbitRadius} max={100} onChange={setOrbitRadius}/>
           <small>Z axis · 0% radius spins in place</small>
           <button className="showcase-wide" disabled={!api} onClick={()=>{if(!playing)restart();setPlaying(!playing);}}>{playing?'Pause preview':'Preview orbit'}</button>
-          <div className="showcase-crop-controls"><button disabled={!api} onClick={()=>{setPlaying(false);setCropEditing(!cropEditing);}}>{cropEditing?'Done':crop?'Edit crop':'Crop'}</button>{crop&&<button onClick={()=>{setCrop(null);setCropEditing(false);}}>Reset</button>}</div>
+          <label>Crop size<select aria-label="Crop size" value={cropPreset} onChange={event=>{const preset=event.target.value;if(preset==='free'){setCrop(selectedCrop);setCropEditing(true);}else setCropEditing(false);setCropPreset(preset);}}><option value="free">Free selection</option><option value="square">Square · 1:1</option><option value="classic">Classic · 4:3</option><option value="wide">Wide · 16:9</option><option value="portrait">Portrait · 3:4</option></select></label>
+          <div className="showcase-crop-controls"><button disabled={!api} onClick={()=>{setPlaying(false);setCropEditing(!cropEditing);}}>{cropEditing?'Done':selectedCrop?'Edit crop':'Crop'}</button>{selectedCrop&&<button onClick={()=>{setCrop(null);setCropPreset('free');setCropEditing(false);}}>Reset</button>}</div>
         </section>
         <section className="showcase-section" aria-label="Graphics">
           <header><strong>Graphics</strong></header>
@@ -132,9 +145,9 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
         </section>
       </fieldset>
     </aside>
-    <section className="showcase-preview" aria-label="Showcase preview" inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} showcaseRadius={orbitRadius} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,orbitRadius,light]}/></Suspense>
-      {(cropEditing||crop)&&<div className={'showcase-crop-overlay'+(cropEditing?' editing':'')} aria-label="Crop area" onPointerDown={cropEditing?startCrop:undefined} onPointerMove={cropEditing?moveCrop:undefined} onPointerUp={cropEditing?finishCrop:undefined} onPointerCancel={cropEditing?finishCrop:undefined}>
-        <div className="showcase-crop-selection" style={{left:(crop?.x||0)*100+'%',top:(crop?.y||0)*100+'%',width:(crop?.width??1)*100+'%',height:(crop?.height??1)*100+'%'}}/>
+    <section ref={previewRef} className="showcase-preview" aria-label="Showcase preview" inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} showcaseRadius={orbitRadius} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,orbitRadius,light]}/></Suspense>
+      {(cropEditing||selectedCrop)&&<div className={'showcase-crop-overlay'+(cropEditing?' editing':'')} aria-label="Crop area" onPointerDown={cropEditing?startCrop:undefined} onPointerMove={cropEditing?moveCrop:undefined} onPointerUp={cropEditing?finishCrop:undefined} onPointerCancel={cropEditing?finishCrop:undefined}>
+        <div className="showcase-crop-selection" style={{left:(selectedCrop?.x||0)*100+'%',top:(selectedCrop?.y||0)*100+'%',width:(selectedCrop?.width??1)*100+'%',height:(selectedCrop?.height??1)*100+'%'}}/>
         {cropEditing&&<div className="showcase-crop-hint">Drag to select the GIF area</div>}
       </div>}</section>
     {animationDialog&&<AnimationDialog model={model} initial={animationDialog} onClose={()=>setAnimationDialog(null)} onSave={row=>{updatePlaylist(animationDialog.index<0?[...playlist,row]:playlist.map((item,index)=>index===animationDialog.index?row:item));setSelected(animationDialog.index<0?playlist.length:animationDialog.index);setAnimationDialog(null);}} onRemove={()=>{updatePlaylist(playlist.filter((_,index)=>index!==animationDialog.index));setSelected(Math.max(0,animationDialog.index-1));setAnimationDialog(null);}}/>}

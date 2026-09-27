@@ -48,3 +48,7 @@
 .showcase-crop-overlay.editing { pointer-events:auto; cursor:crosshair; touch-action:none; }
 .showcase-crop-selection { position:absolute; box-sizing:border-box; border:2px solid white; outline:1px solid #222; box-shadow:0 0 0 9999px #0008; pointer-events:none; }
 .showcase-crop-hint { position:absolute; top:8px; left:50%; transform:translateX(-50%); padding:3px 7px; color:white; background:#222c; pointer-events:none; white-space:nowrap; }
+
+.showcase-color-swatches { display:flex; gap:4px; margin:5px 0; }
+.showcase-color-swatches button { width:27px; height:23px; padding:0; border:1px solid #555; cursor:pointer; }
+.showcase-color-swatches button[aria-pressed=true] { outline:2px solid #1f65ad; outline-offset:1px; }
