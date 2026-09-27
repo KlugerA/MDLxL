@@ -39,6 +39,12 @@ test('actual Movement component renders normal and Portrait mode without excepti
     assert.doesNotMatch(html,/Portrait Camera|Set Current View|>Create<\/button>/);
   }
 });
+test('Movement places Rotate on Own Axis before Restrict and reflects its checked state',()=>{
+  const model=fixture(), selectedNodeIds=[model.Bones[0].ObjectId];
+  const html=renderToStaticMarkup(React.createElement(Movement,{model,sequenceIndex:0,selectedNodeIds,time:0,rotateOnOwnAxis:true}));
+  assert.ok(html.indexOf('Rotate on Own Axis') < html.indexOf('Restrict:'));
+  assert.match(html,/type="checkbox" checked=""\/>Rotate on Own Axis/);
+});
 test('Animations remains editable with no selected vertices or checked geosets',()=>{
   const html=renderToStaticMarkup(React.createElement(Animation,{model:fixture(),sequenceIndex:0,time:0,selectedGeosets:[]}));
   assert.match(html,/Bake Sequence RGB/);assert.match(html,/Bake All RGB/);

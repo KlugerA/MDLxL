@@ -15,6 +15,7 @@ import { drawGeosetHighlight } from './geoset-highlight.js';
 import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatrices, skinGeoset, skinGeosetNormals } from '../src/animation.js';
 import { motionPose } from '../src/motion-inspector.js';
 import { applyMovementTransform, movementRestricted } from '../src/movement.js';
+import { movementBoneVertexCenter } from '../src/movement-selection.js';
 import { drawAttachGuide, drawBoneConnectors, drawMovementOverlay, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from './movement-overlay.js';
 import { applyRestPoseMatrices, isUVOnlyPreviewChange, portraitBlankDragRotatesCamera, restorePreviewCamera } from './game-preview-data.js';
 import { installWarcraftPreviewAdapter, resetPreviewEffects } from './warcraft-preview-adapter.js';
@@ -291,7 +292,7 @@ export default function GamePreview(inputProps) {
         if (handle) {
           const ids = [...(p.selectedNodeIds || [])], snapshots = new Map();
           for (const node of allNodes(ownedModel)) if (ids.includes(node.ObjectId)) snapshots.set(node.ObjectId, structuredClone({ Translation: node.Translation, Rotation: node.Rotation, Scaling: node.Scaling, PivotPoint: node.PivotPoint }));
-          nodeGesture = { id: event.pointerId, x, y, handle, ids, snapshots, frame: Math.round(native.getFrame()), sequence: editSequence, mode: p.transformMode || 'rotate', space: p.transformSpace || 'local', amount: p.transformMode === 'scale' ? 1 : 0, moved: false };
+          nodeGesture = { id: event.pointerId, x, y, handle, ids, snapshots, frame: Math.round(native.getFrame()), sequence: editSequence, mode: p.transformMode || 'rotate', space: p.transformSpace || 'local', rotateOnOwnAxis: !!p.rotateOnOwnAxis, amount: p.transformMode === 'scale' ? 1 : 0, moved: false };
           posedGeometryCache = null;
           Object.assign(nodeGesture, { restPose: !!p.restPose, workplaneEnabled: !!p.workplaneEnabled, workplane: p.workplane, pivotPoints: structuredClone(ownedModel.PivotPoints), origin: active.world.clone() });
           if (workplaneDrag && p.transformMode === 'move') {
@@ -381,11 +382,11 @@ export default function GamePreview(inputProps) {
       if (event.shiftKey && !nodeGesture.freeScaleDrag) nodeGesture.amount = nodeGesture.mode === 'rotate' ? Math.round(nodeGesture.amount / 5) * 5 : nodeGesture.mode === 'move' ? Math.round(nodeGesture.amount) : Math.round(nodeGesture.amount * 20) / 20 || .05;
       restoreGestureTracks(nodeGesture);
       try {
-        applyMovementTransform(ownedModel, nodeGesture.ids, nodeGesture.frame, nodeGesture.sequence, { mode: nodeGesture.mode, space: nodeGesture.space, axis: nodeGesture.handle.axis, amount: nodeGesture.amount, values: nodeGesture.values, restPose: nodeGesture.restPose, workplaneEnabled: nodeGesture.mode === 'scale' ? nodeGesture.scaleConstrained : nodeGesture.workplaneEnabled, workplane: nodeGesture.workplane, restrictions: p.restrictions });
+        applyMovementTransform(ownedModel, nodeGesture.ids, nodeGesture.frame, nodeGesture.sequence, { mode: nodeGesture.mode, space: nodeGesture.space, rotateOnOwnAxis: nodeGesture.rotateOnOwnAxis, axis: nodeGesture.handle.axis, amount: nodeGesture.amount, values: nodeGesture.values, restPose: nodeGesture.restPose, workplaneEnabled: nodeGesture.mode === 'scale' ? nodeGesture.scaleConstrained : nodeGesture.workplaneEnabled, workplane: nodeGesture.workplane, restrictions: p.restrictions });
         if (!nodeGesture.restPose) p.onNodePosePreview?.(motionPose(ownedModel, nodeGesture.ids.at(-1), ({ move: 'Translation', rotate: 'Rotation', scale: 'Scaling' })[nodeGesture.mode], nodeGesture.frame, nodeGesture.sequence));
         const axisLabel = nodeGesture.freeScaleDrag && nodeGesture.scaleConstrained ? String(nodeGesture.workplane).toUpperCase().replace('XZ', 'ZX') : nodeGesture.handle.axis;
         setGestureLabel(`${nodeGesture.mode[0].toUpperCase() + nodeGesture.mode.slice(1)} ${axisLabel}: ${nodeGesture.amount.toFixed(2)}${nodeGesture.mode === 'rotate' ? '°' : nodeGesture.mode === 'scale' ? '×' : ''}`);
-      } catch (cause) { setGestureLabel(cause.message); }
+      } catch (cause) { restoreGestureTracks(nodeGesture); setGestureLabel(cause.message); }
       canvas.style.cursor = viewportCursor('work', nodeGesture.mode); invalidate();
     };
     const finishNodeGesture = event => {
@@ -417,7 +418,7 @@ export default function GamePreview(inputProps) {
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       if (event.type === 'pointercancel' || !gesture.moved || gesture.adjusted || movementRestricted(gesture.mode, latest.current.restrictions)) restoreGestureTracks(gesture);
       else {
-        try { const result = latest.current.onNodeTransform?.({ mode: gesture.mode, space: gesture.space, axis: gesture.handle.axis, amount: gesture.amount, values: gesture.values, restPose: gesture.restPose, workplaneEnabled: gesture.mode === 'scale' ? gesture.scaleConstrained : gesture.workplaneEnabled, workplane: gesture.workplane, restrictions: latest.current.restrictions, time: gesture.frame, sequenceIndex: gesture.sequence, nodeIds: gesture.ids }); if (result === false) restoreGestureTracks(gesture); }
+        try { const result = latest.current.onNodeTransform?.({ mode: gesture.mode, space: gesture.space, rotateOnOwnAxis: gesture.rotateOnOwnAxis, axis: gesture.handle.axis, amount: gesture.amount, values: gesture.values, restPose: gesture.restPose, workplaneEnabled: gesture.mode === 'scale' ? gesture.scaleConstrained : gesture.workplaneEnabled, workplane: gesture.workplane, restrictions: latest.current.restrictions, time: gesture.frame, sequenceIndex: gesture.sequence, nodeIds: gesture.ids }); if (result === false) restoreGestureTracks(gesture); }
         catch (cause) { restoreGestureTracks(gesture); setError(cause.message); }
       }
       invalidate();
@@ -758,7 +759,15 @@ export default function GamePreview(inputProps) {
         nodePoints = visibleMovementPoints(projectedNodes, overlayOptions);
         const active = nodePoints.find(point => point.node.ObjectId === p.selectedNodeIds?.at(-1));
         const handleMode = p.transformMode || 'rotate', workplaneHidesHandles = p.workplaneEnabled && ['move', 'rotate', 'scale'].includes(handleMode);
-        nodeHandles = p.onNodeTransform && (!p.restPose || handleMode === 'move') && !workplaneHidesHandles && !movementRestricted(handleMode, p.restrictions) && ['move', 'rotate', 'scale'].includes(handleMode) && (p.restPose || movementSequence(p, Math.round(native.getFrame())) >= 0) ? movementAxisHandles(active, camera, width, height, radius, handleMode === 'rotate' ? p.transformSpace || 'local' : 'world', handleMode) : [];
+        let handleAnchor = active;
+        if (active && handleMode === 'rotate' && p.rotateOnOwnAxis) {
+          const ownCenter = movementBoneVertexCenter(ownedModel, active.node.ObjectId, getPoseMatrices());
+          if (ownCenter) {
+            const screen = ownCenter.center.clone().project(camera);
+            handleAnchor = { ...active, world: ownCenter.center, x: (screen.x + 1) * width / 2, y: (1 - screen.y) * height / 2, visible: screen.z >= -1 && screen.z <= 1 };
+          }
+        }
+        nodeHandles = p.onNodeTransform && (!p.restPose || handleMode === 'move') && !workplaneHidesHandles && !movementRestricted(handleMode, p.restrictions) && ['move', 'rotate', 'scale'].includes(handleMode) && (p.restPose || movementSequence(p, Math.round(native.getFrame())) >= 0) ? movementAxisHandles(handleAnchor, camera, width, height, radius, handleMode === 'rotate' ? p.transformSpace || 'local' : 'world', handleMode) : [];
         const markerOptions = { ...overlayOptions, wireframeMarkers: p.mode === 'wireframe' || p.mode === 'vertices', occludedMarkerEdges: p.mode === 'solid' || p.mode === 'textured' };
         rigMarkers.draw(camera, projectedNodes, p.selectedNodeIds || [], markerOptions);
         drawBoneConnectors(connectorCanvas.getContext('2d'), projectedNodes, p.selectedNodeIds || [], camera, width, height, canvas.width / Math.max(1, width), { ...markerOptions, preferences: p.preferences });
@@ -850,7 +859,7 @@ export default function GamePreview(inputProps) {
   useEffect(() => { props.onCaptureReady?.(runtime.current?.captureApi || null); }, [props.onCaptureReady]);
   useEffect(() => { if (model) runtime.current?.updateUV(model); }, [model, revision, props.uvRevision]);
 
-  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.rotateOnOwnAxis, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
 
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];

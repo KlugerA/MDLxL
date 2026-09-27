@@ -1,5 +1,6 @@
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import { allNodes, sampleNodeMatrices, sampleTrack } from './animation.js';
+import { movementBoneVertexCenter } from './movement-selection.js';
 
 export const movementProperties = { move: 'Translation', rotate: 'Rotation', scale: 'Scaling' };
 const defaults = { Translation: [0, 0, 0], Rotation: [0, 0, 0, 1], Scaling: [1, 1, 1] };
@@ -272,6 +273,15 @@ export function applyMovementTransform(model, ids, time, sequenceIndex, change =
   const nodes = selectedNodes(model, ids);
   nodes.forEach(node => movementFrame(model, node, property, time, sequenceIndex));
   const matrices = sampleNodeMatrices(model, time, sequenceIndex, time);
+  const ownAxisCenters = new Map();
+  if (mode === 'rotate' && change.rotateOnOwnAxis) {
+    for (const node of nodes) {
+      if (!(model.Bones || []).includes(node)) continue;
+      const center = movementBoneVertexCenter(model, node.ObjectId, matrices);
+      if (center) ownAxisCenters.set(node.ObjectId, center);
+    }
+    if (ownAxisCenters.size) checkRestriction('move', change);
+  }
   const worldMoves = new Map();
   if (mode === 'move') for (const node of nodes) {
     const offset = vector(values), parent = movementParentMatrix(node, matrices);
@@ -321,6 +331,22 @@ export function applyMovementTransform(model, ids, time, sequenceIndex, change =
     return { node, value: current.map((value, i) => value * factors[i]), tangent: input => Array.from(input, (value, i) => value * factors[i]) };
   }).filter(Boolean);
   for (const { node, value, tangent } of changes) writeKey(model, node, property, time, sequenceIndex, value, tangent);
+  if (ownAxisCenters.size) {
+    const byId = new Map(allNodes(model).map(node => [node.ObjectId, node]));
+    const depth = node => {
+      let result = 0, parent = byId.get(node.Parent);
+      const seen = new Set([node.ObjectId]);
+      while (parent && !seen.has(parent.ObjectId)) { result++; seen.add(parent.ObjectId); parent = byId.get(parent.Parent); }
+      return result;
+    };
+    for (const node of [...nodes].sort((a, b) => depth(a) - depth(b))) {
+      const before = ownAxisCenters.get(node.ObjectId);
+      if (!before) continue;
+      const after = movementBoneVertexCenter(model, node.ObjectId, sampleNodeMatrices(model, time, sequenceIndex, time));
+      const offset = before.center.clone().sub(after.center).divideScalar(before.influence);
+      if (offset.lengthSq() > 1e-20) applyMovementTransform(model, [node.ObjectId], time, sequenceIndex, { ...change, mode: 'move', space: 'world', values: offset.toArray() });
+    }
+  }
   return changes.length;
 }
 

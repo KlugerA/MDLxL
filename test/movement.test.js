@@ -82,6 +82,36 @@ test('rotating parent makes child and attached mesh follow normally without edit
   assert.equal(model.Bones[1].Rotation, undefined);
 });
 
+test('Rotate on Own Axis flips a bone mesh around its visible center without changing its pivot or other bones', () => {
+  const model = fixture();
+  const geo = { Vertices: new Float32Array([8, 0, 0, 10, 0, 0]), VertexGroup: [0, 0], Groups: [[2]] };
+  model.Geosets = [geo];
+  const originalPivot = [...model.Bones[1].PivotPoint];
+  applyMovementTransform(model, [2], 500, 0, { mode: 'rotate', space: 'world', axis: 'Z', amount: 180, rotateOnOwnAxis: true });
+  nearVector(skinGeoset(geo, sampleNodeMatrices(model, 500, 0)), [10, 0, 0, 8, 0, 0]);
+  nearVector(sampleMovement(model, model.Bones[1], 'Translation', 500, 0), [10, 0, 0]);
+  assert.deepEqual(model.Bones[1].PivotPoint, originalPivot);
+  assert.equal(model.Bones[0].Translation, undefined);
+  assert.equal(model.Bones[0].Rotation, undefined);
+  const ordinary = fixture(); ordinary.Geosets = [structuredClone(geo)];
+  applyMovementTransform(ordinary, [2], 500, 0, { mode: 'rotate', space: 'world', axis: 'Z', amount: 180 });
+  nearVector(skinGeoset(ordinary.Geosets[0], sampleNodeMatrices(ordinary, 500, 0)), [0, 0, 0, -2, 0, 0]);
+  assert.equal(ordinary.Bones[1].Translation, undefined);
+});
+
+test('own-axis rotation holds the visible center with mixed bone bindings and respects Translation restriction', () => {
+  const model = fixture();
+  const geo = { Vertices: new Float32Array([8, 0, 0, 10, 0, 0]), VertexGroup: [0, 0], Groups: [[0, 2]] };
+  model.Geosets = [geo];
+  const before = structuredClone(model);
+  assert.throws(() => applyMovementTransform(model, [2], 500, 0, { mode: 'rotate', axis: 'Z', amount: 180, rotateOnOwnAxis: true, restrictions: { translation: true } }), /Translation is restricted/);
+  assert.deepEqual(model, before);
+  applyMovementTransform(model, [2], 500, 0, { mode: 'rotate', axis: 'Z', amount: 180, rotateOnOwnAxis: true });
+  const posed = skinGeoset(geo, sampleNodeMatrices(model, 500, 0));
+  near((posed[0] + posed[3]) / 2, 9);
+  nearVector(sampleMovement(model, model.Bones[1], 'Translation', 500, 0), [10, 0, 0]);
+});
+
 test('world movement cancels parent rotation and scaling; local movement follows current local axes', () => {
   for (const space of ['world', 'local']) {
     const model = fixture();
@@ -137,6 +167,21 @@ test('movement edits round-trip MDL/MDX in memory and undo/redo as one operation
     const reopened = openDocument(doc.serialize(format), `synthetic.${format}`);
     nearVector(sampleMovement(reopened.model, reopened.model.Bones[0], 'Rotation', frame, 0), sampleMovement(doc.model, doc.model.Bones[0], 'Rotation', frame, 0));
     doc.undo(); assert.deepEqual(doc.model.Bones[0].Rotation, before); doc.redo(); assert.deepEqual(doc.model.Bones[0].Rotation, authored);
+  }
+});
+
+test('own-axis Rotation and Translation save together and undo together', () => {
+  for (const format of ['mdl', 'mdx']) {
+    const doc = createDemoDocument(), id = doc.model.Bones[1].ObjectId;
+    const before = structuredClone({ rotation: doc.model.Bones[1].Rotation, translation: doc.model.Bones[1].Translation });
+    doc.apply('Rotate on Own Axis', ['Nodes'], model => applyMovementTransform(model, [id], 1000, 0, { mode: 'rotate', space: 'world', axis: 'X', amount: 90, rotateOnOwnAxis: true }));
+    const authored = structuredClone({ rotation: doc.model.Bones[1].Rotation, translation: doc.model.Bones[1].Translation });
+    assert.ok(authored.translation?.Keys.some(key => key.Frame === 1000));
+    const reopened = openDocument(doc.serialize(format), `own-axis.${format}`);
+    nearVector(sampleMovement(reopened.model, reopened.model.Bones[1], 'Rotation', 1000, 0), sampleMovement(doc.model, doc.model.Bones[1], 'Rotation', 1000, 0));
+    nearVector(sampleMovement(reopened.model, reopened.model.Bones[1], 'Translation', 1000, 0), sampleMovement(doc.model, doc.model.Bones[1], 'Translation', 1000, 0));
+    doc.undo(); assert.deepEqual({ rotation: doc.model.Bones[1].Rotation, translation: doc.model.Bones[1].Translation }, before);
+    doc.redo(); assert.deepEqual({ rotation: doc.model.Bones[1].Rotation, translation: doc.model.Bones[1].Translation }, authored);
   }
 });
 
