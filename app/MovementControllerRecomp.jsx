@@ -7,6 +7,7 @@ import {
   setMovementBezierHandles, setMovementControllerType, setMovementHermiteCurve,
 } from '../src/movement.js';
 import { movementSelectionSummary } from '../src/movement-selection.js';
+import { applyPortraitModelTransform } from '../src/portrait-model-control.js';
 import './movement.css';
 import ModernIcon from './ModernIcon.jsx';
 import BoneToolIcon from './BoneToolIcon.jsx';
@@ -42,7 +43,7 @@ function PositionField({ axis, value, disabled, onCommit }) {
 }
 
 
-export default function MovementController({ model, revision = 0, sequenceIndex = -1, time = 0, selectedNodeIds = [], selectionByGeoset = {}, onSelectNodes, onEdit, onVertexTransform, onPlayingChange, transformMode = 'move', onTransformMode, transformSpace = 'local', onTransformSpace, rotateOnOwnAxis = false, onRotateOnOwnAxis, onOpenNodeManager, globalSeqId = null, onTimelineChange, highlightKeyframes = false, onHighlightKeyframes, disabled = false, restPose = false, multiple, onMultiple, workplaneEnabled = false, onWorkplaneEnabled, workplane = 'xy', onWorkplane, restrictions = {}, onRestrictions, portraitMode = false, portraitCameraIndex = 0, onPortraitCameraIndex, onPortraitNew, onPortraitUpdate, onDeleteNode, onRenameNode, onBillboarded, onCreateRigNode, onAttach, onDetach, onSoftBind, onHardBind, onDetachVertices, attachActive = false, createOpen = false, onCreateOpen, canDeleteNode = false, canAttach = false, canDetach = false, canBind = false }) {
+export default function MovementController({ model, revision = 0, sequenceIndex = -1, time = 0, selectedNodeIds = [], selectionByGeoset = {}, onSelectNodes, onEdit, onVertexTransform, onPlayingChange, transformMode = 'move', onTransformMode, transformSpace = 'local', onTransformSpace, rotateOnOwnAxis = false, onRotateOnOwnAxis, onOpenNodeManager, globalSeqId = null, onTimelineChange, highlightKeyframes = false, onHighlightKeyframes, disabled = false, restPose = false, multiple, onMultiple, workplaneEnabled = false, onWorkplaneEnabled, workplane = 'xy', onWorkplane, restrictions = {}, onRestrictions, portraitMode = false, controlModel = false, portraitCameraIndex = 0, onPortraitCameraIndex, onPortraitNew, onPortraitUpdate, onDeleteNode, onRenameNode, onBillboarded, onCreateRigNode, onAttach, onDetach, onSoftBind, onHardBind, onDetachVertices, attachActive = false, createOpen = false, onCreateOpen, canDeleteNode = false, canAttach = false, canDetach = false, canBind = false }) {
   const [localMultiple, setLocalMultiple] = useState(false), [values, setValues] = useState([0, 0, 0]), [error, setError] = useState('');
   const [curveOpen, setCurveOpen] = useState(false), [curve, setCurve] = useState({ tension: 0, continuity: 0, bias: 0 });
   const [incoming, setIncoming] = useState(''), [outgoing, setOutgoing] = useState('');
@@ -89,10 +90,13 @@ export default function MovementController({ model, revision = 0, sequenceIndex 
     } catch (cause) { setError(cause.message); return false; }
   };
   const options = { restPose, rotateOnOwnAxis, workplaneEnabled, workplane, restrictions };
+  const transform = (current, change) => controlModel && ['move', 'rotate'].includes(change.mode)
+    ? applyPortraitModelTransform(current, selectedNodeIds, frame, editSequenceIndex, change)
+    : applyMovementTransform(current, selectedNodeIds, frame, editSequenceIndex, change);
   const commitPosition = (index, value) => {
     if (!summary.center || blocked('move')) return;
     const translation = [0, 0, 0]; translation[index] = value - summary.center[index];
-    if (summary.source === 'nodes') run(restPose ? 'Move rest-pose pivots' : 'Move bones and nodes', current => applyMovementTransform(current, selectedNodeIds, frame, editSequenceIndex, { ...options, mode: 'move', space: 'world', values: translation }));
+    if (summary.source === 'nodes') run(controlModel ? 'Control Model' : restPose ? 'Move rest-pose pivots' : 'Move bones and nodes', current => transform(current, { ...options, mode: 'move', space: 'world', values: translation }));
     else if (restPose && onVertexTransform) { onPlayingChange?.(false); onVertexTransform({ translation: constrainMovementVector(translation, options), selections: selectionByGeoset }); }
   };
   const coordinateValues = ['rotate', 'scale'].includes(transformMode) ? values : summary.center;
@@ -102,7 +106,7 @@ export default function MovementController({ model, revision = 0, sequenceIndex 
     const transformValues = transformMode === 'scale' ? [1, 1, 1] : [0, 0, 0];
     transformValues[index] = value;
     setValues(previous => previous.map((entry, i) => i === index ? value : entry));
-    if (!blocked(transformMode)) run(`${titles[transformMode]} bones and nodes`, current => applyMovementTransform(current, selectedNodeIds, frame, editSequenceIndex, { ...options, mode: transformMode, space: transformMode === 'rotate' ? transformSpace : 'world', values: transformValues }));
+    if (!blocked(transformMode)) run(controlModel ? 'Control Model' : `${titles[transformMode]} bones and nodes`, current => transform(current, { ...options, mode: transformMode, space: transformMode === 'rotate' ? transformSpace : 'world', values: transformValues }));
   };
   const chooseNode = event => {
     if (event.target.value === '') { if (!multiselect) onSelectNodes?.([]); return; }

@@ -16,6 +16,7 @@ import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatric
 import { isolateGlobalSequence } from '../src/global-sequence-preview.js';
 import { motionPose } from '../src/motion-inspector.js';
 import { applyMovementTransform, movementRestricted } from '../src/movement.js';
+import { applyPortraitModelTransform } from '../src/portrait-model-control.js';
 import { movementBoneVertexCenter } from '../src/movement-selection.js';
 import { drawAttachGuide, drawBoneConnectors, drawMovementOverlay, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from './movement-overlay.js';
 import { applyRestPoseMatrices, isUVOnlyPreviewChange, portraitBlankDragRotatesCamera, restorePreviewCamera } from './game-preview-data.js';
@@ -275,7 +276,7 @@ export default function GamePreview(inputProps) {
       canvas.style.cursor = cursorFor(p);
       const work = (p.cameraMode ?? 'work') === 'work' && !event.altKey;
       const portraitCameraDrag = portraitBlankDragRotatesCamera(p, event);
-      const overlayOptions = previewOverlayOptions(p.overlays, p.showNodes), pickable = visibleMovementPoints(nodePoints, overlayOptions);
+      const pickable = nodePoints;
       if (event.button === 0 && p.attachSourceIds?.length) {
         const rect = canvas.getBoundingClientRect(), x = event.clientX - rect.left, y = event.clientY - rect.top;
         attachPointer = { x, y };
@@ -363,7 +364,7 @@ export default function GamePreview(inputProps) {
         event.preventDefault(); event.stopImmediatePropagation(); return;
       }
       if (!nodeGesture) {
-        const pickable = visibleMovementPoints(nodePoints, previewOverlayOptions(p.overlays, p.showNodes));
+        const pickable = nodePoints;
         if (!pickable.length || rotating || (p.cameraMode ?? 'work') !== 'work') { canvas.style.cursor = cursorFor(p); return; }
         const rect = canvas.getBoundingClientRect(), x = event.clientX - rect.left, y = event.clientY - rect.top;
         const overHandle = pickMovementHandle(nodeHandles, x, y, p.transformMode);
@@ -386,7 +387,8 @@ export default function GamePreview(inputProps) {
       if (event.shiftKey && !nodeGesture.freeScaleDrag) nodeGesture.amount = nodeGesture.mode === 'rotate' ? Math.round(nodeGesture.amount / 5) * 5 : nodeGesture.mode === 'move' ? Math.round(nodeGesture.amount) : Math.round(nodeGesture.amount * 20) / 20 || .05;
       restoreGestureTracks(nodeGesture);
       try {
-        applyMovementTransform(ownedModel, nodeGesture.ids, nodeGesture.frame, nodeGesture.sequence, { mode: nodeGesture.mode, space: nodeGesture.space, rotateOnOwnAxis: nodeGesture.rotateOnOwnAxis, axis: nodeGesture.handle.axis, amount: nodeGesture.amount, values: nodeGesture.values, restPose: nodeGesture.restPose, workplaneEnabled: nodeGesture.mode === 'scale' ? nodeGesture.scaleConstrained : nodeGesture.workplaneEnabled, workplane: nodeGesture.workplane, restrictions: p.restrictions });
+        const transform = p.controlModel && ['move', 'rotate'].includes(nodeGesture.mode) ? applyPortraitModelTransform : applyMovementTransform;
+        transform(ownedModel, nodeGesture.ids, nodeGesture.frame, nodeGesture.sequence, { mode: nodeGesture.mode, space: nodeGesture.space, rotateOnOwnAxis: nodeGesture.rotateOnOwnAxis, axis: nodeGesture.handle.axis, amount: nodeGesture.amount, values: nodeGesture.values, restPose: nodeGesture.restPose, workplaneEnabled: nodeGesture.mode === 'scale' ? nodeGesture.scaleConstrained : nodeGesture.workplaneEnabled, workplane: nodeGesture.workplane, restrictions: p.restrictions });
         if (!nodeGesture.restPose) p.onNodePosePreview?.(motionPose(ownedModel, nodeGesture.ids.at(-1), ({ move: 'Translation', rotate: 'Rotation', scale: 'Scaling' })[nodeGesture.mode], nodeGesture.frame, nodeGesture.sequence));
         const axisLabel = nodeGesture.freeScaleDrag && nodeGesture.scaleConstrained ? String(nodeGesture.workplane).toUpperCase().replace('XZ', 'ZX') : nodeGesture.handle.axis;
         setGestureLabel(`${nodeGesture.mode[0].toUpperCase() + nodeGesture.mode.slice(1)} ${axisLabel}: ${nodeGesture.amount.toFixed(2)}${nodeGesture.mode === 'rotate' ? '°' : nodeGesture.mode === 'scale' ? '×' : ''}`);
@@ -496,7 +498,11 @@ export default function GamePreview(inputProps) {
       else if (next !== 'perspective') {
         applyViewPreset(camera, next, controls.target, fitRadius() * 4);
       }
-      controls.object = camera; controls.enableRotate = true; controls.update(); reportProjectionView(); invalidate();
+      controls.object = camera; controls.enableRotate = true;
+      if (state.portraitActive) { controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI; }
+      controls.update();
+      if (state.portraitActive) controls.minPolarAngle = controls.maxPolarAngle = controls.getPolarAngle();
+      reportProjectionView(); invalidate();
       if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); }
     }
     const viewCamera = event => { if (applyModelCamera(perspective, controls, event.detail)) { camera = perspective; state.appliedView = 'perspective'; invalidate(); } };
@@ -523,15 +529,18 @@ export default function GamePreview(inputProps) {
       controls.object = camera; controls.enableRotate = true; controls.update(); reportProjectionView(); invalidate();
     };
     function enterPortrait(evaluated) {
-      if (!portraitBackup) portraitBackup = { perspective: perspective.clone(), ortho: ortho.clone(), target: controls.target.clone(), camera: camera === ortho ? 'ortho' : 'perspective', appliedView: state.appliedView };
+      if (!portraitBackup) portraitBackup = { perspective: perspective.clone(), ortho: ortho.clone(), target: controls.target.clone(), camera: camera === ortho ? 'ortho' : 'perspective', appliedView: state.appliedView, minPolarAngle: controls.minPolarAngle, maxPolarAngle: controls.maxPolarAngle };
       state.portraitActive = true; state.cameraDetached = false; state.appliedView = 'perspective'; camera = perspective; controls.object = camera; controls.enableRotate = true;
+      controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI;
       if (evaluated) applyEvaluatedModelCamera(camera, controls, evaluated, PORTRAIT_ASPECT);
+      controls.minPolarAngle = controls.maxPolarAngle = controls.getPolarAngle();
       resize(); reportProjectionView(); invalidate();
     }
     function exitPortrait() {
       if (!portraitBackup) { state.portraitActive = false; resize(); return; }
       perspective.copy(portraitBackup.perspective); ortho.copy(portraitBackup.ortho); controls.target.copy(portraitBackup.target);
       camera = portraitBackup.camera === 'ortho' ? ortho : perspective; controls.object = camera; state.appliedView = portraitBackup.appliedView;
+      controls.minPolarAngle = portraitBackup.minPolarAngle; controls.maxPolarAngle = portraitBackup.maxPolarAngle;
       portraitBackup = null; state.portraitActive = false; controls.update(); resize(); reportProjectionView(); invalidate();
     }
     const cameraStarted = () => {
@@ -548,7 +557,7 @@ export default function GamePreview(inputProps) {
       state.cameraEditing = false; reportProjectionView(); invalidate();
     };
     controls.addEventListener('start', cameraStarted); controls.addEventListener('end', cameraEnded);
-    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = cursorFor(latest.current); }, setCameraAngles: values => { if (setEditorCameraAngles(camera, controls.target, values)) { if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); } controls.update(); cameraChanged(); } } }; runtime.current = state;
+    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = cursorFor(latest.current); }, setCameraAngles: values => { if (state.portraitActive) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); cameraChanged(); } } }; runtime.current = state;
     observer = new ownerWindow.ResizeObserver(resize); observer.observe(host.current);
     const saved = cameraMemory.current || latest.current.cameraHandoff?.current;
     // UV edits may rebuild geometry/materials, but never own the user's view.
@@ -752,7 +761,8 @@ export default function GamePreview(inputProps) {
         if (cameraCanvas.height !== canvas.height) cameraCanvas.height = canvas.height;
         drawModelCameraOverlay(cameraCanvas.getContext('2d'), ownedModel, camera, canvas.clientWidth, canvas.clientHeight, canvas.width / Math.max(1, canvas.clientWidth), native.getFrame(), poseSequence, globalClock, radius, visualOptions(p.preferences).node, p.portraitMode ? PORTRAIT_ASPECT : 4 / 3);
       } else if (cameraCanvas) { cameraCanvas.remove(); cameraCanvas = null; }
-      if (overlayOptions.bones || overlayOptions.boneLines || overlayOptions.nodes || overlayOptions.attachments || overlayOptions.particles) {
+      const selectedControls = !!p.onNodeTransform && !!p.selectedNodeIds?.length && ['move', 'rotate', 'scale'].includes(p.transformMode);
+      if (overlayOptions.bones || overlayOptions.boneLines || overlayOptions.nodes || overlayOptions.attachments || overlayOptions.particles || selectedControls) {
         if (!connectorCanvas) { connectorCanvas = ownerDocument.createElement('canvas'); connectorCanvas.dataset.connectorOverlay = ''; connectorCanvas.style.cssText = 'position:absolute;z-index:15;inset:0;width:100%;height:100%;pointer-events:none'; host.current.appendChild(connectorCanvas); }
         if (connectorCanvas.width !== canvas.width) connectorCanvas.width = canvas.width;
         if (connectorCanvas.height !== canvas.height) connectorCanvas.height = canvas.height;
@@ -762,6 +772,8 @@ export default function GamePreview(inputProps) {
         const width = canvas.clientWidth, height = canvas.clientHeight;
         const projectedNodes = projectMovementNodes(markerModel, native.getFrame(), poseSequence, camera, width, height, globalClock, getPoseMatrices());
         nodePoints = visibleMovementPoints(projectedNodes, overlayOptions);
+        const selectedPoint = projectedNodes.find(point => point.node.ObjectId === p.selectedNodeIds?.at(-1));
+        if (selectedControls && selectedPoint && !nodePoints.includes(selectedPoint)) nodePoints.push(selectedPoint);
         const active = nodePoints.find(point => point.node.ObjectId === p.selectedNodeIds?.at(-1));
         const handleMode = p.transformMode || 'rotate', workplaneHidesHandles = p.workplaneEnabled && ['move', 'rotate', 'scale'].includes(handleMode);
         let handleAnchor = active;

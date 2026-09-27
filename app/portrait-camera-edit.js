@@ -10,8 +10,10 @@ export function setCameraFromCurrentView(model, cameraIndex, view, frame = 0, se
   if (index < 0) {
     const camera = { Name: 'Camera 01', Position: new Float32Array(view.position), TargetPosition: new Float32Array(view.target), FieldOfView: view.fieldOfView, NearClip: Math.max(.0001, view.near), FarClip: Math.max(view.far, view.near + .0001) };
     index = model.Cameras.push(camera) - 1;
-    updateModelCameraFromView(model, camera, view, frame, sequenceIndex, frame, ['roll']);
-  } else updateModelCameraFromView(model, model.Cameras[index], view, frame, sequenceIndex, frame);
+  } else updateModelCameraFromView(model, model.Cameras[index], view, frame, sequenceIndex, frame, ['position', 'target', 'fieldOfView', 'near', 'far']);
+  // Native Warcraft renders the reported portrait black when MDLxL's KCRL
+  // camera-roll keys are present. Portrait orientation belongs to the model rig.
+  delete model.Cameras[index].Rotation;
   recalculateExtents(model);
   return index;
 }
