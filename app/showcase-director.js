@@ -92,7 +92,7 @@ export function createShowcaseDirector(getSettings, now = () => performance.now(
       else clock.globalTime += Math.max(0,delta);
       clock.angle += (clock.seconds-previous) * Math.PI*2 / Math.max(.02,Number(settings.length)) * clamp(Number(settings.orbitSpeed ?? 100),0,200)/100;
       const animation = showcaseAnimation(settings.model,settings.playlist,clock.seconds,!clock.recording);
-      return { ...animation, portrait:false, globalTime:clock.globalTime, angle:clock.angle, revision:clock.revision, presentationTime:clock.seconds*1000 };
+      return { ...animation, portrait:!!settings.portrait, globalTime:clock.globalTime, angle:clock.angle, revision:clock.revision, presentationTime:clock.seconds*1000 };
     },
     reset() { Object.assign(clock,{seconds:0,angle:0,revision:clock.revision+1}); },
     begin(view, options = {}) {

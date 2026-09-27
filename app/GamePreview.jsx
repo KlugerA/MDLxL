@@ -68,12 +68,13 @@ async function loadHumanFrame() {
   return { canvas: frame, url: frame.toDataURL('image/png') };
 }
 
-function composePortraitCapture(modelCanvas, frameCanvas) {
+function composePortraitCapture(modelCanvas, frameCanvas, color = "#111417", scale = 1) {
   const layout = portraitCaptureLayout(modelCanvas.width, modelCanvas.height), snapshot = document.createElement('canvas');
   snapshot.width = snapshot.height = layout.size;
-  const context = snapshot.getContext('2d'); context.fillStyle = '#111417'; context.fillRect(0, 0, layout.size, layout.size);
-  context.drawImage(modelCanvas, layout.model.x, layout.model.y, layout.model.width, layout.model.height);
-  if (frameCanvas) context.drawImage(frameCanvas, 0, 0, layout.size, layout.size);
+  const context = snapshot.getContext('2d'); context.fillStyle = color; context.fillRect(0, 0, layout.size, layout.size);
+  const size = layout.size * scale, offset = (layout.size - size) / 2;
+  context.drawImage(modelCanvas, offset + layout.model.x * scale, offset + layout.model.y * scale, layout.model.width * scale, layout.model.height * scale);
+  if (frameCanvas) context.drawImage(frameCanvas, offset, offset, size, size);
   return snapshot;
 }
 
@@ -97,9 +98,8 @@ function releasePreviewGraphics(native, gl, canvas) {
 export default function GamePreview(inputProps) {
   const presentationProps = previewPresentationProps(inputProps);
   // Portrait keeps the v4 camera/frame path and normal Movement editing props.
-  const [showcasePortrait, setShowcasePortrait] = useState(false);
   const props = presentationProps;
-  if (props.showcase) props.portraitMode = showcasePortrait;
+  if (props.showcase) props.portraitMode = !!props.showcasePortraitMode;
   const { model, revision = 0, sequenceIndex = -1, textureAssets, view = 'perspective' } = props;
   const root = useRef(null), host = useRef(null), runtime = useRef(null), latest = useRef(props); latest.current = props;
   const [error, setError] = useState(''), [warnings, setWarnings] = useState([]), [eventWarnings, setEventWarnings] = useState([]), [adjustingSensitivity, setAdjustingSensitivity] = useState(null), [gestureLabel, setGestureLabel] = useState('');
@@ -226,9 +226,9 @@ export default function GamePreview(inputProps) {
     const previewAdapter = installWarcraftPreviewAdapter(gl, ownedModel, () => ({ frame: native.getFrame(), sequenceIndex: native.getSequence(), globalTime: globalClock,
       // Installed UI\\MiscData.txt [Light] Direction=0.3,0.3,-0.25;
       // the classic portrait scene maps this to (y,-x,-z), in model space.
-      portrait: latest.current.showcase ? latest.current.showcaseLight === 'portrait' : !!latest.current.portraitMode,
-      lightDirection: latest.current.showcase ? displayLight().toArray() : latest.current.portraitMode ? [.3,-.3,.25] : cameraLeftLight(camera, controls.target, radius).direction.toArray(),
-      viewDirection: (displayCamera || camera).getWorldDirection(new THREE.Vector3()).negate().toArray(), preferences: latest.current.preferences, hiddenGeosets: latest.current.hiddenGeosets, hideRgbGeoset: latest.current.hideRgbGeoset, surface: latest.current.mode === 'solid', lighting: latest.current.showcase ? latest.current.showcaseLight !== 'none' : latest.current.portraitMode || latest.current.shaded !== false && graphicsOptions(latest.current.preferences).lighting }));
+      portrait: !!latest.current.portraitMode || !!latest.current.showcase && latest.current.showcaseLight === 'portrait',
+      lightDirection: latest.current.portraitMode ? [.3,-.3,.25] : latest.current.showcase ? displayLight().toArray() : cameraLeftLight(camera, controls.target, radius).direction.toArray(),
+      viewDirection: (displayCamera || camera).getWorldDirection(new THREE.Vector3()).negate().toArray(), preferences: latest.current.preferences, hiddenGeosets: latest.current.hiddenGeosets, hideRgbGeoset: latest.current.hideRgbGeoset, surface: latest.current.mode === 'solid', lighting: latest.current.portraitMode || (latest.current.showcase ? latest.current.showcaseLight !== 'none' : latest.current.shaded !== false && graphicsOptions(latest.current.preferences).lighting) }));
     try {
       native = new ModelRenderer(ownedModel); native.initGL(gl); previewAdapter.ready(native);
       // Layered WC3 materials redraw the same triangles at identical depth.
@@ -650,7 +650,6 @@ export default function GamePreview(inputProps) {
       if (p.showcase) {
         showcaseNext = p.showcase.sample(captureOnly ? 0 : delta);
         p.sequenceIndex = showcaseNext.sequenceIndex; p.time = showcaseNext.frame;
-        p.portraitMode = false;
       }
       const selected = p.restPose ? 0 : p.sequenceIndex < 0 && timelineSequenceIndex >= 0 ? timelineSequenceIndex : Math.max(0, Math.min(ownedModel.Sequences.length - 1, p.sequenceIndex ?? 0));
       const sequence = ownedModel.Sequences[selected];
@@ -690,7 +689,7 @@ export default function GamePreview(inputProps) {
       globalClock += dt;
       controls.update();
       displayCamera = camera;
-      if (p.showcase) {
+      if (p.showcase && !p.portraitMode) {
         // The model origin is the rotation axis. Radius adds an explicit path;
         // the navigated camera and its projection remain exactly as placed.
         displayCamera = setShowcaseOrbitCamera(camera, turntableCamera, showcaseNext.angle,
@@ -872,7 +871,7 @@ export default function GamePreview(inputProps) {
       recordingFrame(time, options) { latest.current.showcase?.seekRecording(time); render(performance.now(), 0, { captureOnly: true }); return state.captureApi.captureFrame(options); },
       copyVisibleFrame(destination, crop) {
         const context = destination.getContext('2d');
-        const source = latest.current.portraitMode ? composePortraitCapture(canvas, portraitFrame.current.canvas) : canvas;
+        const source = latest.current.portraitMode ? composePortraitCapture(canvas, portraitFrame.current.canvas, viewportAppearanceOptions(latest.current.preferences).background.color, latest.current.showcasePortraitZoom || 1) : canvas;
         const selection = cropPixels(source.width,source.height,crop);
         context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
         context.drawImage(source,selection.x,selection.y,selection.width,selection.height,0,0,destination.width,destination.height);
@@ -905,7 +904,7 @@ export default function GamePreview(inputProps) {
           canvas.width = dimensions.width; canvas.height = dimensions.height; drawBackground();
           if (render(performance.now(), 0, { captureOnly: true }) === false) throw new Error('The animation preview could not render a capture.');
           const captured = composePreviewCapture(backgroundCanvas, canvas);
-          return latest.current.portraitMode ? composePortraitCapture(captured, portraitFrame.current.canvas) : captured;
+          return latest.current.portraitMode ? composePortraitCapture(captured, portraitFrame.current.canvas, viewportAppearanceOptions(latest.current.preferences).background.color, latest.current.showcasePortraitZoom || 1) : captured;
         } finally {
           canvas.width = saved.width; canvas.height = saved.height; drawBackground();
           render(performance.now(), 0); state.scheduler.invalidate();
@@ -928,7 +927,6 @@ export default function GamePreview(inputProps) {
   useEffect(() => {
     const current = runtime.current;
     if (!current) return;
-    if (props.showcase) { current.scheduler.invalidate(); return; }
     if (!props.portraitMode) { current.exitPortrait(); return; }
     const evaluated = evaluateModelCamera(model, model?.Cameras?.[props.portraitCameraIndex], props.time, sequenceIndex, props.time);
     current.enterPortrait(evaluated);
@@ -948,12 +946,12 @@ export default function GamePreview(inputProps) {
 
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];
-  return <div ref={root} className={`game-preview-root${portrait ? ' portrait-preview-root' : ''}`} style={{ minHeight: props.presentation === 'preview' ? 0 : 180 }}>
+  return <div ref={root} className={`game-preview-root${portrait ? ' portrait-preview-root' : ''}`} style={{ minHeight: props.presentation === 'preview' ? 0 : 180, background: props.showcase && portrait ? viewportBackground.color : undefined }}>
     <div className={`game-preview-stage${portrait ? ' portrait-preview-stage' : ''}`} style={portrait ? { width: portraitSize, height: portraitSize } : undefined}>
       <div ref={host} className={`game-preview-surface${portrait ? ' portrait-model-surface' : ''}`} />
       {selectionBox && <div className={`game-preview-selection-layer${portrait ? ' portrait-model-surface' : ''}`}><div data-selection-marquee="" style={{ position: 'absolute', zIndex: 90, pointerEvents: 'none', boxSizing: 'border-box', border: `1px dashed ${marqueeColor}`, background: `${marqueeColor}24`, boxShadow: '0 0 0 1px #fff', ...selectionBox }} /></div>}
       {portrait && frame.status === 'ready' && <img className="portrait-human-frame" src={frame.url} alt="" aria-hidden="true" data-frame-version={portraitFrameVersion}/>} 
-      {portrait && !hasCamera && !props.showcase && <div className="portrait-message" role="status">Create or select a camera to view the portrait</div>}
+      {portrait && !hasCamera && <div className="portrait-message" role="status">Create or select a camera to view the portrait</div>}
       {portrait && frame.status === 'loading' && <div className="portrait-frame-status" role="status">Loading Human UI frame from installed Warcraft III data…</div>}
       {portrait && frame.status === 'failed' && <div className="portrait-frame-status portrait-frame-error" role="status">{frame.error}</div>}
     </div>
