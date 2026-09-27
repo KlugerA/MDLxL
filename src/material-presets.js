@@ -52,3 +52,13 @@ export function applyMaterialPreset(model, materialID, preset, tint = 0) {
   }
   return true;
 }
+
+/** A tint's opaque and modulate passes always sample the same base texture. */
+export function setMaterialLayerTexture(material, layerIndex, value) {
+  const layers = material.Layers;
+  const linked = (layerIndex === 0 || layerIndex === 2) && layers.length === 3 &&
+    layers[0].FilterMode === 0 && layers[1].FilterMode === 3 && layers[2].FilterMode === 5 &&
+    JSON.stringify(layers[0].TextureID) === JSON.stringify(layers[2].TextureID);
+  material.Layers[layerIndex].TextureID = structuredClone(value);
+  if (linked) material.Layers[layerIndex === 0 ? 2 : 0].TextureID = structuredClone(value);
+}

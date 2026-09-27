@@ -27,6 +27,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
    window.nativeState=()=>{let f=document.querySelector('.game-preview-root');if(!f)return null;f=f[Object.keys(f).find(k=>k.startsWith('__reactFiber'))];for(;f;f=f.return)for(let h=f.memoizedState;h;h=h.next)if(h.memoizedState?.current?.native)return h.memoizedState.current.native;return null;};
   });
   await uv.waitForFunction(()=>nativeState()?.model?.Materials[4]?.Layers.length===3);
+  await uv.getByLabel('Material Properties',{exact:true}).selectOption('Team Color Overlay');
   assert.equal(await uv.getByLabel('Material Properties',{exact:true}).inputValue(),'Team Color Overlay');
   await uv.getByLabel('Material Properties',{exact:true}).selectOption('Color Tint');
   await uv.getByLabel('Tint color',{exact:true}).selectOption('1');
@@ -49,7 +50,12 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
   await page.getByRole('dialog',{name:'Material Manager',exact:true}).waitFor();
   await page.getByLabel('Material Properties',{exact:true}).selectOption('Color Tint');
   await page.getByLabel('Tint color',{exact:true}).selectOption('12');
-  await page.screenshot({path:path.join(out,'manager-maroon.png')});
+  const textureFields=page.getByLabel('Texture',{exact:true});
+  const middleTexture=await textureFields.nth(1).inputValue();
+  await textureFields.nth(0).selectOption('4');assert.equal(await textureFields.nth(2).inputValue(),'4');
+  await textureFields.nth(2).selectOption('10');assert.equal(await textureFields.nth(0).inputValue(),'10');assert.equal(await textureFields.nth(1).inputValue(),middleTexture);
+  await page.screenshot({path:path.join(out,'manager-matched-base.png')});
+  console.log('PASS: changing either base texture through Material Manager keeps both texture selectors matched and the tint unchanged');
   const layers=await page.locator('.inspector-fields').innerText();assert.ok(layers.includes('Layer 2'));
   assert.ok(fs.readFileSync(input).equals(original));
   console.log('PASS: UV placement, all presets, live native renderer update, fixed blue texture resolved, tint visibility, undo/redo, manager tint selection, input file unchanged');
