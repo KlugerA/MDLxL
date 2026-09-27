@@ -16,12 +16,17 @@ async function savePreviewCapture(directory, payload) {
   const valid = payload.format === 'png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : ['GIF87a','GIF89a'].includes(bytes.subarray(0, 6).toString('ascii')) && bytes.at(-1) === 0x3b;
   if (!valid) throw Error('Invalid capture image.');
   directory = showcaseDirectory(directory, payload.modelName);
+  const modelDirectory = directory;
+  if (payload.screenshotBatch !== undefined) {
+    if (payload.format !== 'png' || !/^[a-zA-Z0-9-]{1,64}$/.test(payload.screenshotBatch) || !Number.isInteger(payload.shotIndex) || payload.shotIndex < 1 || payload.shotIndex > 20) throw Error('Invalid screenshot batch.');
+    directory = showcaseDirectory(directory, path.basename(showcaseDirectory('', payload.animationName || 'Animation')).slice(0, 60) + '-screenshots-' + payload.screenshotBatch);
+  }
   await fs.mkdir(directory, { recursive: true });
   const name = `Preview-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(3).toString('hex')}.${payload.format}`;
   const destination = path.join(directory, name);
   try { await fs.writeFile(destination, bytes, { flag: 'wx' }); }
   catch (error) { throw Error(`Could not write Showcase Recordings: ${error.message}`); }
-  return { name, path: destination };
+  return { name, path: destination, modelDirectory };
 }
 const MAX_CAPTURE_BYTES = 256 * 1024 * 1024;
 async function validateGIFFile(file) {

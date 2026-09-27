@@ -24,6 +24,7 @@ import { installWarcraftPreviewAdapter, resetPreviewEffects } from './warcraft-p
 import { composePreviewCapture, drawPreviewBackground, previewPlaybackStep } from './game-preview-capture.js';
 import { createGLPreviewBackground } from './game-preview-background-gl.js';
 import { createAnimatedPreviewBackground } from './animated-preview-background.js';
+import { createVideoPreviewBackground } from './video-preview-background.js';
 import { drawPreviewGeometryOverlay, drawPresentationOverlay, previewOverlayOptions, visibleMovementPoints } from './preview-overlays.js';
 import { previewPresentationProps, previewOverlaySettings } from './preview-presentation.js';
 import { bindScrollSensitivity, createRenderScheduler, graphicsOptions, pointerSensitivityValue, sensitivityIndicatorStyle, sensitivityIndicatorText } from './viewport-performance.js';
@@ -156,6 +157,16 @@ export default function GamePreview(inputProps) {
     let resolve, reject, active = true;
     const entry = { url, status: 'loading', image: null, promise: new Promise((yes, no) => { resolve = yes; reject = no; }) };
     entry.promise.catch(() => {}); backgroundState.current = entry;
+    if (appearanceBackgroundType?.startsWith('video/')) {
+      const animation = createVideoPreviewBackground(url, {
+        getTrim: () => latest.current.backgroundTrim,
+        onMetadata: duration => latest.current.onBackgroundMetadata?.(duration),
+        onFrame: image => { if (!active) return; entry.status = 'ready'; entry.image = image; resolve(); runtime.current?.drawBackground(); runtime.current?.scheduler.invalidate(); },
+        onError: cause => { if (!active) return; entry.status = 'failed'; entry.error = cause; setBackgroundError(cause.message); reject(cause); },
+      });
+      entry.animation = animation;
+      return () => { active = false; animation.dispose(); resolve(); };
+    }
     if (appearanceBackgroundType === 'image/gif' || /\.gif(?:[?#]|$)/i.test(url)) {
       const animation = createAnimatedPreviewBackground(url, {
         onFrame: image => { if (!active) return; entry.status = 'ready'; entry.image = image; resolve(); runtime.current?.drawBackground(); runtime.current?.scheduler.invalidate(); },
@@ -172,6 +183,7 @@ export default function GamePreview(inputProps) {
     picture.src = url; runtime.current?.drawBackground();
     return () => { active = false; picture.onload = null; picture.onerror = null; resolve(); };
   }, [appearanceBackgroundUrl, appearanceBackgroundType]);
+  useEffect(() => { backgroundState.current.animation?.setRange?.(); }, [props.backgroundTrim?.start, props.backgroundTrim?.end]);
 
   useEffect(() => {
     if (!model || !host.current) return;
@@ -540,6 +552,7 @@ export default function GamePreview(inputProps) {
     }
     const cameraStarted = () => {
       const p = latest.current;
+      if (p.showcase && !p.portraitMode) { controls.target.copy(center); controls.update(); }
       if (!p.portraitMode || !state.portraitActive) return;
       cameraGestureStart = { position: camera.position.clone(), target: controls.target.clone(), snapshot: editorCameraSnapshot(camera, controls.target) };
       state.cameraEditing = true; state.cameraDetached = true; p.onPlayingChange?.(false);
@@ -597,13 +610,13 @@ export default function GamePreview(inputProps) {
         } else if (texture.image?.data) {
           const image = texture.image; native.setTextureImageData(info.Image, [new ImageData(new Uint8ClampedArray(image.data), image.width, image.height)]);
         } else native.setTextureImage(info.Image, texture.image);
-        if (!texture.isCompressedTexture) improveNativeTexture(gl, native, info.Image);
+        if (!texture.isCompressedTexture) improveNativeTexture(gl, native, info.Image, graphics);
       } catch (cause) { failures.push(`${info.Image}: ${cause.message}`); }
       finally { texture?.dispose(); if (!disposed) invalidate(); }
     });
     const texturePromise = Promise.all(jobs).then(() => { texturesReady = true; if (!disposed) setWarnings([...(missing ? [`${missing} textures unresolved · load the model's texture files`] : []), ...failures]); });
     let reportAt = performance.now(), activeSequence = -99, externalFrame, reportedFrame, lastPlaying = false, globalClock = 0, playbackStopped = false;
-    let showcaseSample;
+    let showcaseSample, recordingSink = null;
     const color = new THREE.Color(), cameraQuaternion = new THREE.Quaternion();
     function setPreviewFrame(frame) {
       native.setFrame(frame);
@@ -718,7 +731,7 @@ export default function GamePreview(inputProps) {
         native.setLightPosition(cameraLeftLight(camera, controls.target, radius).position.toArray());
         const background = new THREE.Color(p.portraitMode ? '#000000' : visualOptions(p.preferences).background).convertLinearToSRGB();
         gl.viewport(0, 0, canvas.width, canvas.height); gl.clearColor(background.r, background.g, background.b, 1); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        if (!p.portraitMode || p.showcase && p.backgroundUrl) nativeBackground.draw();
+        if (!p.portraitMode || p.showcase) nativeBackground.draw();
         if (!captureOnly) presentation.draw(camera, p.preferences, p.workplane, p.overlays?.grid ?? !!p.showGrid, center, radius, bounds.min.z, { gridOnly: true, showAxes: p.showAxes ?? p.overlays?.axes ?? !!p.showGrid });
         const wireframe = !captureOnly && (p.mode === 'wireframe' || p.mode === 'vertices');
         if (wireframe) gl.colorMask(false, false, false, false);
@@ -804,6 +817,7 @@ export default function GamePreview(inputProps) {
       }
       if (!captureOnly && playback.finished) { reportAt = now; reportedFrame = start; p.onTimeChange?.(start); p.onPlayingChange?.(false); }
       else if (!captureOnly && p.playing && !playbackStopped && now - reportAt > 32) { reportAt = now; reportedFrame = native.getFrame(); p.onTimeChange?.(reportedFrame); }
+      if (!captureOnly && recordingSink) recordingSink(showcaseSample?.presentationTime || 0);
     }
     const contextLost = event => { event.preventDefault(); scheduler?.dispose(); setError('The graphics context was lost. Reopen this preview to restore it.'); };
     scheduler = state.scheduler = createRenderScheduler({ render,
@@ -824,9 +838,46 @@ export default function GamePreview(inputProps) {
       invalidate() { state.scheduler.invalidate(); },
       fit() { fit(); },
       setCameraView(view) { camera = perspective; controls.object = camera; state.cameraDetached = true; applyEvaluatedModelCamera(camera, controls, view, canvas.width / canvas.height); invalidate(); },
-      beginRecording() { backgroundState.current.animation?.pause(); latest.current.showcase?.begin(state.cameraView()); },
-      endRecording() { latest.current.showcase?.end(); backgroundState.current.animation?.resume(); invalidate(); },
+      modelCenter() { return center.toArray(); },
+      async prepareRecording() {
+        // Establish the first sequence's camera/aspect before allocating GIF frames.
+        latest.current.showcase?.begin(state.cameraView(), { center: center.toArray() });
+        render(performance.now(), 0, { captureOnly: true });
+        await new Promise(resolve => requestPreviewFrame(resolve));
+        await state.captureApi.whenReady();
+        const animation = backgroundState.current.animation;
+        if (animation?.seek) { animation.pause(); await animation.seek(0); }
+      },
+      beginRecording(options = {}) {
+        latest.current.showcase?.begin(state.cameraView(), { ...options, center: center.toArray() });
+        recordingSink = options.onFrame || null;
+        if (options.live) backgroundState.current.animation?.resume();
+        else backgroundState.current.animation?.pause();
+        render(performance.now(), 0); state.scheduler.sync();
+      },
+      freezeRecording(time) {
+        recordingSink = null; latest.current.showcase?.freeze(time);
+        backgroundState.current.animation?.pause(); render(performance.now(), 0); state.scheduler.sync();
+      },
+      endRecording() { recordingSink = null; latest.current.showcase?.end(); backgroundState.current.animation?.resume(); invalidate(); },
       recordingFrame(time, options) { latest.current.showcase?.seekRecording(time); render(performance.now(), 0, { captureOnly: true }); return state.captureApi.captureFrame(options); },
+      async screenshotFrame(shot, options) {
+        latest.current.showcase?.setShot(shot);
+        await backgroundState.current.animation?.seek?.(shot.localTime / 1000);
+        render(performance.now(), 0, { captureOnly: true });
+        // Let the portrait frame and aspect commit before the high resolution capture.
+        await new Promise(resolve => requestPreviewFrame(resolve));
+        await state.captureApi.whenReady();
+        return state.captureApi.captureFrame(options);
+      },
+      copyVisibleFrame(destination) {
+        const context = destination.getContext('2d');
+        const source = latest.current.portraitMode ? composePortraitCapture(canvas, portraitFrame.current.canvas) : canvas;
+        const fit = Math.min(destination.width / source.width, destination.height / source.height);
+        context.fillStyle = '#000'; context.fillRect(0,0,destination.width,destination.height);
+        context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
+        context.drawImage(source,(destination.width-source.width*fit)/2,(destination.height-source.height*fit)/2,source.width*fit,source.height*fit);
+      },
       playbackState() { return showcaseSample; },
       focusPoint(values) {
         const next = new THREE.Vector3().fromArray(values), offset = next.clone().sub(controls.target);
@@ -873,7 +924,7 @@ export default function GamePreview(inputProps) {
       if (latest.current.cameraHandoff) latest.current.cameraHandoff.current = cameraMemory.current;
       disposed = true; leaveGeoset(); canvas.removeEventListener('pointermove', hoverGeoset); canvas.removeEventListener('pointerleave', leaveGeoset); latest.current.onCaptureReady?.(null); backgroundCanvas.remove(); hoverCanvas?.remove(); connectorCanvas?.remove(); nodeCanvas?.remove(); geometryCanvas?.remove(); cameraCanvas?.remove(); scheduler.dispose(); ownerDocument.removeEventListener('visibilitychange', scheduler.sync); window.removeEventListener('mdlvis-frame', fit); window.removeEventListener('mdlxl-view-camera', viewCamera); unbindScroll(); observer?.disconnect(); ownerWindow.removeEventListener('keydown', previewKeyDown, true); ownerWindow.removeEventListener('keyup', previewKeyUp, true); ownerWindow.removeEventListener('blur', previewWindowBlur); canvas.removeEventListener('pointerdown', pointerDown, true); canvas.removeEventListener('pointermove', suppressAdjustedMove, true); canvas.removeEventListener('pointerup', finishLeftGesture, true); canvas.removeEventListener('pointercancel', finishLeftGesture, true); canvas.removeEventListener('pointermove', nodePointerMove, true); canvas.removeEventListener('pointerup', finishNodeGesture, true); canvas.removeEventListener('pointercancel', finishNodeGesture, true); canvas.removeEventListener('keydown', cancelNodeGesture, true); controls.removeEventListener('change', cameraChanged); controls.removeEventListener('start', cameraStarted); controls.removeEventListener('end', cameraEnded); controls.dispose(); canvas.removeEventListener('webglcontextlost', contextLost); runtime.current = null; rigMarkers.dispose(); presentation.dispose(); nativeBackground.dispose(); eventPreview.dispose(); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas);
     };
-  }, [rendererModel, rendererRevision, textureAssets, props.modelPath, graphics.antialias, graphics.particles, props.showParticles, graphics.lighting, graphics.textures, timelineStart, timelineEnd, globalPreviewId]);
+  }, [rendererModel, rendererRevision, textureAssets, props.modelPath, graphics.antialias, graphics.anisotropy, graphics.textureFiltering, graphics.particles, props.showParticles, graphics.lighting, graphics.textures, timelineStart, timelineEnd, globalPreviewId]);
 
   useEffect(() => {
     const current = runtime.current;

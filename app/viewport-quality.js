@@ -30,16 +30,16 @@ export function cameraLeftLight(camera, target, radius) {
 }
 
 /** WebGL2 generates the complete mip chain for decoded BLP/TGA/DDS top levels. */
-export function improveNativeTexture(gl, native, path) {
+export function improveNativeTexture(gl, native, path, options = {}) {
   const texture = native.rendererData?.textures?.[path];
   if (!texture) return;
   const previous = gl.getParameter(gl.TEXTURE_BINDING_2D);
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.generateMipmap(gl.TEXTURE_2D);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, options.textureFiltering === 'bilinear' ? gl.LINEAR_MIPMAP_NEAREST : gl.LINEAR_MIPMAP_LINEAR);
   const ext = native.anisotropicExt;
-  if (ext) gl.texParameterf(gl.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(16, gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+  if (ext) gl.texParameterf(gl.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(options.anisotropy || 16, gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
   gl.bindTexture(gl.TEXTURE_2D, previous);
 }
 

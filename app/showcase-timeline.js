@@ -10,7 +10,7 @@ export function showcaseAnimation(model, playlist, seconds, repeat = true) {
   const length = row => positive(row.seconds, 3);
   const activeTime = (row, elapsed) => {
     const sequence = model.Sequences[row.sequence], duration = Math.max(0, sequence.Interval[1] - sequence.Interval[0]);
-    const amount = elapsed * 1000 * positive(row.speed, 1);
+    const amount = elapsed * 1000 * (Number.isFinite(Number(row.speed)) ? Math.max(0, Math.min(2, Number(row.speed))) : 1);
     return row.loop === false || sequence.NonLooping ? Math.min(duration, amount) : duration > 0 ? amount : 0;
   };
   const total = rows.reduce((sum, row) => sum + length(row), 0);

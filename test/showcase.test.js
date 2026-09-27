@@ -37,3 +37,49 @@ test('per-model Windows folder names never escape Showcase Recordings', () => {
   assert.match(showcaseDirectory('Showcase Recordings', '../CON.mdx'), /[\\/]_CON$/);
   assert.match(showcaseDirectory('Showcase Recordings', '..'), /[\\/]Untitled$/);
 });
+
+import { centeredView, orbitModelView, cameraPathView, overflowEntries, screenshotPlan, createShowcaseDirector } from '../app/showcase-director.js';
+test('off-origin orbital cameras keep model center and distance on all three axes',()=>{
+  const center=[450,-900,80], off={...view,position:[480,-960,120],target:[0,0,0]};
+  const fixed=centeredView(off,center),distance=Math.hypot(...fixed.position.map((n,i)=>n-center[i]));
+  for(const axis of ['x','y','z'])for(const angle of [0,45,90,180,270,360]){
+    const result=orbitModelView(fixed,angle,axis,center);
+    assert.deepEqual(result.target,center);
+    assert.ok(Math.abs(Math.hypot(...result.position.map((n,i)=>n-center[i]))-distance)<1e-8);
+  }
+  assert.deepEqual(off.target,[0,0,0]);
+});
+test('camera path controls preserve endpoints and arcs do not cut through the model',()=>{
+  const center=[12,35,90], a={...view,target:center,position:[22,35,90]}, b={...view,target:center,position:[2,35,90]};
+  const points=[{view:a},{view:b}];
+  assert.deepEqual(cameraPathView(points,0,10,{},center),a);
+  assert.deepEqual(cameraPathView(points,5,10,{speed:200},center),b);
+  const mid=cameraPathView(points,5,10,{curve:'arc'},center);
+  assert.ok(Math.abs(Math.hypot(...mid.position.map((v,i)=>v-center[i]))-10)<1e-8);
+  assert.deepEqual(cameraPathView(points,5,10,{curve:'straight'},center).position,center);
+});
+test('speed zero freezes pose and overflow includes partly truncated entries',()=>{
+  const frozen=showcaseAnimation(model,[{sequence:0,seconds:10,speed:0}],8);
+  assert.equal(frozen.frame,100);assert.equal(frozen.globalTime,0);
+  assert.deepEqual(overflowEntries([{seconds:4},{seconds:7},{seconds:1}],10),[false,true,true]);
+  assert.deepEqual(overflowEntries([{seconds:4},{seconds:6}],10),[false,false]);
+});
+test('live clock catches up after a stalled encoder and freezes at exact duration',()=>{
+  let now=100;const settings={model,playlist:[{sequence:0,seconds:10,speed:1}],length:10,playing:false,cameraMode:'orbit',orbitAxis:'z'};
+  const director=createShowcaseDirector(()=>settings,()=>now);
+  director.begin(view,{live:true,duration:10000});assert.equal(director.sample().presentationTime,0);
+  now+=4300;assert.equal(director.sample(16).presentationTime,4300);
+  assert.ok(Math.abs(director.sample().frame-400)<1e-6);
+  now+=12000;assert.equal(director.sample().presentationTime,10000);
+  director.freeze(10000);now+=5000;assert.equal(director.sample().presentationTime,10000);
+});
+test('automatic screenshots obey per-animation limits and sample distinct poses and cameras',()=>{
+  const playlist=[{sequence:0,shots:3},{sequence:1,shots:90}];
+  for(const viewpoint of ['frontal','orbital','zoom','free']){
+    const shots=screenshotPlan(model,playlist,view,{viewpoint,axis:'y',random:()=>.5});
+    assert.equal(shots.length,23);assert.equal(shots.filter(s=>s.entry===1).length,20);
+    assert.equal(new Set(shots.slice(0,3).map(s=>s.frame)).size,3);
+    assert.equal(new Set(shots.slice(0,3).map(s=>JSON.stringify(s.camera.position))).size,viewpoint==='frontal'?1:3);
+    for(const shot of shots)assert.deepEqual(shot.camera.target,view.target);
+  }
+});

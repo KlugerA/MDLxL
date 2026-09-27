@@ -265,7 +265,7 @@ export default function App() {
   const refresh = () => setTick(value => value + 1);
   const say = (message, error = false) => setStatus((error ? 'Error: ' : '') + message);
   const selectBackground = value => { setBackground(value); localStorage.setItem('mdlvis-preview-background', value); };
-  const backgroundLibrary = usePreviewBackgrounds(mode === 'animation', background, selectBackground, say);
+  const backgroundLibrary = usePreviewBackgrounds(mode === 'animation' || mode === 'showcase', background, selectBackground, say);
   const {validSelection,selectionCount,centroid,totalVertices,totalFaces,hiddenCount,selectedFaces} = useMemo(() => {
     const validSelection = filterVertexSelection(selection, selectable, model);
   const selectionCount = Object.values(validSelection).reduce((sum, ids) => sum + ids.length, 0);

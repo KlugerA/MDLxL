@@ -34,3 +34,18 @@ test('Capture writes unique preview-only filenames and validates data before wri
     assert.equal((await readdir(path.join(directory, 'Untitled'))).length,2);
   } finally { await rm(directory,{recursive:true,force:true}); }
 });
+
+test('screenshot batches stay under the model and keep a unique ID even for long animation names', async () => {
+  const directory=await mkdtemp(path.join(os.tmpdir(),'mdlxl-shots-'));
+  const bytes=Uint8Array.from([137,80,78,71,13,10,26,10,0,0]);
+  try{
+    const payload={format:'png',bytes,modelName:'Unit.mdx',animationName:'A'.repeat(200),screenshotBatch:'a12b34cd-1234-4567-8901-123456789012',shotIndex:1};
+    const first=await savePreviewCapture(directory,payload),second=await savePreviewCapture(directory,{...payload,shotIndex:2});
+    assert.equal(path.dirname(first.path),path.dirname(second.path));
+    assert.equal(path.dirname(path.dirname(first.path)),path.join(directory,'Unit'));
+    assert.ok(path.basename(path.dirname(first.path)).endsWith('-screenshots-'+payload.screenshotBatch));
+    assert.equal((await readdir(path.dirname(first.path))).length,2);
+    await assert.rejects(savePreviewCapture(directory,{...payload,screenshotBatch:'../escape'}),/Invalid screenshot batch/);
+    await assert.rejects(savePreviewCapture(directory,{...payload,shotIndex:21}),/Invalid screenshot batch/);
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
