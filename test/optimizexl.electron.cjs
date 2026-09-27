@@ -59,6 +59,18 @@ const nearVector=(actual,expected)=>{assert.equal(actual.length,expected.length)
   await popup.getByLabel('Strength',{exact:true}).fill('40');
   await popup.waitForFunction(()=>document.querySelector('.ox-savings strong')&&!document.querySelector('.ox-savings').textContent.includes('Updating'));
   assert.ok(parseFloat(await popup.locator('.ox-savings strong').textContent())>0);
+  const mediumSavings=parseFloat(await popup.locator('.ox-savings strong').textContent());
+  await popup.getByLabel('Strength',{exact:true}).fill('100');
+  await popup.waitForFunction(()=>document.querySelector('.ox-savings strong')&&!document.querySelector('.ox-savings').textContent.includes('Updating'));
+  assert.ok(parseFloat(await popup.locator('.ox-savings strong').textContent())>=mediumSavings);
+  assert.equal(await popup.getByRole('alert').count(),0);
+  await popup.getByRole('button',{name:'Advanced',exact:true}).click();
+  assert.equal(await popup.getByLabel('Shape/texture error (%)',{exact:true}).inputValue(),'20');
+  await popup.getByRole('button',{name:'Simple',exact:true}).click();
+  await popup.getByLabel('Strength',{exact:true}).fill('0');
+  await popup.waitForFunction(()=>document.querySelector('.ox-savings strong')?.textContent==='0.00 KB saved');
+  await popup.getByLabel('Strength',{exact:true}).fill('100');
+  await popup.waitForFunction(()=>document.querySelector('.ox-savings strong')&&!document.querySelector('.ox-savings').textContent.includes('Updating'));
   await popup.screenshot({path:path.join(out,'04-nuclear.png')});
   await popup.getByRole('button',{name:'Approve',exact:true}).click();await popup.getByRole('button',{name:'Save Before + After',exact:true}).waitFor();
   await app.evaluate(({dialog},directory)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[directory]});},out);

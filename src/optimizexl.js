@@ -29,7 +29,7 @@ export function simpleSettings(stage,strength,m){const s=clamp(strength,0,100)/1
  case 'animation':return {position:d*.005*s*s,rotation:3*s*s,scale:.02*s*s};
  case 'unused':return {vertices:true,resources:true,nodes:true};
  case 'spheres':return {preset:1,size:1,spheres:SPHERE_PRESETS[1].spheres};
- case 'nuclear':return {target:Math.round(triangleCount(m)*(1-.98*s)),error:d*(.005+.995*s),normalLimit:45,protectNormals:true,protectSeams:true,protectSkin:true};
+ case 'nuclear':return {target:Math.round(triangleCount(m)*(1-.98*s)),error:.2*s*s,normalLimit:45,protectNormals:true,protectSeams:true,protectSkin:true};
  default:return {};
 }}
 function supported(doc){

@@ -65,6 +65,10 @@ Runtime dependencies: Intel oneVPL (MIT), OpenH264 (BSD-2-Clause), mingw-w64 win
 
 Forge uses clipper-lib 6.4.2 (Angus Johnson / Timo), with embedded JSBN by Tom Wu. The complete Boost Software License and JSBN notice are in docs/licenses/clipper-lib.txt in the source, and LICENSES.bundled.txt in the portable package.
 
+## Meshoptimizer simplifier
+
+OptimizeXL uses the unmodified WebAssembly/JavaScript simplifier from **meshoptimizer 1.3.0**, copyright Arseny Kapoulkine, under the MIT License. The module, complete license and pinned official npm package integrity/module hash are in `src/vendor/meshoptimizer-1.3.0/` and included in the portable package. Upstream: https://github.com/zeux/meshoptimizer/tree/master/js . Nuclear uses attribute-aware quadric simplification; it does not use the vertex-update, sloppy or component-pruning modes.
+
 ## Tengwar Annatar typeface (Mordor mode)
 
 Mordor mode uses the unmodified **Tengwar Annatar 1.20** type family by Johan Winge (2004–2005), distributed as freeware. Its complete original package—including all face variants, `readme.txt`, licence text, and documentation PDF—is retained under `public/fonts/tengwar-annatar/` and copied intact to `dist/fonts/tengwar-annatar/` in the portable package. The original licence permits no-fee redistribution only when all original files are included unchanged; it also notes that commercial use and use of Tolkien's script may require additional permission. The typeface is used here solely as an optional, local, humorous UI mode.

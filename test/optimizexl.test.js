@@ -10,6 +10,8 @@ import { runOptimizeStage, simpleSettings, findIrregularities, SPHERE_PRESETS, t
 import { OptimizeXLSession } from '../src/optimizexl-session.js';
 import { sampleNodeMatrices } from '../src/animation.js';
 import { flattenHiveFindings } from '../app/optimizexl-hive.js';
+import { prepareNuclearReduction } from '../src/optimizexl-geometry.js';
+await prepareNuclearReduction();
 const {saveOptimizeXLPair}=createRequire(import.meta.url)('../electron/optimizexl-save.cjs');
 const fixture=()=>createStarterDocument().serialize('mdx');
 const sequence=(Name='Stand',start=0,end=1000)=>({Name,Interval:new Uint32Array([start,end]),MinimumExtent:new Float32Array(3),MaximumExtent:new Float32Array(3),BoundsRadius:0,MoveSpeed:0,NonLooping:false,Rarity:0});
