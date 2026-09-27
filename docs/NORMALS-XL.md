@@ -1,10 +1,10 @@
 # NormalsXL
 
-In Vertices, select the vertices to correct, then click **NormalsXL** directly below **Merge Geosets**. Click three distinct vertices whose normals already face out of their surface (or into it, to choose inward). The references can face different world directions. The third pick corrects the original selection as one undoable edit. Click a reference again to remove it; Cancel or Escape leaves the document unchanged.
+In Vertices, select the vertices to correct, then click **NormalsXL** directly below **Merge Geosets**. Click one vertex whose normal already faces out of its surface (or into it, to choose inward). That first pick immediately corrects the original selection as one undoable edit. Cancel or Escape before picking leaves the document unchanged.
 
 ## Surface orientation
 
-NormalsXL follows connected surfaces instead of putting every normal into one global hemisphere. It establishes consistent triangle winding through indexed edges first, joining exact geometric edges across vertex seams only when the seam match is unambiguous. Edges with more than two incident faces form analysis boundaries, so separate surface branches do not force conflicting orientations onto each other. Coincident, oppositely wound triangle copies retain their existing front/back coverage; their lighting normals are corrected against their own incident faces. No geometry is welded, split, removed, or omitted from the operation. It estimates each curved piece's outward orientation using signed volume about that piece's centroid. The three references choose the inside/outside polarity relative to their local surfaces. Flat pieces use references on that piece or the direction of the reference normals.
+NormalsXL follows connected surfaces instead of putting every normal into one global hemisphere. It establishes consistent triangle winding through indexed edges first, joining exact geometric edges across vertex seams only when the seam match is unambiguous. Edges with more than two incident faces form analysis boundaries, so separate surface branches do not force conflicting orientations onto each other. Coincident, oppositely wound triangle copies retain their existing front/back coverage; their lighting normals are corrected against their own incident faces. No geometry is welded, split, removed, or omitted from the operation. It estimates each curved piece's outward orientation using signed volume about that piece's centroid. The reference chooses the inside/outside polarity relative to its local surface. Flat pieces use the reference on that piece or its normal direction.
 
 Only selected normals and fully selected triangles can change. Ordinary normals retain their authored slope and magnitude, with their sign corrected relative to the local surface. When different connected pieces share an authored normal, reversing only one piece can require a new shared direction. The tool recognizes geometric smoothing by matching the authored axis to a sum of unit vertex normals under possible component orientations, then rebuilds that shared direction from the corrected surfaces. Unit vertex normals come from sums of unit face normals. Opposite-facing surfaces are kept separate. Custom slopes without that geometric explanation are preserved. Inference for unusually large ambiguous shared groups is bounded; those normals still receive individual sign correction. HD tangents retain handedness on reversal and are reprojected when a shared normal changes.
 
@@ -13,6 +13,8 @@ This is not a general inside/outside proof for arbitrary open, intersecting, nes
 Positions, UVs, materials, rigging, animations, other geosets, unselected normals, and boundary triangles remain unchanged. The existing Reverse normals command remains unchanged. The temporary reference prompt and overlay disappear after correction or cancellation. Picking references does not replace the target selection or add selection-history entries.
 
 ## Acceptance evidence
+
+The initial acceptance runs below used the original three-reference interaction. The current single-reference check is recorded at the end of this document.
 
 The supplied manually corrected **v1 (Fixed Shield Normals).mdx** is the acceptance reference. Comparison is restricted to shield geoset 19 (index 18), with 338 vertices and 443 triangles. Its unrelated extent and emitter changes are not copied. The production algorithm contains no model names, hashes, geoset numbers, vertex IDs, or expected counts.
 
@@ -76,3 +78,10 @@ Validation:
 - One initial shield UI run reported a null-host render callback during viewport replacement. The same check passed on both the previous commit and revised build when rerun; this intermittent lifecycle error was not repaired as part of the shader change.
 
 This is internal headless rendered evidence. A live comparison in Retera/MDLVis and Warcraft runtime have not been performed for this revision. The renderer change is ready for user testing; it is not a release or main-branch update.
+
+
+## Single-reference interaction
+
+The button now applies immediately after one reference vertex is clicked. Its prompt says "Pick 1 normal". The target selection, local surface correction, invalid-reference rejection, cancellation, undo/redo, and renderer fix are preserved. The core accepts one reference while retaining its existing support for multiple reference inputs in algorithm regression tests; the UI requests exactly one.
+
+The rebuilt production UI was exercised on all 685 Saruman vertices with a single click on vertex 0 of geoset index 0. It still reverses exactly 63 normals and 3 triangles, matches the previously validated corrected model streams, retains the selection, adds one undo step, saves successfully, and repeats as a no-op. Cancel and Escape before the pick leave the model unchanged. The original shield, using only reference vertex 107 on geoset index 18, still matches all 338 V1 normals within 1.37e-7 and all 443 triangle orientations. Both UI checks had no page errors. The 34 focused algorithm, selection-history and viewport-selection tests pass, including single-reference correction, invalid/zero references and undo/redo roundtrips.

@@ -6,7 +6,7 @@ import { createDemoDocument, openDocument } from '../src/editor-document.js';
 const unit = n => n.map(value => value / Math.hypot(...n));
 const dot = (a, b) => a.reduce((sum, value, axis) => sum + value * b[axis], 0);
 const at = (array, id) => Array.from(array.slice(id * 3, id * 3 + 3));
-const refs = (ids = [0,1,2], geosetIndex = 0) => ids.map(vertexIndex => ({ geosetIndex, vertexIndex }));
+const refs = (ids = [0], geosetIndex = 0) => ids.map(vertexIndex => ({ geosetIndex, vertexIndex }));
 const all = g => Array.from({length:g.Vertices.length / 3}, (_, id) => id);
 const repair = (g, references = refs(), ids = all(g)) => correctNormalsXL({Geosets:[g]}, {0:ids}, references);
 const close = (actual, expected, tolerance = 1e-6) => {
@@ -46,7 +46,7 @@ function sharedPieces() {
   return {g,desired};
 }
 
-test('curved surfaces preserve outward normals even when references face opposite world directions',()=>{
+test('one reference preserves outward normals around a curved surface',()=>{
   const g=tetra(),before=structuredClone(g);
   assert.ok(dot(at(g.Normals,0),at(g.Normals,1))<0);
   assert.deepEqual(repair(g),{reversedNormals:0,recalculatedNormals:0,reversedFaces:0});
@@ -123,17 +123,17 @@ test('rotation, translation, scale and reference order do not change the outward
   for(const id of all(a))close(at(b.Normals,id),rotate(at(a.Normals,id)));
 });
 test('invalid or contradictory references and invalid target geosets cannot cause partial edits',()=>{
-  for(const kind of ['two','duplicate','opposite','zero','missing','other-geoset','invalid-face']) {
-    const g=tetra(),model={Geosets:[g,tetra()]},references=refs();reverseNormal(g,3);
-    if(kind==='two')references.pop();if(kind==='duplicate')references[2]=references[0];
-    if(kind==='opposite')reverseNormal(g,2);if(kind==='zero')g.Normals.fill(0,6,9);if(kind==='missing')references[2].vertexIndex=999;
+  for(const kind of ['empty','duplicate','opposite','zero','missing','other-geoset','invalid-face']) {
+    const g=tetra(),model={Geosets:[g,tetra()]},references=refs(['duplicate','opposite'].includes(kind)?[0,1,2]:[0]);reverseNormal(g,3);
+    if(kind==='empty')references.length=0;if(kind==='duplicate')references[2]=references[0];
+    if(kind==='opposite')reverseNormal(g,2);if(kind==='zero')g.Normals.fill(0,0,3);if(kind==='missing')references[0].vertexIndex=999;
     if(kind==='invalid-face')model.Geosets[1].Faces[0]=999;
     const selection={0:all(g),1:kind==='other-geoset'?[999]:all(g)},before=structuredClone(model);
     assert.throws(()=>correctNormalsXL(model,selection,references),/NormalsXL/);assert.deepEqual(model,before);
   }
 });
 test('one document edit supports undo, redo, no-op repeat and MDX/MDL roundtrips',()=>{
-  const doc=createDemoDocument(),g=doc.model.Geosets[2],ids=all(g),references=refs([0,1,2],2);
+  const doc=createDemoDocument(),g=doc.model.Geosets[2],ids=all(g),references=refs([0],2);
   doc.apply('Prepare mixed normals',['Geosets'],()=>{reverseNormal(g,7);reverseFace(g,12);});
   const before=structuredClone(doc.model);
   doc.apply('NormalsXL',['Geosets'],model=>correctNormalsXL(model,{2:ids},references));

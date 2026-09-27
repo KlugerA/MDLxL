@@ -108,8 +108,8 @@ function surface(geoset) {
 }
 
 function referenceGuide(analyses, references) {
-  if (references?.length !== 3 || new Set(references.map(r => r.geosetIndex + ':' + r.vertexIndex)).size !== 3)
-    fail('select three different vertices with correctly facing normals.');
+  if (!references?.length || new Set(references.map(r => r.geosetIndex + ':' + r.vertexIndex)).size !== references.length)
+    fail('select a vertex with a correctly facing normal.');
   const refs = references.map(reference => {
     const { geosetIndex, vertexIndex } = reference, mesh = analyses(geosetIndex);
     if (!Number.isInteger(vertexIndex) || vertexIndex < 0 || vertexIndex >= mesh.count)
