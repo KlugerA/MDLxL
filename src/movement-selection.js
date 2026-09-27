@@ -17,6 +17,41 @@ export function movementChildVertexCount(model, ids = []) {
   return count;
 }
 
+/** Center of the visible vertices bound directly to one bone. The average
+ * influence is used to compensate mixed-weight skinning when the bone moves. */
+export function movementBoneVertexCenter(model, boneId, matrices) {
+  const center = new Vector3();
+  let count = 0, influence = 0;
+  for (const geo of model.Geosets || []) {
+    const vertices = (geo.Vertices?.length || 0) / 3, skin = geo.SkinWeights;
+    const bound = [];
+    for (let vertex = 0; vertex < vertices; vertex++) {
+      let weight = 0;
+      if (skin?.length === vertices * 8) {
+        let total = 0;
+        for (let slot = 0; slot < 4; slot++) {
+          const value = skin[vertex * 8 + slot + 4];
+          total += value;
+          if (skin[vertex * 8 + slot] === boneId) weight += value;
+        }
+        weight = total ? weight / total : 0;
+      } else {
+        const group = geo.Groups?.[geo.VertexGroup?.[vertex]] || [];
+        weight = group.length ? group.filter(id => id === boneId).length / group.length : 0;
+      }
+      if (!weight) continue;
+      bound.push([vertex, weight]);
+    }
+    if (!bound.length) continue;
+    const posed = skinGeoset(geo, matrices);
+    for (const [vertex, weight] of bound) {
+      center.add(new Vector3().fromArray(posed, vertex * 3));
+      influence += weight; count++;
+    }
+  }
+  return count ? { center: center.divideScalar(count), influence: influence / count } : null;
+}
+
 /** Arithmetic selection centroid, matching the existing vertex transform pivot. */
 export function movementSelectionSummary(model, ids = [], selectionByGeoset = {}, { time = 0, sequenceIndex = -1, restPose = false } = {}) {
   const selected = allNodes(model).filter(node => ids.includes(node.ObjectId));
