@@ -124,29 +124,15 @@ test('middle-button release toggles Rotation and Work without panning on press',
   control.pointerDown(press); control.pointerUp({ button: 1, pointerId: 7 }); assert.equal(cameraMode, 'work');
 });
 
-test('middle-button release toggles in every wheel mode, including a held-button chord', () => {
-  let preferences = { wheelMode: 'scroll' }, toggles = 0;
-  const control = createScrollSensitivity({ getPreferences: () => preferences, onCameraModeToggle: () => { toggles++; } });
-  const press = { button: 1, pointerId: 1, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
-  control.pointerDown(press); control.pointerUp(press);
-  assert.equal(toggles, 1, 'Peon wheel setting does not disable the middle-button camera toggle');
-  preferences.wheelMode = 'pointer';
-  control.pointerDown({ button: 0, pointerId: 1 });
-  const chordPress = wheel(0, { button: 1, type: 'mousedown' });
-  control.mouseDown(chordPress);
-  assert.ok(chordPress.prevented && chordPress.stopped, 'the middle press is consumed while left is held');
-  control.pointerUp({ button: 1, type: 'mouseup' });
-  control.pointerUp({ button: 1, type: 'mouseup' });
-  assert.equal(toggles, 2, 'a middle click while left is held releases rotation once');
-  control.pointerUp({ button: 0, pointerId: 1 });
-});
-
-test('interrupted middle-button gestures do not toggle rotation', () => {
+test('middle clicks do not select rotation during Peon/Wisp adjustment or after interrupted gestures', () => {
   let preferences = { wheelMode: 'scroll' }, toggles = 0;
   const control = createScrollSensitivity({ getPreferences: () => preferences, onCameraModeToggle: () => { toggles++; } });
   const press = { button: 1, pointerId: 1 };
-  control.pointerDown(press); control.pointerUp({ type: 'blur' }); control.pointerUp(press);
+  control.pointerDown(press); control.pointerUp(press);
+  preferences.wheelMode = 'pointer'; control.pointerDown(press); control.pointerUp(press);
+  preferences.wheelMode = 'rotate'; control.pointerDown(press); control.pointerUp({ type: 'blur' }); control.pointerUp(press);
   control.pointerDown(press); control.pointerUp({ type: 'pointercancel', pointerId: 1 }); control.pointerUp(press);
+  control.pointerDown(press); preferences.wheelMode = 'scroll'; control.pointerUp(press);
   assert.equal(toggles, 0);
 });
 
