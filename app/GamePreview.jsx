@@ -214,6 +214,7 @@ export default function GamePreview(inputProps) {
     const fail = error => { if (!active) return; entry.status='failed'; entry.error=error; reject(error); latest.current.onShowcaseSignatureError?.(error.message); };
     if (props.showcaseSignature.type === 'image/gif') {
       const animation = createAnimatedPreviewBackground(url,{onFrame:show,onError:fail});
+      entry.animation = animation;
       return () => { active=false; animation.dispose(); resolve(); };
     }
     const picture = new Image();
@@ -908,21 +909,28 @@ export default function GamePreview(inputProps) {
         render(performance.now(), 0, { captureOnly: true });
         await new Promise(resolve => requestPreviewFrame(resolve));
         await state.captureApi.whenReady();
-        const animation = backgroundState.current.animation;
-        if (animation?.seek) { animation.pause(); await animation.seek(0); }
+        const animations = [backgroundState.current.animation, signatureState.current.animation].filter(Boolean);
+        for (const animation of animations) animation.pause();
+        await Promise.all(animations.map(animation => animation.seek?.(0)));
       },
       beginRecording(options = {}) {
         latest.current.showcase?.begin(state.cameraView(), { ...options, center: center.toArray() });
         recordingSink = options.onFrame || null;
-        if (options.live) backgroundState.current.animation?.resume();
-        else backgroundState.current.animation?.pause();
+        for (const animation of [backgroundState.current.animation, signatureState.current.animation]) {
+          if (options.live) animation?.resume(); else animation?.pause();
+        }
         render(performance.now(), 0); state.scheduler.sync();
       },
       freezeRecording(time) {
         recordingSink = null; latest.current.showcase?.freeze(time);
-        backgroundState.current.animation?.pause(); render(performance.now(), 0); state.scheduler.sync();
+        backgroundState.current.animation?.pause(); signatureState.current.animation?.pause(); render(performance.now(), 0); state.scheduler.sync();
       },
-      endRecording() { recordingSink = null; latest.current.showcase?.end(); backgroundState.current.animation?.resume(); invalidate(); },
+      endRecording() { recordingSink = null; latest.current.showcase?.end(); backgroundState.current.animation?.resume(); signatureState.current.animation?.resume(); invalidate(); },
+      async seekRecordingFrame(time) {
+        await Promise.all([backgroundState.current.animation?.seek?.(time / 1000), signatureState.current.animation?.seek?.(time / 1000)]);
+        latest.current.showcase?.seekRecording(time); drawBackground();
+        if (render(performance.now(), 0, { captureOnly: true }) === false) throw Error('The animation preview could not render a recording frame.');
+      },
       recordingFrame(time, options) { latest.current.showcase?.seekRecording(time); render(performance.now(), 0, { captureOnly: true }); return state.captureApi.captureFrame(options); },
       copyVisibleFrame(destination, crop) {
         const context = destination.getContext('2d');

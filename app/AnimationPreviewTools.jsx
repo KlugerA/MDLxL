@@ -52,8 +52,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
         });
       }
       if(job.stop)return;
-      const pending=new Set(), maxPending=window.desktop?2:1;
-      let failure=null,nextFrame=0,count=0,lastProgress=-Infinity;
+      let lastProgress=-Infinity;
       const started=performance.now();
       status('recording');
       const duration=await new Promise(resolve=>{
@@ -66,28 +65,21 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
         const onFrame=time=>{
           if(done || time>=timing.duration)return;
           if(mounted.current && time-lastProgress>=100){lastProgress=time;setProgress((time/1000).toFixed(1)+' / '+(timing.duration/1000).toFixed(1)+' seconds');}
-          if(time+.01<nextFrame || pending.size>=maxPending)return;
-          // Keep the preview clock live while frame writes finish off the render path.
-          const timestamp=count===0?0:time;
-          nextFrame=(Math.floor(time/(1000/settings.fps))+1)*1000/settings.fps;
-          try {
-            api.copyVisibleFrame(canvas,crop);
-            const pixels=context.getImageData(0,0,canvas.width,canvas.height);
-            count++;
-            const submitted=request({type:'frame',width:canvas.width,height:canvas.height,time:timestamp,buffer:pixels.data.buffer})
-              .then(result=>{if(result.limit)throw Error(result.reason||'Recording reached the storage limit.');})
-              .catch(cause=>{failure=cause;job.stop=true;job.finish();})
-              .finally(()=>{pending.delete(submitted);});
-            pending.add(submitted);
-          } catch(cause){failure=cause;job.stop=true;job.finish();}
         };
         api.beginRecording({live:true,duration:timing.duration,onFrame});
         timer=setTimeout(job.finish,Math.max(0,timing.duration-(performance.now()-started)));
       });
-      await Promise.all(pending);
-      if(failure)throw failure;
-      if(!count)throw Error('No recording frames were captured.');
       status('finishing');
+      for(let index=0;timing.time(index)<duration;index++){
+        const time=timing.time(index);
+        await api.seekRecordingFrame(time);
+        api.copyVisibleFrame(canvas,crop);
+        const pixels=context.getImageData(0,0,canvas.width,canvas.height);
+        const result=await request({type:'frame',width:canvas.width,height:canvas.height,time,buffer:pixels.data.buffer});
+        if(result.limit)throw Error(result.reason||'Recording reached the storage limit.');
+        if(mounted.current && index%5===0)setProgress('Capturing GIF frames… '+Math.min(100,Math.round(time/duration*100))+'%');
+      }
+      await api.seekRecordingFrame(duration);
       if(mounted.current)setProgress('Creating GIF…');
       const end=Math.max(20,duration);
       let result;

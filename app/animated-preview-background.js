@@ -8,7 +8,8 @@ export function createAnimatedPreviewBackground(url, {
 } = {}) {
   const abort = new AbortController();
   let disposed = false, paused = false, decoder, timer, pendingFrame, canvas, resolveReady, rejectReady, readySettled = false;
-  let currentIndex = 0, timerDue = 0, resumeIndex = null, resumeDelay = 0;
+  let currentIndex = 0, timerDue = 0, resumeIndex = null, resumeDelay = 0, generation = 0;
+  const durations = [];
   const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; }); ready.catch(() => {});
   const settleReady = error => { if (readySettled) return; readySettled = true; error ? rejectReady(error) : resolveReady(); };
   const stop = () => {
@@ -18,9 +19,10 @@ export function createAnimatedPreviewBackground(url, {
   };
   const fail = error => { if (disposed) return; disposed = true; stop(); settleReady(error); onError(error); };
   async function prepare(index, due) {
+    const version = generation;
     try {
       const { image } = await decoder.decode({ frameIndex: index, completeFramesOnly: true });
-      if (disposed) { image.close(); return; }
+      if (disposed || version !== generation) { image.close(); return; }
       if (paused) { resumeIndex = index; resumeDelay = Math.max(0, due - now()); image.close(); return; }
       pendingFrame = image;
       timerDue = due; timer = schedule(() => {
@@ -32,6 +34,7 @@ export function createAnimatedPreviewBackground(url, {
   }
   function present(frame, index) {
     const duration = Math.max(20, (frame.duration || 100000) / 1000);
+    durations[index] = duration;
     try {
       const width = frame.displayWidth, height = frame.displayHeight;
       if (canvas.width !== width) canvas.width = width;
@@ -41,7 +44,7 @@ export function createAnimatedPreviewBackground(url, {
       currentIndex = index; onFrame(canvas); settleReady();
     } catch (error) { fail(error); }
     finally { frame.close(); }
-    if (!disposed && decoder.tracks.selectedTrack.frameCount > 1) {
+    if (!disposed && !paused && decoder.tracks.selectedTrack.frameCount > 1) {
       const next = (index + 1) % decoder.tracks.selectedTrack.frameCount;
       // Preview backgrounds always loop, independently of model playback and
       // of any finite repeat count stored in the GIF itself.
@@ -66,9 +69,30 @@ export function createAnimatedPreviewBackground(url, {
   })();
   return {
     ready,
+    async seek(seconds = 0) {
+      await ready;
+      if (disposed) throw Error('This animated preview background is no longer open.');
+      generation++;
+      const count = decoder.tracks.selectedTrack.frameCount;
+      let index = 0;
+      if (seconds > 0 && count > 1) {
+        for (let i = 0; i < count; i++) {
+          if (durations[i] !== undefined) continue;
+          const { image } = await decoder.decode({ frameIndex: i, completeFramesOnly: true });
+          durations[i] = Math.max(20, (image.duration || 100000) / 1000);
+          image.close();
+        }
+        const total = durations.reduce((sum, duration) => sum + duration, 0);
+        let elapsed = seconds * 1000 % total;
+        while (index < count - 1 && elapsed >= durations[index]) elapsed -= durations[index++];
+      }
+      const { image } = await decoder.decode({ frameIndex: index, completeFramesOnly: true });
+      present(image, index);
+      if (paused) { resumeIndex = (index + 1) % count; resumeDelay = durations[index]; }
+    },
     pause() {
       if (disposed || paused) return;
-      paused = true;
+      paused = true; generation++;
       resumeIndex = (currentIndex + 1) % decoder.tracks.selectedTrack.frameCount;
       resumeDelay = Math.max(0, timerDue - now());
       if (timer !== undefined) { cancel(timer); timer = undefined; }
