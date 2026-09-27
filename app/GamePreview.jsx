@@ -233,9 +233,10 @@ export default function GamePreview(inputProps) {
     const drag = signatureDrag.current; if (!drag) return;
     const dx=(event.clientX-drag.x)/drag.width, dy=(event.clientY-drag.y)/drag.height, rect=drag.rect;
     const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+    const visible=.04;
     const next=drag.resize
       ? {...rect,width:clamp(rect.width+dx,.03,1-rect.x),height:clamp(rect.height+dy,.03,1-rect.y)}
-      : {...rect,x:clamp(rect.x+dx,0,1-rect.width),y:clamp(rect.y+dy,0,1-rect.height)};
+      : {...rect,x:clamp(rect.x+dx,-rect.width+visible,1-visible),y:clamp(rect.y+dy,-rect.height+visible,1-visible)};
     latest.current.onShowcaseSignatureChange?.(next); event.stopPropagation();
   }
   function endSignatureDrag(event) { if (!signatureDrag.current) return; signatureDrag.current=null; event.stopPropagation(); }

@@ -57,9 +57,10 @@
 .showcase-tabs button { flex:1; min-width:0; }
 .showcase-tabs button[aria-selected=true] { border-style:inset; background:#fff; font-weight:bold; }
 .showcase-colors { display:flex; gap:3px; align-items:center; min-width:0; margin:4px 0; }
-.showcase-colors select { width:79px; min-width:0; }
-.showcase-colors button { width:29px; height:23px; flex:none; padding:0; border:1px solid #555; }
-.showcase-colors input[type=color] { width:30px; flex:none; height:23px; padding:1px; }
+.showcase-colors button { width:20px; height:22px; flex:none; box-sizing:border-box; padding:0; border:1px solid #555; }
+.showcase-colors button[aria-pressed=true] { outline:2px solid #1f65ad; outline-offset:1px; }
+.showcase-colors button.empty { border-style:dashed; font-size:12px; line-height:18px; }
+.showcase-colors input[type=color] { width:22px; min-width:22px; height:22px; flex:none; box-sizing:border-box; padding:1px; }
 .showcase-preview.portrait .portrait-preview-stage { transform:scale(var(--portrait-zoom,1)); }
 .showcase-preview.portrait .portrait-model-surface { pointer-events:none; }
 .showcase-preview.portrait .portrait-preview-root { background:inherit; }
