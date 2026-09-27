@@ -22,37 +22,57 @@ function surface(geoset) {
     if (!positionIds.has(key)) positionIds.set(key, positionIds.size);
     return positionIds.get(key);
   });
-  const edges = new Map(), faces = [], neighbors = [];
+  const edges = new Map(), indexedEdges = new Map(), triangles = new Map(), faces = [], neighbors = [];
   for (let offset = 0; offset < g.Faces.length; offset += 3) {
     const ids = vector(g.Faces, offset / 3), [a, b, c] = ids.map(id => positions[id]);
     const normal = cross(subtract(b, a), subtract(c, a)), index = faces.length;
     faces.push({ ids, normal: unit(normal), area: Math.hypot(...normal), offset });
     neighbors.push([]);
+    const triangleKey = ids.map(id => vertexKeys[id]).sort((a, b) => a - b).join(':');
+    if (!triangles.has(triangleKey)) triangles.set(triangleKey, []);
+    triangles.get(triangleKey).push(index);
     for (let edge = 0; edge < 3; edge++) {
       const from = vertexKeys[ids[edge]], to = vertexKeys[ids[(edge + 1) % 3]];
       if (from === to) continue;
       const key = Math.min(from, to) + ':' + Math.max(from, to);
       if (!edges.has(key)) edges.set(key, []);
-      edges.get(key).push({ face: index, sign: from < to ? 1 : -1 });
+      const a = ids[edge], b = ids[(edge + 1) % 3], indexedKey = Math.min(a, b) + ':' + Math.max(a, b);
+      const item = { face: index, sign: from < to ? 1 : -1, indexedKey };
+      edges.get(key).push(item);
+      if (!indexedEdges.has(indexedKey)) indexedEdges.set(indexedKey, []);
+      indexedEdges.get(indexedKey).push(item);
     }
   }
-  const nonManifold = new Set();
+  // Coincident, oppositely wound triangle copies already provide both sides.
+  // Preserve that coverage and correct each vertex's lighting normal against
+  // its own incident faces; never collapse both copies onto one outward side.
+  for (const pair of triangles.values()) {
+    if (pair.length === 2 && dot(faces[pair[0]].normal, faces[pair[1]].normal) < -1 + EPSILON)
+      pair.forEach(id => { faces[id].twoSided = true; });
+  }
+  const connect = (a, b) => {
+    if (faces[a.face].twoSided || faces[b.face].twoSided) return;
+    const sign = -a.sign * b.sign;
+    neighbors[a.face].push([b.face, sign]); neighbors[b.face].push([a.face, sign]);
+  };
+  // Actual indexed topology takes precedence over coincident positions. Edges
+  // with more than two incident faces are analysis boundaries: imposing one
+  // orientation on every branch creates conflicts that are not present on the
+  // individual sheets. No vertex or triangle is split, removed, or skipped.
+  for (const edge of indexedEdges.values()) if (edge.length === 2) connect(...edge);
+  // Join only an unambiguous pair of open seam edges. Do not weld overlapping
+  // front/back sheets just because they occupy the same geometric edge.
   for (const edge of edges.values()) {
-    if (edge.length > 2) edge.forEach(item => nonManifold.add(item.face));
-    for (let i = 1; i < edge.length; i++) {
-      const a = edge[0], b = edge[i], sign = -a.sign * b.sign;
-      neighbors[a.face].push([b.face, sign]); neighbors[b.face].push([a.face, sign]);
-    }
+    if (edge.length === 2 && edge.every(item => indexedEdges.get(item.indexedKey).length === 1)) connect(...edge);
   }
   const signs = new Int8Array(faces.length), parts = [], vertexParts = positions.map(() => new Set());
   for (let seed = 0; seed < faces.length; seed++) {
     if (signs[seed]) continue;
-    const part = { faces: [seed], vertices: new Set(), valid: true, outward: 0 };
+    const part = { faces: [seed], vertices: new Set(), valid: true, outward: 0, twoSided: !!faces[seed].twoSided };
     signs[seed] = 1;
     for (let cursor = 0; cursor < part.faces.length; cursor++) {
       const index = part.faces[cursor], face = faces[index];
       face.part = parts.length;
-      if (nonManifold.has(index)) part.valid = false;
       face.ids.forEach(id => part.vertices.add(id));
       for (const [next, relative] of neighbors[index]) {
         const wanted = signs[index] * relative;
@@ -102,7 +122,7 @@ function referenceGuide(analyses, references) {
   for (const ref of refs) {
     const parts = [...ref.mesh.vertexParts[ref.vertexIndex]];
     if (!parts.length || parts.some(id => !ref.mesh.parts[id].valid)) fail('the reference surface has no consistent orientation.');
-    if (parts.some(id => !ref.mesh.parts[id].outward)) continue;
+    if (parts.some(id => !ref.mesh.parts[id].outward && !ref.mesh.parts[id].twoSided)) continue;
     const local = ref.mesh.normalsFor(ref.mesh.parts.map(part => part.outward || 1))[ref.vertexIndex];
     const agreement = dot(ref.normal, local);
     if (Math.abs(agreement) <= EPSILON) fail('choose reference normals that clearly face into or out of their surface.');
@@ -113,13 +133,17 @@ function referenceGuide(analyses, references) {
 }
 
 function orientationsFor(mesh, selected, guide) {
-  const consistent = mesh.normalsFor(mesh.parts.map(() => 1));
   return mesh.parts.map((part, partIndex) => {
     if (![...part.vertices].some(id => selected.has(id))) return part.outward ? part.outward * guide.polarity : 1;
-    if (!part.valid) fail('the selected surface has conflicting or non-manifold edges.');
+    if (!part.valid) fail('the selected surface has conflicting winding.');
+    if (part.twoSided) return guide.polarity;
     if (part.outward) return part.outward * guide.polarity;
     const refs = guide.refs.filter(ref => ref.mesh === mesh && mesh.vertexParts[ref.vertexIndex].has(partIndex));
-    const agreements = refs.map(ref => dot(ref.normal, consistent[ref.vertexIndex]));
+    const agreements = refs.map(ref => {
+      const local = part.faces.reduce((sum, id) => mesh.faces[id].ids.includes(ref.vertexIndex)
+        ? add(sum, scale(mesh.faces[id].normal, mesh.signs[id])) : sum, [0,0,0]);
+      return dot(ref.normal, unit(local));
+    });
     if (agreements.length) {
       if (agreements.some(value => Math.abs(value) <= EPSILON || value * agreements[0] <= 0))
         fail('the reference normals disagree about this surface.');
@@ -153,7 +177,8 @@ function smoothingNormals(mesh, geometric) {
   const groups = new Map(), repaired = new Map();
   for (let id = 0; id < mesh.count; id++) {
     let normal = unit(vector(mesh.g.Normals, id));
-    if (Math.hypot(...normal) < EPSILON || mesh.vertexParts[id].size !== 1) continue;
+    if (Math.hypot(...normal) < EPSILON || mesh.vertexParts[id].size !== 1 ||
+        [...mesh.vertexParts[id]].some(part => mesh.parts[part].twoSided)) continue;
     if (normal.find(value => Math.abs(value) > EPSILON) < 0) normal = scale(normal, -1);
     const key = normal.map(value => (Math.abs(value) < EPSILON ? 0 : value).toFixed(6)).join(',');
     if (!groups.has(key)) groups.set(key, []);
