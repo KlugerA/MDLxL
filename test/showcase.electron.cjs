@@ -5,7 +5,13 @@ const { execFileSync } = require('node:child_process');
 const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'C:/Users/PC/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 (async () => {
   const root=process.cwd(), out=path.join(root,'out/showcase'); fs.mkdirSync(out,{recursive:true});
-  const {createDemoDocument}=await import('../src/editor-document.js'); const demo=createDemoDocument(); const fixture=path.join(out,'ShowcaseTest.mdx'); fs.writeFileSync(fixture,demo.serialize('mdx'));
+  const {createDemoDocument,createNode}=await import('../src/editor-document.js'); const demo=createDemoDocument(), model=demo.model;
+  model.Sequences.push({...structuredClone(model.Sequences[0]),Name:'Portrait Talk',Interval:new Uint32Array([2000,4000])},{...structuredClone(model.Sequences[0]),Name:'Death',Interval:new Uint32Array([4000,5000]),NonLooping:true});
+  model.GlobalSequences=new Uint32Array([1000]);
+  const emitter=createNode(model,'ParticleEmitter2'); emitter.Name='Showcase Sparks'; emitter.Parent=model.Bones[0]?.ObjectId??null; emitter.Squirt=false; emitter.EmissionRate={LineType:1,GlobalSeqId:0,Keys:[{Frame:0,Vector:new Float32Array([10])},{Frame:500,Vector:new Float32Array([40])}]};
+  const ribbon=createNode(model,'RibbonEmitter'); ribbon.Name='Showcase Trail'; ribbon.Parent=model.Bones[0]?.ObjectId??null;
+  model.Cameras=[{Name:'Portrait Camera',Position:new Float32Array([0,-35,15]),TargetPosition:new Float32Array([0,0,8]),FieldOfView:Math.PI/4,NearClip:1,FarClip:1000}];
+  const fixture=path.join(out,'ShowcaseTest.mdx'); fs.writeFileSync(fixture,demo.serialize('mdx'));
   const entry=path.join(out,'main.cjs');
   fs.writeFileSync(entry, `const {app}=require('electron'); app.getAppPath=()=>${JSON.stringify(root)}; app.on('browser-window-created',(_,w)=>w.webContents.setBackgroundThrottling(false)); require(${JSON.stringify(path.join(root,'electron/main.cjs'))});`);
   const app=await _electron.launch({executablePath:path.join(root,'node_modules/electron/dist/electron.exe'),args:['--disable-backgrounding-occluded-windows',entry,fixture],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:path.join(out,'profile-'+Date.now())},timeout:60000});
@@ -20,6 +26,21 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'C:/Users/P
     assert.equal(await page.locator('.showcase-preview [data-geometry-overlay],.showcase-preview [data-node-overlay],.showcase-preview [data-camera-overlay]').count(),0);
     assert.equal(await page.locator('.showcase-preview canvas').count()>0,true);
     const antialias=await page.locator('.showcase-preview [data-clean-model-canvas]').evaluate(canvas=>canvas.getContext('webgl2').getContextAttributes().antialias); assert.equal(antialias,true,'Showcase antialiasing must reach the WebGL context');
+    await page.getByLabel('Showcase animation').selectOption('1'); await page.getByRole('button',{name:'Add animation'}).click();
+    await page.getByLabel('Change every (seconds)').fill('1'); await page.getByLabel('Animation 2 speed').fill('0.5');
+    const animationList=page.getByRole('group',{name:'Animations'}).locator('.showcase-list');
+    assert.match(await animationList.innerText(),/Portrait Talk/);
+    await page.getByRole('button',{name:'Play',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('.showcase-preview .portrait-human-frame')!==null,{}, {timeout:15000});
+    assert.equal(await page.locator('.showcase-preview .portrait-human-frame').count(),1);
+    await page.getByRole('button',{name:'Pause',exact:true}).click();
+    await animationList.locator('li').nth(1).getByRole('button',{name:'Remove'}).click();
+    await page.getByRole('button',{name:'Set Camera Sequence'}).click();
+    const modelCanvas=page.locator('.showcase-preview [data-clean-model-canvas]'),box=await modelCanvas.boundingBox();
+    await page.mouse.move(box.x+box.width/2,box.y+box.height/2); await page.mouse.down(); await page.mouse.move(box.x+box.width/2+75,box.y+box.height/2+25,{steps:5}); await page.mouse.up();
+    await page.getByRole('button',{name:'Add viewpoint'}).click(); assert.equal(await page.getByRole('group',{name:'Camera'}).locator('.showcase-list li').count(),2);
+    await page.getByLabel('Camera movement').selectOption('sequence'); await page.getByRole('button',{name:'Play camera sequence'}).click();
+    await page.waitForTimeout(500); await page.getByRole('button',{name:'Pause',exact:true}).click();
     await page.getByLabel('Graphics quality').selectOption('low');
     await page.getByLabel('Recording FPS').selectOption('10');
     await page.getByLabel('Record length seconds').fill('10');
@@ -37,6 +58,9 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'C:/Users/P
     if(gif[10]&0x80) offset+=3*(1<<((gif[10]&7)+1));
     while(offset<gif.length){const marker=gif[offset++];if(marker===0x3b)break;if(marker===0x21){const label=gif[offset++];if(label===0xf9){assert.equal(gif[offset++],4);offset++;delay+=gif.readUInt16LE(offset);offset+=2;offset++;assert.equal(gif[offset++],0);}else{while(true){const size=gif[offset++];if(!size)break;offset+=size;}}continue;}if(marker!==0x2c)throw Error(`Unexpected GIF block 0x${marker.toString(16)}`);offset+=9;const packed=gif[offset-1];if(packed&0x80)offset+=3*(1<<((packed&7)+1));offset++;while(true){const size=gif[offset++];if(!size)break;offset+=size;}count++;}
     assert.equal(count,100); assert.equal(delay,1000,`GIF duration is ${delay/100}s, expected 10.00s`);
+    const comparison=execFileSync(path.join(root,'electron/ffmpeg/ffmpeg.exe'),['-v','error','-i',gifPath,'-vf',"select='eq(n,0)+eq(n,10)'",'-vsync','0','-f','rawvideo','-pix_fmt','rgba','pipe:1'],{maxBuffer:16*1024*1024});
+    assert.equal(comparison.length,decoded.length*2); let different=0;for(let at=0;at<decoded.length;at+=4)if(comparison[at]!==comparison[decoded.length+at]||comparison[at+1]!==comparison[decoded.length+at+1]||comparison[at+2]!==comparison[decoded.length+at+2])different++;
+    assert.ok(different>100,`Camera sequence capture did not visibly change the view (${different} differing pixels)`);
     await page.getByRole('button',{name:'Screenshot',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.classic-status')?.textContent.includes('.png') || document.querySelector('.capture-error'),{},{timeout:30000});
     const pngStatus=await page.locator('.classic-status').innerText(),pngPath=pngStatus.match(/Saved (.+\.png)/)?.[1];assert.ok(pngPath,`PNG save path missing from ${pngStatus}`);
