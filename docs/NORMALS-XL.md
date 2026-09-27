@@ -50,7 +50,7 @@ With reference vertices 0, 1 and 2 on geoset index 0, the revised operation reve
 
 The rebuilt production UI was exercised in headless Edge through All geosets, Ctrl+A, the NormalsXL button and three actual vertex clicks. The original target selection remained intact, the result matched the model-level audit, and undo/redo, saving and repeat no-op passed with no page errors. New GUI windows were not opened during automated checks. Hidden Windows Electron could not capture screenshots without showing its window, so rendered UI evidence uses headless Edge. The shield's original/V2/V1 data checks still pass, and the corrected original's three rendered views remain byte-identical to the previously verified V1 reference.
 
-This verifies the reported operation and preservation checks, not a complete visual repair of every issue in Saruman. The user still needs to assess this revision on the live model.
+The user confirmed that NormalsXL now works on this model. They then reported the separate black-surface rendering issue described below.
 
 ## Research
 
@@ -60,3 +60,19 @@ This verifies the reported operation and preservation checks, not a complete vis
 - [CGAL Polygon Mesh Processing](https://doc.cgal.org/6.0/Polygon_mesh_processing/index.html): consistent orientation and per-component outward orientation, including the closed-mesh requirements of volume-bounding operations.
 
 These sources informed the distinction between vertex lighting normals, face winding, and connected-surface orientation. The shared-smoothing rule and shield result were derived and verified from the supplied original, rejected V2, and accepted V1 data.
+
+## Zero-normal viewport rendering
+
+Saruman's black sleeve and robe patches were reproduced with its supplied texture, both before and after NormalsXL. Displayed geosets 3 and 4 contain 28 referenced zero-length normals. Normalizing these in the vertex shader can introduce non-finite interpolated values, causing the hemisphere-light calculation to render entire triangles black. Coincident opposing faces with valid normals render correctly in the regression fixture; overlap alone is not the demonstrated cause of these Saruman patches.
+
+The viewport material now keeps a zero normal finite before interpolation, and uses the face direction only where the interpolated direction is undefined. Face derivatives are evaluated before alpha/clipping discards and conditional branches, following the [GLSL derivative requirements](https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.html). Valid authored normals and smooth shading retain their previous calculation. This changes display only: it does not recalculate stored normals, remove overlapping faces, modify winding, or change NormalsXL.
+
+Validation:
+
+- `scripts/check-viewport-normals.mjs` exercises the actual viewport material factory through headless WebGL. The old shader fails with a black zero-normal triangle. The revised shader passes 24 front/back, solid/textured cases covering valid, zero, mixed, cancelling, and coincident opposite normals. Flat-surface samples match the valid-normal reference, and input normal buffers remain unchanged.
+- Run the GPU check with Playwright available to Node, or set `PLAYWRIGHT_MODULE` to its package.json. `BROWSER_CHANNEL=msedge` selects installed Edge. The check opens no desktop windows and needs no user model assets.
+- The rebuilt production UI shows the supplied Saruman texture on the sleeve and robe patches from front, back, left, right and perspective. Rendering those views preserves the entire document, serialized MDX bytes and undo count. The desktop source SHA-256 remains unchanged.
+- 121 focused renderer, NormalsXL and compatibility tests pass. Corrected shield screenshots remain byte-identical to both the previous commit and accepted V1 in left, right and perspective views; the V1 normal/face data comparison still passes.
+- One initial shield UI run reported a null-host render callback during viewport replacement. The same check passed on both the previous commit and revised build when rerun; this intermittent lifecycle error was not repaired as part of the shader change.
+
+This is internal headless rendered evidence. A live comparison in Retera/MDLVis and Warcraft runtime have not been performed for this revision. The renderer change is ready for user testing; it is not a release or main-branch update.

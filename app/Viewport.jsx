@@ -120,9 +120,19 @@ function layerMaterial(layer, shaded = true) {
     // Three's linear material color makes intermediate authored RGB too bright.
     shader.fragmentShader = 'uniform vec3 uMdlxlGeosetTint;\n' + shader.fragmentShader.replace('#include <colorspace_fragment>', '#include <colorspace_fragment>\ngl_FragColor.rgb *= uMdlxlGeosetTint;');
     shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', '#ifdef USE_MAP\nvec4 sampledDiffuseColor = sRGBTransferEOTF(texture2D(map, vMapUv));\ndiffuseColor *= sampledDiffuseColor;\n#endif');
-    // Opposing shared faces can have a zero interpolated normal. Use the face
-    // derivative only for this undefined case; never rewrite authored normals.
-    if (material.isMeshPhongMaterial) shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nif (!(dot(normal, normal) > 1.e-12)) normal = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));');
+    if (material.isMeshPhongMaterial) {
+      // A zero authored normal must stay finite before interpolation. Fixing
+      // normalize(0) afterwards is too late: it can poison the whole triangle.
+      shader.vertexShader = shader.vertexShader.replace('#include <normal_vertex>', THREE.ShaderChunk.normal_vertex.replace(
+        'vNormal = normalize( transformedNormal );',
+        'vNormal = dot(transformedNormal, transformedNormal) > 0.0 ? normalize(transformedNormal) : vec3(0.0);'));
+      // Compute derivatives before alpha/clipping discards or divergent branches.
+      // Only undefined lighting directions use the face; authored buffers stay intact.
+      shader.fragmentShader = shader.fragmentShader.replace('void main() {', 'void main() {\nvec3 mdlxlFaceNormal = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));')
+        .replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace(
+          'vec3 normal = normalize( vNormal );',
+          'vec3 normal = dot(vNormal, vNormal) > 1.e-12 ? normalize(vNormal) : mdlxlFaceNormal * faceDirection;'));
+    }
   };
   material.side = shading & 16 ? THREE.DoubleSide : THREE.FrontSide;
   material.depthTest = !(shading & 64);
