@@ -433,7 +433,8 @@ export default function GamePreview(inputProps) {
     canvas.addEventListener('pointerdown', pointerDown, true); canvas.addEventListener('pointermove', suppressAdjustedMove, true); canvas.addEventListener('pointerup', finishLeftGesture, true); canvas.addEventListener('pointercancel', finishLeftGesture, true);
     const previewKeyDown = event => {
       if (event.key?.toLowerCase() === 'a' && !event.ctrlKey && !event.metaKey && !event.altKey &&
-          !event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) previewSelectHeld = true;
+          !event.target?.closest?.('input, textarea, select, [contenteditable="true"]') &&
+          (!latest.current.previewSelectionMode || canvas.closest('.uv-workspace-body')?.dataset.pointerRegion === 'preview')) previewSelectHeld = true;
     };
     const previewKeyUp = event => {
       if (event.key?.toLowerCase() !== 'a') return;

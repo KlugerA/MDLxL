@@ -106,15 +106,18 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     const mapBox = await uv.locator('.uv-map-pane canvas').first().boundingBox();
     await uv.mouse.move(mapBox.x + 20, mapBox.y + 20);
     await uv.keyboard.down('a'); await uv.keyboard.up('a');
-    assert.equal(await moveTool.getAttribute('aria-pressed'), 'true', 'A over the UV map must not change its tool');
-    await uv.getByRole('button', { name: 'Select', exact: true }).click();
+    assert.equal(await uv.getByRole('button', { name: 'Select', exact: true }).getAttribute('aria-pressed'), 'true', 'A over the UV map restores the Select tool');
     const location = await uv.evaluate(() => pickLocations());
     assert.ok(location.faces.length, 'Projected Warcraft model polygons must be visible');
     let pickedFace = null;
     const firstFace = location.faces[0], faceX = location.rect.x + firstFace.x, faceY = location.rect.y + firstFace.y;
     await uv.mouse.click(faceX, faceY);
     assert.equal(await uv.evaluate(() => uvState().selectionByGeoset[15]?.length), 248, 'ordinary preview clicks leave UV selection unchanged');
+    await moveTool.click();
+    await uv.mouse.move(faceX, faceY);
+    assert.equal(await uv.evaluate(() => document.querySelector('.uv-workspace-body').dataset.pointerRegion), 'preview', 'pointer is over Live Preview');
     await uv.keyboard.down('a');
+    assert.equal(await moveTool.getAttribute('aria-pressed'), 'true', 'A over Live Preview keeps the UV map tool');
     const clickCamera = await uv.evaluate(() => previewState().controls.object.quaternion.toArray());
     for (const face of location.faces.slice(0, 100)) {
       if (pickedFace) break;
@@ -153,6 +156,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     const firstVertex = location.points.find(point => point.x > 10 && point.x < location.rect.width - 10 && point.y > 10 && point.y < location.rect.height - 10 && point.z >= -1 && point.z <= 1);
     assert.ok(firstVertex, 'A selectable Warcraft model vertex is on screen');
     const vertexX = location.rect.x + firstVertex.x, vertexY = location.rect.y + firstVertex.y;
+    await uv.mouse.move(vertexX, vertexY);
     await uv.keyboard.down('a');
     await uv.mouse.move(vertexX, vertexY); await uv.mouse.down();
     const vertexCamera = await uv.evaluate(() => previewState().controls.object.quaternion.toArray());
@@ -164,6 +168,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await uv.waitForFunction(() => uvMapSelection().length === 1);
     await toggle.click();
     assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
+    await uv.mouse.move(location.rect.x + pickedFace.x, location.rect.y + pickedFace.y);
     await uv.keyboard.down('a');
     await uv.mouse.click(location.rect.x + pickedFace.x, location.rect.y + pickedFace.y);
     await uv.keyboard.up('a');
@@ -177,6 +182,6 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     assert.equal(await canvas.evaluate(element => element.style.cursor), 'default', 'Live Select restores the normal pointer after rotation');
     assert.equal(await uv.evaluate(() => JSON.stringify(uvState().model)), before);
     assert.ok(fs.readFileSync(fixture).equals(original));
-    console.log('PASS Electron UV: normal Warcraft model, hold A selects only in Live View, ordinary drags rotate, wheel zooms, visible vertex markers, shared highlight, unchanged model');
+    console.log('PASS Electron UV: A switches the texture map to Select and selects only in Live View when the pointer is there; camera controls, vertex markers, shared highlight, and model data remain intact');
   } finally { await app.evaluate(({ app }) => app.exit(0)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
