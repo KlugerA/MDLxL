@@ -12,7 +12,7 @@ export function isolateGlobalSequence(model, globalSeqId) {
       if (Array.isArray(value.Keys) && value.GlobalSeqId !== globalSeqId && value.Keys.length) {
         const first = value.Keys[0].Vector;
         const fallback = first.length === 1 ? first[0] : Array.from(first);
-        const sampled = sampleTrack(value, 0, { globalSequences: model.GlobalSequences, fallback, quaternion: property === 'Rotation' });
+        const sampled = owner._MdxDefaults?.[property] ?? sampleTrack(value, 0, { globalSequences: model.GlobalSequences, fallback, quaternion: property === 'Rotation' });
         owner[property] = { LineType: 0, GlobalSeqId: null, Keys: [{ Frame: 0, Vector: typeof sampled === 'number' ? [sampled] : Array.from(sampled) }] };
       } else visit(value);
     }
