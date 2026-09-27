@@ -13,6 +13,7 @@ import { ModelRenderer } from 'war3-model';
 import { textureFromAsset } from './Viewport.jsx';
 import { drawGeosetHighlight } from './geoset-highlight.js';
 import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatrices, skinGeoset, skinGeosetNormals } from '../src/animation.js';
+import { isolateGlobalSequence } from '../src/global-sequence-preview.js';
 import { motionPose } from '../src/motion-inspector.js';
 import { applyMovementTransform, movementRestricted } from '../src/movement.js';
 import { movementBoneVertexCenter } from '../src/movement-selection.js';
@@ -120,8 +121,9 @@ export default function GamePreview(inputProps) {
   const viewportBackground = viewportAppearanceOptions(props.preferences).background;
   const appearanceBackgroundUrl = props.backgroundUrl || (viewportBackground.type === 'image' ? viewportBackground.imageData : '');
   const appearanceBackgroundType = props.backgroundUrl ? props.backgroundType : appearanceBackgroundUrl ? appearanceBackgroundUrl.slice(5, appearanceBackgroundUrl.indexOf(';')) : '';
-  const timelineStart = sequenceIndex < 0 ? Number(props.timelineInterval?.[0]) : NaN;
-  const timelineEnd = sequenceIndex < 0 ? Number(props.timelineInterval?.[1]) : NaN;
+  const globalPreviewId = !props.restPose && Number.isInteger(props.globalSeqId) && model?.GlobalSequences?.[props.globalSeqId] > 0 ? props.globalSeqId : null;
+  const timelineStart = sequenceIndex < 0 ? globalPreviewId !== null ? 0 : Number(props.timelineInterval?.[0]) : NaN;
+  const timelineEnd = sequenceIndex < 0 ? globalPreviewId !== null ? model.GlobalSequences[globalPreviewId] : Number(props.timelineInterval?.[1]) : NaN;
 
   useEffect(() => {
     if (!props.portraitMode || !root.current) return;
@@ -184,6 +186,8 @@ export default function GamePreview(inputProps) {
     const invalidate = () => scheduler?.invalidate();
     const ownedModel = structuredClone(rendererModel);
     ownedModel.Nodes = []; for (const node of allNodes(ownedModel)) ownedModel.Nodes[node.ObjectId] = node;
+    // Global editing plays only its own tracks; the authored model is untouched.
+    if (globalPreviewId !== null) isolateGlobalSequence(ownedModel, globalPreviewId);
     // Marker categories retain emitter membership even when effect simulation is
     // disabled; the shared node objects still receive the same live poses.
     const markerModel = { ...ownedModel };
@@ -608,6 +612,7 @@ export default function GamePreview(inputProps) {
     }
     function useAuthoredSequenceInterval(frame) {
       if (activeSequence !== timelineSequenceIndex || timelineSequenceIndex < 0) return activeSequence;
+      if (globalPreviewId !== null) return timelineSequenceIndex;
       const authored = localSequenceAtFrame(ownedModel, frame, timelineSequenceIndex);
       const index = authored >= 0 ? authored : timelineSequenceIndex;
       native.rendererData.animation = index;
@@ -839,7 +844,7 @@ export default function GamePreview(inputProps) {
       if (latest.current.cameraHandoff) latest.current.cameraHandoff.current = cameraMemory.current;
       disposed = true; leaveGeoset(); canvas.removeEventListener('pointermove', hoverGeoset); canvas.removeEventListener('pointerleave', leaveGeoset); latest.current.onCaptureReady?.(null); backgroundCanvas.remove(); hoverCanvas?.remove(); connectorCanvas?.remove(); nodeCanvas?.remove(); geometryCanvas?.remove(); cameraCanvas?.remove(); scheduler.dispose(); ownerDocument.removeEventListener('visibilitychange', scheduler.sync); window.removeEventListener('mdlvis-frame', fit); window.removeEventListener('mdlxl-view-camera', viewCamera); unbindScroll(); observer?.disconnect(); ownerWindow.removeEventListener('keydown', previewKeyDown, true); ownerWindow.removeEventListener('keyup', previewKeyUp, true); ownerWindow.removeEventListener('blur', previewWindowBlur); canvas.removeEventListener('pointerdown', pointerDown, true); canvas.removeEventListener('pointermove', suppressAdjustedMove, true); canvas.removeEventListener('pointerup', finishLeftGesture, true); canvas.removeEventListener('pointercancel', finishLeftGesture, true); canvas.removeEventListener('pointermove', nodePointerMove, true); canvas.removeEventListener('pointerup', finishNodeGesture, true); canvas.removeEventListener('pointercancel', finishNodeGesture, true); canvas.removeEventListener('keydown', cancelNodeGesture, true); controls.removeEventListener('change', cameraChanged); controls.removeEventListener('start', cameraStarted); controls.removeEventListener('end', cameraEnded); controls.dispose(); canvas.removeEventListener('webglcontextlost', contextLost); runtime.current = null; rigMarkers.dispose(); presentation.dispose(); nativeBackground.dispose(); eventPreview.dispose(); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas);
     };
-  }, [rendererModel, rendererRevision, textureAssets, props.modelPath, graphics.antialias, graphics.particles, props.showParticles, graphics.lighting, graphics.textures, timelineStart, timelineEnd]);
+  }, [rendererModel, rendererRevision, textureAssets, props.modelPath, graphics.antialias, graphics.particles, props.showParticles, graphics.lighting, graphics.textures, timelineStart, timelineEnd, globalPreviewId]);
 
   useEffect(() => {
     const current = runtime.current;
