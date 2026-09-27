@@ -2,6 +2,22 @@
 
 This is an unmerged feature review build, not a published version. The primary checkout and installed application were not modified.
 
+## First review correction: viewport navigation
+
+The initial camera test proved that the two camera states matched but did not prove that a drag changed either state. The user's review exposed the gap: OptimizeXL passed the unsupported drag mode `camera`, which mapped left-drag to no action. It now passes the existing `rotate` mode. OptimizeXL also supplies a local wheel-zoom preference, so an inherited main-editor sensitivity-adjustment mode cannot consume ordinary zoom input.
+
+The strengthened Electron regression failed against the original build with `Left drag must actually rotate the camera`. It passes after the correction and explicitly verifies changed camera positions from a drag on either viewport, changed zoom, matching paired states, camera preservation through candidate updates, and the main editor's persisted wheel setting remaining unchanged. This correction does not alter models, reduction algorithms, repair visibility, sphere rendering or saving behavior.
+
+The user requested live iteration one visible fix at a time. Remaining review work is recorded here so it is not lost:
+
+- Replace the Nuclear reducer's shortest-edge priority with a method that better preserves surface shape, UVs and animated appearance; the current visual distortion is not accepted.
+- Inspect the supplied Magos installation and modernize its familiar collision-sphere display. The shortcut resolves to `D:\WarcraftStuff\War3 Model Editor\War3ModelEditor\War3ModelEditor.exe`; Windows computer-use initialization currently fails with `failed to write kernel assets: The system cannot find the path specified. (os error 3)`, including after a reset. No visual reference inspection is claimed.
+- Restore the whole model when leaving irregularity/geoset inspection.
+- Show which records Duplicate data and Unused data propose deleting.
+- Add a clickable **I** explanation next to every Advanced option.
+- Make top-right **Optimize New Copy** the only save action, available at any stage and saving approved changes. Retain exactly two new files and never overwrite originals.
+- Put a green star inside each unused optimizer button, clearing it after approval or when no changes are possible/needed.
+
 ## Automated checks
 
 - 90/90 focused tests passed: OptimizeXL operations and paired-save failures/races, existing model optimizer, preview presentation/compositing/capture, and the 56-case codec compatibility suite.

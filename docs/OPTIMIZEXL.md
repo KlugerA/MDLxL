@@ -4,7 +4,7 @@ Open **OptimizeXL** from the existing optimizer toolbar button or command. It op
 
 ## Review workflow
 
-The left viewport is the last approved model; the right is the current proposal. Orbit, pan, zoom, animation selection, scrubbing, playback and speed are shared. Each adjustment is calculated from the last approved model, so lowering strength restores detail rather than simplifying an already simplified candidate.
+The left viewport is the last approved model; the right is the current proposal. Left-drag either viewport to rotate both; use the wheel to zoom both. OptimizeXL always uses wheel zoom regardless of the main editor's sensitivity-adjustment mode, without changing that saved setting. Pan, animation selection, scrubbing, playback and speed are also shared. Each adjustment is calculated from the last approved model, so lowering strength restores detail rather than simplifying an already simplified candidate.
 
 **Approve** keeps the current proposal. **Skip stage** advances without applying it. Repair stages also have **Skip fix** and **Next stage**. **Back** undoes the last approval or skipped stage. The stage buttons allow returning directly to a particular operation; leaving a stage discards its unapproved proposal.
 

@@ -19,6 +19,9 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
   const [sequence,setSequence]=useState(0),[time,setTime]=useState(0),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1),[seekId,setSeekId]=useState(0),[loop,setLoop]=useState(true);
   const [selectedFix,setSelectedFix]=useState(null),[skippedFixes,setSkippedFixes]=useState(new Set()),[hive,setHive]=useState(null),[hiveBusy,setHiveBusy]=useState(false),[finished,setFinished]=useState(false);
   const root=useRef(null),spherePreset=useRef(null),camera=useRef({saved:null,listeners:new Set()}),request=useRef(0),worker=useRef(null);
+  // Review viewports always use the wheel to zoom. Keep the main editor's
+  // persistent sensitivity-adjustment mode outside this detached editor.
+  const previewPreferences=useMemo(()=>({...preferences,wheelMode:'rotate'}),[preferences]);
   const before=useMemo(()=>session?openDocument(session.accepted,'before.mdx').model:null,[session,revision]);
   const after=useMemo(()=>candidate?openDocument(candidate.bytes,'after.mdx').model:before,[candidate,before]);
   const findings=useMemo(()=>!before?[]:stage==='irregularities'?findIrregularities(before):stage==='sanity'?sanityProposals(before):[],[before,stage]);
@@ -56,7 +59,7 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
   function back(){const step=session.back();if(step){refresh(v=>v+1);enter(step.stage,step.settings);if(step.settings?.fix)setSelectedFix(step.settings.fix.id);}else enter('duplicates');}
   async function save(){setSaving(true);setError('');try{if(!window.desktop?.saveOptimizeXL)throw Error('Saving two protected copies requires the desktop app.');const result=await window.desktop.saveOptimizeXL(session.savePayload());if(result)setSaved(result);}catch(e){setError(e.message);}finally{setSaving(false);}}
   if(!session)return <div className="ox-root"><header><h1>OptimizeXL</h1><button onClick={onClose}>Close</button></header><p role="alert">{error}</p></div>;
-  const previewProps={textureAssets,preferences,teamColor,presentation:'preview',overlays:{grid:false,axes:false,boneLines:false},showGrid:false,showAxes:false,playing:false,syncPlayback:true,playbackRunning:playing,seekId,sequenceIndex:sequence,time,compareCamera:camera.current,preserveCameraView:true,cameraMode:'camera',showCollisionSpheres:stage==='spheres'&&!finished,loop};
+  const previewProps={textureAssets,preferences:previewPreferences,teamColor,presentation:'preview',overlays:{grid:false,axes:false,boneLines:false},showGrid:false,showAxes:false,playing:false,syncPlayback:true,playbackRunning:playing,seekId,sequenceIndex:sequence,time,compareCamera:camera.current,preserveCameraView:true,cameraMode:'rotate',showCollisionSpheres:stage==='spheres'&&!finished,loop};
   const updateSphere=(i,j,value)=>adjust('spheres',(settings.spheres||[]).map((s,k)=>k===i?s.map((v,l)=>l===j?value:v):s));
   return <div className="ox-root" ref={root} onKeyDown={event=>{event.stopPropagation();if(event.code==='Space'&&!['INPUT','SELECT','TEXTAREA','BUTTON'].includes(event.target.tagName)){event.preventDefault();setPlaying(v=>!v);}}}>
     <header><h1>OptimizeXL</h1><div className="ox-mode" role="group" aria-label="Controls"><button aria-pressed={!advanced} onClick={()=>setAdvanced(false)}>Simple</button><button aria-pressed={advanced} onClick={()=>setAdvanced(true)}>Advanced</button></div><span className="ox-file">{doc.name}</span><button disabled={saving} onClick={onClose}>Close</button></header>

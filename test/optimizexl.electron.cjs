@@ -7,7 +7,8 @@ const nearVector=(actual,expected)=>{assert.equal(actual.length,expected.length)
  const model=process.env.MDLXL_OPTIMIZEXL_MODEL||'C:/Users/PC/Documents/ChatGPT/MDLxL/out/Khorne_Optimized_Review/WH_WOC_KnightKhorneFlail01_HIVE_OPTIMIZED.mdx';
  const source=fs.readFileSync(model);
  const packaged=process.env.MDLXL_OPTIMIZEXL_EXE;
- const app=await _electron.launch({executablePath:packaged||path.resolve('node_modules/electron/dist/electron.exe'),args:packaged?[model]:[process.cwd(),model],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:path.join(out,'profile-'+Date.now())},timeout:60000});
+ const profile=path.join(out,'profile-'+Date.now());fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({preferences:{wheelMode:'scroll'}}));
+ const app=await _electron.launch({executablePath:packaged||path.resolve('node_modules/electron/dist/electron.exe'),args:packaged?[model]:[process.cwd(),model],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:profile},timeout:60000});
  const errors=[];
  try{
   const main=await app.firstWindow();main.setDefaultTimeout(20000);main.on('pageerror',e=>errors.push(e.message));
@@ -21,7 +22,13 @@ const nearVector=(actual,expected)=>{assert.equal(actual.length,expected.length)
   assert.equal(await popup.getByLabel('Before preview').count(),1);assert.equal(await popup.getByLabel('After preview').count(),1);
   await popup.waitForFunction(()=>document.querySelectorAll('.game-preview-surface canvas:not([data-background])').length>=2);
   await popup.evaluate(()=>{window.oxState=()=>Array.from(document.querySelectorAll('.ox-preview .game-preview-root'),root=>{let fiber=root[Object.keys(root).find(k=>k.startsWith('__reactFiber'))];for(;fiber;fiber=fiber.return)for(let h=fiber.memoizedState;h;h=h.next){const r=h.memoizedState?.current;if(r?.native&&r?.controls)return {frame:r.native.getFrame(),position:r.controls.object.position.toArray(),target:r.controls.target.toArray(),zoom:r.controls.object.zoom};}throw Error('Preview runtime unavailable');});});
-  const previewBox=await popup.getByLabel('Before preview',{exact:true}).boundingBox();await popup.mouse.move(previewBox.x+200,previewBox.y+240);await popup.mouse.down();await popup.mouse.move(previewBox.x+250,previewBox.y+260,{steps:8});await popup.mouse.up();await popup.mouse.wheel(0,-200);await popup.waitForTimeout(200);
+  const cameraInitial=await popup.evaluate(()=>oxState());
+  const previewBox=await popup.getByLabel('Before preview',{exact:true}).boundingBox();await popup.mouse.move(previewBox.x+200,previewBox.y+240);await popup.mouse.down();await popup.mouse.move(previewBox.x+250,previewBox.y+260,{steps:8});await popup.mouse.up();await popup.waitForTimeout(150);
+  const cameraRotated=await popup.evaluate(()=>oxState());assert.ok(Math.hypot(...cameraRotated[0].position.map((v,i)=>v-cameraInitial[0].position[i]))>1,'Left drag must actually rotate the camera');nearVector(cameraRotated[0].position,cameraRotated[1].position);
+  await popup.mouse.wheel(0,-200);await popup.waitForTimeout(200);
+  const cameraZoomed=await popup.evaluate(()=>oxState());assert.ok(Math.abs(cameraZoomed[0].zoom-cameraRotated[0].zoom)>.01,'Wheel must actually zoom even when the main editor uses sensitivity-adjustment mode');assert.ok(Math.abs(cameraZoomed[0].zoom-cameraZoomed[1].zoom)<1e-8);
+  const rightBox=await popup.getByLabel('After preview',{exact:true}).boundingBox();await popup.mouse.move(rightBox.x+200,rightBox.y+240);await popup.mouse.down();await popup.mouse.move(rightBox.x+230,rightBox.y+230,{steps:6});await popup.mouse.up();await popup.waitForTimeout(150);
+  const rightRotated=await popup.evaluate(()=>oxState());assert.ok(Math.hypot(...rightRotated[1].position.map((v,i)=>v-cameraZoomed[1].position[i]))>1,'After-view drag must actually rotate both views');nearVector(rightRotated[0].position,rightRotated[1].position);
   const cameraBefore=await popup.evaluate(()=>oxState());nearVector(cameraBefore[0].position,cameraBefore[1].position);nearVector(cameraBefore[0].target,cameraBefore[1].target);
   await popup.screenshot({path:path.join(out,'01-simple.png')});
   await popup.getByRole('button',{name:'Advanced',exact:true}).click();await popup.getByLabel('UV tolerance',{exact:true}).waitFor();
@@ -57,6 +64,7 @@ const nearVector=(actual,expected)=>{assert.equal(actual.length,expected.length)
   await app.evaluate(({dialog},directory)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[directory]});},out);
   await popup.getByRole('button',{name:'Save Before + After',exact:true}).click();await popup.getByText('Saved both copies:',{exact:false}).waitFor();
   assert.equal(fs.readdirSync(out).filter(n=>/\.mdx$/i.test(n)&&!previousFiles.has(n)).length,2);assert.deepEqual(fs.readFileSync(model),source);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(profile,'settings.json'),'utf8')).preferences.wheelMode,'scroll','OptimizeXL must not change the main editor wheel preference');
   await popup.screenshot({path:path.join(out,'05-saved.png')});
   assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:true,packaged:!!packaged,errors,sourceUnchanged:true},null,2));
  }finally{await app.close();}
