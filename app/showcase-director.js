@@ -76,34 +76,33 @@ export function screenshotPlan(model, playlist, base, { viewpoint = 'frontal', a
     });
   });
 }
-/** Wall time owns live recording; encoder throughput never changes animation speed. */
+/** Wall time owns recording and globals; local animation and orbit have independent speeds. */
 export function createShowcaseDirector(getSettings, now = () => performance.now()) {
-  const clock = { seconds: 0, revision: 0, recording: false, live: false, baseView: null, center: [0,0,0], shot: null };
+  const clock = { seconds: 0, globalTime: 0, angle: 0, revision: 0, recording: false, live: false };
   return {
     clock,
-    get playing() { return clock.live || getSettings().playing && !clock.recording; },
+    // Globals keep running even when local animation/orbit preview is paused.
+    get playing() { return true; },
     get recording() { return clock.recording; },
     sample(delta = 0) {
-      const settings = getSettings();
+      const settings = getSettings(), previous = clock.seconds;
       if (clock.live) clock.seconds = Math.min(clock.duration, Math.max(0,now()-clock.started)) / 1000;
       else if (settings.playing && !clock.recording) clock.seconds += delta/1000;
-      if (clock.shot) return { ...clock.shot, revision: clock.revision, presentationTime: clock.seconds*1000 };
-      const animation = showcaseAnimation(settings.model,settings.playlist,clock.seconds,false);
-      const animateCamera = settings.playing || clock.recording;
-      const time = settings.playing && !clock.recording ? clock.seconds % Math.max(.02,Number(settings.length)) : clock.seconds;
-      const camera = animateCamera && settings.cameraMode === 'sequence'
-        ? cameraPathView(settings.points,time,settings.length,settings.motion,clock.center)
-        : animateCamera && settings.cameraMode === 'orbit' && (settings.orbitBase || clock.baseView)
-          ? orbitModelView(settings.orbitBase || clock.baseView,360*time/Math.max(.02,Number(settings.length)),settings.orbitAxis,clock.center) : null;
-      return { ...animation, camera, revision: clock.revision, presentationTime: clock.seconds*1000 };
+      if (clock.live) clock.globalTime = clock.seconds*1000;
+      else clock.globalTime += Math.max(0,delta);
+      clock.angle += (clock.seconds-previous) * Math.PI*2 / Math.max(.02,Number(settings.length)) * clamp(Number(settings.orbitSpeed ?? 100),0,200)/100;
+      const animation = showcaseAnimation(settings.model,settings.playlist,clock.seconds,!clock.recording);
+      return { ...animation, portrait:false, globalTime:clock.globalTime, angle:clock.angle, revision:clock.revision, presentationTime:clock.seconds*1000 };
     },
-    reset(view, center) { Object.assign(clock,{seconds:0,revision:clock.revision+1,baseView:view,center,shot:null}); },
+    reset() { Object.assign(clock,{seconds:0,angle:0,revision:clock.revision+1}); },
     begin(view, options = {}) {
-      Object.assign(clock,{seconds:0,revision:clock.revision+1,recording:true,live:!!options.live,started:now(),duration:options.duration,baseView:view,center:options.center || view.target,shot:null});
+      Object.assign(clock,{seconds:0,globalTime:0,angle:0,revision:clock.revision+1,recording:true,live:!!options.live,started:now(),duration:options.duration});
     },
-    seekRecording(milliseconds) { clock.seconds = milliseconds/1000; },
-    setShot(shot) { clock.shot = shot; clock.seconds = shot.localTime/1000; clock.revision++; },
-    freeze(milliseconds) { clock.live = false; clock.seconds = milliseconds/1000; },
-    end() { clock.recording = false; clock.live = false; clock.shot = null; },
+    seekRecording(milliseconds) {
+      const settings = getSettings(); clock.seconds=milliseconds/1000; clock.globalTime=milliseconds;
+      clock.angle=clock.seconds*Math.PI*2/Math.max(.02,Number(settings.length))*clamp(Number(settings.orbitSpeed ?? 100),0,200)/100;
+    },
+    freeze(milliseconds) { this.seekRecording(milliseconds); clock.live=false; },
+    end() { clock.recording=false; clock.live=false; },
   };
 }

@@ -217,12 +217,16 @@ export default function GamePreview(inputProps) {
     // belongs only to the renderer clone and is never serialized to the model.
     const timelineSequenceIndex = Number.isFinite(timelineStart) && Number.isFinite(timelineEnd) && timelineStart >= 0 && timelineEnd > timelineStart
       ? ownedModel.Sequences.push({ Name: 'Editor timeline', Interval: new Uint32Array([timelineStart, timelineEnd]), NonLooping: true }) - 1 : -1;
+    const turntableCamera = new THREE.PerspectiveCamera();
+    const turntableRotation = new THREE.Quaternion(), turntableAxis = new THREE.Vector3(0,0,1);
+    let displayCamera;
+    const displayLight = () => new THREE.Vector3(...(latest.current.showcaseLight === 'portrait' ? [.3,-.3,.25] : [-.65,.55,1])).applyQuaternion(turntableRotation);
     const previewAdapter = installWarcraftPreviewAdapter(gl, ownedModel, () => ({ frame: native.getFrame(), sequenceIndex: native.getSequence(), globalTime: globalClock,
       // Installed UI\\MiscData.txt [Light] Direction=0.3,0.3,-0.25;
       // the classic portrait scene maps this to (y,-x,-z), in model space.
-      portrait: !!latest.current.portraitMode,
-      lightDirection: latest.current.portraitMode ? [.3,-.3,.25] : cameraLeftLight(camera, controls.target, radius).direction.toArray(),
-      viewDirection: camera.getWorldDirection(new THREE.Vector3()).negate().toArray(), preferences: latest.current.preferences, hiddenGeosets: latest.current.hiddenGeosets, hideRgbGeoset: latest.current.hideRgbGeoset, surface: latest.current.mode === 'solid', lighting: latest.current.portraitMode || latest.current.shaded !== false && graphicsOptions(latest.current.preferences).lighting }));
+      portrait: latest.current.showcase ? latest.current.showcaseLight === 'portrait' : !!latest.current.portraitMode,
+      lightDirection: latest.current.showcase ? displayLight().toArray() : latest.current.portraitMode ? [.3,-.3,.25] : cameraLeftLight(camera, controls.target, radius).direction.toArray(),
+      viewDirection: (displayCamera || camera).getWorldDirection(new THREE.Vector3()).negate().toArray(), preferences: latest.current.preferences, hiddenGeosets: latest.current.hiddenGeosets, hideRgbGeoset: latest.current.hideRgbGeoset, surface: latest.current.mode === 'solid', lighting: latest.current.showcase ? latest.current.showcaseLight !== 'none' : latest.current.portraitMode || latest.current.shaded !== false && graphicsOptions(latest.current.preferences).lighting }));
     try {
       native = new ModelRenderer(ownedModel); native.initGL(gl); previewAdapter.ready(native);
       // Layered WC3 materials redraw the same triangles at identical depth.
@@ -552,7 +556,6 @@ export default function GamePreview(inputProps) {
     }
     const cameraStarted = () => {
       const p = latest.current;
-      if (p.showcase && !p.portraitMode) { controls.target.copy(center); controls.update(); }
       if (!p.portraitMode || !state.portraitActive) return;
       cameraGestureStart = { position: camera.position.clone(), target: controls.target.clone(), snapshot: editorCameraSnapshot(camera, controls.target) };
       state.cameraEditing = true; state.cameraDetached = true; p.onPlayingChange?.(false);
@@ -645,12 +648,7 @@ export default function GamePreview(inputProps) {
       if (p.showcase) {
         showcaseNext = p.showcase.sample(captureOnly ? 0 : delta);
         p.sequenceIndex = showcaseNext.sequenceIndex; p.time = showcaseNext.frame;
-        p.portraitMode = !!showcaseNext.portrait;
-        if (p.portraitMode !== state.portraitActive) {
-          setShowcasePortrait(p.portraitMode);
-          if (p.portraitMode) enterPortrait(evaluateModelCamera(p.model, p.model.Cameras?.[p.portraitCameraIndex], p.time, p.sequenceIndex, showcaseNext.globalTime));
-          else exitPortrait();
-        }
+        p.portraitMode = false;
       }
       const selected = p.restPose ? 0 : p.sequenceIndex < 0 && timelineSequenceIndex >= 0 ? timelineSequenceIndex : Math.max(0, Math.min(ownedModel.Sequences.length - 1, p.sequenceIndex ?? 0));
       const sequence = ownedModel.Sequences[selected];
@@ -689,6 +687,19 @@ export default function GamePreview(inputProps) {
       const dt = p.showcase ? 0 : playback.elapsed;
       globalClock += dt;
       controls.update();
+      displayCamera = camera;
+      if (p.showcase) {
+        // V * T(center) * Rz(angle) * T(-center), expressed as a camera for
+        // native billboards, particles and events as well as the mesh render.
+        turntableRotation.setFromAxisAngle(turntableAxis, -showcaseNext.angle);
+        turntableCamera.copy(camera);
+        turntableCamera.position.sub(center).applyQuaternion(turntableRotation).add(center);
+        turntableCamera.quaternion.premultiply(turntableRotation);
+        turntableCamera.updateMatrixWorld();
+        displayCamera = turntableCamera;
+        cameraQuaternion.copy(displayCamera.quaternion).multiply(billboardCameraCorrection);
+        native.setCamera(displayCamera.position.toArray(), cameraQuaternion.toArray());
+      }
       let poseSequence = selected;
       try {
         // Narrow particle/ribbon visibility windows must survive a slow frame.
@@ -714,10 +725,7 @@ export default function GamePreview(inputProps) {
         poseSequence = useAuthoredSequenceInterval(native.getFrame());
         if (poseSequence !== selected) native.update(0);
         applyRestPoseMatrices(native.rendererData, p.restPose);
-        if (showcaseNext?.camera) {
-          camera = perspective; controls.object = camera;
-          applyEvaluatedModelCamera(camera, controls, showcaseNext.camera, p.portraitMode ? PORTRAIT_ASPECT : canvas.width / canvas.height);
-        } else if (p.portraitMode && !state.cameraEditing && !state.cameraDetached) {
+        if (p.portraitMode && !state.cameraEditing && !state.cameraDetached) {
           const evaluated = evaluateModelCamera(p.model, p.model?.Cameras?.[p.portraitCameraIndex], native.getFrame(), poseSequence, globalClock);
           if (evaluated) applyEvaluatedModelCamera(camera, controls, evaluated, PORTRAIT_ASPECT);
         } else if (!p.portraitMode) {
@@ -725,19 +733,24 @@ export default function GamePreview(inputProps) {
           updateDepthClipping(camera, center, clipRadius, gridDepthExtent(center, gridOptions(p.preferences).extent));
         }
         camera.updateMatrixWorld(); camera.updateProjectionMatrix();
-        cameraQuaternion.copy(camera.quaternion).multiply(billboardCameraCorrection);
-        native.setCamera(camera.position.toArray(), cameraQuaternion.toArray());
+        // Depth changes belong to the real projection, never to orbit framing.
+        if (p.showcase) {
+          displayCamera.projectionMatrix.copy(camera.projectionMatrix);
+          displayCamera.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+        }
+        cameraQuaternion.copy(displayCamera.quaternion).multiply(billboardCameraCorrection);
+        native.setCamera(displayCamera.position.toArray(), cameraQuaternion.toArray());
         native.setTeamColor(nativeTeamColor(p.teamColor || '#ed3333'));
-        native.setLightPosition(cameraLeftLight(camera, controls.target, radius).position.toArray());
+        native.setLightPosition(p.showcase ? displayLight().normalize().multiplyScalar(radius*10).add(center).toArray() : cameraLeftLight(camera, controls.target, radius).position.toArray());
         const background = new THREE.Color(p.portraitMode ? '#000000' : visualOptions(p.preferences).background).convertLinearToSRGB();
         gl.viewport(0, 0, canvas.width, canvas.height); gl.clearColor(background.r, background.g, background.b, 1); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         if (!p.portraitMode || p.showcase) nativeBackground.draw();
         if (!captureOnly) presentation.draw(camera, p.preferences, p.workplane, p.overlays?.grid ?? !!p.showGrid, center, radius, bounds.min.z, { gridOnly: true, showAxes: p.showAxes ?? p.overlays?.axes ?? !!p.showGrid });
         const wireframe = !captureOnly && (p.mode === 'wireframe' || p.mode === 'vertices');
         if (wireframe) gl.colorMask(false, false, false, false);
-        try { native.render(camera.matrixWorldInverse.elements, camera.projectionMatrix.elements, { wireframe: false, useEnvironmentMap: p.shaded !== false && graphics.lighting }); }
+        try { native.render(displayCamera.matrixWorldInverse.elements, displayCamera.projectionMatrix.elements, { wireframe: false, useEnvironmentMap: p.shaded !== false && graphics.lighting }); }
         finally { gl.colorMask(true, true, true, true); }
-        if (!wireframe) eventPreview.render({ frame:native.getFrame(), sequenceIndex:poseSequence, globalTime:globalClock, camera, teamColor:p.teamColor });
+        if (!wireframe) eventPreview.render({ frame:native.getFrame(), sequenceIndex:poseSequence, globalTime:globalClock, camera:displayCamera, teamColor:p.teamColor });
         if (!captureOnly && !p.portraitMode) presentation.draw(camera, p.preferences, p.workplane, false, center, radius, bounds.min.z, { platformOnly: true });
       } catch (cause) { setError(`Warcraft preview error: ${cause.message}`); return false; }
       if (!captureOnly) {
@@ -840,7 +853,7 @@ export default function GamePreview(inputProps) {
       setCameraView(view) { camera = perspective; controls.object = camera; state.cameraDetached = true; applyEvaluatedModelCamera(camera, controls, view, canvas.width / canvas.height); invalidate(); },
       modelCenter() { return center.toArray(); },
       async prepareRecording() {
-        // Establish the first sequence's camera/aspect before allocating GIF frames.
+        // Prepare the animation without changing the current framing or zoom.
         latest.current.showcase?.begin(state.cameraView(), { center: center.toArray() });
         render(performance.now(), 0, { captureOnly: true });
         await new Promise(resolve => requestPreviewFrame(resolve));
@@ -861,15 +874,6 @@ export default function GamePreview(inputProps) {
       },
       endRecording() { recordingSink = null; latest.current.showcase?.end(); backgroundState.current.animation?.resume(); invalidate(); },
       recordingFrame(time, options) { latest.current.showcase?.seekRecording(time); render(performance.now(), 0, { captureOnly: true }); return state.captureApi.captureFrame(options); },
-      async screenshotFrame(shot, options) {
-        latest.current.showcase?.setShot(shot);
-        await backgroundState.current.animation?.seek?.(shot.localTime / 1000);
-        render(performance.now(), 0, { captureOnly: true });
-        // Let the portrait frame and aspect commit before the high resolution capture.
-        await new Promise(resolve => requestPreviewFrame(resolve));
-        await state.captureApi.whenReady();
-        return state.captureApi.captureFrame(options);
-      },
       copyVisibleFrame(destination) {
         const context = destination.getContext('2d');
         const source = latest.current.portraitMode ? composePortraitCapture(canvas, portraitFrame.current.canvas) : canvas;

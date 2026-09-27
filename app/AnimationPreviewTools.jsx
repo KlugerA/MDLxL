@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CAPTURE_QUALITIES, normalizeCapture } from '../src/capture-settings.js';
 import { recordingTimeline } from './showcase-timeline.js';
-import { centeredView, screenshotPlan } from './showcase-director.js';
 
-export default function AnimationPreviewTools({ active, sessionId, captureAPI, modelName, loop, mode, length, playlist, model, shotOptions, disabled, onStatus, onBusy, preferences }) {
+export default function AnimationPreviewTools({ active, sessionId, captureAPI, modelName, loop, length, disabled, onStatus, onBusy, preferences }) {
   const [state,setState] = useState('idle'), [progress,setProgress] = useState(''), [error,setError] = useState('');
   const latest = useRef(); latest.current = {onStatus,onBusy};
   const running = useRef(null), retained = useRef(null), mounted = useRef(true);
@@ -51,7 +50,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
         });
       }
       if(job.stop)return;
-      let inFlight=null,failure=null,nextFrame=0,count=0,lastTime=0;
+      let inFlight=null,failure=null,nextFrame=0,count=0,lastProgress=-Infinity;
       const started=performance.now();
       status('recording');
       const duration=await new Promise(resolve=>{
@@ -63,7 +62,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
         };
         const onFrame=time=>{
           if(done || time>=timing.duration)return;
-          if(mounted.current)setProgress((time/1000).toFixed(1)+' / '+(timing.duration/1000).toFixed(1)+' seconds');
+          if(mounted.current && time-lastProgress>=100){lastProgress=time;setProgress((time/1000).toFixed(1)+' / '+(timing.duration/1000).toFixed(1)+' seconds');}
           if(time+.01<nextFrame || inFlight)return;
           // A slow encoder can reduce frame density, but cannot slow model/camera time.
           const timestamp=count===0?0:time;
@@ -71,7 +70,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
           try {
             api.copyVisibleFrame(canvas);
             const pixels=context.getImageData(0,0,canvas.width,canvas.height);
-            lastTime=timestamp;count++;
+            count++;
             inFlight=request({type:'frame',width:canvas.width,height:canvas.height,time:timestamp,buffer:pixels.data.buffer})
               .then(result=>{if(result.limit)throw Error(result.reason||'Recording reached the storage limit.');})
               .catch(cause=>{failure=cause;job.stop=true;job.finish();})
@@ -103,25 +102,6 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
       if(jobId)await window.desktop.discardPreviewRecording(jobId);
     }
   }
-  async function screenshots(job) {
-    const api=job.api;await api.whenReady();if(job.stop)return;
-    const base=centeredView(api.cameraView(),api.modelCenter());
-    const plan=screenshotPlan(model,playlist,base,shotOptions),groups=new Map();
-    let count=0,lastResult;
-    api.beginRecording();
-    status('shooting');
-    for(const shot of plan){
-      if(job.stop)break;
-      if(!groups.has(shot.entry))groups.set(shot.entry,crypto.randomUUID());
-      if(mounted.current)setProgress((count+1)+' / '+plan.length+' shots · '+shot.animationName);
-      const canvas=await api.screenshotFrame(shot,{maxDimension:CAPTURE_QUALITIES[settings.screenshotQuality].screenshotSize});
-      const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(Error('Screenshot could not be created.')),'image/png'));
-      lastResult=await save({format:'png',modelName,animationName:shot.animationName,screenshotBatch:groups.get(shot.entry),shotIndex:shot.index+1,bytes:new Uint8Array(await blob.arrayBuffer())});
-      if(retained.current)break;
-      count++;
-    }
-    if(!retained.current)latest.current.onStatus?.('Saved '+count+' screenshots'+(lastResult?' in '+lastResult.modelDirectory:''));
-  }
   async function start(){
     if(running.current||retained.current)return;
     const job={stop:false,promise:null,api:captureAPI};running.current=job;
@@ -129,7 +109,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
     job.promise=(async()=>{
       try{
         if(!job.api)throw Error('The Showcase preview is still loading.');
-        if(mode==='record')await record(job);else await screenshots(job);
+        await record(job);
       }catch(cause){if(mounted.current)setError(cause.message);latest.current.onStatus?.(cause.message,true);}
       finally{job.api?.endRecording();running.current=null;if(!retained.current)status('idle');}
     })();
@@ -143,7 +123,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
   },[]);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;stop();};},[sessionId]);
   useEffect(()=>{if(!active)stop();},[active]);
-  const stoppable=['recording','shooting'].includes(state);
+  const stoppable=state==='recording';
   return <div className="showcase-capture">
     <button className="showcase-record" disabled={!stoppable&&(state!=='idle'||!captureAPI||disabled)} onClick={stoppable?stop:start}>{stoppable?'STOP':'RECORD'}</button>
     {state!=='idle'&&<div className="showcase-capture-status" role="status">{state==='retry'?'Save needs retry':state==='saving'?'Saving…':progress}</div>}

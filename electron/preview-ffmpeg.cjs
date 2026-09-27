@@ -4,7 +4,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { savePreviewCaptureFile, validateGIFFile, showcaseDirectory } = require('./preview-capture.cjs');
-const { encodeCaptureQOI } = require('./capture-qoi.cjs');
+const { Worker, isMarkedAsUntransferable } = require('node:worker_threads');
 
 const MAX_TEMP_BYTES = 8 * 1024 ** 3;
 const DISK_RESERVE = 512 * 1024 ** 2;
@@ -41,9 +41,29 @@ function timeline(frames, end) {
   return { entries, duration: total * 10 };
 }
 
+// One worker per recording, with the existing bounded queue providing backpressure.
+function encodeFrame(job, rgba, width, height) {
+  if (!job.encoder) {
+    job.encoder = new Worker(path.join(__dirname, 'capture-qoi-worker.cjs'));
+    job.encoder.on('error', error => { job.encoderError = error; });
+  }
+  if (job.encoderError) return Promise.reject(job.encoderError);
+  return new Promise((resolve, reject) => {
+    const worker = job.encoder;
+    const cleanup = () => { worker.off('message', message); worker.off('error', failed); worker.off('exit', exited); };
+    const message = result => { cleanup(); result.error ? reject(Error(result.error)) : resolve(result.bytes); };
+    const failed = error => { cleanup(); reject(error); };
+    const exited = code => failed(Error('Recording frame worker exited (' + code + ').'));
+    worker.once('message', message); worker.once('error', failed); worker.once('exit', exited);
+    // IPC supplied these bytes exclusively for this frame; no model buffers enter here.
+    const pixels = rgba.byteOffset || rgba.byteLength !== rgba.buffer.byteLength || isMarkedAsUntransferable(rgba.buffer) ? new Uint8Array(rgba) : rgba;
+    worker.postMessage({rgba:pixels,width,height}, [pixels.buffer]);
+  });
+}
+
 function runFFmpeg(executable, args, job) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, ['-hide_banner', '-loglevel', 'error', '-nostdin', ...args], { cwd: job.directory, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(executable, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-threads', '2', '-filter_threads', '2', '-filter_complex_threads', '2', ...args], { cwd: job.directory, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
     job.child = child;
     let diagnostic = '';
     child.stdout.resume();
@@ -92,7 +112,7 @@ class PreviewRecordingStore {
     job.lastRequestedTime = time; job.pending++;
     const operation = job.queue.then(async () => {
       if (job.limit) return { limit: true, reason: job.limit, accepted: false };
-      const lossless = encodeCaptureQOI(rgba, width, height), size = lossless.length;
+      const lossless = await encodeFrame(job, rgba, width, height), size = lossless.length;
       const stat = await fs.statfs(job.directory);
       if (job.accountedBytes + size + FRAME_METADATA_BYTES > job.budget || Number(stat.bavail) * Number(stat.bsize) < DISK_RESERVE + size) {
         job.limit = 'Recording reached the temporary storage budget; saving the accepted frames.';
@@ -119,6 +139,7 @@ class PreviewRecordingStore {
     job.phase = 'encoding';
     try {
       await job.queue;
+      if (job.encoder) { await job.encoder.terminate(); job.encoder=null; }
       const timing = timeline(job.frames, payload.time);
       const manifest = 'ffconcat version 1.0\n' + timing.entries.map(entry => `file '${entry.file}'\noption framerate 100\nduration ${(entry.ticks / 100).toFixed(2)}\n`).join('');
       await fs.writeFile(path.join(job.directory, 'frames.ffconcat'), manifest, { flag: 'wx' });
@@ -153,6 +174,7 @@ class PreviewRecordingStore {
       await new Promise(resolve => { child.once('close', resolve); child.kill(); });
     }
     await job.queue.catch(() => {});
+    if (job.encoder) { await job.encoder.terminate(); job.encoder=null; }
     this.jobs.delete(id);
     // Directory is created by this store, never supplied by the renderer.
     if (path.dirname(job.directory) !== this.temporaryRoot || !path.basename(job.directory).startsWith('recording-')) throw Error('Invalid recording cleanup path.');

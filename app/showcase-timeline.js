@@ -2,11 +2,10 @@ const positive = (value, fallback) => Number.isFinite(Number(value)) && Number(v
 const mix = (a, b, t) => a + (b - a) * t;
 const easing = (t, curve) => curve === 'smooth' ? t * t * (3 - 2 * t) : curve === 'ease-in' ? t * t : curve === 'ease-out' ? 1 - (1 - t) ** 2 : t;
 
-/** Times are presentation seconds. Global time only accrues while a local
- * animation advances, including each entry's independent playback speed. */
+/** Local sequence speed is independent of the always-running global clock. */
 export function showcaseAnimation(model, playlist, seconds, repeat = true) {
   const rows = playlist.filter(row => model.Sequences?.[row.sequence]);
-  if (!rows.length) return { sequenceIndex: -1, frame: 0, globalTime: 0, active: false, segment: -1 };
+  if (!rows.length) return { sequenceIndex: -1, frame: 0, globalTime: Math.max(0,seconds)*1000, active: false, segment: -1 };
   const length = row => positive(row.seconds, 3);
   const activeTime = (row, elapsed) => {
     const sequence = model.Sequences[row.sequence], duration = Math.max(0, sequence.Interval[1] - sequence.Interval[0]);
@@ -15,18 +14,18 @@ export function showcaseAnimation(model, playlist, seconds, repeat = true) {
   };
   const total = rows.reduce((sum, row) => sum + length(row), 0);
   const time = Math.max(0, seconds), cycles = repeat ? Math.floor(time / total) : 0;
-  let remaining = repeat ? time % total : Math.min(time, total), globalTime = cycles * rows.reduce((sum, row) => sum + activeTime(row, length(row)), 0);
+  let remaining = repeat ? time % total : Math.min(time, total);
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index], span = length(row);
     if (remaining < span || index === rows.length - 1) {
       const sequence = model.Sequences[row.sequence], [start, end] = sequence.Interval;
       const elapsed = activeTime(row, remaining), duration = end - start;
       const looping = row.loop !== false && !sequence.NonLooping;
-      return { sequenceIndex: row.sequence, frame: start + (looping && duration > 0 ? elapsed % duration : Math.min(duration, elapsed)), localTime: elapsed, globalTime: globalTime + elapsed,
+      return { sequenceIndex: row.sequence, frame: start + (looping && duration > 0 ? elapsed % duration : Math.min(duration, elapsed)), localTime: elapsed, globalTime: time*1000, looping,
         active: duration > 0 && (looping || elapsed < duration) && (repeat || time < total), segment: cycles * rows.length + index,
         portrait: /portrait/i.test(sequence.Name || '') };
     }
-    remaining -= span; globalTime += activeTime(row, span);
+    remaining -= span;
   }
 }
 
