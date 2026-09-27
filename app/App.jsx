@@ -7,7 +7,7 @@ import {validatePaintAssignments,repairPaintMaterials} from '../src/paint-materi
 import {preparePaintModelCommit,commitPaintModel,adoptCommittedPaintUVs} from '../src/paint-model-integration.js';
 import Addons from './Addons.jsx';
 import { directlyBoundBoneIds } from '../src/binding-inspection.js';
-import { applyPortraitModelTransform, modelControlRoots } from '../src/portrait-model-control.js';
+import { applyPortraitModelTransform, modelControlGroups, modelControlRoots } from '../src/portrait-model-control.js';
 import { attachToBone, changeVertexBinding, createRigNode, deleteRigNode, detachFromBone, renameRigNode, setBoneBillboarded } from '../src/bone-tools.js';
 import { builtinTextureAssets } from '../src/builtin-textures.js';
 const BitsAndParts = lazy(() => import('./BitsAndParts.jsx'));
@@ -159,6 +159,8 @@ export default function App() {
   const [cameraAngles, setCameraAngles] = useState({x:0,y:0,z:0}), [cameraAnglesRequest,setCameraAnglesRequest] = useState(null), [cameraGesture,setCameraGesture] = useState(false);
   const [portraitEnabled, setPortraitEnabled] = useState(false), [portraitCameraIndex, setPortraitCameraIndex] = useState(0);
   const [controlModelIds, setControlModelIds] = useState([]);
+  const [controlModelGroup, setControlModelGroup] = useState('all');
+  useEffect(() => { setControlModelGroup('all'); setControlModelIds([]); }, [session.id]);
   const [portraitSnapRevision, setPortraitSnapRevision] = useState(0);
   const receiveCameraAngles = useCallback(value => setCameraAngles(previous => ['x','y','z'].some(axis=>Math.abs(previous[axis]-value[axis])>.001)?value:previous), []);
   const cameraProps = {onCameraAnglesChange:receiveCameraAngles,cameraAnglesRequest,onCameraGestureChange:setCameraGesture,onSensitivityIndicator:setAdjustingInput};
@@ -372,10 +374,11 @@ export default function App() {
     if (index !== false) { setPortraitCameraIndex(index); setPortraitView('perspective'); }
     return index;
   };
-  const selectControlModel = () => {
+  const selectControlModel = (group = controlModelGroup) => {
     try {
-      const ids = modelControlRoots(model).map(root => root.id);
-      setControlModelIds(ids); setSelectedNodeIds(ids); setMovementMode('move'); setMovementSpace('world'); setTool('translate'); setCameraMode('work'); setPlaying(false);
+      const ids = group === 'all' ? modelControlRoots(model).map(root => root.id) : modelControlGroups(model)[Number(group)]?.ids;
+      if (!ids?.length) throw new Error('Control Model group is unavailable.');
+      setControlModelGroup(group); setControlModelIds(ids); setSelectedNodeIds(ids); setMovementMode('move'); setMovementSpace('world'); setTool('translate'); setCameraMode('work'); setPlaying(false);
     } catch (cause) { say(cause.message, true); }
   };
   const setMissingPortraitCamera = () => {
@@ -1043,6 +1046,7 @@ export default function App() {
     {inspectingMotion && animationPanel === 'movement' && motion.active && <Suspense fallback={null}><MotionInspector time={time} selectedNodeIds={selectedNodeIds} mode={movementMode} motion={motion} anchor={motionAnchor} onClose={closeMotion} onSelect={selectMotion} onReplay={replayMotion}/></Suspense>}
   </KeyframeTimeline></Suspense>);
   const activePortrait = portraitModeActive;
+  const controlGroups = useMemo(() => { try { return modelControlGroups(model); } catch { return []; } }, [model, doc.revision]);
   const cameraPortraitActive = activePortrait && !!model.Cameras?.[portraitCameraIndex];
   // Gate BEFORE mounting the timeline/controllers. Their duplicate-owner edit
   // invariant remains strict; malformed models get a choice instead of a crash.
@@ -1083,7 +1087,7 @@ export default function App() {
       {mode === 'vertices' && <><label className="check"><input type="checkbox" aria-label="RGB Preview" checked={rgbPreview} onChange={event=>{setRGBPreview(event.target.checked);if(rgbSequence<0 && model.Sequences.length)setRGBSequence(0);}}/>RGB Preview</label><select aria-label="RGB preview animation" disabled={!rgbPreview} value={rgbSequence} onChange={event=>setRGBSequence(Number(event.target.value))}><option value={-1}>Static RGB</option>{model.Sequences.map((item,index)=><option key={index} value={index}>{item.Name}</option>)}</select></>}
       {inputStrength}
     </div>
-    {mode === 'animation' && animationPanel === 'movement' && <PortraitToolbar model={model} active={activePortrait} cameraIndex={portraitCameraIndex} disabled={doc.readOnly || saving} controlModel={controlsWholeModel(selectedNodeIds)} onControlModel={selectControlModel} onToggle={() => activePortrait ? setPortraitEnabled(false) : enablePortrait()} onCameraIndex={value => { setPortraitView('perspective'); setPortraitCameraIndex(value); }} onSetView={updatePortraitCamera} onSnap={() => { setPortraitView('perspective'); setPortraitSnapRevision(value => value + 1); }}/>}
+    {mode === 'animation' && animationPanel === 'movement' && <PortraitToolbar model={model} active={activePortrait} cameraIndex={portraitCameraIndex} disabled={doc.readOnly || saving} controlModel={controlsWholeModel(selectedNodeIds)} controlGroups={controlGroups} controlModelGroup={controlModelGroup} onControlModel={() => selectControlModel()} onControlModelGroup={selectControlModel} onToggle={() => activePortrait ? setPortraitEnabled(false) : enablePortrait()} onCameraIndex={value => { setPortraitView('perspective'); setPortraitCameraIndex(value); }} onSetView={updatePortraitCamera} onSnap={() => { setPortraitView('perspective'); setPortraitSnapRevision(value => value + 1); }}/>}
     <main className={`classic-workspace${mode === 'vertices' && quadView ? ' quad-workspace' : ''}${mode === 'animation' ? ' animation-workspace' : ''}${mode === 'uv' ? ' uv-immersive' : ''}${mode === 'paint' ? ' paint-immersive' : ''}`} inert={saving || undefined}><section className="classic-view">
       {mode !== 'uv' && mode !== 'paint' && <div className="classic-view-label"><select data-warmkey="viewDirection" aria-label="View direction" value={cameraPortraitActive ? portraitView : mode === 'vertices' && quadView ? activeVertexPane?.view || 'front' : view} onChange={event => cameraPortraitActive ? setPortraitView(event.target.value) : setView(event.target.value)}>{(mode === 'vertices' && quadView ? QUAD_VIEW_OPTIONS : views.map(name => [name, name[0].toUpperCase() + name.slice(1)])).map(([name, label]) => <option key={name} value={name}>{label}</option>)}</select>{!cleanAnimationPreview && <select aria-label="Render mode" value={renderMode} onChange={event=>{setRenderMode(event.target.value);setCleanViews(previous=>({...previous,[mode]:false}));}}><option value="wireframe">Wireframe</option><option value="solid">Surface</option><option value="textured">Textured View</option></select>}{mode === 'vertices' && <button aria-pressed={quadView} onClick={toggleQuadView}>Quad View</button>}<button data-warmkey="fit" title="Fit model" onClick={()=>frame(false)}>Fit</button><button data-warmkey="fitSelection" title="Fit selection" onClick={()=>frame(true)}>Fit selection</button></div>}
       {normalsXL && <div className="normals-xl-prompt" role="status"><span><b>NormalsXL · Pick 1 normal</b> Click one vertex whose normal correctly faces out of the surface (or into it). This pick corrects the original selection.</span><button onClick={() => setNormalsXL(null)}>Cancel</button></div>}

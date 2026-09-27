@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sampleNodeMatrices, skinGeoset } from '../src/animation.js';
 import { sampleMovement } from '../src/movement.js';
-import { applyPortraitModelTransform, modelControlRoots } from '../src/portrait-model-control.js';
+import { applyPortraitModelTransform, modelControlGroups, modelControlRoots } from '../src/portrait-model-control.js';
 
 const fixture = () => ({
   Sequences: [
@@ -24,6 +24,7 @@ const posed = (model, frame, sequence) => Array.from(skinGeoset(model.Geosets[0]
 test('Control Model selects every root needed by bound geosets and moves both Portrait variants', () => {
   const model = fixture();
   assert.deepEqual(modelControlRoots(model).map(root => root.id), [1, 2]);
+  assert.deepEqual(modelControlGroups(model).map(group => group.ids), [[1, 2]]);
   const stand = posed(model, 50, 0), child = structuredClone(model.Bones[2]);
   applyPortraitModelTransform(model, [1, 2], 150, 1, { mode: 'move', space: 'world', values: [0, 5, 0] });
   for (const [frame, sequence] of [[100, 1], [200, 1], [300, 2], [400, 2]]) {
@@ -32,6 +33,26 @@ test('Control Model selects every root needed by bound geosets and moves both Po
   }
   assert.deepEqual(posed(model, 50, 0), stand);
   assert.deepEqual(model.Bones[2], child);
+});
+
+test('Control Model offers separate geoset groups and edits only the chosen group', () => {
+  const model = fixture();
+  model.Geosets = [
+    { Vertices: new Float32Array([0, 0, 0]), VertexGroup: [0], Groups: [[1]] },
+    { Vertices: new Float32Array([10, 0, 0]), VertexGroup: [0], Groups: [[3]] },
+  ];
+  assert.deepEqual(modelControlGroups(model), [
+    { ids: [1], geosetIndices: [0] },
+    { ids: [2], geosetIndices: [1] },
+  ]);
+  const first = structuredClone(model.Bones[0]), child = structuredClone(model.Bones[2]);
+  applyPortraitModelTransform(model, [2], 150, 1, { mode: 'move', space: 'world', values: [0, 5, 0] });
+  assert.deepEqual(model.Bones[0], first);
+  assert.deepEqual(model.Bones[2], child);
+  for (const [frame, sequence] of [[100, 1], [200, 1], [300, 2], [400, 2]]) {
+    assert.deepEqual(Array.from(skinGeoset(model.Geosets[0], sampleNodeMatrices(model, frame, sequence))), [0, 0, 0]);
+    assert.deepEqual(Array.from(skinGeoset(model.Geosets[1], sampleNodeMatrices(model, frame, sequence))), [10, 5, 0]);
+  }
 });
 
 test('Control Model rotates separate root trees together around their shared center', () => {
