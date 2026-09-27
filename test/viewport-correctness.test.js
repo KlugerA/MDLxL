@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
-import { VIEW_PRESETS, applyViewPreset, applyModelCamera, depthClipRange, projectedPlaneTranslation } from '../app/viewport-math.js';
+import { VIEW_PRESETS, applyViewPreset, applyModelCamera, depthClipRange, modelClipRadius, projectedPlaneTranslation } from '../app/viewport-math.js';
 import { createOverlayDepth } from '../app/preview-depth.js';
 import { projectGridSegment } from '../app/preview-overlays.js';
 import { gridSegments } from '../app/viewport-grid.js';
@@ -91,4 +91,20 @@ test('configured middle pan does not trigger classic middle-click mode toggle', 
   const controller = createScrollSensitivity({ getPreferences: () => ({ cameraBindings: { middle:'pan' } }), onCameraModeToggle:()=>toggles++ });
   const event = { button:1, pointerId:1, preventDefault:()=>consumed++, stopImmediatePropagation:()=>consumed++ };
   controller.pointerDown(event); controller.pointerUp(event); assert.equal(consumed,0); assert.equal(toggles,0);
+});
+
+
+test('empty inverted animation bounds cannot clip otherwise visible model geometry', () => {
+  const extreme = 3.402820018375656e38;
+  const empty = { MinimumExtent: [extreme, extreme, extreme], MaximumExtent: [-extreme, -extreme, -extreme] };
+  const valid = { MinimumExtent: [-100, -100, -100], MaximumExtent: [100, 100, 100] };
+  const model = { Info: valid, Sequences: [empty, valid], Geosets: [{ ...valid, Anims: [empty] }] };
+  const before = structuredClone(model), center = new Vector3();
+  const radius = modelClipRadius(model, center, 100);
+  assert.equal(radius, Math.sqrt(30000));
+  const clips = depthClipRange(320, radius);
+  assert.ok(clips.near < 220 && clips.far > 420, 'the mesh remains inside the camera depth range');
+  assert.deepEqual(model, before, 'source extent records remain unchanged');
+  assert.equal(modelClipRadius({ Sequences: [empty] }, center, 100), 100);
+  assert.equal(modelClipRadius({ Info: { MinimumExtent: [0, 0, 0], MaximumExtent: [1000, 0, 0] } }, center, 100), 1000, 'large ordered bounds still count');
 });

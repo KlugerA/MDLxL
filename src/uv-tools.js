@@ -52,16 +52,16 @@ export function relevantUVMaterials(model, selectionByGeoset, time = 0, sequence
 }
 
 /** Flatten several geosets that use one material into one temporary UV canvas. */
-export function combineUVGeosets(model, geosetIndices, eligibleSelection, selectedSelection, coordId = 0) {
+function combineUVGeosetsBySet(model, geosetIndices, eligibleSelection, selectedSelection, uvSetForGeoset) {
   const refs = [], coordinates = [], faces = [], eligibleVertices = [], selectedVertices = [];
   let offset = 0;
   for (const geosetIndex of uniqueIndices(geosetIndices)) {
-    const geoset = model?.Geosets?.[geosetIndex], uv = geoset?.TVertices?.[coordId];
+    const geoset = model?.Geosets?.[geosetIndex], uvSet = uvSetForGeoset(geosetIndex), uv = geoset?.TVertices?.[uvSet];
     if (!uv) continue;
     const count = Math.min(geoset.Vertices.length / 3, uv.length / 2), allowed = new Set(uniqueIndices(eligibleSelection?.[geosetIndex]).filter(index => index < count));
     const selected = new Set(uniqueIndices(selectedSelection?.[geosetIndex]).filter(index => allowed.has(index)));
     for (let index = 0; index < count; index++) {
-      refs.push({ geosetIndex, vertexIndex: index }); coordinates.push(uv[index * 2], uv[index * 2 + 1]);
+      refs.push({ geosetIndex, vertexIndex: index, uvSet }); coordinates.push(uv[index * 2], uv[index * 2 + 1]);
       if (allowed.has(index)) eligibleVertices.push(offset + index);
       if (selected.has(index)) selectedVertices.push(offset + index);
     }
@@ -76,6 +76,17 @@ export function combineUVGeosets(model, geosetIndices, eligibleSelection, select
       Faces: new Uint32Array(faces),
     },
   };
+}
+
+export function combineUVGeosets(model, geosetIndices, eligibleSelection, selectedSelection, coordId = 0) {
+  return combineUVGeosetsBySet(model, geosetIndices, eligibleSelection, selectedSelection, () => coordId);
+}
+
+/** One canvas for the selection captured before entering UV mode. Its texture
+ * backdrop can change without rerouting any geoset's UV coordinates. */
+export function combineSelectedUVGeosets(model, eligibleSelection, selectedSelection, materialEntries) {
+  const coordByGeoset = new Map(materialEntries.flatMap(entry => entry.geosetIndices.map(index => [index, entry.coordId])));
+  return combineUVGeosetsBySet(model, Object.keys(eligibleSelection).map(Number), eligibleSelection, selectedSelection, index => coordByGeoset.get(index) ?? 0);
 }
 
 /** Expand a flattened UV canvas back to the model's individual UV arrays. */
@@ -188,4 +199,22 @@ export function projectUVFromView(geoset, indices, viewMatrix, projectionMatrix,
     next[index * 2 + 1] = (1 - clip[1] / clip[3]) / 2;
   }
   return next;
+}
+
+/** Commit only changed coordinates to each original geoset and UV set. */
+export function splitSelectedUVGeosets(model, refs, values) {
+  if (!values || values.length !== refs.length * 2) throw Error('Combined UV coordinates changed structure.');
+  const changes = new Map();
+  for (let index = 0; index < refs.length; index++) {
+    const { geosetIndex, vertexIndex, uvSet } = refs[index], source = model?.Geosets?.[geosetIndex]?.TVertices?.[uvSet];
+    if (!source) continue;
+    const u = Number(values[index * 2]), v = Number(values[index * 2 + 1]);
+    if (![u, v].every(value => Number.isFinite(value) && Number.isFinite(Math.fround(value)))) throw Error('UV coordinates must be finite.');
+    if (u === source[vertexIndex * 2] && v === source[vertexIndex * 2 + 1]) continue;
+    const key = geosetIndex + ':' + uvSet;
+    if (!changes.has(key)) changes.set(key, { geosetIndex, uvSet, values: new Float32Array(source) });
+    const target = changes.get(key).values;
+    target[vertexIndex * 2] = u; target[vertexIndex * 2 + 1] = v;
+  }
+  return [...changes.values()];
 }

@@ -43,9 +43,11 @@ import { retainedForgeAssets, forgeExportArchive, isForgeAssetPath, missingForge
 import { applyMovementTransform, movementRestricted, constrainMovementVector, movementProperties } from '../src/movement.js';
 import { classicTimelineDomain } from '../src/classic-keyframes.js';
 import { beginUVPreview, applyUVPreviews, revertUVPreviews, uvPreviewModel, restoreUVPreviews, addLibraryTexture, validateUVPreview, captureUVPreviewGuard, validateUVPreviewGuard, getUVPreviewSelection } from '../src/uv-preview.js';
+import { applyMaterialPreset } from '../src/material-presets.js';
 import { setUVTextureWrapping, uncoupleUVVertices } from '../src/uv-tools.js';
 import './modules.css';
 import './texture-library.css';
+import './material-properties.css';
 const Settings = lazy(() => import('./Settings.jsx'));
 import { installTextureLibraryDecoder } from './asset-preload-client.js';
 import { WarmKeysProvider } from './WarmKeys.jsx';
@@ -946,7 +948,7 @@ export default function App() {
     return () => clearTimeout(timer);
   },[preferences,preferencesReady]);
   useEffect(() => window.desktop?.onBeforeClose?.(async () => { const captures=[]; window.dispatchEvent(new CustomEvent('mdlvis-flush-captures',{detail:captures})); await Promise.all(captures); clearTimeout(preferencesTimer.current); if(!latest.current.preferencesReady)return; const current=preferencesRef.current, encoded=JSON.stringify(current); if(savedPreferences.current!==encoded) {await window.desktop.configure({preferences:current});savedPreferences.current=encoded;} }),[]);
-  useEffect(() => { if(preferencesReady) resolveTextures(); },[preferencesReady]);
+  useEffect(() => { if(preferencesReady) resolveTextures(); },[preferencesReady, JSON.stringify(model.Textures.map(texture => texture.Image))]);
 
 
   // NonLooping is a Warcraft III serialization flag. Editor playback loops
@@ -1004,11 +1006,11 @@ export default function App() {
       }
     });
   };
-  const uncoupleUVSelection = (currentSelection, coordId = uvSet) => {
+  const uncoupleUVSelection = (currentSelection, coordByGeoset = {}) => {
     let nextSelection = { ...validSelection }, nextDomain = { ...uvEntrySelection };
     const result = edit('Uncouple UV vertices', ['Geosets'], current => {
       for (const [indexText, ids] of Object.entries(currentSelection || {})) {
-        const index = Number(indexText), uncoupled = uncoupleUVVertices(current.Geosets[index], ids, coordId);
+        const index = Number(indexText), uncoupled = uncoupleUVVertices(current.Geosets[index], ids, coordByGeoset[index] ?? uvSet);
         nextSelection[index] = [];
         nextDomain[index] = [...new Set([...(nextDomain[index] || []), ...uncoupled.created])];
       }
@@ -1027,9 +1029,8 @@ export default function App() {
             return expanded;
           });
           setSelection(filterVertexSelection(next, new Set(Object.keys(uvEntrySelection).map(Number)), doc.model));
-        }}
-        onWorkingSelectionChange={next => { const indices = new Set(Object.keys(next).map(Number)); setUVEntrySelection(next); setSelectable(indices); setSelection(filterVertexSelection(next, indices, doc.model)); setHidden({}); setActiveGeoset(indices.values().next().value ?? -1); setLiveUV(null); }}
-        onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
+        }}        onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
+        onMaterialPreset={(id, preset, tint) => edit(preset, ['Materials', 'Textures'], current => applyMaterialPreset(current, id, preset, tint))}
         onWrappingChange={(textureIDs, enabled) => edit(`${enabled ? 'Enable' : 'Disable'} UV texture wrapping`, ['Textures'], current => setUVTextureWrapping(current, textureIDs, enabled))}
         onGeosetChange={(index, coordId = 0) => { if (index < 0) return; setActiveGeoset(index); setUvSet(coordId); setLiveUV(null); }}
         textureAssets={session.assets} teamColor={teamColor} preferences={preferences} onPreferences={changePreferences} readOnly={doc.readOnly || saving}
