@@ -8,12 +8,13 @@ const {buildMenuTemplate}=createRequire(import.meta.url)('../electron/menu.cjs')
 
 test('preview options default clean and persist independently of editor mesh size/visibility',()=>{
   const next=normalizePreferences({uvPreviewDisplay:{mesh:'selected',size:2.5,textureFrame:true},visuals:{vertexSize:4,lineWidth:.5},grid:{planes:{xy:false}}});
-  assert.deepEqual(next.uvPreviewDisplay,{mesh:'selected',size:2.5,textureFrame:true});
+  assert.deepEqual(next.uvPreviewDisplay,{mesh:'selected',size:2.5,textureFrame:true,snapTextureFrame:false});
   assert.equal(next.visuals.vertexSize,4);assert.equal(next.visuals.lineWidth,.5);
   assert.deepEqual(importConfiguration(exportConfiguration(next)).uvPreviewDisplay,next.uvPreviewDisplay);
-  assert.deepEqual(normalizeUVPreviewDisplay({mesh:'bad',size:Infinity,textureFrame:'yes'}),{mesh:'none',size:.25,textureFrame:false});
-  assert.deepEqual(normalizeUVPreviewDisplay({size:-2,textureFrame:true}),{mesh:'none',size:.25,textureFrame:true});
-  assert.deepEqual(normalizeUVPreviewDisplay(),{mesh:'none',size:.25,textureFrame:false});
+  assert.equal(normalizePreferences({uvPreviewDisplay:{snapTextureFrame:true}}).uvPreviewDisplay.snapTextureFrame,true);
+  assert.deepEqual(normalizeUVPreviewDisplay({mesh:'bad',size:Infinity,textureFrame:'yes'}),{mesh:'none',size:.25,textureFrame:false,snapTextureFrame:false});
+  assert.deepEqual(normalizeUVPreviewDisplay({size:-2,textureFrame:true}),{mesh:'none',size:.25,textureFrame:true,snapTextureFrame:false});
+  assert.deepEqual(normalizeUVPreviewDisplay(),{mesh:'none',size:.25,textureFrame:false,snapTextureFrame:false});
 });
 
 test('Show mesh covers model geometry but Highlight Select contains only active selected UV points',()=>{

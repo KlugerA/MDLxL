@@ -1,13 +1,14 @@
 import MaterialProperties from './MaterialProperties.jsx';
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import UVEditor from './UVEditor.jsx';
-import { combineUVGeosets, projectUVFromView, relevantUVMaterials, splitCombinedUV } from '../src/uv-tools.js';
+import { combineSelectedUVGeosets, projectUVFromView, relevantUVMaterials, splitSelectedUVGeosets } from '../src/uv-tools.js';
+import { MousePointer2, Hand, RotateCw, Maximize2, FlipHorizontal2, FlipVertical2, Unlink2, FoldHorizontal } from 'lucide-react';
 import { uvToolState } from '../src/uv-tool-state.js';
 import { hiddenUVPreviewGeosets, normalizeUVPreviewDisplay, previewMeshDomain, uvPreviewOverlay } from '../src/uv-preview-display.js';
 import { renderUVMaterialTexture } from './uv-material-preview.js';
 import { normalizeUVGrid, UV_GRID_SPACING_MAX, UV_GRID_SPACING_MIN, uvGridSpacingFromSlider, uvGridSpacingSliderValue } from '../src/uv-grid.js';
 import {
-  UV_PREVIEW_DEFAULT, UV_PREVIEW_MAX, UV_PREVIEW_MIN, UV_SELECT_PREVIEW_DEFAULT,
+  UV_PREVIEW_DEFAULT, UV_PREVIEW_MAX, UV_PREVIEW_MIN,
   UV_SIDE_DEFAULT, UV_SIDE_MAX, UV_SIDE_MIN, clampUVPreviewPercent, clampUVSidePercent,
   uvPreviewPercentAtPointer, uvSidePercentAtPointer,
 } from './uv-workspace-layout.js';
@@ -16,7 +17,7 @@ import './uv-workspace.css';
 const GamePreview = lazy(() => import('./GamePreview.jsx'));
 const unique = values => [...new Set(Array.from(values || []).filter(Number.isSafeInteger))];
 const selectedCount = value => Object.values(value || {}).reduce((sum, ids) => sum + (ids?.length || 0), 0);
-const LAYOUT_KEYS = { side: 'mdlxl.uv.side-percent', preview: 'mdlxl.uv.preview-percent', selectPreview: 'mdlxl.uv.select-preview-percent' };
+const LAYOUT_KEYS = { side: 'mdlxl.uv.side-percent', preview: 'mdlxl.uv.preview-percent' };
 const STANDARD_PROJECTIONS = [['top','Top'],['bottom','Bottom'],['front','Front'],['back','Back'],['left','Side Left'],['right','Side Right']];
 const ANGLED_PROJECTIONS = [
   ['top-front-right','Top Front Right'],['top-front-left','Top Front Left'],['top-back-right','Top Back Right'],['top-back-left','Top Back Left'],
@@ -32,16 +33,10 @@ function rememberLayout(key, value) {
   try { localStorage.setItem(key, String(value)); } catch { /* A locked-down browser can keep the in-session layout. */ }
 }
 
-function FoldIcon() {
-  return <svg className="uv-pixel-icon" viewBox="0 0 16 16" shapeRendering="crispEdges" aria-hidden="true">
-    <rect x="1" y="1" width="14" height="14" fill="#142a91"/><rect x="2" y="2" width="12" height="12" fill="#f5f5f5"/>
-    <path d="M3 4h5v8H3z" fill="#b9c9ee"/><path d="M8 4h5v8H8z" fill="#fff"/><path d="M3 3h10v1H3zm0 9h10v1H3zM3 4h1v8H3zm9 0h1v8h-1z" fill="#202020"/>
-    <path d="M8 4h1v8H8z" fill="#777"/><path d="M12 4h2v5h-2V7h-2V6h2zM9 5h2v1H9z" fill="#ff00e1"/>
-  </svg>;
-}
-
-function Tool({ action, icon, iconClass = '', iconNode, label, active, disabled, onClick }) {
-  return <button type="button" data-warmkey={action} data-warmkey-category="UV" className={`uv-tool${active ? ' active' : ''}`} aria-label={label} title={label} aria-pressed={active === undefined ? undefined : active} disabled={disabled} onClick={onClick}>{icon ? <img className={iconClass} src={`./classic/${icon}.png`} alt="" draggable={false}/> : iconNode || label}</button>;
+const UV_ICONS = { select: MousePointer2, move: Hand, rotate: RotateCw, scale: Maximize2, mirrorX: FlipHorizontal2, mirrorY: FlipVertical2, uncouple: Unlink2, fold: FoldHorizontal };
+function Tool({ action, icon, label, active, disabled, onClick }) {
+  const Icon = UV_ICONS[icon];
+  return <button type="button" data-warmkey={action} data-warmkey-category="UV" className={`uv-tool${active ? ' active' : ''}`} aria-label={label} title={label} aria-pressed={active === undefined ? undefined : active} disabled={disabled} onClick={onClick}>{Icon ? <Icon size={20} strokeWidth={1.9} aria-hidden="true"/> : label}</button>;
 }
 
 function UVGridControls({ value, onChange, children }) {
@@ -87,43 +82,21 @@ function Splitter({ orientation, label, value, minimum, maximum, defaultValue, o
     onPointerMove={event => { if (pointer.current === event.pointerId) { onPointerValue(event); event.preventDefault(); } }} onPointerUp={stop} onPointerCancel={stop}><span/></div>;
 }
 
-function GeosetPicker({ options, value, attention = false, onChoose, onHover }) {
-  const [open, setOpen] = useState(false);
-  const selected = options.find(option => option.index === value) || null;
-  const close = () => { setOpen(false); onHover(null); };
-  return <div className="uv-geoset-picker" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
-    <span>Geoset</span><button type="button" className={`uv-geoset-trigger${attention ? ' attention' : ''}`} aria-haspopup="listbox" aria-expanded={open} onClick={() => { const next = !open; setOpen(next); onHover(next && selected ? value : null); }}>{selected?.label || 'Choose geoset…'}<span aria-hidden="true">▾</span></button>
-    {open && <div className="uv-geoset-menu" role="listbox" aria-label="Select new geoset">{options.map(option => <button type="button" role="option" aria-selected={option.index === value} className={option.index === value ? 'selected' : ''} data-geoset-index={option.index} key={option.index}
-      onPointerEnter={() => onHover(option.index)} onFocus={() => onHover(option.index)} onClick={() => { onChoose(option.index); close(); }}>{option.label}</button>)}</div>}
-  </div>;
-}
-
 export default function UVWorkspace({ model, materialModel = model, previewModel, revision = 0, activeGeoset = -1, eligibleSelection = {}, selectionByGeoset = {}, onSelectionChange,
-  onPreviewSelectionChange, onWorkingSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onWrappingChange, onMaterialPreset, textureAssets, teamColor, preferences, onPreferences,
+  onPreviewSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onWrappingChange, onMaterialPreset, textureAssets, teamColor, preferences, onPreferences,
   draftCount = 0, onLibrary, onSavePreview, onRevertPreview, previewProps, readOnly = false, onExit }) {
-  const [materialID, setMaterialID] = useState(null), [uvTool, setUVTool] = useState('select'), [foldDirection, setFoldDirection] = useState('right-to-left');
-  const [selectingNew, setSelectingNew] = useState(false), [selectGeoset, setSelectGeoset] = useState(-1), [selectionDraft, setSelectionDraft] = useState({}), [hoveredGeoset, setHoveredGeoset] = useState(null);
+  const [materialID, setMaterialID] = useState(null), [uvTool, setUVTool] = useState('select'), [axis, setAxis] = useState(null), [foldDirection, setFoldDirection] = useState('right-to-left');
   const [showOnlySelected, setShowOnlySelected] = useState(false), [hideRGB, setHideRGB] = useState(false), [showVerticles, setShowVerticles] = useState(false);
   const [projectionPreset, setProjectionPreset] = useState({ name: '', revision: 0 });
   const [materialPreview, setMaterialPreview] = useState(null), [materialError, setMaterialError] = useState('');
   const [sidePercent, setSidePercent] = useState(() => storedLayout(LAYOUT_KEYS.side, UV_SIDE_DEFAULT, clampUVSidePercent));
   const [previewPercent, setPreviewPercent] = useState(() => storedLayout(LAYOUT_KEYS.preview, UV_PREVIEW_DEFAULT, clampUVPreviewPercent));
-  const [selectPreviewPercent, setSelectPreviewPercent] = useState(() => storedLayout(LAYOUT_KEYS.selectPreview, UV_SELECT_PREVIEW_DEFAULT, clampUVPreviewPercent));
-  const projectionView = useRef(null), workspaceBody = useRef(null), sidePanel = useRef(null);
-  const activePreviewPercent = selectingNew ? selectPreviewPercent : previewPercent;
-  const selectionKey = JSON.stringify(selectionByGeoset), eligibilityKey = JSON.stringify(eligibleSelection), draftKey = JSON.stringify(selectionDraft);
+  const [rightHeaderHeight, setRightHeaderHeight] = useState(69);
+  const projectionView = useRef(null), workspaceBody = useRef(null), sidePanel = useRef(null), header = useRef(null);
+  const activePreviewPercent = previewPercent;
+  const selectionKey = JSON.stringify(selectionByGeoset), eligibilityKey = JSON.stringify(eligibleSelection);
   const previewDomain = useMemo(() => previewMeshDomain(model), [model, revision]);
-  const geosetOptions = useMemo(() => model.Geosets.flatMap((geoset, index) => geoset?.TVertices?.length ? [{ index, label: `Geoset ${index + 1} · Material ${(geoset.MaterialID ?? 0) + 1}` }] : []), [model, revision]);
-  const selectDomain = useMemo(() => selectGeoset >= 0 && previewDomain[selectGeoset] ? { [selectGeoset]: previewDomain[selectGeoset] } : {}, [previewDomain, selectGeoset]);
-  // Selecting a new area changes the material backdrop immediately, while the
-  // editable UV domain grows only from vertices explicitly picked in 3D.
-  const entryDomain = selectingNew && selectGeoset >= 0 ? selectDomain : eligibleSelection;
-  const editingDomain = selectingNew ? selectionDraft : eligibleSelection;
-  const activeSelection = selectingNew ? selectionDraft : selectionByGeoset;
-  const entryDomainKey = selectingNew && selectGeoset >= 0 ? `${selectGeoset}:all` : eligibilityKey;
-  const editingDomainKey = selectingNew ? draftKey : eligibilityKey;
-  const activeSelectionKey = selectingNew ? draftKey : selectionKey;
-  const materialEntries = useMemo(() => relevantUVMaterials(materialModel, entryDomain), [materialModel, revision, entryDomainKey]);
+  const materialEntries = useMemo(() => relevantUVMaterials(materialModel, eligibleSelection), [materialModel, revision, eligibilityKey]);
   const current = materialEntries.find(entry => entry.materialID === materialID) || materialEntries[0] || null;
   const imageLayers = (current?.layers || []).filter(({ texture }) => texture && !texture.ReplaceableId && texture.Image?.trim());
   const wrappingEnabled = imageLayers.length > 0 && imageLayers.every(({ texture }) => (texture.Flags & 3) === 3);
@@ -137,21 +110,21 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
 
   useEffect(() => { rememberLayout(LAYOUT_KEYS.side, sidePercent); }, [sidePercent]);
   useEffect(() => { rememberLayout(LAYOUT_KEYS.preview, previewPercent); }, [previewPercent]);
-  useEffect(() => { rememberLayout(LAYOUT_KEYS.selectPreview, selectPreviewPercent); }, [selectPreviewPercent]);
-  useEffect(() => { if (!selectingNew) setHoveredGeoset(null); }, [selectingNew]);
+  useEffect(() => {
+    const element = header.current, ownerWindow = element?.ownerDocument.defaultView;
+    if (!element || !ownerWindow?.ResizeObserver) return;
+    const measure = () => setRightHeaderHeight(Math.ceil(element.getBoundingClientRect().height));
+    const observer = new ownerWindow.ResizeObserver(measure); observer.observe(element); measure();
+    return () => observer.disconnect();
+  }, []);
 
-  const materialSelection = useMemo(() => {
-    const result = {};
-    for (const index of current?.geosetIndices || []) result[index] = unique(activeSelection[index]).filter(id => editingDomain[index]?.includes(id));
-    return result;
-  }, [current?.materialID, activeSelectionKey, editingDomainKey]);
-  const materialEligible = useMemo(() => Object.fromEntries((current?.geosetIndices || []).map(index => {
-    const uv = model.Geosets[index]?.TVertices?.[current.coordId] || [];
+  const allSelected = useMemo(() => Object.fromEntries(Object.entries(selectionByGeoset).map(([index, ids]) => [index, unique(ids).filter(id => eligibleSelection[index]?.includes(id))])), [selectionKey, eligibilityKey]);
+  const allEligible = useMemo(() => Object.fromEntries(materialEntries.flatMap(entry => entry.geosetIndices.map(index => {
+    const uv = model.Geosets[index]?.TVertices?.[entry.coordId] || [];
     return [index, (previewDomain[index] || []).filter(id => id * 2 + 1 < uv.length && Number.isFinite(uv[id * 2]) && Number.isFinite(uv[id * 2 + 1]))];
-  })), [current?.materialID, current?.coordId, model, previewDomain]);
-  const materialSelectionKey = JSON.stringify(materialSelection);
-  const combined = useMemo(() => current ? combineUVGeosets(model, current.geosetIndices, editingDomain, materialSelection, current.coordId) : null,
-    [model, revision, current?.materialID, current?.coordId, editingDomainKey, materialSelectionKey]);
+  }))), [materialEntries, model, previewDomain]);
+  const combined = useMemo(() => combineSelectedUVGeosets(model, eligibleSelection, allSelected, materialEntries),
+    [model, revision, eligibilityKey, selectionKey, materialEntries]);
   const materialSignature = current ? JSON.stringify({ material: materialModel.Materials?.[current.materialID], textures: current.layers.map(layer => layer.texture) }) : '';
 
   useEffect(() => {
@@ -163,18 +136,16 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
 
   const display = normalizeUVPreviewDisplay(preferences?.uvPreviewDisplay), uvGrid = normalizeUVGrid(preferences?.uvGrid), liveView = display.mesh === 'selected';
   const selectedGeosets = Object.keys(eligibleSelection).filter(index => eligibleSelection[index]?.length).map(Number);
-  const rgbTarget = selectingNew ? selectGeoset : selectedGeosets.includes(activeGeoset) ? activeGeoset : selectedGeosets[0] ?? -1;
-  const hiddenPreviewGeosets = hiddenUVPreviewGeosets(model, eligibleSelection, showOnlySelected && !selectingNew);
+  const rgbTarget = selectedGeosets.includes(activeGeoset) ? activeGeoset : selectedGeosets[0] ?? -1;
+  const hiddenPreviewGeosets = hiddenUVPreviewGeosets(model, eligibleSelection, showOnlySelected);
   // UV-grid preferences belong only to the 2D texture canvas. Keep the 3D
   // renderer's preference object stable while a grid control is adjusted.
   const previewPreferencesInput = { ...(preferences || {}) }; delete previewPreferencesInput.uvGrid;
   const previewPreferencesKey = JSON.stringify(previewPreferencesInput);
   const previewPreferences = useMemo(() => previewPreferencesInput, [previewPreferencesKey]);
-  const liveOverlay = selectingNew
-    ? { allMesh: true, interactiveSelection: true, highlightSelection: false, size: display.size, color: preferences?.visuals?.uvSelection, eligibleByGeoset: selectDomain, selectionByGeoset: selectionDraft }
-    : showVerticles
-      ? { allMesh: true, interactiveSelection: true, highlightSelection: false, size: display.size, color: preferences?.visuals?.uvSelection, eligibleByGeoset: materialEligible, selectionByGeoset: materialSelection }
-      : uvPreviewOverlay(previewDomain, materialSelection, null, { ...display, mesh: liveView ? 'selected' : 'none' }, preferences?.visuals?.uvSelection);
+  const liveOverlay = showVerticles
+    ? { allMesh: true, interactiveSelection: true, highlightSelection: false, size: display.size, color: preferences?.visuals?.uvSelection, eligibleByGeoset: allEligible, selectionByGeoset: allSelected }
+    : uvPreviewOverlay(previewDomain, allSelected, null, { ...display, mesh: liveView ? 'selected' : 'none' }, preferences?.visuals?.uvSelection);
 
   const dispatch = (kind, value) => window.dispatchEvent(new CustomEvent('mdlvis-uv-action', { detail: { kind, value } }));
   const chooseMaterial = value => {
@@ -182,20 +153,18 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
     if (entry?.geosetIndices.length) onGeosetChange?.(entry.geosetIndices[0], entry.coordId);
   };
   const selectCombined = ids => {
-    if (!combined || !current) return;
-    const chosen = new Set(ids), next = { ...activeSelection };
-    for (const index of current.geosetIndices) next[index] = [];
+    if (!combined) return;
+    const chosen = new Set(ids), next = { ...selectionByGeoset };
+    for (const index of Object.keys(eligibleSelection)) next[index] = [];
     combined.refs.forEach((ref, index) => { if (chosen.has(index)) (next[ref.geosetIndex] ||= []).push(ref.vertexIndex); });
-    if (selectingNew) setSelectionDraft(next); else onSelectionChange?.(next);
+    onSelectionChange?.(next);
   };
   const applyCombined = (values, preview = false, label = 'Edit UV coordinates') => {
-    if (!combined || readOnly || selectingNew) return;
-    const changes = splitCombinedUV(model, combined.refs, values, current.coordId);
+    if (!combined || readOnly) return;
+    const changes = splitSelectedUVGeosets(model, combined.refs, values);
     (preview ? onPreviewChanges : onUVChanges)?.(changes, label);
   };
-  const selectedForCurrent = Object.fromEntries(Object.entries(materialSelection).filter(([, ids]) => ids.length));
-  const currentSelectionCount = selectedCount(selectedForCurrent);
-  const toolState = uvToolState({ readOnly, selectingNew, selectionCount: currentSelectionCount, draftCount });
+  const toolState = uvToolState({ readOnly, selectionCount: selectedCount(allSelected), draftCount });
   useEffect(() => {
     const body = workspaceBody.current;
     if (!body) return;
@@ -215,40 +184,32 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   }, []);
   useEffect(() => {
     const action = event => {
-      if (selectingNew) return;
       const { kind, value } = event.detail || {};
       if (kind === 'tool' && ['select','move','rotate','scale'].includes(value)) setUVTool(value);
-      if (kind === 'uncouple' && toolState.uncouple) onUncouple?.(selectedForCurrent, current?.coordId || 0);
+      if (kind === 'uncouple' && toolState.uncouple) onUncouple?.(Object.fromEntries(Object.entries(allSelected).filter(([, ids]) => ids.length)), Object.fromEntries(materialEntries.flatMap(entry => entry.geosetIndices.map(index => [index, entry.coordId]))));
     };
     window.addEventListener('mdlvis-uv-action', action);
     return () => window.removeEventListener('mdlvis-uv-action', action);
-  }, [selectingNew, toolState.uncouple, materialSelectionKey, onUncouple]);
+  }, [toolState.uncouple, selectionKey, materialEntries, onUncouple]);
   const project = () => {
-    const view = projectionView.current; if (!view || readOnly || !selectedCount(selectedForCurrent)) return;
+    const view = projectionView.current; if (!view || readOnly || !selectedCount(allSelected)) return;
     try {
-      const changes = Object.entries(selectedForCurrent).map(([index, ids]) => ({ geosetIndex: Number(index), uvSet: current.coordId,
-        values: projectUVFromView(model.Geosets[index], ids, view.viewMatrix, view.projectionMatrix, model.Geosets[index].TVertices[current.coordId]) }));
+      const changes = Object.entries(allSelected).filter(([, ids]) => ids.length).map(([index, ids]) => {
+        const uvSet = materialEntries.find(entry => entry.geosetIndices.includes(Number(index)))?.coordId ?? 0;
+        return { geosetIndex: Number(index), uvSet,
+          values: projectUVFromView(model.Geosets[index], ids, view.viewMatrix, view.projectionMatrix, model.Geosets[index].TVertices[uvSet]) };
+      });
       onUVChanges?.(changes, 'Project UVs from model view');
     } catch (cause) { setMaterialError(cause.message); }
   };
-  const beginSelectNew = () => { if (!geosetOptions.length) return; setHoveredGeoset(null); setSelectGeoset(-1); setSelectionDraft({}); setUVTool('select'); setSelectingNew(true); };
-  const changeSelectGeoset = index => { setSelectGeoset(index); setSelectionDraft({ [index]: [] }); setMaterialID(materialModel.Geosets[index]?.MaterialID); onGeosetChange?.(index, relevantUVMaterials(materialModel, { [index]: previewDomain[index] })[0]?.coordId || 0); };
-  const finishSelectNew = () => {
-    const ids = unique(selectionDraft[selectGeoset]); if (!ids.length) { setMaterialError('Select at least one vertex in the model preview.'); return; }
-    const next = { [selectGeoset]: ids }; onWorkingSelectionChange?.(next); onSelectionChange?.(next); onGeosetChange?.(selectGeoset, relevantUVMaterials(materialModel, next)[0]?.coordId || 0); setMaterialID(materialModel.Geosets[selectGeoset].MaterialID); setHoveredGeoset(null); setSelectingNew(false);
-  };
-  const cancelSelectNew = () => { setHoveredGeoset(null); setSelectGeoset(-1); setSelectionDraft({}); setSelectingNew(false); };
-  const clearSelectNew = () => selectGeoset >= 0 && setSelectionDraft({ [selectGeoset]: [] });
   const chooseProjectionPreset = name => { if (name) setProjectionPreset(previous => ({ name, revision: previous.revision + 1 })); };
-  const selectNewCount = selectGeoset >= 0 ? unique(selectionDraft[selectGeoset]).length : 0;
-  const selectNewPrompt = selectGeoset < 0 ? 'Select a new geoset to work with' : selectNewCount ? 'Confirm Selection?' : 'Select new vertices to work with or a different geoset';
-  const setActivePreviewPercent = value => (selectingNew ? setSelectPreviewPercent : setPreviewPercent)(clampUVPreviewPercent(value));
-  const changeLiveDisplay = change => onPreferences?.({ ...preferences, uvPreviewDisplay: { ...display, ...change } });
+  const setActivePreviewPercent = value => setPreviewPercent(clampUVPreviewPercent(value));
+  const changeLiveDisplay = change => onPreferences?.({ ...preferences, uvPreviewDisplay: { ...preferences?.uvPreviewDisplay, ...display, ...change } });
   const changeLiveColor = color => onPreferences?.({ ...preferences, visuals: { ...preferences.visuals, uvSelection: color } });
   const changeUVGrid = value => onPreferences?.({ ...preferences, uvGrid: value });
 
   return <div className="uv-workspace" aria-label="UV wrapper workspace">
-    <header className="uv-workspace-header" style={{ '--uv-side-width': `${sidePercent}%` }}>
+    <header ref={header} className="uv-workspace-header" style={{ '--uv-side-width': `${sidePercent}%` }}>
       <div className="uv-map-header"><strong>UV Wrapper</strong><UVGridControls value={uvGrid} onChange={changeUVGrid}>
         <button type="button" disabled={readOnly || !onWrappingChange || !imageLayers.length}
           title="Toggle Wrap U and Wrap V for this material's image textures. Applies to all uses of these textures."
@@ -256,55 +217,53 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
       </UVGridControls></div>
       <div className="uv-header-divider" aria-hidden="true"/>
       <div className="uv-header-actions"><button disabled={readOnly} onClick={onLibrary}>Replace Texture…</button>{draftCount > 0 && <><button disabled={readOnly} onClick={onSavePreview}>Save texture</button><button disabled={readOnly} onClick={onRevertPreview}>Revert texture</button></>}<button onClick={onExit}>Exit UV Wrapper</button></div>
-      <div className="uv-material-controls"><label>Material <select aria-label="UV material" value={current?.materialID ?? ''} disabled={selectingNew} onChange={event => chooseMaterial(event.target.value)}>{materialEntries.map(entry => <option key={entry.materialID} value={entry.materialID}>{entry.label}</option>)}</select></label><MaterialProperties model={model} materialID={current?.materialID} disabled={readOnly || selectingNew} onChange={onMaterialPreset}/><span className="uv-material-summary">{current ? `${current.geosetIndices.length} geoset${current.geosetIndices.length === 1 ? '' : 's'} · UV ${current.coordId}` : 'No material for this selection'}</span></div>
+      <div className="uv-material-controls"><label><select aria-label="UV material" value={current?.materialID ?? ''} onChange={event => chooseMaterial(event.target.value)}>{materialEntries.map(entry => <option key={entry.materialID} value={entry.materialID}>{entry.label}</option>)}</select></label><MaterialProperties model={model} materialID={current?.materialID} disabled={readOnly} onChange={onMaterialPreset} compact/></div>
     </header>
     {(materialError || materialPreview?.warnings?.length > 0) && <div className="uv-workspace-warning" role="status">{materialError || materialPreview.warnings.join(' · ')}</div>}
-    <div ref={workspaceBody} className="uv-workspace-body" style={{ '--uv-side-width': `${sidePercent}%` }}>
+    <div ref={workspaceBody} className="uv-workspace-body" style={{ '--uv-side-width': `${sidePercent}%`, '--uv-right-header-height': `${rightHeaderHeight}px` }}>
       <section className="uv-map-pane" aria-label="UV texture map">
-        {combined?.eligibleVertices.length ? <UVEditor key={`${current.materialID}:${current.coordId}`} geoset={combined.geoset} uvSet={0} revision={revision} textureUrl={materialPreview?.url} textureSize={materialPreview ? [materialPreview.width, materialPreview.height] : undefined}
-          eligibleVertices={combined.eligibleVertices} selectedVertices={combined.selectedVertices} transformMode={uvTool} cameraMode="work" preferences={preferences} suspended={readOnly || selectingNew}
-          uvGrid={uvGrid} showTextureFrame={display.textureFrame} textureFrameColor={preferences?.visuals?.uvSelection}
+        {combined?.eligibleVertices.length ? <UVEditor key="selected-geosets" geoset={combined.geoset} uvSet={0} revision={revision} textureUrl={materialPreview?.url} textureSize={materialPreview ? [materialPreview.width, materialPreview.height] : undefined}
+          eligibleVertices={combined.eligibleVertices} selectedVertices={combined.selectedVertices} transformMode={uvTool} cameraMode="work" preferences={preferences} suspended={readOnly} axis={axis}
+          uvGrid={uvGrid} snapTextureFrame={display.snapTextureFrame} showTextureFrame={display.textureFrame} textureFrameColor={preferences?.visuals?.uvSelection}
           onSelectVertices={selectCombined} onChange={values => applyCombined(values)} onPreviewChange={values => values ? applyCombined(values, true) : onPreviewChanges?.(null)} />
           : <div className="classic-empty-view">Select textured vertices before opening the UV wrapper.</div>}
         <div className="uv-texture-caption">{materialPreview?.layerCount ? `${current?.label} · ${materialPreview.layerCount} rendered layer${materialPreview.layerCount === 1 ? '' : 's'} · seamless tiled view` : current?.label || 'No material loaded'}</div>
       </section>
       <Splitter orientation="vertical" label="Resize texture and live-view columns" value={sidePercent} minimum={UV_SIDE_MIN} maximum={UV_SIDE_MAX} defaultValue={UV_SIDE_DEFAULT}
         onValue={value => setSidePercent(clampUVSidePercent(value))} onPointerValue={event => { const rect = workspaceBody.current?.getBoundingClientRect(); if (rect) setSidePercent(uvSidePercentAtPointer(event.clientX, rect)); }}/>
-      <aside ref={sidePanel} className={`uv-side-panel${selectingNew ? ' selecting-new' : ''}`} style={{ '--uv-preview-height': `${activePreviewPercent}%`, '--uv-selection-color': preferences?.visuals?.uvSelection || '#4cff59' }}>
+      <aside ref={sidePanel} className="uv-side-panel" style={{ '--uv-preview-height': `${activePreviewPercent}%`, '--uv-selection-color': preferences?.visuals?.uvSelection || '#4cff59' }}>
         <section className="uv-live-options" aria-label="Live view options"><div className="uv-panel-title"><strong>Live View</strong></div>
           <div className="uv-live-toggles">
             <label><input aria-label="Highlight selected vertices in live preview" type="checkbox" checked={liveView} onChange={event => changeLiveDisplay({ mesh: event.target.checked ? 'selected' : 'none' })}/>Highlight Live</label>
-            <label><input aria-label="Highlight texture frame" type="checkbox" checked={display.textureFrame} onChange={event => changeLiveDisplay({ textureFrame: event.target.checked })}/>Highlight Texture Frame</label>
+            <label><input aria-label="Highlight texture frame" type="checkbox" checked={display.textureFrame} onChange={event => changeLiveDisplay({ textureFrame: event.target.checked })}/>Highlight Texture Frame</label><label><input aria-label="Snap to texture frame" type="checkbox" checked={display.snapTextureFrame} onChange={event => changeLiveDisplay({ snapTextureFrame: event.target.checked })}/>Snap to texture frame</label>
           </div>
           <label className="uv-thickness"><span>Thickness</span><input aria-label="Live selection thickness" type="range" min="0.25" max="3" step="0.25" value={display.size} onChange={event => changeLiveDisplay({ size: Number(event.target.value) })}/><output>{display.size.toFixed(2)}×</output><input className="uv-color-button" aria-label="Live selection and texture-frame color" title="Choose live selection and texture-frame color" type="color" value={preferences?.visuals?.uvSelection || '#4cff59'} onChange={event => changeLiveColor(event.target.value)}/></label>
         </section>
-        <section className="uv-live-preview" aria-label={selectingNew ? 'Select new vertices' : 'Live model preview'}>
-          <div className="uv-panel-title"><strong>{selectingNew ? selectNewPrompt : 'Live Model Preview'}</strong>{selectingNew && selectNewCount > 0 ? <span className="uv-confirm-selection"><button onClick={finishSelectNew}>Yes</button><button onClick={clearSelectNew}>No</button></span> : selectingNew && <span className="uv-selection-hint">Drag selects · Shift/Ctrl modifies · Alt+drag rotates</span>}</div>
-          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} revision={previewWrappingRevision} uvRevision={revision} presentation="preview" preserveCameraView={true} interactivePreview={selectingNew || !!current} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
-            uvOnlySelected={showOnlySelected && !selectingNew} hiddenGeosets={hiddenPreviewGeosets} hideRgbGeoset={hideRGB && rgbTarget >= 0 ? rgbTarget : null}
-            selectionByGeoset={activeSelection} selectableGeosets={selectingNew ? selectGeoset >= 0 ? [selectGeoset] : [] : current?.geosetIndices || []}
-            previewSelectionMode={selectingNew ? undefined : showVerticles ? 'vertices' : 'polygons'} previewEligibleByGeoset={materialEligible}
-            onSelectionChange={selectingNew ? selectGeoset >= 0 ? next => setSelectionDraft({ [selectGeoset]: unique(next[selectGeoset]) }) : undefined : onPreviewSelectionChange}
-            hoveredGeoset={selectingNew ? hoveredGeoset : null} cameraMode={selectingNew ? 'work' : 'rotate'} transformMode="select" cameraPresetRequest={projectionPreset} onProjectionViewChange={value => { projectionView.current = value; }} /></Suspense></div>
+        <section className="uv-live-preview" aria-label="Live model preview">
+          <div className="uv-panel-title"><strong>Live Model Preview</strong></div>
+          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} revision={previewWrappingRevision} uvRevision={revision} presentation="preview" preserveCameraView={true} interactivePreview={!!current} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
+            uvOnlySelected={showOnlySelected} hiddenGeosets={hiddenPreviewGeosets} hideRgbGeoset={hideRGB && rgbTarget >= 0 ? rgbTarget : null}
+            selectionByGeoset={selectionByGeoset} selectableGeosets={Object.keys(eligibleSelection).map(Number)}
+            previewSelectionMode={showVerticles ? 'vertices' : 'polygons'} previewEligibleByGeoset={allEligible}
+            onSelectionChange={onPreviewSelectionChange}
+            cameraMode="rotate" transformMode="select" cameraPresetRequest={projectionPreset} onProjectionViewChange={value => { projectionView.current = value; }} /></Suspense></div>
           <div className="uv-preview-footer">
-            {selectingNew ? <><GeosetPicker options={geosetOptions} value={selectGeoset} attention={selectGeoset < 0} onChoose={changeSelectGeoset} onHover={setHoveredGeoset}/><span className="uv-selection-count">{selectNewCount} selected</span><button disabled={!selectNewCount} onClick={finishSelectNew}>Done</button><button onClick={cancelSelectNew}>Cancel</button></>
-              : <><button onClick={beginSelectNew}>Select New</button><button aria-label="Live Select" aria-pressed={showVerticles} disabled={!current} onClick={() => setShowVerticles(value => !value)}>Live Select</button><button aria-label="Selected Only" aria-pressed={showOnlySelected} disabled={!selectedGeosets.length} onClick={() => setShowOnlySelected(value => !value)}>Selected Only</button><button aria-pressed={hideRGB} disabled={rgbTarget < 0} onClick={() => setHideRGB(value => !value)}>Hide RGB</button></>}
+            <button aria-label="Live Select" aria-pressed={showVerticles} disabled={!current} onClick={() => setShowVerticles(value => !value)}>Live Select</button><button aria-label="Selected Only" aria-pressed={showOnlySelected} disabled={!selectedGeosets.length} onClick={() => setShowOnlySelected(value => !value)}>Selected Only</button><button aria-pressed={hideRGB} disabled={rgbTarget < 0} onClick={() => setHideRGB(value => !value)}>Hide RGB</button>
           </div>
         </section>
-        <Splitter orientation="horizontal" label="Resize live model preview" value={activePreviewPercent} minimum={UV_PREVIEW_MIN} maximum={UV_PREVIEW_MAX} defaultValue={selectingNew ? UV_SELECT_PREVIEW_DEFAULT : UV_PREVIEW_DEFAULT}
+        <Splitter orientation="horizontal" label="Resize live model preview" value={activePreviewPercent} minimum={UV_PREVIEW_MIN} maximum={UV_PREVIEW_MAX} defaultValue={UV_PREVIEW_DEFAULT}
           onValue={setActivePreviewPercent} onPointerValue={event => { const rect = sidePanel.current?.getBoundingClientRect(); if (rect) setActivePreviewPercent(uvPreviewPercentAtPointer(event.clientY, rect)); }}/>
         <div className="uv-side-controls">
-          <section className="uv-projection" aria-label="UV projection"><div className="uv-panel-title"><strong>Projection</strong></div><p>Rotate the model to the required viewpoint, or choose a standard projection plane.</p><div className="uv-projection-actions"><button disabled={readOnly || selectingNew || !currentSelectionCount} onClick={project}>Project from Current View</button><select aria-label="Standard projection view" defaultValue="" onChange={event => { chooseProjectionPreset(event.target.value); event.target.value = ''; }}><option value="">Standard…</option>{STANDARD_PROJECTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select><select aria-label="Angled projection view" defaultValue="" onChange={event => { chooseProjectionPreset(event.target.value); event.target.value = ''; }}><option value="">Angled…</option>{ANGLED_PROJECTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div></section>
-          <section className="uv-toolbox" aria-label="UV tools"><div className="uv-panel-title"><strong>Tools</strong></div><div className="uv-tool-grid">
-            <Tool action="select" icon="sb_select" label="Select" active={uvTool === 'select'} disabled={selectingNew} onClick={() => setUVTool('select')}/>
-            <Tool action="translate" icon="sb_move" label="Move" active={uvTool === 'move'} disabled={!toolState.move} onClick={() => setUVTool('move')}/>
-            <Tool action="rotate" icon="sb_rot" label="Rotate" active={uvTool === 'rotate'} disabled={!toolState.rotate} onClick={() => setUVTool('rotate')}/>
-            <Tool action="scale" icon="sb_zoom" label="Zoom" active={uvTool === 'scale'} disabled={!toolState.scale} onClick={() => setUVTool('scale')}/>
-            <Tool action="uv:flip-u" icon="sb_mirror" iconClass="uv-icon-mirror-x" label="Mirror by X" disabled={!toolState.mirror} onClick={() => dispatch('flip-u')}/>
-            <Tool action="uv:flip-v" icon="sb_mirror" label="Mirror by Y" disabled={!toolState.mirror} onClick={() => dispatch('flip-v')}/>
-            <Tool action="Collapse" label="Collapse" disabled={!toolState.collapse} onClick={() => dispatch('collapse')}/>
-            <Tool action="Uncouple" icon="sb_uncouple" label="Uncouple selected face corners" disabled={!toolState.uncouple} onClick={() => onUncouple?.(selectedForCurrent, current?.coordId || 0)}/>
-            <div className="uv-fold-control"><Tool action="uv:fold" iconNode={<FoldIcon/>} label="Fold" disabled={!toolState.fold} onClick={() => dispatch('fold', foldDirection)}/><select aria-label="Fold direction" value={foldDirection} onChange={event => setFoldDirection(event.target.value)}><option value="right-to-left">Right → left</option><option value="left-to-right">Left → right</option><option value="bottom-to-top">Bottom → top</option><option value="top-to-bottom">Top → bottom</option></select></div>
+          <section className="uv-projection" aria-label="UV projection"><div className="uv-panel-title"><strong>Projection</strong></div><p>Rotate the model to the required viewpoint, or choose a standard projection plane.</p><div className="uv-projection-actions"><button disabled={readOnly || !selectedCount(allSelected)} onClick={project}>Project from Current View</button><select aria-label="Standard projection view" defaultValue="" onChange={event => { chooseProjectionPreset(event.target.value); event.target.value = ''; }}><option value="">Standard…</option>{STANDARD_PROJECTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select><select aria-label="Angled projection view" defaultValue="" onChange={event => { chooseProjectionPreset(event.target.value); event.target.value = ''; }}><option value="">Angled…</option>{ANGLED_PROJECTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div></section>
+          <section className="uv-toolbox" aria-label="UV tools"><div className="uv-panel-title"><strong>Tools</strong><div className="uv-axis-controls" role="group" aria-label="UV axis when Shift is held">{['X','Y'].map(value => <button key={value} type="button" aria-label={`UV ${value} axis`} aria-pressed={axis === value} onClick={() => setAxis(previous => previous === value ? null : value)}>{value}</button>)}</div></div><div className="uv-tool-grid">
+            <Tool action="select" icon="select" label="Select" active={uvTool === 'select'} onClick={() => setUVTool('select')}/>
+            <Tool action="translate" icon="move" label="Move" active={uvTool === 'move'} disabled={!toolState.move} onClick={() => setUVTool('move')}/>
+            <Tool action="rotate" icon="rotate" label="Rotate" active={uvTool === 'rotate'} disabled={!toolState.rotate} onClick={() => setUVTool('rotate')}/>
+            <Tool action="scale" icon="scale" label="Zoom" active={uvTool === 'scale'} disabled={!toolState.scale} onClick={() => setUVTool('scale')}/>
+            <Tool action="uv:flip-u" icon="mirrorX" label="Mirror by X" disabled={!toolState.mirror} onClick={() => dispatch('flip-u')}/>
+            <Tool action="uv:flip-v" icon="mirrorY" label="Mirror by Y" disabled={!toolState.mirror} onClick={() => dispatch('flip-v')}/>
+            <Tool action="Uncouple" icon="uncouple" label="Uncouple selected face corners" disabled={!toolState.uncouple} onClick={() => onUncouple?.(Object.fromEntries(Object.entries(allSelected).filter(([, ids]) => ids.length)), Object.fromEntries(materialEntries.flatMap(entry => entry.geosetIndices.map(index => [index, entry.coordId]))))}/>
+            <div className="uv-fold-control"><Tool action="uv:fold" icon="fold" label="Fold" disabled={!toolState.fold} onClick={() => dispatch('fold', foldDirection)}/><select aria-label="Fold direction" value={foldDirection} onChange={event => setFoldDirection(event.target.value)}><option value="right-to-left">Right → left</option><option value="left-to-right">Left → right</option><option value="bottom-to-top">Bottom → top</option><option value="top-to-bottom">Top → bottom</option></select></div>
           </div></section>
         </div>
       </aside>

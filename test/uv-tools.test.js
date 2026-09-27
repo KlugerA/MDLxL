@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { combineUVGeosets, collapseUVCoordinates, foldUVCoordinates, projectUVFromView, relevantUVMaterials, splitCombinedUV, uncoupleUVVertices } from '../src/uv-tools.js';
+import { combineUVGeosets, combineSelectedUVGeosets, splitSelectedUVGeosets, collapseUVCoordinates, foldUVCoordinates, projectUVFromView, relevantUVMaterials, splitCombinedUV, uncoupleUVVertices } from '../src/uv-tools.js';
 import { compositeMaterialPixels } from '../src/uv-material-compositor.js';
 
 const geoset = (offset = 0, material = 0) => ({ MaterialID: material,
@@ -75,4 +75,27 @@ test('material compositor combines opaque team colour and alpha image layers and
   const base = new Uint8ClampedArray([255,0,0,255]), blue = new Uint8ClampedArray([0,0,255,128]);
   assert.deepEqual([...compositeMaterialPixels([{ pixels: base, filterMode: 0, alpha: 1 }, { pixels: blue, filterMode: 2, alpha: 1 }], 1, 1)], [127,0,128,255]);
   assert.deepEqual([...compositeMaterialPixels([{ pixels: new Uint8ClampedArray([64,64,64,255]), filterMode: 0, alpha: 1 }, { pixels: new Uint8ClampedArray([255,128,64,255]), filterMode: 6, alpha: 1 }], 1, 1)], [128,64,32,255]);
+});
+
+
+test('selected geosets of different materials stay on one canvas and edits return to their own UV sets', () => {
+  const first = geoset(0, 0), second = geoset(2, 1);
+  first.TVertices.push(new Float32Array([.1,.2, .3,.4, .5,.6, .7,.8]));
+  second.TVertices.push(new Float32Array([.9,.8, .7,.6, .5,.4, .3,.2]));
+  const model = { Geosets: [first, second], Materials: [{ Layers: [{ TextureID: 0, CoordId: 0 }] }, { Layers: [{ TextureID: 1, CoordId: 1 }] }], Textures: [{ Image: 'first.blp' }, { Image: 'second.blp' }] };
+  const original = structuredClone(model), domain = { 0: [0,1,2], 1: [0,1,2] }, selected = { 0: [1], 1: [1] };
+  const materials = relevantUVMaterials(model, domain);
+  assert.equal(materials.length, 2);
+  const canvas = combineSelectedUVGeosets(model, domain, selected, materials);
+  assert.deepEqual(canvas.selectedVertices, [1,5]);
+  assert.deepEqual(canvas.refs.filter(ref => ref.vertexIndex === 1).map(ref => ref.uvSet), [0,1]);
+  assert.equal(canvas.geoset.TVertices[0][10], second.TVertices[1][2]);
+  const values = new Float32Array(canvas.geoset.TVertices[0]);
+  values[2] = .25; values[10] = .75;
+  const changes = splitSelectedUVGeosets(model, canvas.refs, values);
+  assert.deepEqual(changes.map(change => [change.geosetIndex, change.uvSet]), [[0,0],[1,1]]);
+  assert.equal(changes[0].values[2], .25);
+  assert.equal(changes[1].values[2], .75);
+  assert.deepEqual(model, original, 'the combined canvas never changes the input model');
+  assert.deepEqual(splitSelectedUVGeosets(model, canvas.refs, canvas.geoset.TVertices[0]), [], 'unchanged geosets are not written');
 });

@@ -1006,11 +1006,11 @@ export default function App() {
       }
     });
   };
-  const uncoupleUVSelection = (currentSelection, coordId = uvSet) => {
+  const uncoupleUVSelection = (currentSelection, coordByGeoset = {}) => {
     let nextSelection = { ...validSelection }, nextDomain = { ...uvEntrySelection };
     const result = edit('Uncouple UV vertices', ['Geosets'], current => {
       for (const [indexText, ids] of Object.entries(currentSelection || {})) {
-        const index = Number(indexText), uncoupled = uncoupleUVVertices(current.Geosets[index], ids, coordId);
+        const index = Number(indexText), uncoupled = uncoupleUVVertices(current.Geosets[index], ids, coordByGeoset[index] ?? uvSet);
         nextSelection[index] = [];
         nextDomain[index] = [...new Set([...(nextDomain[index] || []), ...uncoupled.created])];
       }
@@ -1029,9 +1029,7 @@ export default function App() {
             return expanded;
           });
           setSelection(filterVertexSelection(next, new Set(Object.keys(uvEntrySelection).map(Number)), doc.model));
-        }}
-        onWorkingSelectionChange={next => { const indices = new Set(Object.keys(next).map(Number)); setUVEntrySelection(next); setSelectable(indices); setSelection(filterVertexSelection(next, indices, doc.model)); setHidden({}); setActiveGeoset(indices.values().next().value ?? -1); setLiveUV(null); }}
-        onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
+        }}        onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
         onMaterialPreset={(id, preset, tint) => edit(preset, ['Materials', 'Textures'], current => applyMaterialPreset(current, id, preset, tint))}
         onWrappingChange={(textureIDs, enabled) => edit(`${enabled ? 'Enable' : 'Disable'} UV texture wrapping`, ['Textures'], current => setUVTextureWrapping(current, textureIDs, enabled))}
         onGeosetChange={(index, coordId = 0) => { if (index < 0) return; setActiveGeoset(index); setUvSet(coordId); setLiveUV(null); }}
