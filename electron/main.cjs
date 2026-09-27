@@ -241,7 +241,9 @@ ipcMain.handle('recovery:write',(_,payload)=>recoveryStore.write(payload));
 ipcMain.handle('recovery:list',()=>recoveryStore.list());
 ipcMain.handle('recovery:read',async(_,id)=>{const payload=await recoveryStore.read(id);if(typeof payload.path==='string'&&/\.(mdl|mdx)$/i.test(payload.path)){try{if((await fs.stat(payload.path)).isFile())openedPaths.add(path.resolve(payload.path));}catch{}}return payload;});
 const publicSettings=()=>({...settings,gameData:settings.gameData||null,gameDataDiscovery:gameDataDiscovery?.result});
-ipcMain.handle('app:initial',async()=>({settings:publicSettings(),model:initialModel,recoveryPrompt,recovery:(await recoveryStore.list()).filter(r=>r.dirty!==false)}));
+// Historical drafts are only needed for a crash prompt or the Recovery command.
+// A normal launch must not wait on every saved draft before starting the viewport.
+ipcMain.handle('app:initial',async()=>({settings:publicSettings(),model:initialModel,recoveryPrompt,recovery:recoveryPrompt?(await recoveryStore.list()).filter(r=>r.dirty!==false):[]}));
 ipcMain.handle('settings:get',publicSettings);
 ipcMain.handle('settings:configure',(_,value)=>{
   if(value&&Object.prototype.hasOwnProperty.call(value,'gameData'))throw Error('Use the game data folder picker to change the asset folder.');
