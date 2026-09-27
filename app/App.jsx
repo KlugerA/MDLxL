@@ -141,7 +141,6 @@ export default function App() {
   const changePointerSensitivity = value => changePreferences({ ...preferencesRef.current, pointerSensitivity: value });
   const toggleWheelMode = mode => changePreferences(previous => ({ ...previous, wheelMode: previous.wheelMode === mode ? 'rotate' : mode }));
   const toggleCamera = () => setCameraMode(previous => previous === 'work' ? 'rotate' : 'work');
-  const toggleMiddleCamera = () => setCameraMode(previous => previous === 'rotate' ? 'work' : 'rotate');
   const [session, setSession] = useState(newSession), [tick, setTick] = useState(0), [status, setStatus] = useState('Ready');
   const [repairReceipt, setRepairReceipt] = useState(null);
   const [mode, setMode] = useState('vertices'), [cameraMode, setCameraMode] = useState('work'), [view, setStoredView] = useState('orthographic'), [portraitView, setPortraitView] = useState('perspective'), [workplane, setWorkplane] = useState('xy');
@@ -420,6 +419,12 @@ export default function App() {
     if (mode === 'bones') setAttachSourceIds([]);
     setTool(next); setCameraMode('work');
     if (rigWorkspace) setMovementMode(movement);
+  };
+  const toggleMiddleCamera = () => {
+    if (cameraMode !== 'rotate') { setCameraMode('rotate'); return; }
+    setCameraMode('work');
+    if (tool === 'rotate') setTool('select');
+    if (rigWorkspace && movementMode === 'rotate') setMovementMode('select');
   };
   const selectSequence = index => { if (portraitModeActive && !portraitSequenceIndices(model).includes(index)) return; setGlobalSeqId(null); setSequence(index); setTime(model.Sequences[index]?.Interval[0] || 0); };
   const selectTimeline = value => { if (portraitModeActive && String(value).startsWith('global:')) return; if (String(value).startsWith('global:')) { setGlobalSeqId(Number(value.split(':')[1])); setSequence(-1); setTime(0); } else selectSequence(Number(value)); };
