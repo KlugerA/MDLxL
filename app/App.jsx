@@ -1,18 +1,19 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, lazy, Suspense } from 'react';
-import Viewport, { textureFromAsset } from './Viewport.jsx';
+import Viewport from './Viewport.jsx';
 import { QUAD_VIEW_OPTIONS } from './quad-view.js';
 import {visiblePaintGeosets} from '../src/paint-view.js';
 import PaintBoundary from './PaintBoundary.jsx';
 import {validatePaintAssignments,repairPaintMaterials} from '../src/paint-materials.js';
 import {preparePaintModelCommit,commitPaintModel,adoptCommittedPaintUVs} from '../src/paint-model-integration.js';
 import Addons from './Addons.jsx';
-import { commitPart } from '../src/bits-and-parts.js';
 import { directlyBoundBoneIds } from '../src/binding-inspection.js';
 import { attachToBone, changeVertexBinding, createRigNode, deleteRigNode, detachFromBone, renameRigNode, setBoneBillboarded } from '../src/bone-tools.js';
 import { builtinTextureAssets } from '../src/builtin-textures.js';
 const BitsAndParts = lazy(() => import('./BitsAndParts.jsx'));
 const ParticleEditor = lazy(() => import('./ParticleEditor.jsx'));
-import UVWorkspace from './UVWorkspace.jsx';
+const UVWorkspace = lazy(() => import('./UVWorkspace.jsx'));
+// Detached UV windows copy styles before their lazy contents mount.
+import './uv-workspace.css';
 import DetachedWindow from './DetachedWindow.jsx';
 import { openDetachedUVWindow } from './detached-window.js';
 import { applyApplicationTheme } from './theme.js';
@@ -36,7 +37,6 @@ const KeyframeTimeline = lazy(() => import('./KeyframeTimeline.jsx'));
 const MotionInspector = lazy(() => import('./MotionInspector.jsx'));
 import useMotionInspector from './useMotionInspector.js';
 import { rememberMotionSave } from '../src/motion-decisions.js';
-import { commitForge } from '../src/forge.js';
 import { shapeGeosets, SHAPE_TOOLS } from '../src/shaping.js';
 import { retainedForgeAssets, forgeExportArchive, isForgeAssetPath, missingForgeAssetPaths } from '../src/forge-assets.js';
 import { applyMovementTransform, movementRestricted, constrainMovementVector, movementProperties } from '../src/movement.js';
@@ -45,7 +45,7 @@ import { beginUVPreview, applyUVPreviews, revertUVPreviews, uvPreviewModel, rest
 import { setUVTextureWrapping, uncoupleUVVertices } from '../src/uv-tools.js';
 import './modules.css';
 import './texture-library.css';
-import Settings from './Settings.jsx';
+const Settings = lazy(() => import('./Settings.jsx'));
 import { installTextureLibraryDecoder } from './asset-preload-client.js';
 import { WarmKeysProvider } from './WarmKeys.jsx';
 import { normalizePreferences } from '../src/preferences.js';
@@ -129,22 +129,9 @@ export default function App() {
   setLanguage(preferences.language);
   useEffect(()=>{document.documentElement.lang=preferences.language;},[preferences.language]);
   const [settingsTab, setSettingsTab] = useState(null), [preferencesReady, setPreferencesReady] = useState(!window.desktop);
-  const [pressedKeysIcon, setPressedKeysIcon] = useState('./classic/pasbtn-magical-sentry.png');
+  const pressedKeysIcon = './classic/pasbtn-magical-sentry.png';
   useEffect(() => bindDropdownWheel(document), []);
   const textureUrls = useRef(new Set());
-  useEffect(() => {
-    let cancelled = false, texture;
-    window.desktop?.resolveTextures?.({ names: ['ReplaceableTextures\\PassiveButtons\\PASBTNMagicalSentry.blp'] }).then(records => {
-      if (!records?.[0] || cancelled) return;
-      return textureFromAsset(records[0]).then(value => {
-        texture = value; if (cancelled) return;
-        const { width, height, data } = value.image, canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
-        const context = canvas.getContext('2d'); if (data) context.putImageData(new ImageData(new Uint8ClampedArray(data), width, height), 0, 0); else context.drawImage(value.image, 0, 0);
-        setPressedKeysIcon(canvas.toDataURL('image/png')); value.dispose(); texture = null;
-      });
-    }).catch(() => {});
-    return () => { cancelled = true; texture?.dispose(); };
-  }, []);
   const timelineCommands = useRef({});
   const registerTimelineCommands = useCallback(value=>{timelineCommands.current=value;},[]);
   const preferencesRef = useRef(preferences); preferencesRef.current = preferences;
@@ -810,6 +797,8 @@ export default function App() {
   }
   function showHistory() { setHistoryMB(Math.round(doc.historyStats.budgetBytes / 1048576)); setHistorySteps(doc.historyStats.maxSteps); setDialog({ type: 'history' }); }
   async function forgeItem({mesh,asset,texturePath,trimColor}) {
+    const {commitForge}=await import('../src/forge.js');
+    if(latest.current.session!==session || savingRef.current)return false;
     const result=edit('Forge item',['Geosets','Materials','Textures','Nodes','PivotPoints','GeosetAnims','Info'],m=>commitForge(m,mesh,{texturePath,trimColor}));
     if(result===false)return false;
     await loadTextures([{...asset,name:texturePath}],session,{source:asset.source==='forge'?'forge':'library'});
@@ -819,6 +808,7 @@ export default function App() {
     say('Forge item created and attached to DummyBone.');return result;
   }
   async function importPart({source,rgb,texturePaths,assets}) {
+    const {commitPart}=await import('../src/bits-and-parts.js');
     if(latest.current.session!==session || savingRef.current)return false;
     const target=session;
     const result=edit('Import BitsAndParts',['Geosets','Materials','Textures','TextureAnims','GlobalSequences','Nodes','PivotPoints','GeosetAnims','Info'],m=>commitPart(m,source,{rgb,texturePaths}),{rethrow:true});
@@ -1006,7 +996,7 @@ export default function App() {
     });
     if (result !== false) { setSelection(nextSelection); setUVEntrySelection(nextDomain); setLiveUV(null); }
   };
-  const uvWorkspace = (<UVWorkspace key={session.id+':'+uvEntryId} model={model} materialModel={texturedModel} previewModel={previewModel} revision={doc.revision} activeGeoset={activeGeoset} eligibleSelection={uvEntrySelection} selectionByGeoset={validSelection}
+  const uvWorkspace = (<Suspense fallback={null}><UVWorkspace key={session.id+':'+uvEntryId} model={model} materialModel={texturedModel} previewModel={previewModel} revision={doc.revision} activeGeoset={activeGeoset} eligibleSelection={uvEntrySelection} selectionByGeoset={validSelection}
         onSelectionChange={next => setSelection(filterVertexSelection(next, new Set(Object.keys(uvEntrySelection).map(Number)), doc.model))}
         onPreviewSelectionChange={next => {
           setUVEntrySelection(previous => {
@@ -1026,7 +1016,7 @@ export default function App() {
         textureAssets={session.assets} teamColor={teamColor} preferences={preferences} onPreferences={changePreferences} readOnly={doc.readOnly || saving}
         draftCount={Object.keys(session.uvPreviews).length} onLibrary={() => openLibrary(true)} onSavePreview={() => finishUVPreview()} onRevertPreview={() => finishUVPreview(true)} onExit={() => selectMode('vertices')}
         previewProps={{ ...cameraProps, previewMode:previewRenderModes.uv, modelPath:session.path, key: session.id, preferences, onSensitivityChange: changeSensitivity, onPointerSensitivityChange: changePointerSensitivity, onCameraModeToggle: toggleMiddleCamera, suspended: previewSuspended,
-          revision: doc.revision, teamColor, textureAssets: session.assets, view, cameraMode }} />);
+          revision: doc.revision, teamColor, textureAssets: session.assets, view, cameraMode }} /></Suspense>);
   const textureLibraryDialog = dialog?.type === 'library' && <Suspense fallback={<div className="classic-modal"><p>Loading texture library…</p></div>}><TextureLibrary model={model} modelPath={session.path} onClose={() => setDialog(dialog.returnTo)} onAddTexture={doc.readOnly ? undefined : addTexture} onPreviewTexture={dialog.preview ? previewTexture : undefined} previewEnabled={dialog.preview && previewSelection.enabled && !doc.readOnly} previewReason={doc.readOnly ? 'This model is read-only.' : previewSelection.reason} onOpenMaterials={() => setDialog({ type: 'resource', kind: 'Materials' })}/></Suspense>;
   const timeline = (<Suspense fallback={<div>Loading keyframes…</div>}><KeyframeTimeline
     motionFindings={inspectingMotion ? motion.visible : []} motionActive={!inspectingMotion || motion.stale || motion.active?.resolved ? null : motion.active}
@@ -1134,7 +1124,7 @@ export default function App() {
     {dialog?.type === 'help' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="MDLxL help" onClose={() => setDialog(null)}><p>Default Hotkeys (customize in Settings): F1 vertices · F2 selected UV maps · F3 Movement. Bones edits the unanimated rig. Animations edits visibility and RGB; BAKE applies current visibility and RGB across the selected animation; ALL applies them across every animation. Bake Text applies edited text tracks. A select · M/Q move · R rotate · Z scale. W switches between work and camera rotation. F toggles Textured View on and off; S selects Surface. Wireframe remains available beside the view direction. Use View / Fit to frame the model.</p><p>Geoset checkboxes control which meshes can be selected. Only checkboxes change selection; Shift checks a range. All, Clear and Invert act on the geoset list. Hide/Show affects editor visibility only.</p><p>T creates a triangle from three selected points. U uncouples, C collapses and B welds points. Welding retains the last selected vertex's UVs and binding. Copy remains available after opening another model.</p><p>Windows opens the material, texture and node managers. Changes can be undone. Untouched saves preserve original bytes; edited sections regenerate through the codec.</p></Dialog>}
     {dialog?.type === 'about' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="About MDLxL" onClose={() => setDialog(null)}><p>MDLxL model editor.</p><p>Based on the original 1.41 form layout, with integrated material/node editing and recoverable undo history. The original application is unchanged.</p><p>Format 1200 remains read-only. Model and rendering compatibility still require Warcraft testing.</p></Dialog>}
     {dialog?.type === 'optimizeModel' && <Suspense fallback={<div className="classic-empty-view">Analyzing model…</div>}><OptimizeModel doc={doc} onClose={()=>setDialog(null)} onApply={result=>{const applied=edit('Optimize Model',OPTIMIZER_SECTIONS,m=>commitOptimization(m,result,doc),{rethrow:true});if(applied!==false){setSelection({});setHidden({});setUVEntrySelection({});if(mode==='uv')selectMode('vertices');say('Optimization complete. Save or Save As to write the optimized model.');}return applied;}}/></Suspense>}
-    {settingsTab && <Settings modelPath={session.path} preferences={preferences} initialTab={settingsTab} gameDataPath={gameDataPath} onChooseGameData={window.desktop?.chooseGameData ? gameData : undefined} onClearGameData={window.desktop?.clearGameData ? clearGameData : undefined} onChange={changePreferences} onClose={()=>setSettingsTab(null)}/>}
+    {settingsTab && <Suspense fallback={null}><Settings modelPath={session.path} preferences={preferences} initialTab={settingsTab} gameDataPath={gameDataPath} onChooseGameData={window.desktop?.chooseGameData ? gameData : undefined} onClearGameData={window.desktop?.clearGameData ? clearGameData : undefined} onChange={changePreferences} onClose={()=>setSettingsTab(null)}/></Suspense>}
     <PressedKeys enabled={preferences.showPressedKeys}/>
   </div></WarmKeysProvider>;
 }
