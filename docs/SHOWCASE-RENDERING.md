@@ -13,3 +13,5 @@ Quality changes preview sampling and GIF dimensions. Low uses 1x sampling, no AA
 Folder backgrounds load in Showcase. Image/Video accepts local images, animated GIFs and browser-decodable videos; videos are muted and loop inside the From/To interval. WAV is audio-only and cannot supply a background picture. GIFs and videos animate during live recording.
 
 The WebGL2 war3-model renderer supports standard geometry and animation, global sequences, layered alpha, texture animation, ParticleEmitter2, and partial RibbonEmitter behavior. It does not provide full Warcraft III Light-node, render-priority, legacy ParticleEmitter or Popcorn rendering. Showcase is not a complete Warcraft III engine replacement.
+
+Crop opens a direct drag selection over the preview. Done keeps the selected frame visible while the camera remains usable, and Reset returns to the full viewport. The rectangle is stored in viewport-relative coordinates, so preview resizing does not shift it. GIF frame dimensions and every captured frame use the same crop; no black bars or model edits are added.

@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CAPTURE_QUALITIES, normalizeCapture } from '../src/capture-settings.js';
 import { recordingTimeline } from './showcase-timeline.js';
+import { cropPixels } from './showcase-crop.js';
 
-export default function AnimationPreviewTools({ active, sessionId, captureAPI, modelName, loop, length, disabled, onStatus, onBusy, preferences }) {
+export default function AnimationPreviewTools({ active, sessionId, captureAPI, modelName, loop, length, crop, disabled, onStatus, onBusy, preferences }) {
   const [state,setState] = useState('idle'), [progress,setProgress] = useState(''), [error,setError] = useState('');
   const latest = useRef(); latest.current = {onStatus,onBusy};
   const running = useRef(null), retained = useRef(null), mounted = useRef(true);
@@ -34,7 +35,8 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
       await api.prepareRecording(); if(job.stop)return;
       // Size allocation and encoder preparation happen before the visible clock starts.
       const initial=api.captureFrame({maxDimension:quality.gifSize});
-      const canvas=document.createElement('canvas');canvas.width=initial.width;canvas.height=initial.height;
+      const selection=cropPixels(initial.width,initial.height,crop);
+      const canvas=document.createElement('canvas');canvas.width=selection.width;canvas.height=selection.height;
       const context=canvas.getContext('2d',{willReadFrequently:true});
       let request;
       if(window.desktop){
@@ -68,7 +70,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
           const timestamp=count===0?0:time;
           nextFrame=(Math.floor(time/(1000/settings.fps))+1)*1000/settings.fps;
           try {
-            api.copyVisibleFrame(canvas);
+            api.copyVisibleFrame(canvas,crop);
             const pixels=context.getImageData(0,0,canvas.width,canvas.height);
             count++;
             inFlight=request({type:'frame',width:canvas.width,height:canvas.height,time:timestamp,buffer:pixels.data.buffer})

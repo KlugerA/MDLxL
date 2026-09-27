@@ -1,5 +1,6 @@
 import React, { lazy, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import AnimationPreviewTools from './AnimationPreviewTools.jsx';
+import { cropBetween } from './showcase-crop.js';
 import { createShowcaseDirector, overflowEntries, SHOWCASE_QUALITY } from './showcase-director.js';
 import './showcase.css';
 
@@ -32,12 +33,34 @@ function AnimationDialog({ model, initial, onSave, onRemove, onClose }) {
 }
 export default function ShowcaseWorkspace({ model, modelName, modelPath, revision, textureAssets, preferences, teamColor, sessionId, background, backgroundLibrary, onBackground, onStatus }) {
   const [api,setAPI] = useState(null), [playing,setPlaying] = useState(false), [busy,setBusy] = useState(false);
+  const [crop,setCrop] = useState(null), [cropEditing,setCropEditing] = useState(false), cropDrag = useRef(null);
   const [length,setLength] = useState(10), [orbitSpeed,setOrbitSpeed] = useState(100), [orbitRadius,setOrbitRadius] = useState(0), [light,setLight] = useState('ingame');
   const [playlist,setPlaylist] = useState(() => model.Sequences?.length ? [{sequence:0,seconds:3,speed:1,loop:true}] : []);
   const [selected,setSelected] = useState(0), [animationDialog,setAnimationDialog] = useState(null);
   const [quality,setQuality] = useState('high'), [fps,setFPS] = useState(30), [tool,setTool] = useState('rotate');
   const [backgroundMode,setBackgroundMode] = useState('folder'), [color,setColor] = useState('#cccccc'), [media,setMedia] = useState(null), [videoDuration,setVideoDuration] = useState(0), [trim,setTrim] = useState({start:0,end:0});
   const mediaInput = useRef(null);
+  const cropPoint = event => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height };
+  };
+  function startCrop(event) {
+    if (event.button !== 0) return;
+    cropDrag.current = { start: cropPoint(event), previous: crop };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+  function moveCrop(event) {
+    if (!cropDrag.current) return;
+    const selection = cropBetween(cropDrag.current.start, cropPoint(event));
+    if (selection.width >= .05 && selection.height >= .05) setCrop(selection);
+  }
+  function finishCrop(event) {
+    if (!cropDrag.current) return;
+    const selection = cropBetween(cropDrag.current.start, cropPoint(event));
+    setCrop(selection.width >= .05 && selection.height >= .05 ? selection : cropDrag.current.previous);
+    cropDrag.current = null;
+  }
   useEffect(() => () => { if (media?.url) URL.revokeObjectURL(media.url); }, [media?.url]);
   const current = useRef();
   current.current = {model,playlist,length,orbitSpeed,playing};
@@ -72,7 +95,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   }),[preferences,quality,fps,color]);
   return <div className="showcase-workspace">
     <aside className="showcase-sidebar" aria-label="Showcase controls">
-      <AnimationPreviewTools active sessionId={sessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} disabled={overflow.some(Boolean) || !playlist.length || backgroundMode === 'folder' && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)setPlaying(false);}}/>
+      <AnimationPreviewTools active sessionId={sessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={crop} disabled={overflow.some(Boolean) || !playlist.length || backgroundMode === 'folder' && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)setPlaying(false);}}/>
       <fieldset disabled={busy} className="showcase-fields">
         <NumberField label="Length" aria-label="Record length seconds" min={.02} step={.01} value={length} onChange={setLength}/>
         <section className="showcase-section" aria-label="Background">
@@ -98,6 +121,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
           <Slider label="Radius" value={orbitRadius} max={100} onChange={setOrbitRadius}/>
           <small>Z axis · 0% radius spins in place</small>
           <button className="showcase-wide" disabled={!api} onClick={()=>{if(!playing)restart();setPlaying(!playing);}}>{playing?'Pause preview':'Preview orbit'}</button>
+          <div className="showcase-crop-controls"><button disabled={!api} onClick={()=>{setPlaying(false);setCropEditing(!cropEditing);}}>{cropEditing?'Done':crop?'Edit crop':'Crop'}</button>{crop&&<button onClick={()=>{setCrop(null);setCropEditing(false);}}>Reset</button>}</div>
         </section>
         <section className="showcase-section" aria-label="Graphics">
           <header><strong>Graphics</strong></header>
@@ -108,7 +132,11 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
         </section>
       </fieldset>
     </aside>
-    <section className="showcase-preview" aria-label="Showcase preview" inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} showcaseRadius={orbitRadius} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,orbitRadius,light]}/></Suspense></section>
+    <section className="showcase-preview" aria-label="Showcase preview" inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} showcaseRadius={orbitRadius} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,orbitRadius,light]}/></Suspense>
+      {(cropEditing||crop)&&<div className={'showcase-crop-overlay'+(cropEditing?' editing':'')} aria-label="Crop area" onPointerDown={cropEditing?startCrop:undefined} onPointerMove={cropEditing?moveCrop:undefined} onPointerUp={cropEditing?finishCrop:undefined} onPointerCancel={cropEditing?finishCrop:undefined}>
+        <div className="showcase-crop-selection" style={{left:(crop?.x||0)*100+'%',top:(crop?.y||0)*100+'%',width:(crop?.width??1)*100+'%',height:(crop?.height??1)*100+'%'}}/>
+        {cropEditing&&<div className="showcase-crop-hint">Drag to select the GIF area</div>}
+      </div>}</section>
     {animationDialog&&<AnimationDialog model={model} initial={animationDialog} onClose={()=>setAnimationDialog(null)} onSave={row=>{updatePlaylist(animationDialog.index<0?[...playlist,row]:playlist.map((item,index)=>index===animationDialog.index?row:item));setSelected(animationDialog.index<0?playlist.length:animationDialog.index);setAnimationDialog(null);}} onRemove={()=>{updatePlaylist(playlist.filter((_,index)=>index!==animationDialog.index));setSelected(Math.max(0,animationDialog.index-1));setAnimationDialog(null);}}/>}
   </div>;
 }

@@ -12,6 +12,7 @@ import { drawModelCameraOverlay } from './model-camera-overlay.js';
 import { ModelRenderer } from 'war3-model';
 import { advanceShowcaseModel } from './showcase-playback.js';
 import { showcaseOrbitRadius, setShowcaseOrbitCamera } from './showcase-orbit.js';
+import { cropPixels } from './showcase-crop.js';
 import { textureFromAsset } from './Viewport.jsx';
 import { drawGeosetHighlight } from './geoset-highlight.js';
 import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatrices, skinGeoset, skinGeosetNormals } from '../src/animation.js';
@@ -869,13 +870,12 @@ export default function GamePreview(inputProps) {
       },
       endRecording() { recordingSink = null; latest.current.showcase?.end(); backgroundState.current.animation?.resume(); invalidate(); },
       recordingFrame(time, options) { latest.current.showcase?.seekRecording(time); render(performance.now(), 0, { captureOnly: true }); return state.captureApi.captureFrame(options); },
-      copyVisibleFrame(destination) {
+      copyVisibleFrame(destination, crop) {
         const context = destination.getContext('2d');
         const source = latest.current.portraitMode ? composePortraitCapture(canvas, portraitFrame.current.canvas) : canvas;
-        const fit = Math.min(destination.width / source.width, destination.height / source.height);
-        context.fillStyle = '#000'; context.fillRect(0,0,destination.width,destination.height);
+        const selection = cropPixels(source.width,source.height,crop);
         context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
-        context.drawImage(source,(destination.width-source.width*fit)/2,(destination.height-source.height*fit)/2,source.width*fit,source.height*fit);
+        context.drawImage(source,selection.x,selection.y,selection.width,selection.height,0,0,destination.width,destination.height);
       },
       playbackState() { return showcaseSample; },
       focusPoint(values) {
