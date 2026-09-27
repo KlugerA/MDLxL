@@ -2,11 +2,12 @@ import React, { lazy, useEffect, useMemo, useRef, useState, Suspense } from 'rea
 import AnimationPreviewTools from './AnimationPreviewTools.jsx';
 import { cropBetween, cropPresetRect, SHOWCASE_CROP_PRESETS } from './showcase-crop.js';
 import { createShowcaseDirector, overflowEntries, SHOWCASE_QUALITY } from './showcase-director.js';
+import { listSignaturePresets, saveSignaturePreset, deleteSignaturePreset } from './showcase-signature.js';
 import './showcase.css';
 
 const GamePreview = lazy(() => import('./GamePreview.jsx'));
 const SHOWCASE_COLORS = [
-  ['Black','#101216'], ['Charcoal','#292f38'], ['Slate','#546477'],
+  ['Black','#000000'], ['Charcoal','#292f38'], ['Slate','#546477'],
   ['Gray','#858d91'], ['Warm gray','#b5aa99'], ['Light','#e4e0d7'],
 ];
 const SAVED_COLORS_KEY = 'mdlxl-showcase-saved-colors-v1';
@@ -62,8 +63,33 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   const cameraIndex = portraitCameraIndex >= 0 ? portraitCameraIndex : model.Cameras?.length ? 0 : -1;
   const [selected,setSelected] = useState(0), [animationDialog,setAnimationDialog] = useState(null);
   const [quality,setQuality] = useState('high'), [fps,setFPS] = useState(30), [tool,setTool] = useState('rotate');
-  const [backgroundMode,setBackgroundMode] = useState('folder'), [color,setColor] = useState('#cccccc'), [savedColors,setSavedColors] = useState(readSavedColors), [portraitZoom,setPortraitZoom] = useState(100), [media,setMedia] = useState(null), [videoDuration,setVideoDuration] = useState(0), [trim,setTrim] = useState({start:0,end:0});
-  const mediaInput = useRef(null);
+  const [backgroundMode,setBackgroundMode] = useState('folder'), [color,setColor] = useState('#000000'), [savedColors,setSavedColors] = useState(readSavedColors), [portraitZoom,setPortraitZoom] = useState(100), [media,setMedia] = useState(null), [videoDuration,setVideoDuration] = useState(0), [trim,setTrim] = useState({start:0,end:0});
+  const mediaInput = useRef(null), signatureInput = useRef(null);
+  const [signature,setSignature] = useState(null), [signatureOpen,setSignatureOpen] = useState(false), [signatureName,setSignatureName] = useState(''), [signaturePresets,setSignaturePresets] = useState([]);
+  useEffect(() => { let active=true; listSignaturePresets().then(rows=>{if(active)setSignaturePresets(rows);}).catch(error=>onStatus?.('Could not load signature presets: '+error.message,true)); return ()=>{active=false;}; }, []);
+  useEffect(() => () => { if(signature?.url) URL.revokeObjectURL(signature.url); }, [signature?.url]);
+  function applySignature(blob,name,type,presetId=null,rect={x:.68,y:.82,width:.28,height:.12}) {
+    setSignature({blob,name,type,url:URL.createObjectURL(blob),presetId,rect});
+    setSignatureName(presetId ? name : name.replace(/\.[^.]+$/,''));
+  }
+  function chooseSignature(event) {
+    const file=event.target.files?.[0]; event.target.value=''; if(!file)return;
+    if(!file.type.startsWith('image/') && !/\.(png|jpe?g|webp|bmp|gif)$/i.test(file.name)) { onStatus?.('Choose an image or GIF for the signature.',true); return; }
+    applySignature(file,file.name,/\.gif$/i.test(file.name)?'image/gif':file.type||'image/png');
+  }
+  async function storeSignature() {
+    if(!signature)return;
+    try {
+      const preset={id:signature.presetId||crypto.randomUUID(),name:signatureName.trim()||signature.name,type:signature.type,blob:signature.blob,rect:signature.rect};
+      await saveSignaturePreset(preset); setSignature(value=>value?{...value,presetId:preset.id}:value);
+      setSignaturePresets(await listSignaturePresets()); onStatus?.('Signature preset saved.');
+    } catch(error) { onStatus?.('Could not save signature preset: '+error.message,true); }
+  }
+  async function removeSignaturePreset() {
+    if(!signature?.presetId)return;
+    try { await deleteSignaturePreset(signature.presetId); setSignaturePresets(await listSignaturePresets()); setSignature(value=>value?{...value,presetId:null}:value); onStatus?.('Signature preset removed.'); }
+    catch(error) { onStatus?.('Could not remove signature preset: '+error.message,true); }
+  }
   function saveColor(index) {
     const next=[...savedColors]; if (next[index]) setColor(next[index]); else { next[index]=color; setSavedColors(next); }
   }
@@ -139,8 +165,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
           </>}
         </section>
         <section className="showcase-section" aria-label="Sequences / Portrait">
-          <div className="showcase-tabs" role="tablist" aria-label="Sequences / Portrait"><button role="tab" aria-selected={!portrait} onClick={()=>{setMode('sequences');setSelected(0);setPlaying(false);director.reset();}}>Sequences</button><button role="tab" aria-selected={portrait} onClick={()=>{setMode('portrait');setSelected(0);setPlaying(false);director.reset();}}>Portrait</button></div>
-          <header><strong>{portrait?'Portrait':'Sequences'}</strong><button disabled={!available.length} onClick={()=>editAnimation(-1)}>Add</button></header>
+          <header><div className="showcase-tabs" role="tablist" aria-label="Sequences / Portrait"><button role="tab" aria-selected={!portrait} onClick={()=>{setMode('sequences');setSelected(0);setPlaying(false);director.reset();}}>Sequences</button><button role="tab" aria-selected={portrait} onClick={()=>{setMode('portrait');setSelected(0);setPlaying(false);director.reset();}}>Portrait</button></div><button disabled={!available.length} onClick={()=>editAnimation(-1)}>Add</button></header>
           <ol className="showcase-list" aria-label="Animation sequence">{playlist.map((row,index)=><li key={index} className={(selected===index?' selected':'')+(overflow[index]?' overflow':'')} onClick={()=>selectAnimation(index)} onDoubleClick={()=>editAnimation(index)} onContextMenu={event=>{event.preventDefault();editAnimation(index);}} tabIndex={0} onKeyDown={event=>{if(event.key==='Enter')editAnimation(index);if(event.key==='Delete')updatePlaylist(playlist.filter((_,i)=>i!==index));}} title="Right-click to edit">
             <span>{index+1}. {model.Sequences[row.sequence]?.Name}</span><small>{row.seconds+'s'+(portrait?'':' / '+Math.round(row.speed*100)+'%')}</small>
           </li>)}</ol>
@@ -166,12 +191,20 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
           {!portrait&&<label>Light<select aria-label="Light" value={light} onChange={event=>setLight(event.target.value)}><option value="ingame">Ingame</option><option value="portrait">Portrait</option><option value="none">None</option></select></label>}
           <small>{quality==='low'?'1× · no AA · bilinear':quality==='medium'?'1.5× · AA · 4× filtering':'2× · AA · 16× filtering'}</small>
         </section>
+        <button className="showcase-wide showcase-signature-button" aria-expanded={signatureOpen} onClick={()=>{setSignatureOpen(!signatureOpen);setCropEditing(false);setPlaying(false);}}>Signature{signature?' *':''}</button>
       </fieldset>
     </aside>
-    <section ref={previewRef} className={`showcase-preview${portrait?" portrait":""}`} aria-label="Showcase preview" style={portrait?{"--portrait-zoom":portraitZoom/125,backgroundColor:color}:undefined} inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} showcaseRadius={orbitRadius} showcasePortraitMode={portrait} showcasePortraitZoom={portraitZoom/125} portraitCameraIndex={cameraIndex} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,orbitRadius,light,portrait,portraitZoom]}/></Suspense>
+    <section ref={previewRef} className={`showcase-preview${portrait?" portrait":""}`} aria-label="Showcase preview" style={portrait?{"--portrait-zoom":portraitZoom/125,backgroundColor:color}:undefined} inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} showcaseRadius={orbitRadius} showcasePortraitMode={portrait} portraitCameraIndex={cameraIndex} showcaseSignature={signature&&{url:signature.url,type:signature.type,rect:signature.rect}} showcaseSignatureEditing={signatureOpen} onShowcaseSignatureChange={rect=>setSignature(value=>value?{...value,rect}:value)} onShowcaseSignatureError={message=>onStatus?.(message,true)} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,orbitRadius,light,portrait,portraitZoom]}/></Suspense>
       {!portrait&&(cropEditing||selectedCrop)&&<div className={'showcase-crop-overlay'+(cropEditing?' editing':'')} aria-label="Crop area" onPointerDown={cropEditing?startCrop:undefined} onPointerMove={cropEditing?moveCrop:undefined} onPointerUp={cropEditing?finishCrop:undefined} onPointerCancel={cropEditing?finishCrop:undefined}>
         <div className="showcase-crop-selection" style={{left:(selectedCrop?.x||0)*100+'%',top:(selectedCrop?.y||0)*100+'%',width:(selectedCrop?.width??1)*100+'%',height:(selectedCrop?.height??1)*100+'%'}}/>
         {cropEditing&&<div className="showcase-crop-hint">Drag to select the GIF area</div>}
+      </div>}
+      {signatureOpen&&<div className="showcase-signature-panel" aria-label="Signature editor">
+        <header><strong>Signature</strong><button aria-label="Close signature editor" onClick={()=>setSignatureOpen(false)}>�</button></header>
+        <button onClick={()=>signatureInput.current?.click()}>Add image/GIF�</button><input hidden ref={signatureInput} type="file" accept="image/*,.gif" onChange={chooseSignature}/>
+        <select aria-label="Signature presets" value={signature?.presetId||''} onChange={event=>{const preset=signaturePresets.find(row=>row.id===event.target.value);if(preset)applySignature(preset.blob,preset.name,preset.type,preset.id,preset.rect);}}><option value="">Presets</option>{signaturePresets.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select>
+        {signature&&<><small>Drag the signature; drag its corner to resize.</small><input aria-label="Signature preset name" value={signatureName} onChange={event=>setSignatureName(event.target.value)} placeholder="Preset name"/>
+          <div className="showcase-signature-actions"><button onClick={storeSignature}>Save preset</button><button onClick={()=>{setSignature(null);setSignatureOpen(false);}}>Remove</button>{signature.presetId&&<button onClick={removeSignaturePreset}>Delete preset</button>}</div></>}
       </div>}</section>
     {animationDialog&&<AnimationDialog model={model} initial={animationDialog} portrait={portrait} onClose={()=>setAnimationDialog(null)} onSave={row=>{updatePlaylist(animationDialog.index<0?[...playlist,row]:playlist.map((item,index)=>index===animationDialog.index?row:item));setSelected(animationDialog.index<0?playlist.length:animationDialog.index);setAnimationDialog(null);}} onRemove={()=>{updatePlaylist(playlist.filter((_,index)=>index!==animationDialog.index));setSelected(Math.max(0,animationDialog.index-1));setAnimationDialog(null);}}/>}
   </div>;

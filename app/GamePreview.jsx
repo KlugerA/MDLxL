@@ -68,14 +68,22 @@ async function loadHumanFrame() {
   return { canvas: frame, url: frame.toDataURL('image/png') };
 }
 
-function composePortraitCapture(modelCanvas, frameCanvas, color = "#111417", scale = 1) {
+function composePortraitCapture(modelCanvas, frameCanvas) {
   const layout = portraitCaptureLayout(modelCanvas.width, modelCanvas.height), snapshot = document.createElement('canvas');
   snapshot.width = snapshot.height = layout.size;
-  const context = snapshot.getContext('2d'); context.fillStyle = color; context.fillRect(0, 0, layout.size, layout.size);
-  const size = layout.size * scale, offset = (layout.size - size) / 2;
-  context.drawImage(modelCanvas, offset + layout.model.x * scale, offset + layout.model.y * scale, layout.model.width * scale, layout.model.height * scale);
-  if (frameCanvas) context.drawImage(frameCanvas, offset, offset, size, size);
+  const context = snapshot.getContext('2d'); context.fillStyle = '#000000'; context.fillRect(0, 0, layout.size, layout.size);
+  context.drawImage(modelCanvas, layout.model.x, layout.model.y, layout.model.width, layout.model.height);
+  if (frameCanvas) context.drawImage(frameCanvas, 0, 0, layout.size, layout.size);
   return snapshot;
+}
+
+function paintSignature(context, image, rect, width, height) {
+  if (!image || !rect) return;
+  const iw = image.naturalWidth || image.width, ih = image.naturalHeight || image.height;
+  if (!(iw > 0 && ih > 0)) return;
+  const x = rect.x * width, y = rect.y * height, boxWidth = rect.width * width, boxHeight = rect.height * height;
+  const scale = Math.min(boxWidth / iw, boxHeight / ih), drawWidth = iw * scale, drawHeight = ih * scale;
+  context.drawImage(image, x + (boxWidth - drawWidth) / 2, y + (boxHeight - drawHeight) / 2, drawWidth, drawHeight);
 }
 
 function releasePreviewGraphics(native, gl, canvas) {
@@ -101,13 +109,15 @@ export default function GamePreview(inputProps) {
   const props = presentationProps;
   if (props.showcase) props.portraitMode = !!props.showcasePortraitMode;
   const { model, revision = 0, sequenceIndex = -1, textureAssets, view = 'perspective' } = props;
-  const root = useRef(null), host = useRef(null), runtime = useRef(null), latest = useRef(props); latest.current = props;
+  const root = useRef(null), host = useRef(null), stage = useRef(null), signatureCanvas = useRef(null), signatureDrag = useRef(null), runtime = useRef(null), latest = useRef(props); latest.current = props;
   const [error, setError] = useState(''), [warnings, setWarnings] = useState([]), [eventWarnings, setEventWarnings] = useState([]), [adjustingSensitivity, setAdjustingSensitivity] = useState(null), [gestureLabel, setGestureLabel] = useState('');
   const [backgroundError, setBackgroundError] = useState('');
   const [selectionBox, setSelectionBox] = useState(null);
   const [portraitSize, setPortraitSize] = useState(256), [portraitFrameVersion, setPortraitFrameVersion] = useState(0);
   const portraitFrame = useRef({ status: 'idle', canvas: null, url: '', error: '', promise: Promise.resolve() });
   const backgroundState = useRef({ url: null, status: 'ready', image: null, promise: Promise.resolve() });
+  const signatureState = useRef({ url: null, status: 'ready', image: null, promise: Promise.resolve() });
+  const signatureComposite = useRef(null);
   const cameraMemory = useRef(null);
   const rendererSource = useRef({ input: null, build: null });
   if (rendererSource.current.input !== model) {
@@ -186,6 +196,50 @@ export default function GamePreview(inputProps) {
     return () => { active = false; picture.onload = null; picture.onerror = null; resolve(); };
   }, [appearanceBackgroundUrl, appearanceBackgroundType]);
   useEffect(() => { backgroundState.current.animation?.setRange?.(); }, [props.backgroundTrim?.start, props.backgroundTrim?.end]);
+
+  useEffect(() => {
+    const url = props.showcaseSignature?.url;
+    if (!url) { signatureState.current = { url: null, status: 'ready', image: null, promise: Promise.resolve() }; return; }
+    let resolve, reject, active = true;
+    const entry = { url, status: 'loading', image: null, promise: new Promise((yes,no)=>{resolve=yes;reject=no;}) };
+    entry.promise.catch(()=>{}); signatureState.current = entry;
+    if (signatureCanvas.current) { signatureCanvas.current.width=1; signatureCanvas.current.height=1; }
+    const show = image => {
+      if (!active) return;
+      entry.status = 'ready'; entry.image = image;
+      const preview = signatureCanvas.current;
+      if (preview) { preview.width = image.naturalWidth || image.width; preview.height = image.naturalHeight || image.height; preview.getContext('2d').drawImage(image,0,0); }
+      resolve(); runtime.current?.scheduler.invalidate();
+    };
+    const fail = error => { if (!active) return; entry.status='failed'; entry.error=error; reject(error); latest.current.onShowcaseSignatureError?.(error.message); };
+    if (props.showcaseSignature.type === 'image/gif') {
+      const animation = createAnimatedPreviewBackground(url,{onFrame:show,onError:fail});
+      return () => { active=false; animation.dispose(); resolve(); };
+    }
+    const picture = new Image();
+    picture.onload = () => show(picture);
+    picture.onerror = () => fail(new Error('The signature image could not be loaded.'));
+    picture.src = url;
+    return () => { active=false; picture.onload=null; picture.onerror=null; resolve(); };
+  }, [props.showcaseSignature?.url, props.showcaseSignature?.type]);
+
+  function startSignatureDrag(event) {
+    if (!latest.current.showcaseSignatureEditing || event.button !== 0) return;
+    const bounds = stage.current.getBoundingClientRect(), rect = latest.current.showcaseSignature.rect;
+    signatureDrag.current = {x:event.clientX,y:event.clientY,width:bounds.width,height:bounds.height,rect,resize:event.target.dataset.signatureResize === 'true'};
+    event.currentTarget.setPointerCapture(event.pointerId); event.stopPropagation(); event.preventDefault();
+  }
+  function moveSignatureDrag(event) {
+    const drag = signatureDrag.current; if (!drag) return;
+    const dx=(event.clientX-drag.x)/drag.width, dy=(event.clientY-drag.y)/drag.height, rect=drag.rect;
+    const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+    const next=drag.resize
+      ? {...rect,width:clamp(rect.width+dx,.03,1-rect.x),height:clamp(rect.height+dy,.03,1-rect.y)}
+      : {...rect,x:clamp(rect.x+dx,0,1-rect.width),y:clamp(rect.y+dy,0,1-rect.height)};
+    latest.current.onShowcaseSignatureChange?.(next); event.stopPropagation();
+  }
+  function endSignatureDrag(event) { if (!signatureDrag.current) return; signatureDrag.current=null; event.stopPropagation(); }
+
 
   useEffect(() => {
     if (!model || !host.current) return;
@@ -497,7 +551,7 @@ export default function GamePreview(inputProps) {
       if (backgroundCanvas.width !== canvas.width) backgroundCanvas.width = canvas.width;
       if (backgroundCanvas.height !== canvas.height) backgroundCanvas.height = canvas.height;
       const current = latest.current, appearance = viewportAppearanceOptions(current.preferences).background;
-      drawPreviewBackground(backgroundCanvas.getContext('2d'), canvas.width, canvas.height, backgroundState.current.image, appearance.color, current.backgroundUrl ? { display: 'fill', opacity: 1 } : appearance);
+      drawPreviewBackground(backgroundCanvas.getContext('2d'), canvas.width, canvas.height, current.portraitMode ? null : backgroundState.current.image, current.portraitMode ? '#000000' : appearance.color, current.portraitMode ? { type: 'color', color: '#000000', display: 'fill', opacity: 1 } : current.backgroundUrl ? { display: 'fill', opacity: 1 } : appearance);
       nativeBackground.update(backgroundCanvas);
     }
     function resize() {
@@ -841,7 +895,7 @@ export default function GamePreview(inputProps) {
       cancel: cancelPreviewFrame,
     });
     state.captureApi = {
-      get isReady() { return !disposed && texturesReady && eventPreview.isReady && backgroundState.current.status === 'ready' && (!latest.current.portraitMode || portraitFrame.current.status !== 'loading'); },
+      get isReady() { return !disposed && texturesReady && eventPreview.isReady && backgroundState.current.status === 'ready' && signatureState.current.status === 'ready' && (!latest.current.portraitMode || portraitFrame.current.status !== 'loading'); },
       cameraView() { return state.cameraView(); },
       invalidate() { state.scheduler.invalidate(); },
       fit() { fit(); },
@@ -871,7 +925,17 @@ export default function GamePreview(inputProps) {
       recordingFrame(time, options) { latest.current.showcase?.seekRecording(time); render(performance.now(), 0, { captureOnly: true }); return state.captureApi.captureFrame(options); },
       copyVisibleFrame(destination, crop) {
         const context = destination.getContext('2d');
-        const source = latest.current.portraitMode ? composePortraitCapture(canvas, portraitFrame.current.canvas, viewportAppearanceOptions(latest.current.preferences).background.color, latest.current.showcasePortraitZoom || 1) : canvas;
+        let source = latest.current.portraitMode ? composePortraitCapture(canvas, portraitFrame.current.canvas) : canvas;
+        const signature = signatureState.current;
+        if (signature.status === 'ready' && signature.url === latest.current.showcaseSignature?.url && signature.image) {
+          if (source === canvas) {
+            const composite = signatureComposite.current ||= document.createElement('canvas');
+            if (composite.width !== source.width) composite.width=source.width;
+            if (composite.height !== source.height) composite.height=source.height;
+            composite.getContext('2d').drawImage(source,0,0); source=composite;
+          }
+          paintSignature(source.getContext('2d'),signature.image,latest.current.showcaseSignature.rect,source.width,source.height);
+        }
         const selection = cropPixels(source.width,source.height,crop);
         context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
         context.drawImage(source,selection.x,selection.y,selection.width,selection.height,0,0,destination.width,destination.height);
@@ -884,9 +948,9 @@ export default function GamePreview(inputProps) {
       },
       async whenReady() {
         while (!disposed) {
-          const entry = backgroundState.current, human = portraitFrame.current; await Promise.all([entry.promise, texturePromise, eventPreview.ready, (latest.current.portraitMode || latest.current.preparePortraitFrame) ? human.promise : undefined]);
+          const entry = backgroundState.current, human = portraitFrame.current, signature = signatureState.current; await Promise.all([entry.promise, texturePromise, eventPreview.ready, signature.promise, (latest.current.portraitMode || latest.current.preparePortraitFrame) ? human.promise : undefined]);
           if (disposed) break;
-          if (entry === backgroundState.current && (!latest.current.portraitMode || human === portraitFrame.current)) { if (entry.status === 'failed') throw entry.error; return; }
+          if (entry === backgroundState.current && signature === signatureState.current && (!latest.current.portraitMode || human === portraitFrame.current)) { if (entry.status === 'failed') throw entry.error; if (signature.status === 'failed') throw signature.error; return; }
         }
         throw new Error('This animation preview is no longer open.');
       },
@@ -904,7 +968,10 @@ export default function GamePreview(inputProps) {
           canvas.width = dimensions.width; canvas.height = dimensions.height; drawBackground();
           if (render(performance.now(), 0, { captureOnly: true }) === false) throw new Error('The animation preview could not render a capture.');
           const captured = composePreviewCapture(backgroundCanvas, canvas);
-          return latest.current.portraitMode ? composePortraitCapture(captured, portraitFrame.current.canvas, viewportAppearanceOptions(latest.current.preferences).background.color, latest.current.showcasePortraitZoom || 1) : captured;
+          const result = latest.current.portraitMode ? composePortraitCapture(captured, portraitFrame.current.canvas) : captured;
+          const signature = signatureState.current;
+          if (signature.status === 'ready' && signature.url === latest.current.showcaseSignature?.url && signature.image) paintSignature(result.getContext('2d'),signature.image,latest.current.showcaseSignature.rect,result.width,result.height);
+          return result;
         } finally {
           canvas.width = saved.width; canvas.height = saved.height; drawBackground();
           render(performance.now(), 0); state.scheduler.invalidate();
@@ -947,10 +1014,11 @@ export default function GamePreview(inputProps) {
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];
   return <div ref={root} className={`game-preview-root${portrait ? ' portrait-preview-root' : ''}`} style={{ minHeight: props.presentation === 'preview' ? 0 : 180, background: props.showcase && portrait ? viewportBackground.color : undefined }}>
-    <div className={`game-preview-stage${portrait ? ' portrait-preview-stage' : ''}`} style={portrait ? { width: portraitSize, height: portraitSize } : undefined}>
+    <div ref={stage} className={`game-preview-stage${portrait ? ' portrait-preview-stage' : ''}`} style={portrait ? { width: portraitSize, height: portraitSize } : undefined}>
       <div ref={host} className={`game-preview-surface${portrait ? ' portrait-model-surface' : ''}`} />
       {selectionBox && <div className={`game-preview-selection-layer${portrait ? ' portrait-model-surface' : ''}`}><div data-selection-marquee="" style={{ position: 'absolute', zIndex: 90, pointerEvents: 'none', boxSizing: 'border-box', border: `1px dashed ${marqueeColor}`, background: `${marqueeColor}24`, boxShadow: '0 0 0 1px #fff', ...selectionBox }} /></div>}
       {portrait && frame.status === 'ready' && <img className="portrait-human-frame" src={frame.url} alt="" aria-hidden="true" data-frame-version={portraitFrameVersion}/>} 
+      {props.showcaseSignature && <div className={`showcase-signature-overlay${props.showcaseSignatureEditing?' editing':''}`} style={{left:props.showcaseSignature.rect.x*100+'%',top:props.showcaseSignature.rect.y*100+'%',width:props.showcaseSignature.rect.width*100+'%',height:props.showcaseSignature.rect.height*100+'%'}} onPointerDown={startSignatureDrag} onPointerMove={moveSignatureDrag} onPointerUp={endSignatureDrag} onPointerCancel={endSignatureDrag}><canvas ref={signatureCanvas} aria-label="Signature"/>{props.showcaseSignatureEditing&&<span className="showcase-signature-handle" data-signature-resize="true" aria-hidden="true"/>}</div>}
       {portrait && !hasCamera && <div className="portrait-message" role="status">Create or select a camera to view the portrait</div>}
       {portrait && frame.status === 'loading' && <div className="portrait-frame-status" role="status">Loading Human UI frame from installed Warcraft III data…</div>}
       {portrait && frame.status === 'failed' && <div className="portrait-frame-status portrait-frame-error" role="status">{frame.error}</div>}
