@@ -39,13 +39,18 @@ export function createScrollSensitivity({ getPreferences, onChange, onPointerCha
       if (event.button === 1 && (getPreferences()?.cameraBindings?.middle ?? 'toggle') === 'toggle') {
         // Original MDLVis toggles Rotation/Work on middle-button release.
         // Consume the down event so OrbitControls and browser autoscroll stay idle.
-        middlePointer = { id: event.pointerId, rotation: wheelMode(getPreferences()) === 'rotate' };
+        middlePointer = { id: event.pointerId };
         event.preventDefault?.(); event.stopImmediatePropagation?.();
       }
     },
     // Pointer Events fire pointerdown only when the first mouse button is
     // pressed. mousedown is required to see the second button in a chord.
     mouseDown(event) {
+      if (event.button === 1 && (getPreferences()?.cameraBindings?.middle ?? 'toggle') === 'toggle') {
+        // A second button in a held mouse chord has no pointerdown event.
+        if (!middlePointer) middlePointer = { id: null };
+        event.preventDefault?.(); event.stopImmediatePropagation?.(); return;
+      }
       if (event.button === 0 && rightDown && !scrollResetLatched) {
         scrollResetLatched = true; value = 2; pointerAdjustmentPointer = null; onChange?.(value); onPointerAdjustment?.(event);
         event.preventDefault?.(); event.stopImmediatePropagation?.(); onIndicator({ kind: 'scroll', value, shortcut: true, reset: true });
@@ -62,9 +67,9 @@ export function createScrollSensitivity({ getPreferences, onChange, onPointerCha
       if (event.type === 'pointercancel' || event.type === 'blur') { middlePointer = null; leftPointer = null; pointerAdjustmentPointer = null; rightDown = false; dpiResetLatched = false; scrollResetLatched = false; onIndicator(null); return; }
       if (event.button === 0 && (!leftPointer || leftPointer.id === event.pointerId || event.type === 'mouseup')) { leftPointer = null; pointerAdjustmentPointer = null; scrollResetLatched = false; onIndicator(null); }
       if (event.button === 2) { rightDown = false; dpiResetLatched = false; onIndicator(null); }
-      if (event.button === 1 && middlePointer && middlePointer.id === event.pointerId) {
-        const toggle = middlePointer.rotation && wheelMode(getPreferences()) === 'rotate'; middlePointer = null;
-        if (toggle) onCameraModeToggle?.();
+      if (event.button === 1 && middlePointer && (event.type === 'mouseup' || middlePointer.id === event.pointerId)) {
+        middlePointer = null;
+        onCameraModeToggle?.();
       }
     },
     wheel(event) {
