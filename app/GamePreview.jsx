@@ -9,6 +9,7 @@ import { createRigMarkersGL } from './rig-markers-gl.js';
 import { boneVertexHighlights } from '../src/bone-tools.js';
 import { billboardCameraCorrection } from './preview-pose.js';
 import { drawModelCameraOverlay } from './model-camera-overlay.js';
+import { drawCollisionSpheres } from './optimizexl-overlays.js';
 import { ModelRenderer } from 'war3-model';
 import { textureFromAsset } from './Viewport.jsx';
 import { drawGeosetHighlight } from './geoset-highlight.js';
@@ -231,7 +232,14 @@ export default function GamePreview(inputProps) {
       const key = [...viewMatrix, ...projectionMatrix].map(value => value.toFixed(6)).join(',');
       if (key !== projectionKey) { projectionKey = key; latest.current.onProjectionViewChange?.({ viewMatrix, projectionMatrix }); }
     };
-    const cameraChanged = () => { latest.current.onCameraAnglesChange?.(editorCameraAngles(camera)); reportProjectionView(); invalidate(); };
+    let syncingCamera = false, compareRegistered = false, collisionCanvas = null, externalSeek;
+    const snapshotCamera = () => ({ camera: camera === ortho ? 'ortho' : 'perspective', perspective: perspective.clone(), ortho: ortho.clone(), target: controls.target.clone() });
+    const receiveCamera = saved => { syncingCamera = true; camera = restorePreviewCamera(saved, perspective, ortho, controls); resize(); reportProjectionView(); invalidate(); syncingCamera = false; };
+    const cameraChanged = () => {
+      latest.current.onCameraAnglesChange?.(editorCameraAngles(camera)); reportProjectionView(); invalidate();
+      const bus = latest.current.compareCamera;
+      if (bus && compareRegistered && !syncingCamera) { bus.saved = snapshotCamera(); for (const receive of bus.listeners) if (receive !== receiveCamera) receive(bus.saved); }
+    };
     controls.addEventListener('change', cameraChanged);
     let leftGesture = null, previewSelectHeld = false;
     const cancelPreviewGesture = () => {
@@ -571,6 +579,8 @@ export default function GamePreview(inputProps) {
       if (saved && saved.view === view) { camera = restorePreviewCamera(saved, perspective, ortho, controls); reportProjectionView(); }
     }
     if (latest.current.portraitMode) enterPortrait(evaluateModelCamera(model, model?.Cameras?.[latest.current.portraitCameraIndex], latest.current.time, sequenceIndex, latest.current.time));
+    const compareCamera = latest.current.compareCamera;
+    if (compareCamera) { if (compareCamera.saved) receiveCamera(compareCamera.saved); else compareCamera.saved = snapshotCamera(); compareCamera.listeners.add(receiveCamera); compareRegistered = true; }
     const checker = new Uint8ClampedArray(8 * 8 * 4);
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const value = ((x >> 1) + (y >> 1)) % 2 ? 135 : 90; checker.set([value, value, value, 255], (y * 8 + x) * 4); }
     const assets = textureAssets instanceof Map ? textureAssets : new Map(Object.entries(textureAssets || {}));
@@ -649,10 +659,11 @@ export default function GamePreview(inputProps) {
         native.rendererData.animation = timelineSequenceIndex;
         native.rendererData.animationInfo = sequence;
       }
-      const userSeek = p.time !== externalFrame && Math.abs((p.time || 0) - (reportedFrame ?? -Infinity)) > 1;
+      const userSeek = p.syncPlayback ? p.seekId !== externalSeek || p.time < externalFrame : p.time !== externalFrame && Math.abs((p.time || 0) - (reportedFrame ?? -Infinity)) > 1;
+      externalSeek = p.seekId;
       if (sequenceChanged || userSeek || p.playing && !lastPlaying) playbackStopped = false;
       if (sequenceChanged || userSeek) resetPreviewEffects(native);
-      const requestedSeek = sequenceChanged || userSeek || !p.playing || !lastPlaying;
+      const requestedSeek = p.syncPlayback ? sequenceChanged || userSeek || !p.playbackRunning : sequenceChanged || userSeek || !p.playing || !lastPlaying;
       if (nodeGesture || requestedSeek) {
         const frame = p.restPose ? start : nodeGesture?.frame ?? Math.min(end, Math.max(start, p.time ?? start));
         setPreviewFrame(frame); globalClock = frame;
@@ -665,7 +676,7 @@ export default function GamePreview(inputProps) {
         }
       }
       externalFrame = p.time; lastPlaying = p.playing;
-      const playback = previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
+      const playback = p.syncPlayback ? { frame: Math.min(end, Math.max(start, p.time ?? start)), elapsed: requestedSeek ? 0 : Math.max(0, Math.min(end,p.time)-native.getFrame()), finished: false } : previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
       const dt = playback.elapsed;
       globalClock += dt;
       controls.update();
@@ -715,6 +726,11 @@ export default function GamePreview(inputProps) {
         if (!captureOnly && !p.portraitMode) presentation.draw(camera, p.preferences, p.workplane, false, center, radius, bounds.min.z, { platformOnly: true });
       } catch (cause) { setError(`Warcraft preview error: ${cause.message}`); return false; }
       if (!captureOnly) {
+      if (p.showCollisionSpheres) {
+        if (!collisionCanvas) { collisionCanvas = ownerDocument.createElement('canvas'); collisionCanvas.dataset.collisionOverlay = ''; collisionCanvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:30'; host.current.appendChild(collisionCanvas); }
+        collisionCanvas.width=canvas.width; collisionCanvas.height=canvas.height;
+        drawCollisionSpheres(collisionCanvas.getContext('2d'),ownedModel,camera,native,canvas.width,canvas.height);
+      } else if (collisionCanvas) { collisionCanvas.remove(); collisionCanvas=null; }
       const overlayOptions = { ...previewOverlayOptions(p.overlays, p.showNodes), preferences: p.preferences, workplane: p.workplane };
       overlayOptions.selectableGeosets = p.selectableGeosets ?? [];
       overlayOptions.grid = false;
@@ -854,6 +870,7 @@ export default function GamePreview(inputProps) {
         ? { camera:portraitBackup.camera, view:portraitBackup.appliedView, perspective:portraitBackup.perspective.clone(), ortho:portraitBackup.ortho.clone(), target:portraitBackup.target.clone() }
         : { camera:camera === ortho ? 'ortho' : 'perspective', view:state.appliedView, perspective:perspective.clone(), ortho:ortho.clone(), target:controls.target.clone() };
       if (latest.current.cameraHandoff) latest.current.cameraHandoff.current = cameraMemory.current;
+      compareCamera?.listeners.delete(receiveCamera); collisionCanvas?.remove();
       disposed = true; leaveGeoset(); canvas.removeEventListener('pointermove', hoverGeoset); canvas.removeEventListener('pointerleave', leaveGeoset); latest.current.onCaptureReady?.(null); backgroundCanvas.remove(); hoverCanvas?.remove(); connectorCanvas?.remove(); nodeCanvas?.remove(); geometryCanvas?.remove(); cameraCanvas?.remove(); scheduler.dispose(); ownerDocument.removeEventListener('visibilitychange', scheduler.sync); window.removeEventListener('mdlvis-frame', fit); window.removeEventListener('mdlxl-view-camera', viewCamera); unbindScroll(); observer?.disconnect(); ownerWindow.removeEventListener('keydown', previewKeyDown, true); ownerWindow.removeEventListener('keyup', previewKeyUp, true); ownerWindow.removeEventListener('blur', previewWindowBlur); canvas.removeEventListener('pointerdown', pointerDown, true); canvas.removeEventListener('pointermove', suppressAdjustedMove, true); canvas.removeEventListener('pointerup', finishLeftGesture, true); canvas.removeEventListener('pointercancel', finishLeftGesture, true); canvas.removeEventListener('pointermove', nodePointerMove, true); canvas.removeEventListener('pointerup', finishNodeGesture, true); canvas.removeEventListener('pointercancel', finishNodeGesture, true); canvas.removeEventListener('keydown', cancelNodeGesture, true); controls.removeEventListener('change', cameraChanged); controls.removeEventListener('start', cameraStarted); controls.removeEventListener('end', cameraEnded); controls.dispose(); canvas.removeEventListener('webglcontextlost', contextLost); runtime.current = null; rigMarkers.dispose(); presentation.dispose(); nativeBackground.dispose(); eventPreview.dispose(); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas);
     };
   }, [rendererModel, rendererRevision, textureAssets, props.modelPath, graphics.antialias, graphics.particles, props.showParticles, graphics.lighting, graphics.textures, timelineStart, timelineEnd, globalPreviewId]);
@@ -878,6 +895,7 @@ export default function GamePreview(inputProps) {
 
   useEffect(() => { runtime.current?.scheduler.sync(); }, [props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.rotateOnOwnAxis, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
 
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.showCollisionSpheres, props.seekId, props.playbackRunning]);
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];
   return <div ref={root} className={`game-preview-root${portrait ? ' portrait-preview-root' : ''}`} style={{ minHeight: props.presentation === 'preview' ? 0 : 180 }}>

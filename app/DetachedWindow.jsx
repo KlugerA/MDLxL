@@ -20,7 +20,7 @@ function copyStyles(targetDocument) {
   return Promise.all(pending);
 }
 
-export default function DetachedWindow({ childWindow, title, preferences, onClose, children }) {
+export default function DetachedWindow({ childWindow, title, preferences, onClose, children, forwardKeys = true }) {
   const [container, setContainer] = useState(null), closing = useRef(false), onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -36,8 +36,8 @@ export default function DetachedWindow({ childWindow, title, preferences, onClos
     const root = targetDocument.createElement('div');
     root.className = 'mdlxl-detached-root';
     targetDocument.body.appendChild(root);
-    const forwardKeyDown = event => window.dispatchEvent(new CustomEvent('mdlxl-detached-keydown', { detail: event }));
-    const forwardKeyUp = event => window.dispatchEvent(new CustomEvent('mdlxl-detached-keyup', { detail: event }));
+    const forwardKeyDown = event => { if (forwardKeys) window.dispatchEvent(new CustomEvent('mdlxl-detached-keydown', { detail: event })); };
+    const forwardKeyUp = event => { if (forwardKeys) window.dispatchEvent(new CustomEvent('mdlxl-detached-keyup', { detail: event })); };
     const forwardBlur = () => window.dispatchEvent(new CustomEvent('mdlxl-detached-blur'));
     targetDocument.addEventListener('keydown', forwardKeyDown, true);
     targetDocument.addEventListener('keyup', forwardKeyUp, true);

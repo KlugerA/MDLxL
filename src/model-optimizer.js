@@ -108,7 +108,7 @@ function visitIds(value, visit) {
   for (const key of value.Keys) for (const field of ['Vector', 'InTan', 'OutTan']) if (key[field]) for (let i = 0; i < key[field].length; i++) key[field][i] = visit(key[field][i]);
   return value;
 }
-function resources(model, counts, skipped) {
+export function resources(model, counts, skipped) {
   const usedMaterials = new Set([...model.Geosets, ...model.RibbonEmitters].map(consumer => consumer.MaterialID).filter(id => !sentinel(id)));
   const materialMap = new Map(); model.Materials = model.Materials.filter((material, i) => { if (!usedMaterials.has(i)) return false; materialMap.set(i, materialMap.size); return true; });
   counts.materials += counts.originalMaterials - model.Materials.length;
@@ -184,7 +184,7 @@ export function verifyOptimization(before, after) {
   requireSame(preservationView(before, before), preservationView(after, before), 'Preservation check failed: triangle corners, resources, hierarchy, bounds or excluded data changed.');
 }
 
-function assertRoundTripFields(source, reopened, path = '') {
+export function assertRoundTripFields(source, reopened, path = '') {
   if (source === undefined || path === 'Nodes' || /\.PivotPoint$/.test(path) || /^Info\.Num/.test(path)) return;
   // MDL omits default layer alpha; its decoder represents that as null while
   // MDX stores the same fully opaque value explicitly.
