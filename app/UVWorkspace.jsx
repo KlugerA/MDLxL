@@ -1,3 +1,4 @@
+import MaterialProperties from './MaterialProperties.jsx';
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import UVEditor from './UVEditor.jsx';
 import { combineUVGeosets, projectUVFromView, relevantUVMaterials, splitCombinedUV } from '../src/uv-tools.js';
@@ -98,7 +99,7 @@ function GeosetPicker({ options, value, attention = false, onChoose, onHover }) 
 }
 
 export default function UVWorkspace({ model, materialModel = model, previewModel, revision = 0, activeGeoset = -1, eligibleSelection = {}, selectionByGeoset = {}, onSelectionChange,
-  onPreviewSelectionChange, onWorkingSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onWrappingChange, textureAssets, teamColor, preferences, onPreferences,
+  onPreviewSelectionChange, onWorkingSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onWrappingChange, onMaterialPreset, textureAssets, teamColor, preferences, onPreferences,
   draftCount = 0, onLibrary, onSavePreview, onRevertPreview, previewProps, readOnly = false, onExit }) {
   const [materialID, setMaterialID] = useState(null), [uvTool, setUVTool] = useState('select'), [foldDirection, setFoldDirection] = useState('right-to-left');
   const [selectingNew, setSelectingNew] = useState(false), [selectGeoset, setSelectGeoset] = useState(-1), [selectionDraft, setSelectionDraft] = useState({}), [hoveredGeoset, setHoveredGeoset] = useState(null);
@@ -126,8 +127,8 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   const current = materialEntries.find(entry => entry.materialID === materialID) || materialEntries[0] || null;
   const imageLayers = (current?.layers || []).filter(({ texture }) => texture && !texture.ReplaceableId && texture.Image?.trim());
   const wrappingEnabled = imageLayers.length > 0 && imageLayers.every(({ texture }) => (texture.Flags & 3) === 3);
-  // UV drags keep the renderer alive; saved sampling changes must reload it.
-  const previewWrappingRevision = JSON.stringify((previewModel?.Textures || []).map(texture => texture.Flags || 0));
+  // UV drags keep the renderer alive; material and texture changes must reload it.
+  const previewWrappingRevision = JSON.stringify({ materials: previewModel?.Materials, textures: previewModel?.Textures });
 
   useEffect(() => {
     if (!current) { setMaterialID(null); return; }
@@ -254,7 +255,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
           onClick={() => onWrappingChange?.([...new Set(imageLayers.map(layer => layer.textureID))], !wrappingEnabled)}>{wrappingEnabled ? 'Disable Wrapping' : 'Enable Wrapping'}</button>
       </UVGridControls></div>
       <div className="uv-header-divider" aria-hidden="true"/>
-      <div className="uv-header-actions"><label>Material <select aria-label="UV material" value={current?.materialID ?? ''} disabled={selectingNew} onChange={event => chooseMaterial(event.target.value)}>{materialEntries.map(entry => <option key={entry.materialID} value={entry.materialID}>{entry.label}</option>)}</select></label><span className="uv-material-summary">{current ? `${current.geosetIndices.length} geoset${current.geosetIndices.length === 1 ? '' : 's'} · UV ${current.coordId}` : 'No material for this selection'}</span><button disabled={readOnly} onClick={onLibrary}>Replace Texture…</button>{draftCount > 0 && <><button disabled={readOnly} onClick={onSavePreview}>Save texture</button><button disabled={readOnly} onClick={onRevertPreview}>Revert texture</button></>}<button onClick={onExit}>Exit UV Wrapper</button></div>
+      <div className="uv-header-actions"><label>Material <select aria-label="UV material" value={current?.materialID ?? ''} disabled={selectingNew} onChange={event => chooseMaterial(event.target.value)}>{materialEntries.map(entry => <option key={entry.materialID} value={entry.materialID}>{entry.label}</option>)}</select></label><MaterialProperties model={model} materialID={current?.materialID} disabled={readOnly || selectingNew} onChange={onMaterialPreset}/><span className="uv-material-summary">{current ? `${current.geosetIndices.length} geoset${current.geosetIndices.length === 1 ? '' : 's'} · UV ${current.coordId}` : 'No material for this selection'}</span><button disabled={readOnly} onClick={onLibrary}>Replace Texture…</button>{draftCount > 0 && <><button disabled={readOnly} onClick={onSavePreview}>Save texture</button><button disabled={readOnly} onClick={onRevertPreview}>Revert texture</button></>}<button onClick={onExit}>Exit UV Wrapper</button></div>
     </header>
     {(materialError || materialPreview?.warnings?.length > 0) && <div className="uv-workspace-warning" role="status">{materialError || materialPreview.warnings.join(' · ')}</div>}
     <div ref={workspaceBody} className="uv-workspace-body" style={{ '--uv-side-width': `${sidePercent}%` }}>

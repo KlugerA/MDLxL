@@ -71,11 +71,15 @@ class TextureResolver {
       if (typeof name !== 'string' || !name || name.includes('\0') || !extensions.includes(path.extname(name).slice(1).toLowerCase())) continue;
       // A fully qualified native module path is an explicit CASC choice. Do
       // not substitute a same-named custom file beside the model for it.
+      // Slots 12-15 were black in old MPQs. Prefer modern native colors when
+      // available, while keeping explicit loose texture overrides first.
+      const modernTeamColor = /^ReplaceableTextures[\\/]TeamColor[\\/]TeamColor(?:1[2-9]|2[0-4])\.blp$/i.test(name);
       const nativeModule = /\.w3mod:/i.test(name);
       const nativeName = nativeModule && !/^war3\.w3mod:/i.test(name) ? 'war3.w3mod:' + name : name;
       let bytes = null;
       for (const source of sources) {
-        bytes = (!nativeModule && (await this.loose(name, source.folders) || await this.archived(name, source.archives))) || await this.casc?.read(nativeName, source.cascFolders);
+        if (modernTeamColor) bytes = await this.loose(name, source.folders) || await this.casc?.read(nativeName, source.cascFolders) || await this.archived(name, source.archives);
+        else bytes = (!nativeModule && (await this.loose(name, source.folders) || await this.archived(name, source.archives))) || await this.casc?.read(nativeName, source.cascFolders);
         // Reforged can keep event models exclusively in an SD/HD module. This
         // endpoint is also used for them; image lookup retains its own order.
         if (!bytes && !nativeModule && /\.(mdx|mdl)$/i.test(name) && this.casc) {

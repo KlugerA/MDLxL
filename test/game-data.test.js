@@ -163,3 +163,15 @@ test('archive reader LRU closes unused handles without closing an archive during
   assert.ok(resolver.readers.size <= 2);
   await resolver.close(); assert.equal(closed.length, 5);
 });
+
+ test('modern fixed team colors prefer CASC over legacy black slots without changing other lookup priorities',async()=>{
+ const mpq=Buffer.from('legacy'),modern=Buffer.from('modern'),loose=Buffer.from('custom');
+ const resolver=new TextureResolver({openArchive:async()=>({read:async()=>mpq,close:async()=>{}}),stat:async()=>{throw Object.assign(Error(),{code:'ENOENT'});},casc:{read:async()=>modern,close:async()=>{}}});
+ const source={archives:['legacy.mpq'],cascFolders:['modern']};
+ assert.deepEqual((await resolver.resolve(['ReplaceableTextures\\TeamColor\\TeamColor12.blp'],source))[0].bytes,modern);
+ assert.deepEqual((await resolver.resolve(['ReplaceableTextures\\TeamColor\\TeamColor00.blp'],source))[0].bytes,mpq);
+ assert.deepEqual((await resolver.resolve(['Armor.blp'],source))[0].bytes,mpq);
+ resolver.stat=async()=>({isFile:()=>true,size:6});resolver.readFile=async()=>loose;
+ assert.deepEqual((await resolver.resolve(['ReplaceableTextures\\TeamColor\\TeamColor12.blp'],{...source,folders:['custom']}))[0].bytes,loose);
+ await resolver.close();
+ });
