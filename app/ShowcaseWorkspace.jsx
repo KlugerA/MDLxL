@@ -2,7 +2,7 @@ import React, { lazy, useEffect, useMemo, useRef, useState, Suspense } from 'rea
 import AnimationPreviewTools from './AnimationPreviewTools.jsx';
 import { cropBetween, cropPresetRect, SHOWCASE_CROP_PRESETS } from './showcase-crop.js';
 import { createShowcaseDirector, overflowEntries, SHOWCASE_QUALITY } from './showcase-director.js';
-import { listSignaturePresets, saveSignaturePreset, deleteSignaturePreset } from './showcase-signature.js';
+import ShowcaseLayerTools from './ShowcaseLayerTools.jsx';
 import './showcase.css';
 
 const GamePreview = lazy(() => import('./GamePreview.jsx'));
@@ -64,32 +64,10 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   const [selected,setSelected] = useState(0), [animationDialog,setAnimationDialog] = useState(null);
   const [quality,setQuality] = useState('high'), [fps,setFPS] = useState(30), [tool,setTool] = useState('rotate');
   const [backgroundMode,setBackgroundMode] = useState('folder'), [color,setColor] = useState('#000000'), [savedColors,setSavedColors] = useState(readSavedColors), [portraitZoom,setPortraitZoom] = useState(100), [media,setMedia] = useState(null), [videoDuration,setVideoDuration] = useState(0), [trim,setTrim] = useState({start:0,end:0});
-  const mediaInput = useRef(null), signatureInput = useRef(null);
-  const [signature,setSignature] = useState(null), [signatureOpen,setSignatureOpen] = useState(false), [signatureName,setSignatureName] = useState(''), [signaturePresets,setSignaturePresets] = useState([]);
-  useEffect(() => { let active=true; listSignaturePresets().then(rows=>{if(active)setSignaturePresets(rows);}).catch(error=>onStatus?.('Could not load signature presets: '+error.message,true)); return ()=>{active=false;}; }, []);
-  useEffect(() => () => { if(signature?.url) URL.revokeObjectURL(signature.url); }, [signature?.url]);
-  function applySignature(blob,name,type,presetId=null,rect={x:.68,y:.82,width:.28,height:.12}) {
-    setSignature({blob,name,type,url:URL.createObjectURL(blob),presetId,rect});
-    setSignatureName(presetId ? name : name.replace(/\.[^.]+$/,''));
-  }
-  function chooseSignature(event) {
-    const file=event.target.files?.[0]; event.target.value=''; if(!file)return;
-    if(!file.type.startsWith('image/') && !/\.(png|jpe?g|webp|bmp|gif)$/i.test(file.name)) { onStatus?.('Choose an image or GIF for the signature.',true); return; }
-    applySignature(file,file.name,/\.gif$/i.test(file.name)?'image/gif':file.type||'image/png');
-  }
-  async function storeSignature() {
-    if(!signature)return;
-    try {
-      const preset={id:signature.presetId||crypto.randomUUID(),name:signatureName.trim()||signature.name,type:signature.type,blob:signature.blob,rect:signature.rect};
-      await saveSignaturePreset(preset); setSignature(value=>value?{...value,presetId:preset.id}:value);
-      setSignaturePresets(await listSignaturePresets()); onStatus?.('Signature preset saved.');
-    } catch(error) { onStatus?.('Could not save signature preset: '+error.message,true); }
-  }
-  async function removeSignaturePreset() {
-    if(!signature?.presetId)return;
-    try { await deleteSignaturePreset(signature.presetId); setSignaturePresets(await listSignaturePresets()); setSignature(value=>value?{...value,presetId:null}:value); onStatus?.('Signature preset removed.'); }
-    catch(error) { onStatus?.('Could not remove signature preset: '+error.message,true); }
-  }
+  const mediaInput = useRef(null);
+  const [layers,setLayers] = useState([]), [activeLayer,setActiveLayer] = useState(null), [layersEditing,setLayersEditing] = useState(false), [portraitFrameEnabled,setPortraitFrameEnabled] = useState(true);
+  const framedPortrait = portrait && portraitFrameEnabled;
+  useEffect(()=>{if(layersEditing){setCropEditing(false);setPlaying(false);}},[layersEditing]);
   function saveColor(index) {
     const next=[...savedColors]; if (next[index]) setColor(next[index]); else { next[index]=color; setSavedColors(next); }
   }
@@ -149,15 +127,15 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   const backgroundType = portrait ? '' : backgroundMode === 'folder' ? backgroundLibrary.type : backgroundMode === 'media' ? media?.type : '';
   const localPreferences = useMemo(() => ({ ...preferences,
     graphics:{...preferences.graphics,...SHOWCASE_QUALITY[quality],textures:true,lighting:true,particles:true,maxFps:60,pauseWhenHidden:false},
-    viewportAppearance:{...preferences.viewportAppearance,background:{type:'color',color,imageData:'',display:'fill',opacity:1}},
+    viewportAppearance:{...preferences.viewportAppearance,background:{type:'color',color:portrait&&!portraitFrameEnabled?'#000000':color,imageData:'',display:'fill',opacity:1}},
     platform:{enabled:false},lighting:{...preferences.lighting,preset:'legacy'},capture:{fps,recordingQuality:quality},
-  }),[preferences,quality,fps,color]);
+  }),[preferences,quality,fps,color,portrait,portraitFrameEnabled]);
   return <div className="showcase-workspace">
     <aside className="showcase-sidebar" aria-label="Showcase controls">
-      <AnimationPreviewTools active sessionId={sessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={portrait?null:selectedCrop} disabled={overflow.some(Boolean) || !playlist.length || portrait && cameraIndex < 0 || !portrait && backgroundMode === 'folder' && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)setPlaying(false);}}/>
+      <AnimationPreviewTools active sessionId={sessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={framedPortrait?null:selectedCrop} disabled={overflow.some(Boolean) || !playlist.length || portrait && cameraIndex < 0 || !portrait && backgroundMode === 'folder' && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)setPlaying(false);}}/>
       <fieldset disabled={busy} className="showcase-fields">
         <NumberField label="Length" aria-label="Record length seconds" min={.02} step={.01} value={length} onChange={portrait?setPortraitLength:setSequenceLength}/>
-        <section className="showcase-section" aria-label={portrait?"Portrait color":"Background"}>
+        {(!portrait||portraitFrameEnabled)&&<section className="showcase-section" aria-label={portrait?"Portrait color":"Background"}>
           {portrait&&<header><strong>Color</strong></header>}
           {!portrait&&<label>Background<select aria-label="Background source" value={backgroundMode} onChange={event=>setBackgroundMode(event.target.value)}><option value="folder">Backgrounds</option><option value="color">Color</option><option value="media">Image/Video</option></select></label>}
           {!portrait&&backgroundMode === 'folder' && <select className="showcase-wide" aria-label="Backgrounds" value={background} onFocus={backgroundLibrary.refresh} onChange={event=>onBackground(event.target.value)}><option value="">None</option>{backgroundLibrary.items.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select>}
@@ -165,7 +143,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
           {!portrait&&backgroundMode === 'media' && <><button className="showcase-wide showcase-file" onClick={()=>mediaInput.current.click()} title={media?.name}>{media?.name || 'Choose image/video…'}</button><input hidden ref={mediaInput} type="file" accept="image/*,video/*,.mp4,.webm,.mov,.m4v,.ogv,.avi,.mkv,.wmv,.wav" onChange={chooseFile}/>
             {backgroundType?.startsWith('video/') && videoDuration > 0 && <div className="showcase-trim"><NumberField label="From (s)" min={0} max={Math.max(0,(trim.end || videoDuration)-.02)} step={.1} value={trim.start} onChange={value=>setTrim({...trim,start:Math.max(0,Math.min(Number(value)||0,(trim.end||videoDuration)-.02))})}/><NumberField label="To (s)" min={trim.start+.02} max={videoDuration} step={.1} value={trim.end || videoDuration} onChange={value=>setTrim({...trim,end:Math.max(trim.start+.02,Math.min(videoDuration,Number(value)||videoDuration))})}/></div>}
           </>}
-        </section>
+        </section>}
         <section className="showcase-section" aria-label="Sequences / Portrait">
           <header><div className="showcase-tabs" role="tablist" aria-label="Sequences / Portrait"><button role="tab" aria-selected={!portrait} onClick={()=>{setMode('sequences');setSelected(0);setPlaying(false);director.reset();}}>Sequences</button><button role="tab" aria-selected={portrait} onClick={()=>{setMode('portrait');setSelected(0);setPlaying(false);director.reset();}}>Portrait</button></div><button disabled={!available.length} onClick={()=>editAnimation(-1)}>Add</button></header>
           <ol className="showcase-list" aria-label="Animation sequence">{playlist.map((row,index)=><li key={index} className={(selected===index?' selected':'')+(overflow[index]?' overflow':'')} onClick={()=>selectAnimation(index)} onDoubleClick={()=>editAnimation(index)} onContextMenu={event=>{event.preventDefault();editAnimation(index);}} tabIndex={0} onKeyDown={event=>{if(event.key==='Enter')editAnimation(index);if(event.key==='Delete')updatePlaylist(playlist.filter((_,i)=>i!==index));}} title="Right-click to edit">
@@ -182,10 +160,14 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
           <Slider label="Radius" value={orbitRadius} max={100} onChange={setOrbitRadius}/>
           <small>Z axis · 0% radius spins in place</small>
           <button className="showcase-wide" disabled={!api} onClick={()=>{if(!playing)restart();setPlaying(!playing);}}>{playing?'Pause preview':'Preview orbit'}</button>
+
+        </section>
+        {portrait&&<section className="showcase-section" aria-label="Portrait zoom"><header><strong>Portrait</strong></header><label>Portrait frame<input type="checkbox" aria-label="Portrait frame" checked={portraitFrameEnabled} onChange={event=>{setPortraitFrameEnabled(event.target.checked);setCropEditing(false);}}/></label><label>Size<select aria-label="Portrait zoom preset" value={[75,100,125,150].includes(portraitZoom)?portraitZoom:"custom"} onChange={event=>setPortraitZoom(Number(event.target.value))}><option value="custom" disabled>Custom</option><option value="75">Small 75%</option><option value="100">Frame 100%</option><option value="125">Close 125%</option><option value="150">Detail 150%</option></select></label><Slider label="Zoom" min={50} max={200} value={portraitZoom} onChange={setPortraitZoom}/></section>}
+        {!framedPortrait&&<section className="showcase-section" aria-label="Crop">
           <label>Crop size<select aria-label="Crop size" value={cropPreset} onChange={event=>{const preset=event.target.value;if(preset==='free'){setCrop(selectedCrop);setCropEditing(true);}else setCropEditing(false);setCropPreset(preset);}}><option value="free">Free selection</option><option value="square">Square · 1:1</option><option value="classic">Classic · 4:3</option><option value="wide">Wide · 16:9</option><option value="portrait">Portrait · 3:4</option></select></label>
           <div className="showcase-crop-controls"><button disabled={!api} onClick={()=>{setPlaying(false);setCropEditing(!cropEditing);}}>{cropEditing?'Done':selectedCrop?'Edit crop':'Crop'}</button>{selectedCrop&&<button onClick={()=>{setCrop(null);setCropPreset('free');setCropEditing(false);}}>Reset</button>}</div>
-        </section>
-        {portrait&&<section className="showcase-section" aria-label="Portrait zoom"><header><strong>Portrait zoom</strong></header><label>Size<select aria-label="Portrait zoom preset" value={[75,100,125,150].includes(portraitZoom)?portraitZoom:"custom"} onChange={event=>setPortraitZoom(Number(event.target.value))}><option value="custom" disabled>Custom</option><option value="75">Small 75%</option><option value="100">Frame 100%</option><option value="125">Close 125%</option><option value="150">Detail 150%</option></select></label><Slider label="Zoom" min={50} max={200} value={portraitZoom} onChange={setPortraitZoom}/></section>}
+        </section>}
+        <ShowcaseLayerTools layers={layers} onLayers={setLayers} activeId={activeLayer} onActive={setActiveLayer} onEditing={setLayersEditing} onStatus={onStatus}/>
         <section className="showcase-section" aria-label="Graphics">
           <header><strong>Graphics</strong></header>
           <label>Quality<select aria-label="Graphics quality" value={quality} onChange={event=>setQuality(event.target.value)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">Highest</option></select></label>
@@ -193,21 +175,14 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
           {!portrait&&<label>Light<select aria-label="Light" value={light} onChange={event=>setLight(event.target.value)}><option value="ingame">Ingame</option><option value="portrait">Portrait</option><option value="none">None</option></select></label>}
           <small>{quality==='low'?'1× · no AA · bilinear':quality==='medium'?'1.5× · AA · 4× filtering':'2× · AA · 16× filtering'}</small>
         </section>
-        <button className="showcase-wide showcase-signature-button" aria-expanded={signatureOpen} onClick={()=>{setSignatureOpen(!signatureOpen);setCropEditing(false);setPlaying(false);}}>Signature{signature?' *':''}</button>
       </fieldset>
     </aside>
-    <section ref={previewRef} className={`showcase-preview${portrait?" portrait":""}`} aria-label="Showcase preview" style={portrait?{"--portrait-zoom":portraitZoom/125,backgroundColor:color}:undefined} inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} showcaseRadius={orbitRadius} showcasePortraitMode={portrait} portraitCameraIndex={cameraIndex} showcaseSignature={signature&&{url:signature.url,type:signature.type,rect:signature.rect}} showcaseSignatureEditing={signatureOpen} onShowcaseSignatureChange={rect=>setSignature(value=>value?{...value,rect}:value)} onShowcaseSignatureError={message=>onStatus?.(message,true)} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,orbitRadius,light,portrait,portraitZoom]}/></Suspense>
-      {!portrait&&(cropEditing||selectedCrop)&&<div className={'showcase-crop-overlay'+(cropEditing?' editing':'')} aria-label="Crop area" onPointerDown={cropEditing?startCrop:undefined} onPointerMove={cropEditing?moveCrop:undefined} onPointerUp={cropEditing?finishCrop:undefined} onPointerCancel={cropEditing?finishCrop:undefined}>
+    <section ref={previewRef} className={`showcase-preview${framedPortrait?" portrait":portrait?" portrait-frameless":""}`} aria-label="Showcase preview" style={framedPortrait?{"--portrait-zoom":portraitZoom/125,backgroundColor:color}:portrait?{backgroundColor:"#000000"}:undefined} inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} showcaseRadius={orbitRadius} showcasePortraitMode={portrait} showcasePortraitFrame={portraitFrameEnabled} showcasePortraitZoom={portraitZoom} portraitCameraIndex={cameraIndex} showcaseLayers={layers} showcaseLayerEditing={layersEditing&&!cropEditing} showcaseActiveLayer={activeLayer} onShowcaseLayerSelect={setActiveLayer} onShowcaseLayerChange={(id,patch)=>setLayers(values=>values.map(layer=>layer.id===id?{...layer,...patch}:layer))} onShowcaseLayerError={message=>onStatus?.(message,true)} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,orbitRadius,light,portrait,portraitZoom,portraitFrameEnabled]}/></Suspense>
+      {!framedPortrait&&(cropEditing||selectedCrop)&&<div className={'showcase-crop-overlay'+(cropEditing?' editing':'')} aria-label="Crop area" onPointerDown={cropEditing?startCrop:undefined} onPointerMove={cropEditing?moveCrop:undefined} onPointerUp={cropEditing?finishCrop:undefined} onPointerCancel={cropEditing?finishCrop:undefined}>
         <div className="showcase-crop-selection" style={{left:(selectedCrop?.x||0)*100+'%',top:(selectedCrop?.y||0)*100+'%',width:(selectedCrop?.width??1)*100+'%',height:(selectedCrop?.height??1)*100+'%'}}/>
         {cropEditing&&<div className="showcase-crop-hint">Drag to select the GIF area</div>}
       </div>}
-      {signatureOpen&&<div className="showcase-signature-panel" aria-label="Signature editor">
-        <header><strong>Signature</strong><button aria-label="Close signature editor" onClick={()=>setSignatureOpen(false)}>�</button></header>
-        <button onClick={()=>signatureInput.current?.click()}>Add image/GIF�</button><input hidden ref={signatureInput} type="file" accept="image/*,.gif" onChange={chooseSignature}/>
-        <select aria-label="Signature presets" value={signature?.presetId||''} onChange={event=>{const preset=signaturePresets.find(row=>row.id===event.target.value);if(preset)applySignature(preset.blob,preset.name,preset.type,preset.id,preset.rect);}}><option value="">Presets</option>{signaturePresets.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select>
-        {signature&&<><small>Drag the signature; drag its corner to resize.</small><input aria-label="Signature preset name" value={signatureName} onChange={event=>setSignatureName(event.target.value)} placeholder="Preset name"/>
-          <div className="showcase-signature-actions"><button onClick={storeSignature}>Save preset</button><button onClick={()=>{setSignature(null);setSignatureOpen(false);}}>Remove</button>{signature.presetId&&<button onClick={removeSignaturePreset}>Delete preset</button>}</div></>}
-      </div>}</section>
+    </section>
     {animationDialog&&<AnimationDialog model={model} initial={animationDialog} portrait={portrait} onClose={()=>setAnimationDialog(null)} onSave={row=>{updatePlaylist(animationDialog.index<0?[...playlist,row]:playlist.map((item,index)=>index===animationDialog.index?row:item));setSelected(animationDialog.index<0?playlist.length:animationDialog.index);setAnimationDialog(null);}} onRemove={()=>{updatePlaylist(playlist.filter((_,index)=>index!==animationDialog.index));setSelected(Math.max(0,animationDialog.index-1));setAnimationDialog(null);}}/>}
   </div>;
 }
