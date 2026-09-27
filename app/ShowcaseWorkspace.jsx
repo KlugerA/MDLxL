@@ -32,7 +32,7 @@ function AnimationDialog({ model, initial, onSave, onRemove, onClose }) {
 }
 export default function ShowcaseWorkspace({ model, modelName, modelPath, revision, textureAssets, preferences, teamColor, sessionId, background, backgroundLibrary, onBackground, onStatus }) {
   const [api,setAPI] = useState(null), [playing,setPlaying] = useState(false), [busy,setBusy] = useState(false);
-  const [length,setLength] = useState(10), [orbitSpeed,setOrbitSpeed] = useState(100), [light,setLight] = useState('ingame');
+  const [length,setLength] = useState(10), [orbitSpeed,setOrbitSpeed] = useState(100), [orbitRadius,setOrbitRadius] = useState(0), [light,setLight] = useState('ingame');
   const [playlist,setPlaylist] = useState(() => model.Sequences?.length ? [{sequence:0,seconds:3,speed:1,loop:true}] : []);
   const [selected,setSelected] = useState(0), [animationDialog,setAnimationDialog] = useState(null);
   const [quality,setQuality] = useState('high'), [fps,setFPS] = useState(30), [tool,setTool] = useState('rotate');
@@ -95,7 +95,8 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
         <section className="showcase-section" aria-label="Camera Control">
           <header><strong>Camera Control</strong><div>{['rotate','zoom'].map(value=><button key={value} aria-pressed={tool===value} onClick={()=>{setPlaying(false);setTool(value);}}>{value==='rotate'?'Rotate':'Zoom'}</button>)}<button onClick={()=>{setPlaying(false);api?.fit();}}>Fit</button></div></header>
           <Slider label="Orbit speed" value={orbitSpeed} onChange={setOrbitSpeed}/>
-          <small>Z axis · 100% = one turn per recording</small>
+          <Slider label="Radius" value={orbitRadius} max={100} onChange={setOrbitRadius}/>
+          <small>Z axis · 0% radius spins in place</small>
           <button className="showcase-wide" disabled={!api} onClick={()=>{if(!playing)restart();setPlaying(!playing);}}>{playing?'Pause preview':'Preview orbit'}</button>
         </section>
         <section className="showcase-section" aria-label="Graphics">
@@ -107,7 +108,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
         </section>
       </fieldset>
     </aside>
-    <section className="showcase-preview" aria-label="Showcase preview" inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,light]}/></Suspense></section>
+    <section className="showcase-preview" aria-label="Showcase preview" inert={busy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode={tool} showcaseLight={light} showcaseRadius={orbitRadius} onCaptureReady={setAPI} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing} showcaseConfig={[playlist,length,orbitSpeed,orbitRadius,light]}/></Suspense></section>
     {animationDialog&&<AnimationDialog model={model} initial={animationDialog} onClose={()=>setAnimationDialog(null)} onSave={row=>{updatePlaylist(animationDialog.index<0?[...playlist,row]:playlist.map((item,index)=>index===animationDialog.index?row:item));setSelected(animationDialog.index<0?playlist.length:animationDialog.index);setAnimationDialog(null);}} onRemove={()=>{updatePlaylist(playlist.filter((_,index)=>index!==animationDialog.index));setSelected(Math.max(0,animationDialog.index-1));setAnimationDialog(null);}}/>}
   </div>;
 }

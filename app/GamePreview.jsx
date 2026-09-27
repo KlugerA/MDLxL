@@ -11,6 +11,7 @@ import { billboardCameraCorrection } from './preview-pose.js';
 import { drawModelCameraOverlay } from './model-camera-overlay.js';
 import { ModelRenderer } from 'war3-model';
 import { advanceShowcaseModel } from './showcase-playback.js';
+import { showcaseOrbitRadius, setShowcaseOrbitCamera } from './showcase-orbit.js';
 import { textureFromAsset } from './Viewport.jsx';
 import { drawGeosetHighlight } from './geoset-highlight.js';
 import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatrices, skinGeoset, skinGeosetNormals } from '../src/animation.js';
@@ -218,7 +219,7 @@ export default function GamePreview(inputProps) {
     const timelineSequenceIndex = Number.isFinite(timelineStart) && Number.isFinite(timelineEnd) && timelineStart >= 0 && timelineEnd > timelineStart
       ? ownedModel.Sequences.push({ Name: 'Editor timeline', Interval: new Uint32Array([timelineStart, timelineEnd]), NonLooping: true }) - 1 : -1;
     const turntableCamera = new THREE.PerspectiveCamera();
-    const turntableRotation = new THREE.Quaternion(), turntableAxis = new THREE.Vector3(0,0,1);
+    const turntableRotation = new THREE.Quaternion(), turntableOffset = new THREE.Vector3();
     let displayCamera;
     const displayLight = () => new THREE.Vector3(...(latest.current.showcaseLight === 'portrait' ? [.3,-.3,.25] : [-.65,.55,1])).applyQuaternion(turntableRotation);
     const previewAdapter = installWarcraftPreviewAdapter(gl, ownedModel, () => ({ frame: native.getFrame(), sequenceIndex: native.getSequence(), globalTime: globalClock,
@@ -485,7 +486,7 @@ export default function GamePreview(inputProps) {
     const bounds = new THREE.Box3(), point = new THREE.Vector3();
     for (const geo of ownedModel.Geosets) for (let i = 0; i < geo.Vertices.length; i += 3) bounds.expandByPoint(point.fromArray(geo.Vertices, i));
     if (bounds.isEmpty()) bounds.set(new THREE.Vector3(-50, -50, 0), new THREE.Vector3(50, 50, 100));
-    const center = bounds.getCenter(new THREE.Vector3()), radius = Math.max(1, bounds.getSize(new THREE.Vector3()).length() / 2);
+    const center = bounds.getCenter(new THREE.Vector3()), boundsSize = bounds.getSize(new THREE.Vector3()), radius = Math.max(1, boundsSize.length() / 2);
     const fitRadius = () => {
       const p = latest.current, gridVisible = p.overlays?.grid ?? !!p.showGrid;
       if (p.previewSelectionMode) return radius;
@@ -689,16 +690,10 @@ export default function GamePreview(inputProps) {
       controls.update();
       displayCamera = camera;
       if (p.showcase) {
-        // V * T(center) * Rz(angle) * T(-center), expressed as a camera for
-        // native billboards, particles and events as well as the mesh render.
-        turntableRotation.setFromAxisAngle(turntableAxis, -showcaseNext.angle);
-        turntableCamera.copy(camera);
-        turntableCamera.position.sub(center).applyQuaternion(turntableRotation).add(center);
-        turntableCamera.quaternion.premultiply(turntableRotation);
-        turntableCamera.updateMatrixWorld();
-        displayCamera = turntableCamera;
-        cameraQuaternion.copy(displayCamera.quaternion).multiply(billboardCameraCorrection);
-        native.setCamera(displayCamera.position.toArray(), cameraQuaternion.toArray());
+        // The model origin is the rotation axis. Radius adds an explicit path;
+        // the navigated camera and its projection remain exactly as placed.
+        displayCamera = setShowcaseOrbitCamera(camera, turntableCamera, showcaseNext.angle,
+          showcaseOrbitRadius(center, boundsSize, p.showcaseRadius), turntableRotation, turntableOffset);
       }
       let poseSequence = selected;
       try {
