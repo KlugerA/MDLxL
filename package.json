@@ -1,6 +1,6 @@
 {
   "name": "mdlxl",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "description": "MDLxL Warcraft III model editor",

@@ -25,6 +25,16 @@
   pose in a continuous deletion range. Removing the intended movement merely
   to make a warning disappear is not a successful repair.
 
+## OptimizeXL teaching
+
+- Before changing optimizer detection or repairs, read
+  `docs/OPTIMIZEXL_TEACHING.md` and the relevant verification notes.
+- New examples must add reusable capability without regressing accepted model
+  results or introducing duplicate/conflicting rule ownership. Record evidence,
+  exact correction boundaries, rule interactions and regression proof.
+- Repaired counterparts are test references only; runtime repairs must use the
+  model under review. Preserve the immutable accepted flail baseline.
+
 ## Versioning
 
 - Advance the project version for every patch release; do not reuse a version
