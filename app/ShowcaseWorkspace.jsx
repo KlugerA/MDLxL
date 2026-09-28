@@ -29,6 +29,10 @@ const CLEAN = Object.fromEntries(['bones','nodes','attachments','particles','bon
 function NumberField({ label, value, onChange, min, max, step = 1, ...rest }) {
   return <label>{label}<input aria-label={label} type="number" value={value} min={min} max={max} step={step} onChange={event => onChange(event.target.value === '' ? '' : Number(event.target.value))} {...rest}/></label>;
 }
+function ExtraTimeField({value,onChange,base,label='Extra Time'}) {
+  const total=Math.round((base+Math.max(0,Number(value)||0))*100)/100;
+  return <label className="showcase-extra-time">Extra Time<input aria-label={label} type="number" min={0} step={.01} value={value} onChange={event=>onChange(event.target.value===''?'':Math.max(0,Number(event.target.value)||0))}/><output title={`Sequence: ${base}s, including effects. Total: ${total}s.`}>{total}s</output></label>;
+}
 function Slider({ label, value, onChange, min = 0, max = 200 }) {
   return <label className="showcase-slider">{label}<input aria-label={label} type="range" min={min} max={max} value={value} onChange={event => onChange(Number(event.target.value))}/><output>{value}%</output></label>;
 }
@@ -44,17 +48,22 @@ function Dialog({ title, children, onClose, onSubmit, footer }) {
   </dialog>;
 }
 function AnimationDialog({ model, initial, portrait, exportTarget, definitions, globalStart=0, onSave, onRemove, onClose }) {
-  const [draft, setDraft] = useState(initial),[error,setError]=useState('');
-  const sequence=model.Sequences[draft.sequence];
+  const duration=(row,loops=row.durationLoops??1)=>loopEffectTiming(model,row.sequence,loops,row.speed>0?row.speed:1,globalStart*1000,definitions).seconds;
+  const [draft,setDraft]=useState(()=>({...initial,durationLoops:initial.durationLoops??1,extraTime:initial.extraTime??Math.max(0,(Number(initial.seconds)||0)-duration(initial))})),[error,setError]=useState('');
+  const sequence=model.Sequences[draft.sequence],base=duration(draft);
   const naturalSeconds=Math.max(0,(sequence?.Interval?.[1]||0)-(sequence?.Interval?.[0]||0))/1000;
-  const duration=(row,loops=row.durationLoops??(model.Sequences[row.sequence]?.NonLooping?1:2))=>loopEffectTiming(model,row.sequence,loops,row.speed,globalStart*1000,definitions).seconds;
-  const change = patch => setDraft(row => {const next={...row,...patch};if(next.useDuration&&next.speed>0)next.seconds=duration(next);return next;});
-  return <Dialog title={initial.editing ? 'Edit animation' : 'Add animation'} onClose={onClose} onSubmit={() => {try{validateShowcaseExport(exportTarget,draft.seconds);}catch(error){setError(error.message);return;}onSave({ sequence: draft.sequence, seconds: Math.max(.02,Number(draft.seconds)||3), speed: draft.speed, loop: true, useDuration: !!draft.useDuration, durationLoops: draft.useDuration?(draft.durationLoops??(sequence?.NonLooping?1:2)):undefined });}} footer={initial.editing && <button type="button" onClick={onRemove}>Remove</button>}>
+  const change=patch=>setDraft(row=>({...row,...patch}));
+  return <Dialog title={initial.editing ? 'Edit animation' : 'Add animation'} onClose={onClose} onSubmit={() => {
+    const extraTime=Math.max(0,Number(draft.extraTime)||0),seconds=Math.round((base+extraTime)*100)/100;
+    try{validateShowcaseExport(exportTarget,seconds);}catch(error){setError(error.message);return;}
+    onSave({sequence:draft.sequence,seconds,speed:draft.speed,loop:true,useDuration:true,durationLoops:draft.durationLoops,extraTime});
+  }} footer={initial.editing && <button type="button" onClick={onRemove}>Remove</button>}>
     <label>Animation<select aria-label="Animation" value={draft.sequence} onChange={event => change({sequence:Number(event.target.value)})}>{model.Sequences.map((row,index)=>isPortrait(row)===portrait?<option key={index} value={index}>{row.Name}</option>:null)}</select></label>
-    <NumberField label="Length (seconds)" max={exportTarget==='hive'?5:undefined} min={.02} step={.01} value={draft.seconds} onChange={seconds=>change({seconds,useDuration:false})}/><div className="showcase-crop-controls">{[1,2].map(loops=><button key={loops} type="button" disabled={draft.speed<=0||naturalSeconds<=0} aria-pressed={!!draft.useDuration&&(draft.durationLoops??(sequence?.NonLooping?1:2))===loops} onClick={()=>change({useDuration:true,durationLoops:loops})}>{loops} {loops===1?'loop':'loops'} · {draft.speed>0?duration(draft,loops)+'s':'paused'}</button>)}</div>{!portrait&&<Slider label="Speed" value={Math.round(draft.speed*100)} onChange={value=>change({speed:value/100})}/>}
-    {draft.useDuration&&<small>Includes particle finish time.</small>}{error&&<div className="showcase-error" role="alert">{error}</div>}
+    <ExtraTimeField label="Animation Extra Time" value={draft.extraTime} base={base} onChange={extraTime=>change({extraTime})}/><div className="showcase-crop-controls">{[1,2].map(loops=><button key={loops} type="button" disabled={draft.speed<=0||naturalSeconds<=0} aria-pressed={draft.durationLoops===loops} onClick={()=>change({durationLoops:loops})}>{loops} {loops===1?'loop':'loops'} · {duration(draft,loops)}s</button>)}</div>{!portrait&&<Slider label="Speed" value={Math.round(draft.speed*100)} onChange={value=>change({speed:value/100})}/>}
+    {error&&<div className="showcase-error" role="alert">{error}</div>}
   </Dialog>;
 }
+
 export default function ShowcaseWorkspace({ model, modelName, modelPath, revision, textureAssets, preferences, teamColor, sessionId, background, backgroundLibrary, onBackground, onStatus, active=true, onLoadModel }) {
   const [api,setAPI] = useState(null), [playing,setPlaying] = useState(false), [busy,setBusy] = useState(false);
   const [crop,setCrop] = useState(null), [cropPreset,setCropPreset] = useState('free'), [cropEditing,setCropEditing] = useState(false), cropDrag = useRef(null);
@@ -67,9 +76,11 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
     const observer = new ResizeObserver(([entry]) => setPreviewSize({width:entry.contentRect.width,height:entry.contentRect.height}));
     observer.observe(node); return () => observer.disconnect();
   }, []);
-  const [mode,setMode] = useState('sequences'), [sequenceLength,setSequenceLength] = useState(10), [portraitLength,setPortraitLength] = useState(10), [orbitSpeed,setOrbitSpeed] = useState(150), [orbitDirection,setOrbitDirection] = useState(1), [orbitTiming,setOrbitTiming] = useState('speed'), [orbitRadius,setOrbitRadius] = useState(0), [orbitAngle,setOrbitAngle] = useState(0), [light,setLight] = useState('ingame');
-  const [sequencePlaylist,setSequencePlaylist] = useState(() => { const index=model.Sequences?.findIndex(row=>!isPortrait(row)) ?? -1; return index<0?[]:[{sequence:index,seconds:3,speed:1,loop:true}]; });
-  const [portraitPlaylist,setPortraitPlaylist] = useState(() => { const index=model.Sequences?.findIndex(isPortrait) ?? -1; return index<0?[]:[{sequence:index,seconds:3,speed:1,loop:true}]; });
+  const [mode,setMode] = useState('sequences'), [sequenceExtraTime,setSequenceExtraTime] = useState(0), [portraitExtraTime,setPortraitExtraTime] = useState(0), [orbitSpeed,setOrbitSpeed] = useState(150), [orbitDirection,setOrbitDirection] = useState(1), [orbitTiming,setOrbitTiming] = useState('speed'), [orbitRadius,setOrbitRadius] = useState(0), [orbitAngle,setOrbitAngle] = useState(0), [light,setLight] = useState('ingame');
+  const [sequencePlaylist,setSequencePlaylist] = useState(() => { const index=model.Sequences?.findIndex(row=>!isPortrait(row)) ?? -1; return index<0?[]:timeShowcasePlaylist(model,[{sequence:index,speed:1,loop:true,useDuration:true,durationLoops:1,extraTime:0}]); });
+  const [portraitPlaylist,setPortraitPlaylist] = useState(() => { const index=model.Sequences?.findIndex(isPortrait) ?? -1; return index<0?[]:timeShowcasePlaylist(model,[{sequence:index,speed:1,loop:true,useDuration:true,durationLoops:1,extraTime:0}]); });
+  const sequenceBase=sequencePlaylist.reduce((sum,row)=>sum+Number(row.seconds),0),portraitBase=portraitPlaylist.reduce((sum,row)=>sum+Number(row.seconds),0);
+  const sequenceLength=Math.max(.02,Math.round((sequenceBase+(Number(sequenceExtraTime)||0))*100)/100),portraitLength=Math.max(.02,Math.round((portraitBase+(Number(portraitExtraTime)||0))*100)/100);
   const portrait = mode === 'portrait', playlist = portrait ? portraitPlaylist : sequencePlaylist, length = portrait ? portraitLength : sequenceLength;
   const available = model.Sequences?.map((row,index)=>isPortrait(row)===portrait?index:-1).filter(index=>index>=0) || [];
   const portraitCameraIndex = model.Cameras?.findIndex(camera=>/portrait/i.test(String(camera.Name||''))) ?? -1;
@@ -97,8 +108,6 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   useEffect(()=>{if(!api)return;let live=true;api.whenReady().then(()=>{if(!live)return;const definitions=api.effectDefinitions();
     setSequencePlaylist(rows=>timeShowcasePlaylist(model,rows,definitions));setPortraitPlaylist(rows=>timeShowcasePlaylist(model,rows,definitions));
   }).catch(error=>{if(live&&apiRef.current===api)onStatus?.(error.message,true);});return()=>{live=false;};},[api,sessionId]);
-  useEffect(()=>{if(sequencePlaylist.some(row=>row.useDuration))setSequenceLength(v=>Math.max(Number(v)||0,sequencePlaylist.reduce((sum,row)=>sum+Number(row.seconds),0)));},[sequencePlaylist]);
-  useEffect(()=>{if(portraitPlaylist.some(row=>row.useDuration))setPortraitLength(v=>Math.max(Number(v)||0,portraitPlaylist.reduce((sum,row)=>sum+Number(row.seconds),0)));},[portraitPlaylist]);
   useEffect(()=>{if(!active)setPlaying(false);},[active]);
   useEffect(()=>{const pending=modelView.current;if(!pending||!api||api===pending.previousAPI)return;modelView.current=null;if(pending.view)api.restoreShowcaseView(pending.view);},[api,sessionId]);
   useEffect(()=>{let live=true;listShowcasePresets().then(rows=>{if(live)setPresets(rows);}).catch(error=>onStatus?.('Could not load Showcase presets: '+error.message,true));return()=>{live=false;};},[]);
@@ -150,15 +159,15 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   const director = useMemo(() => createShowcaseDirector(() => current.current), []);
   const overflow = overflowEntries(playlist,length);
   let exportError='';try{validateShowcaseExport(mainPicture?'hive-main':exportTarget,length,playlist);}catch(error){exportError=error.message;}
-  function chooseExportTarget(value){const next=exportTarget===value?null:value;setExportTarget(next);setPlaying(false);if(next==='hive'){setSequenceLength(v=>Math.min(Number(v)||5,5));setPortraitLength(v=>Math.min(Number(v)||5,5));}}
-  function chooseMainPicture(){setMainPicture(value=>!value);setPlaying(false);setCropEditing(false);if(!mainPicture){setSequenceLength(v=>Math.min(Number(v)||5,5));setPortraitLength(v=>Math.min(Number(v)||5,5));}}
+  function chooseExportTarget(value){const next=exportTarget===value?null:value;setExportTarget(next);setPlaying(false);}
+  function chooseMainPicture(){setMainPicture(value=>!value);setPlaying(false);setCropEditing(false);}
 
   const center = () => api?.modelCenter() || [0,0,0];
   function restart() { director.reset(api?.cameraView(),center()); api?.invalidate(); }
-  function updatePlaylist(rows) { const timed=timeShowcasePlaylist(model,rows,apiRef.current?.effectDefinitions());(portrait?setPortraitPlaylist:setSequencePlaylist)(timed);if(timed.some(row=>row.useDuration))(portrait?setPortraitLength:setSequenceLength)(v=>Math.max(Number(v)||0,timed.reduce((sum,row)=>sum+Number(row.seconds),0))); setPlaying(false); director.reset(api?.cameraView(),center()); api?.invalidate(); }
+  function updatePlaylist(rows) { const timed=timeShowcasePlaylist(model,rows,apiRef.current?.effectDefinitions());(portrait?setPortraitPlaylist:setSequencePlaylist)(timed); setPlaying(false); director.reset(api?.cameraView(),center()); api?.invalidate(); }
   function editAnimation(index) {
     setPlaying(false); setSelected(index >= 0 ? index : selected);
-    setAnimationDialog({index,sequence:index >= 0 ? playlist[index].sequence : available[0],seconds:3,speed:1,...playlist[index],editing:index >= 0});
+    setAnimationDialog({index,sequence:index >= 0 ? playlist[index].sequence : available[0],speed:1,...(index<0?{useDuration:true,durationLoops:1,extraTime:0}:playlist[index]),editing:index >= 0});
   }
   function selectAnimation(index) {
     setSelected(index); setPlaying(false);
@@ -185,14 +194,14 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
     if(!apiRef.current)throw Error('The Showcase preview is still loading.');
     if(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)throw Error('Wait for the background to finish loading.');
     await apiRef.current.whenReady();
-    return snapshotShowcase({version:1,orbitAngle:director.clock.angle,mainPicture,mode,sequenceLength,portraitLength,orbitSpeed,orbitDirection,orbitTiming,orbitRadius,light,quality,fps,backgroundMode,color,crop,cropPreset,media,background,backgroundAsset:backgroundMode==='folder'&&(backgroundAsset?.url||backgroundLibrary.url)?{id:backgroundAsset?.id||background,name:backgroundAsset?.name||backgroundLibrary.items.find(item=>item.id===background)?.label||background,type:backgroundAsset?.type||backgroundLibrary.type,url:backgroundAsset?.url||backgroundLibrary.url,blob:backgroundAsset?.blob}:null,trim,portraitZoom,portraitFrameEnabled,grid,gridDensity,layers,view:apiRef.current.showcaseView(),...(animations?{sequencePlaylist,portraitPlaylist}:{})});
+    return snapshotShowcase({version:1,orbitAngle:director.clock.angle,mainPicture,mode,sequenceLength,portraitLength,sequenceExtraTime,portraitExtraTime,orbitSpeed,orbitDirection,orbitTiming,orbitRadius,light,quality,fps,backgroundMode,color,crop,cropPreset,media,background,backgroundAsset:backgroundMode==='folder'&&(backgroundAsset?.url||backgroundLibrary.url)?{id:backgroundAsset?.id||background,name:backgroundAsset?.name||backgroundLibrary.items.find(item=>item.id===background)?.label||background,type:backgroundAsset?.type||backgroundLibrary.type,url:backgroundAsset?.url||backgroundLibrary.url,blob:backgroundAsset?.blob}:null,trim,portraitZoom,portraitFrameEnabled,grid,gridDensity,layers,view:apiRef.current.showcaseView(),...(animations?{sequencePlaylist,portraitPlaylist}:{})});
   }
   function applySetup(snapshot){
     return new Promise((resolve,reject)=>{
       const previousURLs=[...setupURLs.current],setup=hydrateShowcase(snapshot,setupURLs.current);
       pendingApply.current={setup,resolve,reject,previousURLs};
       flushSync(()=>{
-        setPlaying(false);setCropEditing(false);setMainPicture(!!setup.mainPicture);setMode(setup.mode);setSequenceLength(setup.sequenceLength);setPortraitLength(setup.portraitLength);
+        setPlaying(false);setCropEditing(false);setMainPicture(!!setup.mainPicture);setMode(setup.mode);setSequenceExtraTime(setup.sequenceExtraTime??Math.max(0,(Number(setup.sequenceLength)||0)-(setup.sequencePlaylist||sequencePlaylist).reduce((sum,row)=>sum+Number(row.seconds),0)));setPortraitExtraTime(setup.portraitExtraTime??Math.max(0,(Number(setup.portraitLength)||0)-(setup.portraitPlaylist||portraitPlaylist).reduce((sum,row)=>sum+Number(row.seconds),0)));
         setOrbitTiming(setup.orbitTiming==='circle'?'circle':'speed');setOrbitSpeed(setup.orbitSpeed);setOrbitDirection(setup.orbitDirection===-1?-1:1);setOrbitRadius(setup.orbitRadius);setOrbitAngle(setup.orbitAngle||0);setLight(setup.light);setQuality(setup.quality);setFPS(setup.fps);
         setBackgroundMode(setup.backgroundMode);setColor(setup.color);setCrop(setup.crop);setCropPreset(setup.cropPreset);setMedia(setup.media);setBackgroundAsset(setup.backgroundAsset);onBackground(setup.background||'');setTrim(setup.trim);setVideoDuration(0);
         setPortraitZoom(setup.portraitZoom);setPortraitFrameEnabled(setup.portraitFrameEnabled);setGrid(!!setup.grid);setGridDensity(setup.gridDensity||5);setLayers(setup.layers);setActiveLayer(null);setLayersEditing(false);setSelected(0);
@@ -249,7 +258,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
         <div className="showcase-preset-actions"><button disabled={!api} onClick={()=>{setPresetName(modelName.replace(/\.[^.]+$/,'')+' setup');setPresetDialog('save');}}>Save Preset</button><button disabled={!api} onClick={()=>setPresetDialog('load')}>Load Preset</button></div>
         <button className="showcase-wide" disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={addRecording}>Add to recording list{recordingList.length?' · '+recordingList.length:''}</button>
         {recordingList.length>0&&<ol className="showcase-recording-list" aria-label="Recording list">{recordingList.map((take,index)=><li key={take.id}><span title={take.name}>{index+1}. {take.name}</span><button aria-label={'Remove recording '+(index+1)} onClick={()=>setRecordingList(rows=>rows.filter(row=>row.id!==take.id))}>×</button></li>)}</ol>}
-        <NumberField label="Length" aria-label="Record length seconds" max={exportTarget==='hive'||mainPicture?5:undefined} min={.02} step={.01} value={length} onChange={portrait?setPortraitLength:setSequenceLength}/>
+        <ExtraTimeField value={portrait?portraitExtraTime:sequenceExtraTime} base={portrait?portraitBase:sequenceBase} onChange={portrait?setPortraitExtraTime:setSequenceExtraTime}/>
         {(!portrait||framedPortrait)&&<section className="showcase-section" aria-label={portrait?"Portrait color":"Background"}>
           {portrait&&<header><strong>Color</strong></header>}
           {!portrait&&<label>Background<select aria-label="Background source" value={backgroundMode} onChange={event=>setBackgroundMode(event.target.value)}><option value="folder">Backgrounds</option><option value="color">Color</option><option value="media">Image/Video</option></select></label>}

@@ -90,8 +90,11 @@ export function createShowcaseDirector(getSettings, now = () => performance.now(
       else if (settings.playing && !clock.recording) clock.seconds += delta/1000;
       if (clock.live) clock.globalTime = clock.seconds*1000;
       else clock.globalTime += Math.max(0,delta);
-      clock.angle += (clock.seconds-previous) * Math.PI*2 / Math.max(.02,Number(settings.length)) * (settings.orbitTiming==='circle'?1:clamp(Number(settings.orbitSpeed ?? 100),0,200)/100)*(settings.orbitDirection===-1?-1:1);
-      const animation = showcaseAnimation(settings.model,settings.playlist,clock.seconds,!clock.recording);
+      if(settings.orbitTiming==='circle')clock.angle=(Number(settings.startAngle)||0)+clock.seconds*Math.PI*2/Math.max(.02,Number(settings.length))*(settings.orbitDirection===-1?-1:1);
+      else clock.angle += (clock.seconds-previous) * Math.PI*2 / Math.max(.02,Number(settings.length)) * clamp(Number(settings.orbitSpeed ?? 100),0,200)/100*(settings.orbitDirection===-1?-1:1);
+      const span=Math.max(.02,Number(settings.length)),cycle=clock.recording?0:Math.floor(clock.seconds/span);
+      const animation = showcaseAnimation(settings.model,settings.playlist,clock.recording?clock.seconds:clock.seconds%span,false);
+      if(!clock.recording)animation.segment+=cycle*settings.playlist.filter(row=>settings.model.Sequences?.[row.sequence]).length;
       return { ...animation, portrait:!!settings.portrait, globalTime:clock.globalTime, angle:clock.angle, revision:clock.revision, presentationTime:clock.seconds*1000 };
     },
     reset() { Object.assign(clock,{seconds:0,angle:Number(getSettings().startAngle)||0,revision:clock.revision+1}); },

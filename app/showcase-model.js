@@ -9,7 +9,7 @@ export function remapShowcasePlaylist(rows,previous,next){
 }
 export function remapShowcaseTake(take,previous,next){
   const setup={...take.setup,sequencePlaylist:timeShowcasePlaylist(next,remapShowcasePlaylist(take.setup.sequencePlaylist,previous,next)),portraitPlaylist:timeShowcasePlaylist(next,remapShowcasePlaylist(take.setup.portraitPlaylist,previous,next))};
-  for(const [list,length] of [['sequencePlaylist','sequenceLength'],['portraitPlaylist','portraitLength']])if(setup[list].some(row=>row.useDuration))setup[length]=Math.max(Number(setup[length])||0,setup[list].reduce((sum,row)=>sum+Number(row.seconds),0));
+  for(const [list,length,extra] of [['sequencePlaylist','sequenceLength','sequenceExtraTime'],['portraitPlaylist','portraitLength','portraitExtraTime']]){setup[extra]=take.setup[extra]??Math.max(0,(Number(take.setup[length])||0)-(take.setup[list]||[]).reduce((sum,row)=>sum+Number(row.seconds),0));setup[length]=Math.max(.02,Math.round((setup[list].reduce((sum,row)=>sum+Number(row.seconds),0)+setup[extra])*100)/100);}
   const rows=setup.mode==='portrait'?setup.portraitPlaylist:setup.sequencePlaylist;
   return {...take,setup,name:rows.map(row=>next.Sequences[row.sequence].Name).join(' → ')+' · '+(setup.mode==='portrait'?setup.portraitLength:setup.sequenceLength)+'s'};
 }

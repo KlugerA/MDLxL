@@ -16,7 +16,7 @@ export const SHOWCASE_PRESETS=[
 ];
 export const withinCrop=(rect,crop)=>({x:crop.x+rect.x*crop.width,y:crop.y+rect.y*crop.height,width:rect.width*crop.width,height:rect.height*crop.height});
 export function builtinSetup(preset,crop){
-  return {version:1,mode:'sequences',sequenceLength:10,portraitLength:10,orbitSpeed:150,orbitRadius:0,orbitAngle:0,light:'ingame',quality:'high',fps:30,backgroundMode:'color',color:preset.color,crop:null,cropPreset:preset.cropPreset,media:null,backgroundAsset:null,background:'',trim:{start:0,end:0},portraitZoom:100,portraitFrameEnabled:true,grid:false,gridDensity:5,layout:withinCrop(preset.modelRect,crop),layers:preset.layers.map(layer=>({...layer,id:crypto.randomUUID(),size:Math.max(6,layer.size*crop.width),rect:withinCrop(layer.rect,crop)}))};
+  return {version:1,mode:'sequences',sequenceLength:10,portraitLength:10,sequenceExtraTime:0,portraitExtraTime:0,orbitSpeed:150,orbitRadius:0,orbitAngle:0,light:'ingame',quality:'high',fps:30,backgroundMode:'color',color:preset.color,crop:null,cropPreset:preset.cropPreset,media:null,backgroundAsset:null,background:'',trim:{start:0,end:0},portraitZoom:100,portraitFrameEnabled:true,grid:false,gridDensity:5,layout:withinCrop(preset.modelRect,crop),layers:preset.layers.map(layer=>({...layer,id:crypto.randomUUID(),size:Math.max(6,layer.size*crop.width),rect:withinCrop(layer.rect,crop)}))};
 }
 // Blob URLs are session-local. Persist the Blob, then create a fresh URL on load.
 export async function snapshotShowcase(setup){

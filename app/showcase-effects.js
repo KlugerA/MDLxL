@@ -41,4 +41,12 @@ export function loopEffectTiming(model,index,loops=1,speed=1,globalStart=0,defin
  const tail=finish>motion+1e-6;
  return {seconds:Math.max(.02,Math.ceil((finish+(tail?1000/30:0))/10-1e-8)/100),motionSeconds:motion/1000,emissionEnds};
 }
-export function timeShowcasePlaylist(model,rows,definitions){let start=0;return rows.map(row=>{const next=row.useDuration?{...row,...loopEffectTiming(model,row.sequence,row.durationLoops??(model.Sequences[row.sequence]?.NonLooping?1:2),row.speed,start*1000,definitions)}:row;start+=Number(next.seconds)||0;return next;});}
+export function timeShowcasePlaylist(model,rows,definitions){
+ let start=0;
+ return rows.map(row=>{
+  if(!row.useDuration){start+=Number(row.seconds)||0;return row;}
+  const timing=loopEffectTiming(model,row.sequence,row.durationLoops??1,row.speed>0?row.speed:1,start*1000,definitions);
+  const extraTime=Math.max(0,Number(row.extraTime)||0),next={...row,...timing,extraTime,seconds:Math.round((timing.seconds+extraTime)*100)/100};
+  start+=next.seconds;return next;
+ });
+}

@@ -164,3 +164,7 @@
 .showcase-upload-result button { font-size:10px; white-space:nowrap; padding:1px 3px; }
 
 .showcase-model-file{display:flex;align-items:center;gap:5px;margin:4px 0}.showcase-model-file small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.showcase-sidebar .showcase-extra-time,.showcase-dialog .showcase-extra-time { display:grid; grid-template-columns:1fr 60px 52px; white-space:nowrap; }
+.showcase-extra-time input[type=number] { width:60px; min-width:0; }
+.showcase-extra-time output { text-align:right; font-size:10px; overflow:hidden; text-overflow:ellipsis; }
