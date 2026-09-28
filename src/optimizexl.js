@@ -9,6 +9,7 @@ import { reduceAnimationTrack } from './optimizexl-animation.js';
 import { boundsProposals, repairBounds } from './optimizexl-bounds.js';
 import { repairMotionIrregularity, scanIrregularMotion } from './optimizexl-motion.js';
 import { repairSuspiciousSnap, scanSuspiciousSnaps } from './optimizexl-snaps.js';
+import { repairContextMotion, scanModelMotionContext } from './optimizexl-motion-context.js';
 
 export const STAGES = [
   {id:'duplicates',name:'Duplicate data'}, {id:'animation',name:'Animation optimization'},
@@ -106,7 +107,8 @@ export function findIrregularities(m){const findings=[],seq=m.Sequences,live=seq
  // while a small, separately rooted visible component remains stationary.
  const dissipate=seq.findIndex(s=>seqName(s)==='dissipate');if(dissipate>=0){const [lo,hi]=seq[dissipate].Interval,nodes=allNodes(m),byId=new Map(nodes.map(n=>[n.ObjectId,n]));const root=id=>{let n=byId.get(id),seen=new Set();while(n?.Parent!=null&&!seen.has(n.Parent)){seen.add(n.Parent);n=byId.get(n.Parent);}return n;};const motion=gi=>Math.max(0,...m.Geosets[gi].Groups.flat().map(id=>{const n=root(id);return n?trackError(sample(m,n.Translation,'Translation',dissipate,lo),sample(m,n.Translation,'Translation',dissipate,hi),false):0;}));const vis=m.Geosets.map((_,gi)=>gi).filter(gi=>allVisible(m,gi,dissipate)),moving=vis.filter(gi=>motion(gi)>dimensions(m)*.15);if(moving.length>vis.length*.75)for(const gi of vis)if(motion(gi)<.01)findings.push({id:`dissipate:${gi}`,kind:'hide',geoset:gi,sequence:dissipate,frame:hi,label:`Geoset ${gi+1} remains behind during Dissipate`,detail:'Most visible geometry travels away, but this separately rooted component stays still. Proposed correction hides this component in Dissipate.'});}
  findings.push(...scanSuspiciousSnaps(m,findings.filter(f=>f.kind==='motion')));
- return findings;
+ const context=scanModelMotionContext(m,findings.filter(f=>f.kind==='motion'||f.kind==='snap'));
+ return [...findings.map(f=>context.review.has(f.id)?{...f,motionContext:context.review.get(f.id)}:f),...context.findings];
 }
 export function sanityProposals(m){const findings=boundsProposals(m);for(const [i,e]of m.ParticleEmitters2.entries())if(e.Gravity?.Keys)findings.push({id:`gravity:${i}`,kind:'gravity',emitter:i,value:e.Gravity.Keys[0]?.Vector[0]||0,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${e.Name}: animated gravity`,detail:'Hive flags animated gravity. Choose a static value and review its particle motion.'});
  for(const {track:t,path}of tracks(m)){if(t.GlobalSeqId>=0&&m.GlobalSequences[t.GlobalSeqId]>0&&t.Keys.some(k=>k.Frame>m.GlobalSequences[t.GlobalSeqId])&&t.Keys.some(k=>k.Frame<=m.GlobalSequences[t.GlobalSeqId]))findings.push({id:`outside:${path.join('.')}`,kind:'globalKeys',path,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${path.join('.')}: keys beyond global duration`,detail:'Remove keys outside the declared global sequence. Review effects and animation before approval.'});}
@@ -125,6 +127,7 @@ function applyRepair(m,fix,settings,evidenceModel=m){
  }
  if(fix.kind==='motion'){repairMotionIrregularity(m,fix,evidenceModel);return;}
  if(fix.kind==='snap'){repairSuspiciousSnap(m,fix,evidenceModel);return;}
+ if(fix.kind==='motionContext'){repairContextMotion(m,fix,evidenceModel);return;}
  if(fix.kind==='gravity'){
   const emitter=m.ParticleEmitters2[fix.emitter];emitter.Gravity=Number(settings.gravity??fix.value);
   // The animated field's separate MDX base ceases to exist when it is static.

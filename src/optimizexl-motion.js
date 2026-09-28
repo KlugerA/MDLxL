@@ -197,6 +197,11 @@ export function repairMotionIrregularity(model, fix, evidenceModel = model) {
   if (!warning) throw Error('This motion finding no longer matches the current model.');
   if (warning.signature !== fix.signature || JSON.stringify(warning.segments) !== JSON.stringify(fix.segments) || JSON.stringify(warning.bridges) !== JSON.stringify(fix.bridges))
     throw Error('The affected curve segments changed. Select the finding again.');
+  applyMotionCorrection(model, warning);
+}
+
+export function applyMotionCorrection(model, warning) {
+  const fix = warning;
   const track = allNodes(model).find(n => n.ObjectId === fix.nodeId)[fix.property];
   const keys = inInterval(track, model.Sequences[fix.sequence].Interval), rotation = fix.property === 'Rotation';
   for (const { start, end, axis } of warning.bridges) {

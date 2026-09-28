@@ -26,9 +26,16 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await stage('Irregularities Fixer');
     const select = p.getByLabel('Proposed fix', { exact: true }), selection = p.locator('.ox-fix-selection'), summary = selection.locator('summary');
     assert.equal(await selection.locator('details').getAttribute('open'), null); assert.equal(await p.locator('.ox-controls').evaluate(e => e.getBoundingClientRect().width), 255);
+    assert.equal(await p.locator('.ox-motion-context').count(), 0, 'Context details stay hidden until a finding is selected');
     const ids = await select.locator('option').evaluateAll(os => os.map(o => o.value).filter(Boolean));
     await select.hover(); await p.mouse.wheel(0, 100); await p.waitForFunction(id => document.querySelector('[aria-label="Proposed fix"]').value === id, ids[0]); await ready();
     await select.hover(); await p.mouse.wheel(0, 100); await p.waitForFunction(id => document.querySelector('[aria-label="Proposed fix"]').value === id, ids[1]); await ready();
+    await p.locator('.ox-motion-context[data-motion-level="red"]').waitFor(); assert.match(await p.locator('.ox-motion-context').textContent(), /Whole body · 11\/13 animations/);
+    await select.selectOption('motion:4:37:Translation'); await ready(); await p.locator('.ox-motion-context[data-motion-level="orange"]').waitFor();
+    assert.match(await p.locator('.ox-motion-context').textContent(), /Localized part/);
+    await select.selectOption('context:5:25:Translation'); await p.getByText('Inspection only — play or scrub this animation.', { exact: true }).waitFor();
+    assert.equal(await p.getByRole('button', { name: 'Approve', exact: true }).isEnabled(), false);
+    assert.equal(await animation.inputValue(), '5'); await p.screenshot({ path: path.join(out, 'red-context-inspection.png') });
     // Approve and Skip must advance without opening the dropdown again.
     await select.selectOption('motion:0:25:Translation'); await ready(); await p.getByRole('button', { name: 'Approve', exact: true }).click();
     await p.waitForFunction(() => document.querySelector('[aria-label="Proposed fix"]').value && document.querySelector('[aria-label="Proposed fix"]').value !== 'motion:0:25:Translation'); await ready(); await originalUnchanged();
@@ -38,7 +45,9 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await stage('Irregularities Fixer'); await summary.click();
     const preview = p.getByRole('button', { name: 'Preview all selected fixes', exact: true }); assert.equal(await preview.isEnabled(), false);
     await selection.getByRole('button', { name: 'Select all', exact: true }).click();
-    const total = await selection.getByRole('checkbox').count(); assert.ok(total > 2); assert.equal(await selection.locator('input:checked').count(), total);
+    const total = await selection.locator('input:not(:disabled)').count(); assert.ok(total > 2); assert.equal(await selection.locator('input:checked').count(), total);
+    assert.equal(await selection.locator('input:disabled:checked').count(), 0, 'Inspection-only flags cannot become automatic fixes');
+    assert.ok(await selection.locator('[data-motion-level="red"]').count()); assert.ok(await selection.locator('[data-motion-level="orange"]').count());
     await preview.click(); await ready(); assert.equal(await p.getByRole('button', { name: 'Approve selected', exact: true }).isEnabled(), true, 'The complete selected queue must also compose successfully');
     await originalUnchanged();
     await selection.getByRole('button', { name: 'Clear all', exact: true }).click(); assert.equal(await selection.locator('input:checked').count(), 0); assert.equal(await preview.isEnabled(), false);
