@@ -13,10 +13,10 @@ export function drawPreviewBackground(context, width, height, image, color = '#c
   if (image) {
     context.globalAlpha = Number.isFinite(options.opacity) ? Math.max(0, Math.min(1, options.opacity)) : 1;
     if (options.display && options.display !== 'fill') {
-      const rect = backgroundImageRect(image.naturalWidth || image.width, image.naturalHeight || image.height, width, height, options.display);
+      const rect = backgroundImageRect(image.videoWidth || image.naturalWidth || image.width, image.videoHeight || image.naturalHeight || image.height, width, height, options.display);
       if (rect) context.drawImage(image, rect.x, rect.y, rect.width, rect.height);
     } else {
-      const rect = backgroundCoverRect(image.naturalWidth || image.width, image.naturalHeight || image.height, width, height);
+      const rect = backgroundCoverRect(image.videoWidth || image.naturalWidth || image.width, image.videoHeight || image.naturalHeight || image.height, width, height);
       context.drawImage(image, rect.x, rect.y, rect.width, rect.height, 0, 0, width, height);
     }
   }

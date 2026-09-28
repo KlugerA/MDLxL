@@ -25,6 +25,18 @@
   pose in a continuous deletion range. Removing the intended movement merely
   to make a warning disappear is not a successful repair.
 
+## Versioning
+
+- Advance the project version for every patch release; do not reuse a version
+  name for later patches. Use semantic versioning: patch for fixes and small
+  maintenance changes, minor for backward-compatible features, and major for
+  incompatible changes.
+- Keep the version in `package.json`, the README title, and the current-version
+  summary in the README in sync. Update these together when preparing a release.
+- Do not change the version for unshipped local edits alone. Before publishing,
+  choose the next version from the latest released version and include all
+  changes intended for that release.
+
 ## Git workflow
 
 - Do not treat a local-only commit or merge as a completed handoff.
