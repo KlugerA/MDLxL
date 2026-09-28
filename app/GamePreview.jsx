@@ -595,8 +595,8 @@ export default function GamePreview(inputProps) {
     }
     const viewCamera = event => { if (latest.current.suspended)return;if (applyModelCamera(perspective, controls, event.detail)) { camera = perspective; state.appliedView = 'perspective'; invalidate(); } };
     window.addEventListener('mdlxl-view-camera', viewCamera);
-    function fit() {
-      if (state.portraitActive || latest.current.suspended) return;
+    function fit({ initialize = false } = {}) {
+      if (state.portraitActive || (latest.current.suspended && !initialize)) return;
       const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1);
       perspective.position.copy(center).add(new THREE.Vector3(1, -1.5, .9).normalize().multiplyScalar(perspectiveFitDistance(fitRadius(), perspective.fov, width / height)));
       controls.target.copy(center); perspective.zoom = ortho.zoom = 1; resize(); setView(latest.current.view || 'perspective');
@@ -715,7 +715,7 @@ export default function GamePreview(inputProps) {
       camera = restorePreviewCamera(saved, perspective, ortho, controls);
       state.appliedView = latest.current.view || saved.view; resize(); reportProjectionView();
     } else {
-      fit();
+      fit({ initialize: true });
       if (saved && saved.view === view) { camera = restorePreviewCamera(saved, perspective, ortho, controls); reportProjectionView(); }
     }
     if (latest.current.portraitMode) enterPortrait(evaluateModelCamera(model, model?.Cameras?.[latest.current.portraitCameraIndex], latest.current.time, sequenceIndex, latest.current.time));

@@ -96,7 +96,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   }else previousModel.current.model=model;
   useEffect(()=>{if(!api)return;let live=true;api.whenReady().then(()=>{if(!live)return;const definitions=api.effectDefinitions();
     setSequencePlaylist(rows=>timeShowcasePlaylist(model,rows,definitions));setPortraitPlaylist(rows=>timeShowcasePlaylist(model,rows,definitions));
-  }).catch(error=>onStatus?.(error.message,true));return()=>{live=false;};},[api,sessionId]);
+  }).catch(error=>{if(live&&apiRef.current===api)onStatus?.(error.message,true);});return()=>{live=false;};},[api,sessionId]);
   useEffect(()=>{if(sequencePlaylist.some(row=>row.useDuration))setSequenceLength(v=>Math.max(Number(v)||0,sequencePlaylist.reduce((sum,row)=>sum+Number(row.seconds),0)));},[sequencePlaylist]);
   useEffect(()=>{if(portraitPlaylist.some(row=>row.useDuration))setPortraitLength(v=>Math.max(Number(v)||0,portraitPlaylist.reduce((sum,row)=>sum+Number(row.seconds),0)));},[portraitPlaylist]);
   useEffect(()=>{if(!active)setPlaying(false);},[active]);
