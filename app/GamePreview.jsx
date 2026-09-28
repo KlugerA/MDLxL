@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { EditorCameraControls, editorCameraAngles, preserveShiftCameraAction, setEditorCameraAngles } from './editor-camera-controls.js';
 import { viewportCursor } from './viewport-cursors.js';
@@ -124,6 +124,18 @@ export default function GamePreview(inputProps) {
   const appearanceBackgroundUrl = props.backgroundUrl || (viewportBackground.type === 'image' ? viewportBackground.imageData : '');
   const appearanceBackgroundType = props.backgroundUrl ? props.backgroundType : appearanceBackgroundUrl ? appearanceBackgroundUrl.slice(5, appearanceBackgroundUrl.indexOf(';')) : '';
   const globalPreviewId = !props.restPose && Number.isInteger(props.globalSeqId) && model?.GlobalSequences?.[props.globalSeqId] > 0 ? props.globalSeqId : null;
+  // Equal comparison panes can occupy half a CSS pixel. Align the complete
+  // render surface (including hover/collision overlays) to physical pixels.
+  useLayoutEffect(() => {
+    if (!props.pixelAligned || !root.current || props.portraitMode) return;
+    const element=root.current, stage=element.querySelector('.game-preview-stage'), owner=element.ownerDocument.defaultView;
+    const align=()=>{
+      const r=element.getBoundingClientRect(), dpr=owner.devicePixelRatio||1;
+      Object.assign(stage.style,{left:`${Math.ceil(r.x*dpr-1e-6)/dpr-r.x}px`,top:`${Math.ceil(r.y*dpr-1e-6)/dpr-r.y}px`,right:'auto',bottom:'auto',width:`${Math.max(1,Math.floor(r.width*dpr)-1)/dpr}px`,height:`${Math.max(1,Math.floor(r.height*dpr)-1)/dpr}px`});
+    };
+    const observer=new owner.ResizeObserver(align);observer.observe(element);owner.addEventListener('resize',align);align();
+    return()=>{observer.disconnect();owner.removeEventListener('resize',align);for(const key of ['left','top','right','bottom','width','height'])stage.style[key]='';};
+  },[props.pixelAligned,props.portraitMode]);
   const timelineStart = sequenceIndex < 0 ? globalPreviewId !== null ? 0 : Number(props.timelineInterval?.[0]) : NaN;
   const timelineEnd = sequenceIndex < 0 ? globalPreviewId !== null ? model.GlobalSequences[globalPreviewId] : Number(props.timelineInterval?.[1]) : NaN;
 
@@ -489,7 +501,8 @@ export default function GamePreview(inputProps) {
       nativeBackground.update(backgroundCanvas);
     }
     function resize() {
-      const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1), pixelRatio = viewportPixelRatio(graphicsOptions(latest.current.preferences), ownerWindow.devicePixelRatio);
+      const rect=latest.current.pixelAligned?host.current?.getBoundingClientRect():null;
+      const width = Math.max(1, rect?.width || host.current?.clientWidth || 1), height = Math.max(1, rect?.height || host.current?.clientHeight || 1), pixelRatio = viewportPixelRatio(graphicsOptions(latest.current.preferences), ownerWindow.devicePixelRatio);
       canvas.height = Math.round(height * pixelRatio); canvas.width = latest.current.portraitMode ? Math.round(canvas.height * PORTRAIT_ASPECT) : Math.round(width * pixelRatio); gl.viewport(0, 0, canvas.width, canvas.height);
       perspective.aspect = latest.current.portraitMode ? PORTRAIT_ASPECT : width / height; perspective.updateProjectionMatrix();
       const aspect = latest.current.portraitMode ? PORTRAIT_ASPECT : width / height;

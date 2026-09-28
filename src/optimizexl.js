@@ -5,6 +5,8 @@ import { mergeDuplicateVertices, removeUnusedVertices, reducePolygons } from './
 import { protectedGeosetData } from './optimizexl-exclusions.js';
 import { commonEndpointProposals, applyCommonEndpointPose } from './optimizexl-endpoints.js';
 import { optimizationReview } from './optimizexl-review.js';
+import { reduceAnimationTrack } from './optimizexl-animation.js';
+import { boundsProposals, repairBounds } from './optimizexl-bounds.js';
 
 export const STAGES = [
   {id:'duplicates',name:'Duplicate data'}, {id:'animation',name:'Animation optimization'},
@@ -20,7 +22,7 @@ export const SPHERE_PRESETS = [
   {name:'Mounted rider',spheres:[[0,0,45,55],[35,0,95,55],[-15,0,75,55]],source:'The reviewed Khorne rider: three radius-55 spheres.'},
 ];
 const collections = Object.values(NODE_TYPES).map(([key])=>key);
-const sections = ['Geosets','GeosetAnims','Materials','Textures','TextureAnims','GlobalSequences','PivotPoints',...collections];
+const sections = ['Info','Sequences','Geosets','GeosetAnims','Materials','Textures','TextureAnims','GlobalSequences','PivotPoints',...collections];
 const json=x=>JSON.stringify(x,(_,v)=>ArrayBuffer.isView(v)?Array.from(v):v);
 const same=(a,b)=>json(a)===json(b);
 const local=t=>t?.Keys && (t.GlobalSeqId==null||t.GlobalSeqId===-1||t.GlobalSeqId===0xffffffff);
@@ -77,22 +79,9 @@ function animationReduction(m,settings,changes){const protectedData=protectedGeo
  const [collection,index]=path;
  if(collections.includes(collection)&&protectedData.nodes.has(m[collection][index].ObjectId)||collection==='GeosetAnims'&&protectedData.geosets.has(m.GeosetAnims[index].GeosetId)||collection==='Materials'&&protectedData.materials.has(Number(index))||collection==='TextureAnims'&&protectedData.textureAnims.has(Number(index)))continue;
  const p=path.at(-1),transform=['Translation','Rotation','Scaling'].includes(p);
- if(!local(t)||![0,1].includes(t.LineType)||t.Keys.some((k,i,a)=>i&&k.Frame<=a[i-1].Frame)||t.Keys.some(k=>k.InTan||k.OutTan))continue;
  const tolerance=transform?settings[p==='Translation'?'position':p==='Rotation'?'rotation':'scale']||0:0;
- if(p==='Rotation'&&t.Keys.some(k=>Math.abs(Math.hypot(...k.Vector)-1)>1e-6))continue;
- const baseline=structuredClone(t);
- for(let si=0;si<m.Sequences.length;si++){
-  const [lo,hi]=m.Sequences[si].Interval;if(m.Sequences.some((s,j)=>j!==si&&s.Interval[0]<=hi&&s.Interval[1]>=lo))continue;
-  for(let i=1;i<t.Keys.length-1;){const a=t.Keys[i-1],k=t.Keys[i],b=t.Keys[i+1];if(a.Frame<lo||b.Frame>hi||k.Frame<=lo||k.Frame>=hi){i++;continue;}
-   const record=()=>changes.push({path,sequence:si,from:a.Frame,to:b.Frame,frame:k.Frame});
-   if(!tolerance){if(same(a.Vector,k.Vector)&&same(k.Vector,b.Vector)){t.Keys.splice(i,1);removed++;record();continue;}i++;continue;}
-   if(t.LineType!==1){i++;continue;}
-   t.Keys.splice(i,1);let valid=true;
-   const probes=new Set([a.Frame,b.Frame,...baseline.Keys.filter(k=>k.Frame>=a.Frame&&k.Frame<=b.Frame).map(k=>k.Frame)]);for(let f=a.Frame;f<b.Frame;f+=Math.max(1,(b.Frame-a.Frame)/32))probes.add(f);
-   for(const f of probes){const x=sample(m,baseline,p,si,f),y=sample(m,t,p,si,f);if(trackError(x,y,p==='Rotation')>tolerance){valid=false;break;}}
-   if(valid){removed++;record();}else{t.Keys.splice(i,0,k);i++;}
-  }
- }}return removed;}
+ removed+=reduceAnimationTrack(m,t,p,tolerance,change=>changes.push({path,...change}));
+ }return removed;}
 function setKey(t,frame,value){const i=t.Keys.findIndex(k=>k.Frame===frame),key={Frame:frame,Vector:new Float32Array(Array.isArray(value)||ArrayBuffer.isView(value)?value:[value])};if(i>=0)t.Keys[i]=key;else t.Keys.push(key);t.Keys.sort((a,b)=>a.Frame-b.Frame);}
 function hideGeoset(m,gi,si){let a=m.GeosetAnims.find(a=>a.GeosetId===gi);if(!a){a={GeosetId:gi,Flags:0,Alpha:1,Color:new Float32Array([1,1,1])};m.GeosetAnims.push(a);}const existing=a.Alpha;let t=local(existing)?existing:null;if(!t){if(existing?.Keys)throw Error('Global visibility cannot be changed for only one sequence.');const value=typeof existing==='number'?existing:1;t={LineType:0,GlobalSeqId:null,Keys:[]};for(const s of m.Sequences){setKey(t,s.Interval[0],value);setKey(t,s.Interval[1],value);}a.Alpha=t;}
  const [lo,hi]=m.Sequences[si].Interval;for(const k of t.Keys)if(k.Frame>=lo&&k.Frame<=hi)k.Vector[0]=0;setKey(t,lo,0);setKey(t,hi,0);}
@@ -115,10 +104,10 @@ export function findIrregularities(m){const findings=[],seq=m.Sequences,live=seq
  const dissipate=seq.findIndex(s=>seqName(s)==='dissipate');if(dissipate>=0){const [lo,hi]=seq[dissipate].Interval,nodes=allNodes(m),byId=new Map(nodes.map(n=>[n.ObjectId,n]));const root=id=>{let n=byId.get(id),seen=new Set();while(n?.Parent!=null&&!seen.has(n.Parent)){seen.add(n.Parent);n=byId.get(n.Parent);}return n;};const motion=gi=>Math.max(0,...m.Geosets[gi].Groups.flat().map(id=>{const n=root(id);return n?trackError(sample(m,n.Translation,'Translation',dissipate,lo),sample(m,n.Translation,'Translation',dissipate,hi),false):0;}));const vis=m.Geosets.map((_,gi)=>gi).filter(gi=>allVisible(m,gi,dissipate)),moving=vis.filter(gi=>motion(gi)>dimensions(m)*.15);if(moving.length>vis.length*.75)for(const gi of vis)if(motion(gi)<.01)findings.push({id:`dissipate:${gi}`,kind:'hide',geoset:gi,sequence:dissipate,frame:hi,label:`Geoset ${gi+1} remains behind during Dissipate`,detail:'Most visible geometry travels away, but this separately rooted component stays still. Proposed correction hides this component in Dissipate.'});}
  return findings;
 }
-export function sanityProposals(m){const findings=[];for(const [i,e]of m.ParticleEmitters2.entries())if(e.Gravity?.Keys)findings.push({id:`gravity:${i}`,kind:'gravity',emitter:i,value:e.Gravity.Keys[0]?.Vector[0]||0,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${e.Name}: animated gravity`,detail:'Hive flags animated gravity. Choose a static value and review its particle motion.'});
+export function sanityProposals(m){const findings=boundsProposals(m);for(const [i,e]of m.ParticleEmitters2.entries())if(e.Gravity?.Keys)findings.push({id:`gravity:${i}`,kind:'gravity',emitter:i,value:e.Gravity.Keys[0]?.Vector[0]||0,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${e.Name}: animated gravity`,detail:'Hive flags animated gravity. Choose a static value and review its particle motion.'});
  for(const {track:t,path}of tracks(m)){if(t.GlobalSeqId>=0&&m.GlobalSequences[t.GlobalSeqId]>0&&t.Keys.some(k=>k.Frame>m.GlobalSequences[t.GlobalSeqId])&&t.Keys.some(k=>k.Frame<=m.GlobalSequences[t.GlobalSeqId]))findings.push({id:`outside:${path.join('.')}`,kind:'globalKeys',path,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${path.join('.')}: keys beyond global duration`,detail:'Remove keys outside the declared global sequence. Review effects and animation before approval.'});}
  return findings;}
-function applyRepair(m,fix,settings){if(!fix)return;if(fix.kind==='commonPose'){applyCommonEndpointPose(m,fix);return;}switch(fix.kind){case'hide':hideGeoset(m,fix.geoset,fix.sequence);break;case'gravity':m.ParticleEmitters2[fix.emitter].Gravity=Number(settings.gravity??fix.value);break;case'globalKeys':{let t=m;for(const p of fix.path)t=t[p];t.Keys=t.Keys.filter(k=>k.Frame<=m.GlobalSequences[t.GlobalSeqId]);break;}case'pose':{const source=settings.reverse?fix.sequence:fix.from,sourceFrame=settings.reverse?fix.frame:fix.fromFrame,target=settings.reverse?fix.from:fix.sequence,targetFrame=settings.reverse?fix.fromFrame:fix.frame;for(const n of allNodes(m))for(const p of ['Translation','Rotation','Scaling']){const t=n[p];if(!local(t)||![0,1].includes(t.LineType))continue;const value=sample(m,t,p,source,sourceFrame),before=sample(m,t,p,target,targetFrame);if(same(value,before))continue;const interval=m.Sequences[target].Interval,keys=t.Keys.filter(k=>k.Frame>=interval[0]&&k.Frame<=interval[1]);setKey(t,targetFrame,value);if(keys.length<=1)setKey(t,targetFrame===interval[0]?interval[1]:interval[0],value);}}break;}}
+function applyRepair(m,fix,settings){if(!fix)return;if(fix.kind==='bounds'){repairBounds(m,fix);return;}if(fix.kind==='commonPose'){applyCommonEndpointPose(m,fix);return;}switch(fix.kind){case'hide':hideGeoset(m,fix.geoset,fix.sequence);break;case'gravity':m.ParticleEmitters2[fix.emitter].Gravity=Number(settings.gravity??fix.value);break;case'globalKeys':{let t=m;for(const p of fix.path)t=t[p];t.Keys=t.Keys.filter(k=>k.Frame<=m.GlobalSequences[t.GlobalSeqId]);break;}case'pose':{const source=settings.reverse?fix.sequence:fix.from,sourceFrame=settings.reverse?fix.frame:fix.fromFrame,target=settings.reverse?fix.from:fix.sequence,targetFrame=settings.reverse?fix.fromFrame:fix.frame;for(const n of allNodes(m))for(const p of ['Translation','Rotation','Scaling']){const t=n[p];if(!local(t)||![0,1].includes(t.LineType))continue;const value=sample(m,t,p,source,sourceFrame),before=sample(m,t,p,target,targetFrame);if(same(value,before))continue;const interval=m.Sequences[target].Interval,keys=t.Keys.filter(k=>k.Frame>=interval[0]&&k.Frame<=interval[1]);setKey(t,targetFrame,value);if(keys.length<=1)setKey(t,targetFrame===interval[0]?interval[1]:interval[0],value);}}break;}}
 function spheres(m,settings){const chosen=settings.spheres||SPHERE_PRESETS[settings.preset||0].spheres,size=clamp(settings.size??1,.01,20),old=m.CollisionShapes;
  if(allNodes(m).some(n=>!old.includes(n)&&old.some(c=>c.ObjectId===n.Parent)))throw Error('A collision shape has non-collision child nodes; adjust that hierarchy before replacing spheres.');
  for(let i=0;i<chosen.length;i++){const [x,y,z,r]=chosen[i];if(![x,y,z,r].every(Number.isFinite)||r<=0)throw Error('Sphere coordinates must be finite and radius must be positive.');let n=old[i];if(!n)n=createNode(m,'CollisionShape');Object.assign(n,{Shape:2,Name:`OptimizeXL Sphere ${i+1}`,Parent:null,Vertices:new Float32Array([x*size,y*size,z*size]),BoundsRadius:r*size});for(const k of ['Translation','Rotation','Scaling'])delete n[k];}

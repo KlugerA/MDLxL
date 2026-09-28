@@ -12,7 +12,7 @@ The user accepted viewport navigation, Nuclear, inspection restoration and Optim
 
 - Common endpoint-pose correction and concise results were accepted by the user. Percentage speed and independent global playback are ready for the next visual check.
 - Inspect the supplied Magos installation and modernize its familiar collision-sphere display. The shortcut resolves to `D:\WarcraftStuff\War3 Model Editor\War3ModelEditor\War3ModelEditor.exe`; Windows computer-use initialization currently fails with `failed to write kernel assets: The system cannot find the path specified. (os error 3)`, including after a reset. No visual reference inspection is claimed.
-- Add a clickable **I** explanation next to every Advanced option.
+- Advanced hover explanations and clickable information buttons are implemented in the ninth review correction below.
 
 ## Second review correction: Nuclear surface and texture preservation
 
@@ -80,11 +80,27 @@ The prior packaged build reproduced the global defect: during a 2.7-second Walk 
 
 The new packaged Electron regression drives controller RAF timestamps deterministically while native rendering retains its actual timers/GPU updates. It checks exact percentage advancement at 0/50/100/200%, full 4000 ms and 500 ms global cycles during repeated Walk loops, both native clock arrays, and shield matrices against an independently sampled native reference across all 13 Flail03 animations. It also checks local seeks, candidate rebuilding, speed limits, pause, nonlooping final-frame stop and unchanged source bytes. Both views' shield poses match the expected global phase. Existing endpoint, review, camera, inspection, exclusion and save checks run against the same package.
 
+## Ninth review correction: sharp comparison, curved tracks, explanations and bounds
+
+The two supplied Footman files are 287,514 and 105,022 bytes. Their positions, UVs, faces and bone bindings match; normals, extent metadata, and some attachment visibility differ. Animation tracks account for most of the size gap: 6,328 keys versus 1,398, with 4,746 keys in curved tracks in the larger file. The old optimizer skipped curved tracks entirely and left 269,082 bytes after maximum duplicate/animation/unused stages.
+
+The reducer now handles Hermite/Bezier tracks without discarding tangents or converting interpolation types. Exact cleanup proves constant spline spans; nonzero Hermite tangents are not treated as constant merely because endpoint values match. Positive strength checks the proposed curve against the original baseline at every original key and 32 subdivisions of each original segment. A small margin leaves room between samples. First/last authored keys in each sequence, global tracks, overlapping intervals, and excluded geoset dependencies stay protected. This remains sampled local-channel tolerance, not a world-space motion guarantee.
+
+With exact duplicate cleanup and 100% animation strength, the large Footman reaches 101,927 bytes (99.54 KB). With both stages at maximum, it reaches 100,442 bytes (98.09 KB), without Nuclear reduction. After the bounds repair, both combined candidates have zero Hive errors, severe findings, warnings and unused notices; their polygon counts and collision shapes remain unchanged. Animation alone at zero removes 2,753 keys; 5,950 native-renderer poses across all 13 animations have zero vertex difference. At 40%, maximum sampled vertex displacement is 1.487 units; at 100% it is 6.203 units. The latter maximum local rotation difference is 2.827 degrees, within its 3-degree setting. These approximate outputs need visual review. Original files are unchanged. The changed-animation regression still reports 37 changes on Flail03 at 40%, now across five animation rows under the updated curve checks.
+
+Footman Unoptimized's Decay Bone bounds use reversed float-max sentinels. Footman Original has 38 invalid extent records. Insanity Fixer now offers one previewable repair for the broken records, computes moving-sequence bounds from native animated geometry, and writes only extent metadata. After approval the local Hive checker reports zero errors, severe findings and warnings on both files. Redundant/unused notices remain available through the animation and unused-data stages. This is a repair for supported extent problems, not a claim that every possible Hive diagnostic is automatically repairable.
+
+The prior After canvas started at a half screen pixel: its native render matched Before exactly, but its displayed screenshot was softer. OptimizeXL now snaps the complete canvas surface and overlays to physical pixels and uses its precise rectangle for render sizing. Actual displayed Before/After screenshots of identical models match pixel-for-pixel at four widths (1279, 1600, 1601, 1920) at both 100% and 125% scaling. The scaled test crops physical pixels from the complete screenshot; element screenshots can round fractional CSS clip bounds differently.
+
+Every Advanced numeric/checkbox option has a hover explanation and a clickable information button. The UI test covers 22 settings, pinned help, Escape dismissal, the actual bounds warning's Preview fix button, approval clearing the warning, and navigation to redundant-key cleanup. Existing stage layout, geoset selection, shared playback/camera and exclusive approved-only paired saving remain.
+
+Reproduce native Footman checks with `node test/optimizexl-footman.mjs "path/to/Footman (Unoptimized).mdx" "path/to/Footman (Original).mdx"`. Set `MDLXL_FOOTMAN_REPORT` for a JSON report. The new Electron check is `node test/optimizexl-footman.electron.cjs`, with optional `MDLXL_FOOTMAN_MODEL` and `MDLXL_TEST_DPR=1.25`, plus the common packaged-test environment variables below.
+
 ## Automated checks
 
-- 125/125 focused tests passed: OptimizeXL operations and concise review/removal metadata, common endpoint poses, geoset exclusions, stage state, bundled validation, Nuclear quality/target regressions and paired-save failures/races, existing model optimizer, preview presentation/compositing/capture, render scheduling, global-sequence isolation, and the 56-case codec compatibility suite.
+- 131/131 focused tests passed: OptimizeXL operations and concise review/removal metadata, common endpoint poses, geoset exclusions, stage state, bundled validation, Nuclear quality/target regressions and paired-save failures/races, existing model optimizer, preview presentation/compositing/capture, render scheduling, global-sequence isolation, and the 56-case codec compatibility suite.
 - The production Vite bundle built successfully. Its existing large-chunk advisory remains.
-- Packaging verified 568 runtime/asset files and 55 Electron locale files, including the portable save validator, unmodified local Hive checker, meshoptimizer module and their licenses.
+- Packaging verified 570 runtime/asset files and 55 Electron locale files, including the portable save validator, unmodified local Hive checker, meshoptimizer module and their licenses.
 - The packaged EXE passed the isolated Playwright/Electron workflow: launch popup, switch Simple/Advanced, synchronized camera orbit/zoom and preservation across candidate rebuilds, matching playback frames, actual Hive check, selected visibility repair and approval, wheel cycling of collision presets, sphere overlays present only during Sphereomancer, real nuclear reduction, and final two-file save. No page errors were recorded and the source file remained byte-identical.
 - Source-path `git diff --check` passed. Generated bundles retain upstream shader text and are not hand-edited.
 
@@ -124,7 +140,7 @@ Run `node test/optimizexl-save.electron.cjs` with the same environment for appro
 
 Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. Run `node test/optimizexl-playback.electron.cjs` with Flail03 for percentage speed and native global playback; its proofs go to `out/optimizexl-playback-proof/`. All six desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-playback-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-footman-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 
