@@ -577,70 +577,20 @@ export default function GamePreview(inputProps) {
         // Reframe the authored portrait projection; its animated camera stays owned by the model.
         portraitFraming.set(x-.5,y-.5);invalidate();return;
       }
-      const posedBounds=new THREE.Box3(),vertex=new THREE.Vector3(),points=[];
-      const rotation=turntableRotation.clone().invert();
-      const matrices=new Map((native.rendererData?.nodes||[]).flatMap((node,index)=>node?.matrix?[[index,new THREE.Matrix4().fromArray(node.matrix)]]:[]));
-      const hidden=new Set(p.hiddenGeosets||[]);
-      for(let index=0;index<ownedModel.Geosets.length;index++){
-        if(hidden.has(index)||sampleGeosetAnimation(ownedModel,index,native.getFrame(),native.getSequence(),globalClock).alpha<=.001)continue;
-        const geoset=ownedModel.Geosets[index],vertices=skinGeoset(geoset,matrices);
-        for(const id of new Set(geoset.Faces)){
-          const point=new THREE.Vector3().fromArray(vertices,id*3).applyQuaternion(rotation).add(turntableOffset);
-          points.push(point);posedBounds.expandByPoint(point);
-        }
-      }
-      if(!points.length)return;
-      const anchor=posedBounds.getCenter(new THREE.Vector3()),target=new THREE.Vector2(x*2-1,1-y*2);
-      // First bring even an off-screen model into view. Geometry is only a
-      // coarse guide: transparent glow planes extend beyond their visible pixels.
-      for(let pass=0;pass<8;pass++){
-        camera.updateMatrixWorld();camera.updateProjectionMatrix();
-        const projected=new THREE.Box2();
-        for(const point of points){
-          vertex.copy(point).project(camera);
-          if(Number.isFinite(vertex.x)&&Number.isFinite(vertex.y)&&vertex.z>=-1&&vertex.z<=1)projected.expandByPoint(vertex);
-        }
-        if(projected.isEmpty())break;
-        const midpoint=projected.getCenter(new THREE.Vector2());
-        const dx=(target.x-midpoint.x)*canvas.width/2,dy=(midpoint.y-target.y)*canvas.height/2;
-        if(Math.abs(dx)<.1&&Math.abs(dy)<.1)break;
-        const translation=screenPlaneTranslation(camera,anchor,canvas.width,canvas.height,dx,dy);
-        camera.position.sub(translation);controls.target.sub(translation);controls.update();
-      }
-      const dark=new Uint8Array(canvas.width*canvas.height*4),light=new Uint8Array(dark.length);
-      try {
-        for(let pass=0;pass<6;pass++){
-          // Freeze the pose and refresh billboard/camera uniforms after each pan.
-          if(render(performance.now(),0,{captureOnly:true})===false)break;
-          // Render against both extremes, without the chosen background or 2D
-          // overlays. This finds black surfaces as well as additive light while
-          // ignoring fully transparent texels, regardless of background media.
-          for(const [clear,pixels] of [[0,dark],[1,light]]){
-            gl.clearColor(clear,clear,clear,1);gl.clearDepth(1);gl.depthMask(true);
-            gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-            native.render(displayCamera.matrixWorldInverse.elements,displayCamera.projectionMatrix.elements,{wireframe:false,useEnvironmentMap:p.shaded!==false&&graphics.lighting});
-            eventPreview.render({frame:native.getFrame(),sequenceIndex:native.getSequence(),globalTime:globalClock,camera:displayCamera,teamColor:p.teamColor});
-            gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
-          }
-          let left=canvas.width,right=-1,bottom=canvas.height,top=-1;
-          for(let row=0;row<canvas.height;row++)for(let col=0;col<canvas.width;col++){
-            const i=(row*canvas.width+col)*4;
-            // Ignore imperceptible glow tails and color-conversion rounding.
-            if(dark[i]>6||dark[i+1]>6||dark[i+2]>6||light[i]<249||light[i+1]<249||light[i+2]<249){
-              left=Math.min(left,col);right=Math.max(right,col);bottom=Math.min(bottom,row);top=Math.max(top,row);
-            }
-          }
-          if(right<left)break;
-          const dx=x*canvas.width-(left+right+1)/2,dy=y*canvas.height-(canvas.height-(bottom+top+1)/2);
-          if(Math.abs(dx)<=.5&&Math.abs(dy)<=.5)break;
-          const translation=screenPlaneTranslation(camera,anchor,canvas.width,canvas.height,dx,dy);
-          camera.position.sub(translation);controls.target.sub(translation);controls.update();
-        }
-      } finally {
-        // Never present the measurement backgrounds, including after an error.
-        render(performance.now(),0,{captureOnly:true});cameraChanged();
-      }
+      // The unit is anchored to its own Z rotation axis, not the outline of
+      // its weapon, glow, particles, or current animation pose. Use the fixed
+      // model mid-height so centering also remains stable through an orbit.
+      const anchor=new THREE.Vector3(0,0,center.z).add(turntableOffset);
+      camera.updateMatrixWorld();camera.updateProjectionMatrix();
+      const projected=anchor.clone().project(camera);
+      const dx=(x-(projected.x+1)/2)*canvas.width;
+      const dy=(y-(1-projected.y)/2)*canvas.height;
+      const translation=screenPlaneTranslation(camera,anchor,canvas.width,canvas.height,dx,dy);
+      // Pan both ends of the view together, preserving angle and zoom.
+      camera.position.sub(translation);controls.target.sub(translation);controls.update();
+      cameraChanged();
     }
+
     function updateUV(nextModel) {
       const priorBuffer = gl.getParameter(gl.ARRAY_BUFFER_BINDING);
       for (let i = 0; i < ownedModel.Geosets.length; i++) {
