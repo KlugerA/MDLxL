@@ -63,11 +63,17 @@ export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,on
   function start(event,layer){
     if(!latest.current.editing||event.button!==0)return;
     const box=root.current.getBoundingClientRect();latest.current.onSelect?.(layer.id);
-    drag.current={id:layer.id,x:event.clientX,y:event.clientY,width:box.width,height:box.height,rect:layer.rect,size:layer.size,angle:(layer.kind==='text'?Number(layer.rotation)||0:0)*Math.PI/180,resize:event.target.dataset.layerResize==='true'};
+    const centerX=box.left+(layer.rect.x+layer.rect.width/2)*box.width,centerY=box.top+(layer.rect.y+layer.rect.height/2)*box.height;
+    drag.current={id:layer.id,x:event.clientX,y:event.clientY,width:box.width,height:box.height,rect:layer.rect,size:layer.size,angle:(layer.kind==='text'?Number(layer.rotation)||0:0)*Math.PI/180,resize:event.target.dataset.layerResize==='true',rotate:layer.kind==='text'&&!!event.target.closest('[data-layer-rotate]'),centerX,centerY,pointerAngle:Math.atan2(event.clientY-centerY,event.clientX-centerX)};
     event.currentTarget.setPointerCapture(event.pointerId);event.stopPropagation();event.preventDefault();
   }
   function move(event){
     const row=drag.current;if(!row)return;const dx=(event.clientX-row.x)/row.width,dy=(event.clientY-row.y)/row.height,rect=row.rect;
+    if(row.rotate){
+      const angle=row.angle+Math.atan2(event.clientY-row.centerY,event.clientX-row.centerX)-row.pointerAngle;
+      const rotation=((Math.round(angle*180/Math.PI)+180)%360+360)%360-180;
+      latest.current.onChange?.(row.id,{rotation});event.stopPropagation();return;
+    }
     const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
     const c=Math.cos(row.angle),s=Math.sin(row.angle),localX=(c*dx*row.width+s*dy*row.height)/row.width,localY=(-s*dx*row.width+c*dy*row.height)/row.height;
     const next=row.resize?{...rect,width:clamp(rect.width+localX,.03,2),height:clamp(rect.height+localY,.03,2)}:
@@ -78,7 +84,8 @@ export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,on
   function end(event){drag.current=null;event.stopPropagation();}
   const selected=layers.find(layer=>layer.id===activeId);
   return <div className="showcase-layer-stage" ref={root}><canvas ref={canvas} aria-label="Showcase image and text layers"/>
-    {editing&&selected&&<div className="showcase-layer-selection" style={{left:selected.rect.x*100+'%',top:selected.rect.y*100+'%',width:selected.rect.width*100+'%',height:selected.rect.height*100+'%',transform:selected.kind==='text'?'rotate('+(selected.rotation||0)+'deg)':undefined}} onPointerDown={event=>start(event,selected)} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
+    {editing&&selected&&<div className="showcase-layer-selection" style={{left:selected.rect.x*100+'%',top:selected.rect.y*100+'%',width:selected.rect.width*100+'%',height:selected.rect.height*100+'%',transform:selected.kind==='text'?'rotate('+(selected.rotation||0)+'deg)':undefined}} onPointerDown={event=>start(event,selected)} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
+      {selected.kind==='text'&&<button type="button" className="showcase-text-rotate" data-layer-rotate="true" aria-label="Rotate text" title="Drag to rotate text">↻</button>}
       <span className="showcase-signature-handle" data-layer-resize="true" aria-hidden="true"/>
     </div>}
   </div>;

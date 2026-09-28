@@ -125,6 +125,9 @@
 .showcase-layer-stage { position:absolute; inset:0; z-index:84; overflow:hidden; pointer-events:none; }
 .showcase-layer-stage > canvas { display:block; width:100%; height:100%; pointer-events:none; }
 .showcase-layer-selection { position:absolute; box-sizing:border-box; outline:1px dashed #fff; box-shadow:0 0 0 2px #222; pointer-events:auto; cursor:move; touch-action:none; }
+.showcase-workspace .showcase-layer-selection .showcase-text-rotate { position:absolute; left:50%; top:-29px; transform:translateX(-50%); width:21px; height:21px; min-height:0; padding:0; border:1px solid #222; border-radius:50%; background:#fff !important; color:#111 !important; font:bold 18px/19px Arial,sans-serif; box-shadow:0 0 0 1px #fff; cursor:grab; touch-action:none; }
+.showcase-text-rotate::after { content:''; position:absolute; width:1px; height:8px; background:#fff; box-shadow:1px 0 #222; top:20px; left:9px; pointer-events:none; }
+.showcase-text-rotate:active { cursor:grabbing; }
 .showcase-signature-handle { position:absolute; right:-5px; bottom:-5px; width:11px; height:11px; background:#fff; border:1px solid #222; box-sizing:border-box; cursor:nwse-resize; }
 
 .showcase-text-format input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }

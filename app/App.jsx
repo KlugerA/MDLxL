@@ -47,6 +47,7 @@ import './modules.css';
 import './texture-library.css';
 const Settings = lazy(() => import('./Settings.jsx'));
 import { installTextureLibraryDecoder } from './asset-preload-client.js';
+import { flushRecordingQueue } from './preview-recording-queue.js';
 import { WarmKeysProvider } from './WarmKeys.jsx';
 import { normalizePreferences } from '../src/preferences.js';
 import { COMMANDS } from '../src/commands.js';
@@ -934,7 +935,7 @@ export default function App() {
     const timer=preferencesTimer.current=setTimeout(() => { window.desktop.configure({preferences}).then(result => {settings.current=result; savedPreferences.current=encoded;}).catch(error=>say('Settings could not be saved: '+error.message,true)); },200);
     return () => clearTimeout(timer);
   },[preferences,preferencesReady]);
-  useEffect(() => window.desktop?.onBeforeClose?.(async () => { const captures=[]; window.dispatchEvent(new CustomEvent('mdlvis-flush-captures',{detail:captures})); await Promise.all(captures); clearTimeout(preferencesTimer.current); if(!latest.current.preferencesReady)return; const current=preferencesRef.current, encoded=JSON.stringify(current); if(savedPreferences.current!==encoded) {await window.desktop.configure({preferences:current});savedPreferences.current=encoded;} }),[]);
+  useEffect(() => window.desktop?.onBeforeClose?.(async () => { const captures=[]; window.dispatchEvent(new CustomEvent('mdlvis-flush-captures',{detail:captures})); await Promise.all(captures); await flushRecordingQueue(); clearTimeout(preferencesTimer.current); if(!latest.current.preferencesReady)return; const current=preferencesRef.current, encoded=JSON.stringify(current); if(savedPreferences.current!==encoded) {await window.desktop.configure({preferences:current});savedPreferences.current=encoded;} }),[]);
   useEffect(() => { if(preferencesReady) resolveTextures(); },[preferencesReady]);
 
 

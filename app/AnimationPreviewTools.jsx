@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CAPTURE_QUALITIES, normalizeCapture } from '../src/capture-settings.js';
 import { recordingTimeline } from './showcase-timeline.js';
 import { cropPixels } from './showcase-crop.js';
+import { queueRecording, subscribeRecordings, recordingQueueSnapshot, retryRecordingSaves } from './preview-recording-queue.js';
 
 export default function AnimationPreviewTools({ active, sessionId, captureAPI, modelName, loop, length, crop, disabled, onStatus, onBusy, preferences }) {
   const [state,setState] = useState('idle'), [progress,setProgress] = useState(''), [error,setError] = useState('');
   const latest = useRef(); latest.current = {onStatus,onBusy};
   const running = useRef(null), retained = useRef(null), mounted = useRef(true);
   const settings = normalizeCapture(preferences?.capture);
+  const background = useSyncExternalStore(subscribeRecordings,recordingQueueSnapshot);
   function status(next) { if(mounted.current)setState(next); latest.current.onBusy?.(next!=='idle'); }
   async function save(payload) {
     retained.current = payload;
@@ -70,24 +72,34 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
         timer=setTimeout(job.finish,Math.max(0,timing.duration-(performance.now()-started)));
       });
       status('finishing');
+      let pendingFrame;
+      async function acceptFrame(){
+        if(!pendingFrame)return;
+        const outcome=await pendingFrame;pendingFrame=null;
+        if(outcome.error)throw outcome.error;
+        if(outcome.result.limit)throw Error(outcome.result.reason||'Recording reached the storage limit.');
+      }
       for(let index=0;timing.time(index)<duration;index++){
         const time=timing.time(index);
         await api.seekRecordingFrame(time);
         api.copyVisibleFrame(canvas,crop);
         const pixels=context.getImageData(0,0,canvas.width,canvas.height);
-        const result=await request({type:'frame',width:canvas.width,height:canvas.height,time,buffer:pixels.data.buffer});
-        if(result.limit)throw Error(result.reason||'Recording reached the storage limit.');
+        // Render the next frame while the previous frame is written losslessly.
+        // At most two pixel buffers are in flight; no frames are skipped.
+        await acceptFrame();
+        pendingFrame=request({type:'frame',width:canvas.width,height:canvas.height,time,buffer:pixels.data.buffer}).then(result=>({result}),error=>({error}));
         if(mounted.current && index%5===0)setProgress('Capturing GIF frames… '+Math.min(100,Math.round(time/duration*100))+'%');
       }
+      await acceptFrame();
       await api.seekRecordingFrame(duration);
       if(mounted.current)setProgress('Creating GIF…');
       const end=Math.max(20,duration);
       let result;
       if(jobId){
-        await window.desktop.finishPreviewRecording({jobId,time:end});
-        status('saving');result=await save({format:'gif',nativeJobId:jobId,modelName});
-        // A failed save retains the native job for Retry Save.
-        jobId=null;
+        queueRecording({jobId,time:end,onStatus:latest.current.onStatus});
+        // The queue now owns this job, including save retries. Release the
+        // preview immediately; its next take must never share this cleanup.
+        jobId=null;return;
       } else {
         const encoded=await request({type:'finish',time:end});status('saving');
         result=await save({format:'gif',bytes:encoded.bytes,modelName});
@@ -123,7 +135,9 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
   return <div className="showcase-capture">
     <button className="showcase-record" disabled={!stoppable&&(state!=='idle'||!captureAPI||disabled)} onClick={stoppable?stop:start}>{stoppable?'STOP':'RECORD'}</button>
     {state!=='idle'&&<div className="showcase-capture-status" role="status">{state==='retry'?'Save needs retry':state==='saving'?'Saving…':progress}</div>}
+    {background.pending>0&&<div className="showcase-capture-status" role="status">Making GIFs… {background.pending}</div>}
     {state==='retry'&&<button onClick={retry}>Retry Save</button>}
-    {error&&<div className="capture-error" role="alert">{error}</div>}
+    {background.retry>0&&<button onClick={retryRecordingSaves}>Retry Save{background.retry>1?' · '+background.retry:''}</button>}
+    {(error||background.error)&&<div className="capture-error" role="alert">{error||background.error}</div>}
   </div>;
 }
