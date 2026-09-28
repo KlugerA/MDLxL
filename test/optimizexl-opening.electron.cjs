@@ -13,7 +13,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await p.getByRole('navigation', { name: 'Optimization stages' }).getByRole('button', { name: 'Insanity FIxer', exact: true }).click();
     await p.getByText('Hive: 0 errors · 1 severe · 0 warnings · 3 notices', { exact: true }).waitFor();
     const select = p.getByLabel('Proposed fix', { exact: true }), label = 'BlastFlare: missing opening Translation in Attack - Slam';
-    assert.deepEqual(await select.locator('option').allTextContents(), ['Select a finding to preview', label]);
+    assert.ok((await select.locator('option').allTextContents()).includes(label));
     await select.selectOption({ label }); await p.waitForFunction(() => !!document.querySelector('.ox-savings strong'));
     assert.equal(await p.getByLabel('Animation', { exact: true }).inputValue(), '9');
     assert.equal(await p.getByLabel('Animation frame', { exact: true }).inputValue(), '170000');

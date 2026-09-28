@@ -28,13 +28,13 @@ for (const path of paths) {
     const available = stage === 'sanity' ? sanityProposals(model) : findIrregularities(model);
     const acceptedIds = expected?.results[`${stage}:findings`];
     // Keep the immutable accepted outputs as the regression contract. The new
-    // opening-track repair is additional capacity and is checked separately.
+    // explicitly added repairs are additional capacity, checked separately.
     const added = capture ? [] : available.filter(f => !acceptedIds.includes(f.id));
     for (const fix of added) {
-      assert.equal(stage, 'sanity', 'Unexpected new irregularity in accepted fixture');
-      assert.equal(fix.kind, 'openingTrack', 'Only the explicitly added opening-track capability may extend this baseline');
+      assert.ok(stage === 'sanity' ? ['openingTrack','unusedLocalKeys'].includes(fix.kind) : fix.kind === 'effectVisibility', 'Only explicitly added repair capabilities may extend this baseline');
       const repaired = runOptimizeStage(source, stage, {}, fix);
-      assert.ok(!sanityProposals(openDocument(repaired.bytes, 'repaired.mdx').model).some(f => f.id === fix.id), 'Additional repair resolves its finding');
+      const repairedModel = openDocument(repaired.bytes, 'repaired.mdx').model;
+      assert.ok(!(stage === 'sanity' ? sanityProposals(repairedModel) : findIrregularities(repairedModel)).some(f => f.id === fix.id), 'Additional repair resolves its finding');
       additionalRepairs.push({ id: fix.id, bytes: repaired.bytes.length, sha256: hash(repaired.bytes) });
     }
     const findings = capture ? available : available.filter(f => acceptedIds.includes(f.id));

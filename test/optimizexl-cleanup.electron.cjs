@@ -1,0 +1,42 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
+(async()=>{
+  const model=process.env.MDLXL_OPENING_MODEL||'C:/Users/PC/Downloads/WH_WOC_KnightKhorneFlail02_After.mdx',source=fs.readFileSync(model);
+  const out=path.resolve(process.env.MDLXL_OPTIMIZEXL_PROOF_ROOT||'out','cleanup-ui');fs.mkdirSync(out,{recursive:true});
+  const exe=process.env.MDLXL_OPTIMIZEXL_EXE,errors=[];
+  const app=await _electron.launch({executablePath:exe||path.resolve('node_modules/electron/dist/electron.exe'),args:[...(exe?[]:[process.cwd()]),model],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:path.join(out,'profile-'+Date.now())},timeout:60000});
+  try{
+    const main=await app.firstWindow();await main.getByTitle('OptimizeXL',{exact:true}).waitFor({timeout:60000});
+    const pending=app.waitForEvent('window');await main.getByTitle('OptimizeXL',{exact:true}).click();const p=await pending;p.setDefaultTimeout(20000);p.on('pageerror',e=>errors.push(e.message));
+    await app.evaluate(({BrowserWindow})=>{for(const w of BrowserWindow.getAllWindows()){w.webContents.setBackgroundThrottling(false);w.setBounds({x:-3500,y:0,width:1600,height:1000});w.showInactive();}});
+    const stage=name=>p.getByRole('navigation',{name:'Optimization stages'}).getByRole('button',{name,exact:true}).click();
+    const all=async()=>{const list=p.locator('.ox-fix-selection');if(!await list.evaluate(e=>e.open))await list.locator('summary').click();await list.getByRole('button',{name:'Select all',exact:true}).click();await p.getByRole('button',{name:'Preview all selected fixes',exact:true}).click();await p.waitForFunction(()=>!!document.querySelector('.ox-savings strong'));};
+    await stage('Insanity FIxer');await p.getByText('Hive: 0 errors · 1 severe · 0 warnings · 3 notices',{exact:true}).waitFor();
+    await p.evaluate(()=>{window.sides=()=>Array.from(document.querySelectorAll('.ox-preview .game-preview-root'),root=>{let props;for(let f=root[Object.keys(root).find(k=>k.startsWith('__reactFiber'))];f;f=f.return)for(let h=f.memoizedState;h;h=h.next){const c=h.memoizedState?.current;if(c?.model?.Geosets&&c?.compareCamera)props=c;}return props;});});
+    const original=await p.evaluate(()=>JSON.stringify(sides()[0].model));
+    await all();assert.equal(await p.locator('.ox-fix-selection input:checked').count(),4);
+    await p.getByRole('button',{name:'Approve selected',exact:true}).click();
+    await p.getByText('Hive: 0 errors · 0 severe · 0 warnings · 0 notices',{exact:true}).waitFor();
+    await p.screenshot({path:path.join(out,'hive-clear.png')});
+    await stage('Irregularities Fixer');
+    const label='Portrait - 1: glow Geoset 49 visible without its attached geometry';
+    await p.getByLabel('Proposed fix',{exact:true}).selectOption({label});await p.waitForFunction(()=>!!document.querySelector('.ox-savings strong'));
+    assert.equal(await p.getByLabel('Animation',{exact:true}).inputValue(),'7');
+    assert.deepEqual(await p.evaluate(()=>sides().map(s=>s.model.GeosetAnims.find(a=>a.GeosetId===48)?.Alpha?.Keys?.find(k=>k.Frame===140000)?.Vector[0]??1)),[1,0]);
+    await p.screenshot({path:path.join(out,'portrait-glow-preview.png')});
+    const selection=p.locator('.ox-fix-selection');await selection.locator('summary').click();
+    for(const name of ['Portrait - 1','Portrait Talk - 1','Decay Bone'])await selection.getByRole('checkbox',{name:'Select '+name+': glow Geoset 49 visible without its attached geometry',exact:true}).check();
+    await p.getByRole('button',{name:'Preview all selected fixes',exact:true}).click();await p.waitForFunction(()=>!!document.querySelector('.ox-savings strong'));
+    await p.getByRole('button',{name:'Approve selected',exact:true}).click();
+    await p.waitForFunction(()=>!Array.from(document.querySelector('[aria-label="Proposed fix"]').options).some(o=>o.textContent.includes('glow Geoset 49')));
+    assert.equal(await p.evaluate(()=>JSON.stringify(sides()[0].model)),original);
+    await stage('Insanity FIxer');await p.getByText('Hive: 0 errors · 0 severe · 0 warnings · 0 notices',{exact:true}).waitFor();
+    await stage('Sphereomancer');await p.waitForFunction(()=>!!document.querySelector('.ox-savings strong'));
+    const spheres=await p.evaluate(()=>sides()[1].model.CollisionShapes.map(c=>[...c.Vertices,c.BoundsRadius]));
+    assert.deepEqual(spheres,[[5.257450103759766,0,63.22100067138672,38.07600021362305],[3.239419937133789,0,22.847400665283203,38.07600021362305]]);
+    await p.screenshot({path:path.join(out,'footman-spheres.png')});
+    assert.deepEqual(fs.readFileSync(model),source);assert.deepEqual(errors,[]);
+    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:true,zeroHiveFindings:true,threeGlowCorrections:true,footmanSpheres:true,pinnedBefore:true,sourceUnchanged:true,errors},null,2));
+    console.log('Passed combined cleanup, zero Hive findings, glow preview/approval and Footman spheres.');
+  }finally{await app.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

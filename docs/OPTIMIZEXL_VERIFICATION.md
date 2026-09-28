@@ -211,6 +211,16 @@ Source and packaged Electron checks pass for finding selection, animation seekin
 
 Reproduce with `node --test test/optimizexl-opening-tracks.test.js`, `node test/optimizexl-opening-models.mjs <flail02> <flail02-after>` and `node test/optimizexl-opening.electron.cjs`. The Electron test accepts the existing Playwright, EXE and proof-root environment variables and optional `MDLXL_OPENING_MODEL` input.
 
+## Unused-key cleanup, attached glow visibility and Footman spheres
+
+The follow-up requires an empty Hive result, including unused notices. A separate selectable repair now removes nonzero local keys outside all sequence intervals while retaining frame-zero setup keys, global tracks and every active key. The opening and unused-key proposals can be approved together from one snapshot. On both supplied Flail02 files, the combined serialized result reports 0 errors, 0 severe findings, 0 warnings and 0 unused notices. All three affected particle channels match native playback exactly at 431,445 channel/frame samples per file. No input files are modified.
+
+The visible Portrait glow is an additive geoset, not the already-hidden fire emitter. The new reusable detector associates it with solid geosets by matching used skin bones, spatial overlap and repeated co-visibility, then identifies animations where the solids remain hidden while the glow appears. There are no model, texture, bone or animation name checks. Both Flail02 files gain proposals for Geoset 49 in Portrait, Portrait Talk and Decay Bone. Approval changes only its visibility in the chosen sequences. Both Footman references and the previously repaired HIVE_OPTIMIZED flail gain no glow findings. All 52 earlier accepted flail outputs still match the immutable golden hashes; explicitly added unused-key and glow proposals are checked separately. Flail03 gains the same previously missed glow issue as well as unused-key cleanup.
+
+30 focused tests pass. They cover unchanged native interpolation, retained setup/global keys, stale plans, glow inference without names, unrelated/distant geometry, visible carriers, cubic visibility excursions and overlapping intervals. Supplied-model tests verify all original data except approved tracks, full-interval glow visibility, zero Hive findings even after the glow correction, and exact equality of the Standard unit preset with both authored Footman sphere centers/radii. Source and packaged Electron checks cover selected cleanup approval, empty Hive results, glow Before/After preview, three selected visibility fixes, pinned original data, and the two-sphere preview. Source and package evidence is under `D:\MDLxL-Reviews\OptimizeXL-cleanup-20260928`. User visual acceptance and Warcraft runtime testing remain pending.
+
+Reproduce with `node --test test/optimizexl-cleanup-visibility.test.js`, `node test/optimizexl-cleanup-models.mjs <flail02> <flail02-after>` and `node test/optimizexl-cleanup.electron.cjs`. Set `MDLXL_FOOTMAN_REFERENCE` for the exact preset comparison. The Electron test uses the same environment overrides as the opening-track test.
+
 ## Reproducing
 
 ```powershell
@@ -228,7 +238,7 @@ Run `node test/optimizexl-save.electron.cjs` with the same environment for appro
 
 Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. Run `node test/optimizexl-playback.electron.cjs` with Flail03 for percentage speed and native global playback; its proofs go to `out/optimizexl-playback-proof/`. All six desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-opening-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-cleanup-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 
