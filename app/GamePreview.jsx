@@ -591,9 +591,8 @@ export default function GamePreview(inputProps) {
       }
       if(!points.length)return;
       const anchor=posedBounds.getCenter(new THREE.Vector3()),target=new THREE.Vector2(x*2-1,1-y*2);
-      // Center the displayed silhouette bounds, not a projected 3D box center.
-      // A perspective pan moves near/far vertices by different screen amounts,
-      // so refine the pan until the projected bounds meet the crop midpoint.
+      // First bring even an off-screen model into view. Geometry is only a
+      // coarse guide: transparent glow planes extend beyond their visible pixels.
       for(let pass=0;pass<8;pass++){
         camera.updateMatrixWorld();camera.updateProjectionMatrix();
         const projected=new THREE.Box2();
@@ -608,7 +607,39 @@ export default function GamePreview(inputProps) {
         const translation=screenPlaneTranslation(camera,anchor,canvas.width,canvas.height,dx,dy);
         camera.position.sub(translation);controls.target.sub(translation);controls.update();
       }
-      cameraChanged();
+      const dark=new Uint8Array(canvas.width*canvas.height*4),light=new Uint8Array(dark.length);
+      try {
+        for(let pass=0;pass<6;pass++){
+          // Freeze the pose and refresh billboard/camera uniforms after each pan.
+          if(render(performance.now(),0,{captureOnly:true})===false)break;
+          // Render against both extremes, without the chosen background or 2D
+          // overlays. This finds black surfaces as well as additive light while
+          // ignoring fully transparent texels, regardless of background media.
+          for(const [clear,pixels] of [[0,dark],[1,light]]){
+            gl.clearColor(clear,clear,clear,1);gl.clearDepth(1);gl.depthMask(true);
+            gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+            native.render(displayCamera.matrixWorldInverse.elements,displayCamera.projectionMatrix.elements,{wireframe:false,useEnvironmentMap:p.shaded!==false&&graphics.lighting});
+            eventPreview.render({frame:native.getFrame(),sequenceIndex:native.getSequence(),globalTime:globalClock,camera:displayCamera,teamColor:p.teamColor});
+            gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+          }
+          let left=canvas.width,right=-1,bottom=canvas.height,top=-1;
+          for(let row=0;row<canvas.height;row++)for(let col=0;col<canvas.width;col++){
+            const i=(row*canvas.width+col)*4;
+            // Ignore imperceptible glow tails and color-conversion rounding.
+            if(dark[i]>6||dark[i+1]>6||dark[i+2]>6||light[i]<249||light[i+1]<249||light[i+2]<249){
+              left=Math.min(left,col);right=Math.max(right,col);bottom=Math.min(bottom,row);top=Math.max(top,row);
+            }
+          }
+          if(right<left)break;
+          const dx=x*canvas.width-(left+right+1)/2,dy=y*canvas.height-(canvas.height-(bottom+top+1)/2);
+          if(Math.abs(dx)<=.5&&Math.abs(dy)<=.5)break;
+          const translation=screenPlaneTranslation(camera,anchor,canvas.width,canvas.height,dx,dy);
+          camera.position.sub(translation);controls.target.sub(translation);controls.update();
+        }
+      } finally {
+        // Never present the measurement backgrounds, including after an error.
+        render(performance.now(),0,{captureOnly:true});cameraChanged();
+      }
     }
     function updateUV(nextModel) {
       const priorBuffer = gl.getParameter(gl.ARRAY_BUFFER_BINDING);
