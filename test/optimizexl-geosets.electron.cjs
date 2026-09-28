@@ -26,7 +26,7 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
    return {counts:props.model.Geosets.map(g=>[g.Vertices.length,g.Faces.length]),geosets:JSON.stringify(props.model.Geosets,(_,v)=>ArrayBuffer.isView(v)?Array.from(v):v),hidden:Array.from(props.hiddenGeosets||[]),hovered:props.hoveredGeoset,frame:runtime.native.getFrame(),position:cam.position.toArray(),projection:cam.projectionMatrix.toArray(),worldInverse:cam.matrixWorldInverse.toArray(),matrices:(runtime.native.rendererData?.nodes||[]).map(n=>n?.matrix?Array.from(n.matrix):null)};
   });});
   const nav=name=>p.getByRole('navigation',{name:'Optimization stages'}).getByRole('button',{name,exact:true});
-  const star=async(name,exists)=>assert.equal(await nav(name).locator('.ox-stage-star').count(),exists?1:0,name+' star');
+  const star=async(name,exists)=>{await p.locator('nav[aria-label="Optimization stages"][aria-busy="false"]').waitFor();assert.equal(await nav(name).locator('.ox-stage-star').count(),exists?1:0,name+' star');};
   const box=p.locator('.ox-geosets'),selected=()=>box.getByRole('checkbox',{checked:true}).count();
   const exclude=i=>p.getByLabel(`Exclude geoset ${i+1}`,{exact:true});
   await nav('Nuclear Polygon Destroyer').click();await ready();await star('Nuclear Polygon Destroyer',true);

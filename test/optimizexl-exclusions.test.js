@@ -77,11 +77,13 @@ test('Nuclear retains excluded geosets exactly and keeps other geosets at the sa
 });
 
 test('green-star review state distinguishes approval, no-op, skipped work, exclusions and undo',()=>{
-  const session=new OptimizeXLSession(new Uint8Array([1]));assert.equal(session.needsReview('nuclear'),true);
-  session.recordReview('nuclear',false);assert.equal(session.needsReview('nuclear'),true,'Zero strength is not a completed review');
-  session.recordReview('unused',true,'1');assert.equal(session.needsReview('unused','1'),false);assert.equal(session.needsReview('unused',''),true);
+  const session=new OptimizeXLSession(new Uint8Array([1]));assert.equal(session.needsReview('nuclear'),false,'Unchecked is not evidence of available work');
+  session.recordAvailability('nuclear',true);assert.equal(session.needsReview('nuclear'),true,'An actual reduction is available even at zero current strength');
+  session.recordReview('unused',true,'1');assert.equal(session.needsReview('unused','1'),false);assert.equal(session.needsReview('unused',''),false,'Changed exclusions await a check');
+  session.recordAvailability('unused',true,'1');assert.equal(session.needsReview('unused','1'),false,'Late background result cannot override the explicit no-op review');
+  session.recordAvailability('duplicates',true);
   session.skip('duplicates');assert.equal(session.needsReview('duplicates'),true);assert.equal(session.needsReview('unused','1'),false,'Skip keeps no-op proof for the same accepted model');
   session.propose({bytes:new Uint8Array([2])},session.revision);session.approve('nuclear',{excludedGeosets:[1]});
-  assert.equal(session.needsReview('nuclear','1'),false);assert.equal(session.needsReview('unused','1'),true,'An approved change invalidates stale no-op results');
+  assert.equal(session.needsReview('nuclear','1'),false);assert.equal(session.needsReview('unused','1'),false,'An approved change awaits fresh evidence, not a speculative star');
   session.back();assert.equal(session.needsReview('nuclear'),true);assert.equal(session.needsReview('unused','1'),false);
 });

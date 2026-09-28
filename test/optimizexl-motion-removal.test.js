@@ -37,6 +37,30 @@ const sample = (model, property, frame) => sampleTrack(model.Bones[0][property],
   interval: model.Sequences[frame < 2000 ? 0 : 1].Interval, quaternion: property === 'Rotation', fallback: property === 'Rotation' ? [0, 0, 0, 1] : [0, 0, 0],
 });
 
+test('remove a small rate hitch only with copied-control corruption and an independently supported rate', () => {
+  const times = [0, 300, 650, 700, 1000, 1200];
+  const doc = openDocument(fixture('Translation', times, [-5, -5.9, -7.04, -7.1, -6.2, -5.6], 2), 'hitch.mdx');
+  doc.apply('Corrupted other intervals', ['Bones'], m => {
+    const t = m.Bones[0].Translation;
+    t.Keys = t.Keys.filter(k => k.Frame < 2000);
+    for (let i = 0; i < 7; i++) {
+      const Vector = new Float32Array([0, 0, -10 * (i + 1)]);
+      t.Keys.push({ Frame: 2000 + i * 200, Vector, InTan: new Float32Array(Vector), OutTan: new Float32Array(Vector) });
+    }
+  });
+  const before = doc.model, fix = scanIrregularMotion(before).find(f => f.sequence === 0);
+  assert.deepEqual(fix.bridges, [{ start: 300, end: 700, axis: 2 }]);
+  const after = read(runOptimizeStage(doc.serialize('mdx'), 'irregularities', {}, fix).bytes);
+  const keys = after.Bones[0].Translation.Keys;
+  assert.ok(Math.abs(keys.find(k => k.Frame === 650).Vector[2] + 6.95) < 1e-6);
+  for (let t = 300; t < 700; t++) assert.ok(Math.abs((sample(after, 'Translation', t + 1)[2] - sample(after, 'Translation', t)[2]) * 1000 + 3) < .002);
+  assert.deepEqual(scanIrregularMotion(after).filter(f => f.sequence === 0), []);
+  const noSupport = structuredClone(before);noSupport.Bones[0].Translation.Keys[0].Vector[2] = -4;
+  assert.deepEqual(scanIrregularMotion(noSupport).filter(f => f.sequence === 0), [], 'No independent rate support means no speculative smoothing');
+  const noCorruption = structuredClone(before);noCorruption.Bones[0].Translation.LineType = 1;
+  assert.deepEqual(scanIrregularMotion(noCorruption).filter(f => f.sequence === 0), [], 'An ordinary small speed change is not a warning');
+});
+
 for (const type of [1, 2, 3]) test(`replace a stray position completely and preserve independent axes (${type})`, () => {
   const times = [0, 300, 500, 533, 566, 900, 1200];
   const bytes = fixture('Translation', times, times.map(t => [t / 100, Math.sin(t / 300), t === 533 ? 30 : 0]), type);

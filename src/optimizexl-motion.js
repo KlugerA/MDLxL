@@ -111,6 +111,25 @@ export function scanIrregularMotion(model) {
       if (!best) break;
       spans.push({ start: best.start, end: best.end }); work.splice(best.i, 1);
     }
+    // A copied-control track can also contain a small *monotonic* hitch: it
+    // briefly slows down without reversing, so displacement alone misses it.
+    // Require independent support for the replacement rate from an exterior
+    // segment. This is not general smoothing of slow or uneven movement.
+    if (copiedSlow) for (let i = 1; i < work.length - 1; i++) {
+      const a = work[i - 1], b = work[i], c = work[i + 1];
+      const left = b.Frame - a.Frame, right = c.Frame - b.Frame, dt = left + right;
+      if (left <= 0 || right <= 0 || Math.min(left, right) > 100 || Math.max(left, right) < Math.min(left, right) * 3 || dt > Math.min(500, duration * .4)) continue;
+      const av = value(a, axis), bv = value(b, axis), cv = value(c, axis);
+      const v1 = (bv - av) / left, v2 = (cv - bv) / right, rate = (cv - av) / dt;
+      if (v1 * v2 <= 0 || Math.max(Math.abs(v1), Math.abs(v2)) < Math.min(Math.abs(v1), Math.abs(v2)) * 1.5) continue;
+      if (Math.abs(bv - blend(av, cv, left / dt, axis)) < size * .00001) continue;
+      const exterior = [[work[i - 2], a], [c, work[i + 2]]].filter(([x, y]) => x && y);
+      if (!exterior.some(([x, y]) => {
+        const reference = (value(y, axis) - value(x, axis)) / (y.Frame - x.Frame);
+        return reference * rate > 0 && Math.abs(reference - rate) <= Math.abs(rate) * .01;
+      })) continue;
+      spans.push({ start: a.Frame, end: c.Frame }); work.splice(i--, 1);
+    }
     // Repeated rapid out-and-back movement is strong evidence even when the
     // individual amplitudes are too small to be a model-wide speed outlier.
     // Restrict it to body motion or scale distortion; normal limb cycles and

@@ -8,14 +8,20 @@ export class OptimizeXLSession {
     this.revision = 0;
     this.candidate = null;
     this.reviews = new Map();
+    this.availability = new Map();
   }
   recordReview(stage, noChanges, exclusions = '') {
     this.reviews.set(stage, { before: this.accepted, noChanges, exclusions });
   }
+  recordAvailability(stage, hasChanges, exclusions = '', error = '') {
+    this.availability.set(stage, { before: this.accepted, hasChanges, exclusions, error });
+  }
   needsReview(stage, exclusions = '') {
     if (this.steps.some(step => step.stage === stage && !step.skipped)) return false;
     const review = this.reviews.get(stage);
-    return !(review?.before === this.accepted && review.exclusions === exclusions && review.noChanges);
+    if (review?.before === this.accepted && review.exclusions === exclusions) return !review.noChanges;
+    const available = this.availability.get(stage);
+    return available?.before === this.accepted && available.exclusions === exclusions && available.hasChanges || false;
   }
   propose(result, revision) {
     if (revision !== this.revision) return false;

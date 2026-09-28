@@ -155,6 +155,18 @@ The source checks cover complete removal of position/rotation spikes, scale dist
 
 The focused motion/OptimizeXL checks pass 66 cases. Rebuilt-source and packaged Electron tests pass the real Before/After candidate, changed bad poses, synchronized playback, Approve, Back, clean Hive messaging and source preservation. The separate review package contains 571 verified runtime/asset files and 55 locales. Proofs are under `D:\MDLxL-Reviews\OptimizeXL-jitter-removal-20260928\proofs\motion-ui` and `packaged-proofs\motion-ui`.
 
+## Thirteenth review correction: reference motion, meaningful stars and original Before
+
+The supplied Original Footman revealed the remaining Stand -1 hitch: the extra root key at 833 ms changed vertical speed by about 1.394 units/second, despite a position error below 0.094 units. The new rule reconnects it to the steady 467–900 ms movement. Detection requires copied-control evidence plus an independently matching neighboring rate; there are no Footman names or frame numbers in the algorithm. Small speed changes without this evidence remain unflagged.
+
+Native evaluation at all 1,501 millisecond positions now matches the Original's Stand -1 root motion within 0.000001 model units and 0.000477 units/second. The true low pose at 900 ms stays. The repair also catches the residual hitch when either earlier repair has already been approved. Other track data remains unchanged; this is a reference match for the root bob, not a claim that every animation or rotation channel has been reconstructed. Both Original and Flail03 still have zero motion proposals.
+
+Before now uses the immutable entry model and entry file size through multiple approvals and Back. After and its saving estimate show the cumulative result. Native-window checks verify that the entire Before model data stays identical while the Footman After shrinks from 280.78 KB to 103.56 KB after the tested repair/cleanup sequence. The source file remains untouched.
+
+Stage stars begin off and require a real availability result. A private worker checks reductions and supported repairs, with explicit stage reviews taking priority. Existing valid collision spheres and clean stages remain unstarred. Exclusion changes and approved model changes invalidate stale evidence; Back restores the earlier state. Failed availability checks expose their reason in the existing button tooltip.
+
+All 74 focused motion/OptimizeXL tests pass. Source and packaged native-window checks pass for the reference repair preview, synchronized playback, approval, Back, unchanged original preview/size, clean-stage stars and source preservation. The source geoset interaction test also passes exclusion, shared hover and star refresh cases. The separate package verifies 572 runtime/asset files and 55 locales. Evidence is under `D:\MDLxL-Reviews\OptimizeXL-reference-review-20260928\proofs` and `packaged-proofs`; the numerical reference report is `out/footman-reference-motion.json` in the feature worktree.
+
 ## Reproducing
 
 ```powershell
@@ -172,7 +184,7 @@ Run `node test/optimizexl-save.electron.cjs` with the same environment for appro
 
 Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. Run `node test/optimizexl-playback.electron.cjs` with Flail03 for percentage speed and native global playback; its proofs go to `out/optimizexl-playback-proof/`. All six desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-jitter-removal-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-reference-review-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 
