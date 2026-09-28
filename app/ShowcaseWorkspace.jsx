@@ -103,6 +103,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   const [grid,setGrid]=useState(false),[gridDensity,setGridDensity]=useState(5);
   const [presets,setPresets]=useState([]),[presetDialog,setPresetDialog]=useState(null),[presetName,setPresetName]=useState(''),[presetId,setPresetId]=useState(SHOWCASE_PRESETS[0].id),[setupBusy,setSetupBusy]=useState(false);
   const [recordingList,setRecordingList]=useState([]),[backgroundAsset,setBackgroundAsset]=useState(null),[applyVersion,setApplyVersion]=useState(0);
+  const [editingRecording,setEditingRecording]=useState(null),recordingDraft=useRef(null);
   const setupURLs=useRef(new Set()),pendingApply=useRef(null),apiRef=useRef(null),captureSettings=useRef(null),batchRestore=useRef(null);
   const captureReady=useCallback(value=>{apiRef.current=value;setAPI(value);},[]);
   const previousModel=useRef({model,sessionId}),modelView=useRef(null);
@@ -112,6 +113,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
     previousModel.current={model,sessionId};
     setSequencePlaylist(rows=>timeShowcasePlaylist(model,remapShowcasePlaylist(rows,previous,model)));setPortraitPlaylist(rows=>timeShowcasePlaylist(model,remapShowcasePlaylist(rows,previous,model)));
     setRecordingList(rows=>rows.map(row=>remapShowcaseTake(row,previous,model)));
+    if(recordingDraft.current)recordingDraft.current=remapShowcaseTake({setup:recordingDraft.current},previous,model).setup;
     setSelected(0);stopPreview();setAnimationDialog(null);
   }else previousModel.current.model=model;
   useEffect(()=>{if(!api)return;let live=true;api.whenReady().then(()=>{if(!live)return;const definitions=api.effectDefinitions();
@@ -259,6 +261,29 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
     try{const setup=await captureSetup(true),names=playlist.map(row=>model.Sequences[row.sequence]?.Name).join(' → ');setRecordingList(rows=>[...rows,{id:crypto.randomUUID(),name:names+' · '+length+'s',setup}]);}
     catch(error){onStatus?.('Could not add recording: '+error.message,true);}finally{setSetupBusy(false);}
   }
+  async function editRecording(take){
+    if(busy||setupBusy||editingRecording)return;
+    setSetupBusy(true);
+    try{
+      recordingDraft.current=await captureSetup(true);
+      setEditingRecording(take.id);
+      await applySetup(take.setup);
+      onStatus?.('Editing queued recording. Save changes or Cancel to return.');
+    }catch(error){onStatus?.('Could not open recording: '+error.message,true);}
+    finally{setSetupBusy(false);}
+  }
+  async function finishRecordingEdit(save){
+    if(busy||setupBusy||!editingRecording||!recordingDraft.current)return;
+    setSetupBusy(true);
+    try{
+      const replacement=save?{setup:await captureSetup(true),name:playlist.map(row=>model.Sequences[row.sequence]?.Name).join(' → ')+' · '+length+'s'}:null;
+      await applySetup(recordingDraft.current);
+      if(replacement)setRecordingList(rows=>rows.map(row=>row.id===editingRecording?{...row,...replacement}:row));
+      recordingDraft.current=null;setEditingRecording(null);
+      onStatus?.(save?'Queued recording updated.':'Recording changes cancelled.');
+    }catch(error){onStatus?.('Could not '+(save?'update recording':'return to your setup')+': '+error.message,true);}
+    finally{setSetupBusy(false);}
+  }
   async function alignText(id,x,y){
     const layer=layers.find(row=>row.id===id);if(!layer)return;
     try{const stage=previewRef.current?.querySelector('.showcase-layer-stage'),width=stage?.clientWidth||previewSize.width,height=stage?.clientHeight||previewSize.height;
@@ -267,14 +292,14 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   }
   return <div className="showcase-workspace">
     <aside className="showcase-sidebar" aria-label="Showcase controls">
-      <AnimationPreviewTools exportTarget={exportTarget} onExportTarget={chooseExportTarget} mainPicture={mainPicture} cropAspect={framedPortrait?undefined:mainPicture?612/490:SHOWCASE_CROP_PRESETS[cropPreset]} active={active} sessionId={sessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={framedPortrait?null:selectedCrop} locked={setupBusy} recordingList={recordingList} prepareTake={take=>applySetup(take.setup)} onTakeComplete={id=>setRecordingList(rows=>rows.filter(row=>row.id!==id))} beforeBatch={async()=>{batchRestore.current=await captureSetup(true);}} afterBatch={async()=>{const saved=batchRestore.current;batchRestore.current=null;if(saved)await applySetup(saved);}} disabled={!!exportError || setupBusy || overflow.some(Boolean) || !playlist.length || portrait && cameraIndex < 0 || !portrait && backgroundMode === 'folder' && !backgroundAsset && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)stopPreview();}}/>
+      <AnimationPreviewTools exportTarget={exportTarget} onExportTarget={chooseExportTarget} mainPicture={mainPicture} cropAspect={framedPortrait?undefined:mainPicture?612/490:SHOWCASE_CROP_PRESETS[cropPreset]} active={active} sessionId={sessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={framedPortrait?null:selectedCrop} locked={setupBusy||!!editingRecording} recordingList={recordingList} prepareTake={take=>applySetup(take.setup)} onTakeComplete={id=>setRecordingList(rows=>rows.filter(row=>row.id!==id))} beforeBatch={async()=>{batchRestore.current=await captureSetup(true);}} afterBatch={async()=>{const saved=batchRestore.current;batchRestore.current=null;if(saved)await applySetup(saved);}} disabled={!!exportError || setupBusy || overflow.some(Boolean) || !playlist.length || portrait && cameraIndex < 0 || !portrait && backgroundMode === 'folder' && !backgroundAsset && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)stopPreview();}}/>
       {exportError&&<div className="showcase-error" role="alert">{exportError}</div>}
       <fieldset disabled={busy||setupBusy} className="showcase-fields">
         <div className="showcase-model-file"><button onClick={()=>window.desktop?onLoadModel?.():modelInput.current.click()}>Load model</button><small title={modelPath||modelName}>{modelName}</small></div>
         <input ref={modelInput} type="file" accept=".mdl,.mdx" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)onLoadModel?.(file);}}/>
         <div className="showcase-preset-actions"><button disabled={!api} onClick={()=>{setPresetName(modelName.replace(/\.[^.]+$/,'')+' setup');setPresetDialog('save');}}>Save Preset</button><button disabled={!api} onClick={()=>setPresetDialog('load')}>Load Preset</button></div>
-        <button className="showcase-wide" disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={addRecording}>Add to recording list{recordingList.length?' · '+recordingList.length:''}</button>
-        {recordingList.length>0&&<ol className="showcase-recording-list" aria-label="Recording list">{recordingList.map((take,index)=><li key={take.id}><span title={take.name}>{index+1}. {take.name}</span><button aria-label={'Remove recording '+(index+1)} onClick={()=>setRecordingList(rows=>rows.filter(row=>row.id!==take.id))}>×</button></li>)}</ol>}
+        {editingRecording?<div className="showcase-preset-actions"><button disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={()=>finishRecordingEdit(true)}>Save changes</button><button onClick={()=>finishRecordingEdit(false)}>Cancel</button></div>:<button className="showcase-wide" disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={addRecording}>Add to recording list{recordingList.length?' · '+recordingList.length:''}</button>}
+        {recordingList.length>0&&<ol className="showcase-recording-list" aria-label="Recording list">{recordingList.map((take,index)=><li key={take.id}><button className="showcase-recording-edit" aria-label={'Edit recording '+(index+1)} aria-pressed={editingRecording===take.id} disabled={!!editingRecording} title={'Edit '+take.name} onClick={()=>editRecording(take)}>{index+1}. {take.name}</button><button disabled={!!editingRecording} aria-label={'Remove recording '+(index+1)} onClick={()=>setRecordingList(rows=>rows.filter(row=>row.id!==take.id))}>×</button></li>)}</ol>}
         <ExtraTimeField value={portrait?portraitExtraTime:sequenceExtraTime} base={portrait?portraitBase:sequenceBase} onChange={portrait?setPortraitExtraTime:setSequenceExtraTime}/>
         {(!portrait||framedPortrait)&&<section className={sectionClass('background')} aria-label={portrait?"Portrait color":"Background"}>
           <header>{sectionToggle('background',portrait?'Color':'Background')}{!portrait&&!collapsed.background&&<select aria-label="Background source" value={backgroundMode} onChange={event=>setBackgroundMode(event.target.value)}><option value="folder">Backgrounds</option><option value="color">Color</option><option value="media">Image/Video</option></select>}</header>

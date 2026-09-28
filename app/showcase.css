@@ -161,7 +161,7 @@
 .showcase-preset-actions button { flex:1; }
 .showcase-recording-list { margin:4px 0; padding:0; list-style:none; max-height:110px; overflow:auto; }
 .showcase-recording-list li { display:flex; align-items:center; gap:3px; margin:2px 0; }
-.showcase-recording-list span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+.showcase-recording-list .showcase-recording-edit { flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
 .showcase-recording-list button { padding:0 4px; min-height:18px; }
 
 .showcase-orbit-direction {display:flex;align-items:center;justify-content:space-between;gap:4px;}
