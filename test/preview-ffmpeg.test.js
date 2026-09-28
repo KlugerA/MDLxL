@@ -104,3 +104,23 @@ test('large invalid GIF is rejected by its contents without a renderer buffer', 
   const handle=await fs.open(file,'w'); await handle.truncate(MAX_CAPTURE_BYTES+1); await handle.close();
   await assert.rejects(validateGIFFile(file),/complete GIF/);
 });
+
+
+test('export profiles cap dimensions, preserve frame timing and reject Hive duration overflow', { skip: process.platform !== 'win32' }, async t => {
+  const store=await fixture(t);
+  for(const [exportTarget,width,height] of [['catbox',900,450],['hive',800,800]]){
+    const {jobId}=await store.begin(1,{width,height,quality:'high',loop:true,exportTarget});
+    for(let i=0;i<3;i++)await store.frame(1,{jobId,width,height,time:i*1000/30,buffer:frame(i,width,height)});
+    await store.finish(1,{jobId,time:100});
+    const bytes=await fs.readFile(store.get(1,jobId).output);
+    const w=bytes.readUInt16LE(6),h=bytes.readUInt16LE(8),decoded=inspectGIF(bytes);
+    if(exportTarget==='catbox'){assert.equal(w,864);assert.equal(h,432);assert.ok(bytes.length<=20*1024*1024);}
+    else assert.ok(w*h<=300000);
+    assert.equal(decoded.frames,3);assert.equal(decoded.delay,100);
+    await store.save(1,jobId);
+  }
+  const {jobId}=await store.begin(1,{width:16,height:8,quality:'high',loop:true,exportTarget:'hive'});
+  await store.frame(1,{jobId,width:16,height:8,time:0,buffer:frame(0)});
+  await assert.rejects(store.finish(1,{jobId,time:5010}),/Hive does not support/);
+  assert.equal(store.jobs.has(jobId),false);
+});

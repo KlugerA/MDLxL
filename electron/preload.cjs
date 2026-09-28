@@ -53,6 +53,8 @@ contextBridge.exposeInMainWorld('desktop', {
   beginPreviewRecording: payload => ipcRenderer.invoke('preview:recordBegin', payload),
   writePreviewRecordingFrame: payload => ipcRenderer.invoke('preview:recordFrame', payload),
   finishPreviewRecording: payload => ipcRenderer.invoke('preview:recordFinish', payload),
+  uploadPreviewToCatbox: id => ipcRenderer.invoke('preview:catboxUpload',id),
+  copyPreviewLink: (exportId,bbcode=false) => ipcRenderer.invoke('preview:copyLink',{exportId,bbcode}),
   savePreviewRecording: id => ipcRenderer.invoke('preview:recordSave', id),
   discardPreviewRecording: id => ipcRenderer.invoke('preview:recordDiscard', id),
   listPreviewBackgrounds: () => ipcRenderer.invoke('preview:backgrounds'),
