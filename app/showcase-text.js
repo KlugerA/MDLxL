@@ -13,6 +13,7 @@ export const SHOWCASE_FONTS = [
   {id:'rajdhani',name:'Rajdhani',family:'Showcase Rajdhani'},
   {id:'cormorantsc',name:'Cormorant SC',family:'Showcase Cormorant SC'},
   {id:'grenzegotisch',name:'Grenze Gotisch',family:'Showcase Grenze Gotisch'},
+  {id:'frizquadrata',name:'Friz Quadrata TT',family:'Showcase Friz Quadrata'},
 ];
 export const TEXT_EFFECTS = [
   ['solid','Solid'],['gradient','Gradient'],['neon','Neon'],['flame','Flame'],
@@ -65,7 +66,7 @@ function geometry(context,layer,size) {
   const edgeContext=edge.getContext('2d');edgeContext.lineWidth=Math.max(1,size*.1);glyphs(edgeContext,true);
   edgeContext.globalCompositeOperation='destination-out';edgeContext.drawImage(mask,0,0);edgeContext.globalCompositeOperation='source-over';
   const tubeContext=tube.getContext('2d');tubeContext.lineWidth=Math.max(.7,size*.027);glyphs(tubeContext,true);
-  const value={key,mask,edge,tube,surface,scratch,frame,width,height,x,top,bottom,textWidth,textHeight,size,rows:lines.map((_,index)=>({top:top+index*lineHeight,bottom:top+index*lineHeight+ascent+descent})),fire:null,conduction:null,arcs:new Map()};
+  const value={key,mask,edge,tube,surface,scratch,frame,width,height,x,top,bottom,textWidth,textHeight,size,rows:lines.map((_,index)=>({top:top+index*lineHeight,bottom:top+index*lineHeight+ascent+descent})),fire:null,frost:null,conduction:null,arcs:new Map()};
   cache.delete(id);cache.set(id,value);
   // Old removed layers are evicted without retaining an unbounded set of canvases.
   while(cache.size>24)cache.delete(cache.keys().next().value);
@@ -144,17 +145,17 @@ function heatAt(f,x,y) {
 function fireField(g) {
   if(g.fire)return g.fire;
   // Bound the simulation surface; text itself is still drawn at full resolution.
-  const scale=Math.min(1,64/g.size,640/g.width,192/g.height);
+  const scale=Math.min(1,96/g.size,960/g.width,256/g.height);
   const width=Math.max(2,Math.ceil(g.width*scale)),height=Math.max(2,Math.ceil(g.height*scale)),size=g.size*scale;
   const canvas=g.mask.ownerDocument.createElement('canvas');canvas.width=width;canvas.height=height;
   const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(g.mask,0,0,width,height);
   const pixels=context.getImageData(0,0,width,height).data,heat=new Float32Array(width*height);
-  const decay=Math.exp(-1/Math.max(1,size*.34));
+  const decay=Math.exp(-1/Math.max(1,size*.42));
   // Every part of the silhouette emits heat. Upward diffusion joins the small
   // sources into irregular sheets of flame instead of a row of flame icons.
   for(let y=height-1;y>=0;y--)for(let x=0;x<width;x++){
     const i=y*width+x,row=(y+1)*width;
-    const below=y+1<height?(heat[row+x]*2+heat[row+Math.max(0,x-1)]+heat[row+Math.min(width-1,x+1)])*.25:0;
+    const below=y+1<height?heat[row+x]*.8+(heat[row+Math.max(0,x-1)]+heat[row+Math.min(width-1,x+1)])*.1:0;
     heat[i]=Math.max(pixels[i*4+3]/255,below*decay);
   }
   const active=[],reach=Math.ceil(size*.2);
@@ -189,13 +190,17 @@ function burning(g,time,colors) {
   if(f.time===time)return f;
   const pixels=f.image.data;pixels.fill(0);
   for(const index of f.active){
-    const x=index%f.width,y=Math.floor(index/f.width),u=x/f.size*72,v=y/f.size*58+time*27;
-    const swirl=heatNoise(f.tile,u*.44+91,v*.44),detail=heatNoise(f.tile,u+swirl*18,v+swirl*24);
+    const x=index%f.width,y=Math.floor(index/f.width),u=x/f.size*155,v=y/f.size*40+time*25;
+    const swirl=heatNoise(f.tile,u*.43+91,v*.62),detail=heatNoise(f.tile,u+swirl*32,v+swirl*18);
     const source=heatAt(f,x+(swirl-.5)*f.size*.32,y+(detail-.5)*f.size*.07);
-    const heat=clamp((source-.1-detail*.46)*1.16);if(heat<=0)continue;
+    // A narrow density boundary makes tongues with clear edges. Horizontal
+    // turbulence is finer than vertical turbulence, stretching the rising tips.
+    const density=source-.14-clamp((detail-.5)*1.8+.5)*.57;
+    if(density<=0)continue;
+    const heat=clamp(density*1.85);
     const at=index*4,color=Math.round(heat*255)*3;
     pixels[at]=f.palette[color];pixels[at+1]=f.palette[color+1];pixels[at+2]=f.palette[color+2];
-    pixels[at+3]=255*smooth(heat*3.4)*clamp(heat*2.4);
+    pixels[at+3]=255*smooth(density/.065)*smooth(source*1.7)*(.6+.4*heat);
   }
   f.context.putImageData(f.image,0,0);f.time=time;return f;
 }
@@ -282,6 +287,38 @@ function energy(context,g,time,colors) {
   }context.restore();
 }
 
+// Slowly drifting condensation stays close to the glyphs, pooling underneath.
+function frostFog(g,time,colors) {
+  if(!g.frost){
+    const scale=Math.min(1,64/g.size,640/g.width,192/g.height),width=Math.max(2,Math.ceil(g.width*scale)),height=Math.max(2,Math.ceil(g.height*scale)),size=g.size*scale;
+    const canvas=g.mask.ownerDocument.createElement('canvas');canvas.width=width;canvas.height=height;
+    const context=canvas.getContext('2d',{willReadFrequently:true});
+    context.filter='blur('+Math.max(1,size*.13)+'px)';context.drawImage(g.mask,0,size*.05,width,height);
+    context.filter='blur('+Math.max(1,size*.18)+'px)';context.drawImage(g.mask,0,size*.27,width,height);context.filter='none';
+    const pixels=context.getImageData(0,0,width,height).data,mask=new Float32Array(width*height),active=[];
+    for(let i=0;i<mask.length;i++){mask[i]=clamp(pixels[i*4+3]/255*3);if(mask[i]>.008)active.push(i);}
+    g.frost={canvas,context,width,height,size,mask,active:Uint32Array.from(active),image:context.createImageData(width,height),tile:turbulenceTile()};
+  }
+  const f=g.frost,data=f.image.data,cold=rgb(mix(colors[2],'#9ddbf5',.78)),light=rgb(mix(colors[0],'#e5f9ff',.8));
+  data.fill(0);
+  for(const index of f.active){
+    const x=index%f.width,y=Math.floor(index/f.width),u=x/f.size*105-time*8,v=y/f.size*82-time*3;
+    const billow=heatNoise(f.tile,u*.6,v*.6),wisps=heatNoise(f.tile,u+billow*36,v-billow*24);
+    const density=f.mask[index]*smooth((billow-.18)*2.5)*(.24+.76*wisps),i=index*4;
+    data[i]=cold[0]+(light[0]-cold[0])*wisps;data[i+1]=cold[1]+(light[1]-cold[1])*wisps;data[i+2]=cold[2]+(light[2]-cold[2])*wisps;
+    data[i+3]=255*density*.78;
+  }
+  f.context.putImageData(f.image,0,0);return f.canvas;
+}
+function neonPower(time) {
+  const period=11.5,cycle=Math.floor(time/period),at=time-cycle*period;
+  const failure=3.5+noise(cycle+144)*1.4,recovery=failure+.65+noise(cycle+57)*.65;
+  // Brief failed starts surround a longer outage; no frame-dependent random state.
+  if(at>=failure&&at<recovery||at>=failure-.62&&at<failure-.43||at>=failure-.24&&at<failure-.08||at>=recovery+.18&&at<recovery+.34)return 0;
+  return .88+.12*Math.sin(time*.9)**2;
+}
+const dimNeon=color=>mix(color,'#000000',.84);
+
 /** A shared canvas painter owns preview and recording, with deterministic slow effects. */
 export function paintShowcaseText(destination,layer,width,height,milliseconds=0,cinematic) {
   if(!layer.text)return;
@@ -295,18 +332,18 @@ export function paintShowcaseText(destination,layer,width,height,milliseconds=0,
   context.save();
 
   const fire=effect==='flame'?burning(g,time,colors):null;
-  const luminous=['neon','frost','arcane'].includes(effect);
-  const glow=effect==='frost'?mix(colors[0],'#9ddeff',.7):colors[0];
-  if(luminous)drawTint(context,g,g.mask,glow,effect==='neon'?.55+.1*breath:effect==='frost'?.44+.06*breath:.28+.08*breath,size*(effect==='neon'?.24:.14));
+  const fog=effect==='frost'?frostFog(g,time,colors):null;
+  const power=effect==='neon'?neonPower(time):1,neonColor=emissive(colors[0],'#b5c8e6');
+  if(fog)context.drawImage(fog,0,0,g.width,g.height);
+  const luminous=['neon','frost','arcane'].includes(effect)&&power>0;
+  const glow=effect==='frost'?mix(colors[0],'#9ddeff',.7):effect==='neon'?neonColor:colors[0];
+  if(luminous)drawTint(context,g,g.mask,glow,effect==='neon'?.7*power:effect==='frost'?.5+.06*breath:.28+.08*breath,size*(effect==='neon'?.24:.14));
   if(layer.outline&&effect!=='wave'){
     // An emissive border stays luminous even when its chosen base color is black.
-    const border=effect==='neon'?emissive(outline,colors[0]):outline;
-    drawTint(context,g,g.edge,border,1,effect==='neon'?size*.16:0);
+    const border=effect==='neon'?(power?emissive(outline,neonColor):dimNeon(neonColor)):outline;
+    drawTint(context,g,g.edge,border,1,effect==='neon'&&power?size*.16*power:0);
   }
-  if(fire){
-    context.save();context.shadowColor='#b93808';context.shadowBlur=size*.07;
-    context.drawImage(fire.canvas,0,0,g.width,g.height);context.restore();
-  }
+  if(fire)context.drawImage(fire.canvas,0,0,g.width,g.height);
   const surface=clear(g.surface);
   let fill=colors[0];
   if(effect==='gradient'||effect==='arcane')fill=flowing(surface,g,colors,time,effect==='arcane'?11:8);
@@ -314,7 +351,7 @@ export function paintShowcaseText(destination,layer,width,height,milliseconds=0,
   if(effect==='lightning')fill=vertical(surface,g,[[0,mix(colors[0],'#131b2a',.83)],[.28,mix(colors[0],'#6f8095',.4)],[.46,mix(colors[2],'#182131',.65)],[1,mix(colors[0],'#374151',.65)]]);
   if(effect==='frost')fill=vertical(surface,g,[[0,'#f0faff'],[.36,mix(colors[0],'#b5e8ff',.5)],[.5,mix(colors[0],'#397393',.72)],[.62,mix(colors[0],'#abd8ea',.4)],[1,mix(colors[0],'#ddf9ff',.65)]]);
   if(effect==='prism')fill=vertical(surface,g,[[0,mix(colors[0],'#ffffff',.7)],[.42,colors[0]],[.5,mix(colors[2],'#131925',.3)],[.64,mix(colors[0],'#ffffff',.7)],[1,colors[1]]]);
-  if(effect==='neon')fill=mix(colors[0],'#0b101b',.42);
+  if(effect==='neon')fill=power?mix(neonColor,'#0b101b',.42):dimNeon(neonColor);
   surface.fillStyle=fill;surface.fillRect(0,0,g.width,g.height);
   if(fire){surface.globalCompositeOperation='multiply';surface.drawImage(fire.soot,0,0,g.width,g.height);surface.globalCompositeOperation='source-over';}
   if(effect==='frost'){facets(surface,g,time,[colors[0],'#d6f4ff','#8fc7e6'],true);sheen(surface,g,time,['#bbebff','#ffffff','#c8edff'],10,.5);}
@@ -330,8 +367,8 @@ export function paintShowcaseText(destination,layer,width,height,milliseconds=0,
   }else context.drawImage(g.surface,0,0);
   context.restore();
   if(effect==='neon'){
-    const tubeColor=mix(colors[0],'#ffffff',.8);
-    drawTint(context,g,g.tube,tubeColor,.85+.12*breath,size*.065);
+    const tubeColor=power?mix(neonColor,'#ffffff',.8):dimNeon(neonColor);
+    drawTint(context,g,g.tube,tubeColor,power||1,power?size*.065*power:0);
   }
   if(fire)fireRim(context,g,fire);
   if(effect==='lightning'){
@@ -339,7 +376,10 @@ export function paintShowcaseText(destination,layer,width,height,milliseconds=0,
     lightningArcs(context,g,time,colors);
   }
   if(effect==='prism'){drawTint(context,g,g.tube,colors[1],.48,0,-size*.025,-size*.012);drawTint(context,g,g.tube,colors[2],.48,0,size*.025,size*.012);}
-  if(effect==='frost')drawTint(context,g,g.tube,mix(colors[0],'#dcf8ff',.75),.4);
+  if(fog){
+    context.save();context.globalAlpha=.2;context.drawImage(fog,0,0,g.width,g.height);context.restore();
+    drawTint(context,g,g.tube,mix(colors[0],'#dcf8ff',.75),.6);
+  }
   if(effect==='arcane')drawTint(context,g,g.tube,flowing(context,g,[colors[1],mix(colors[0],'#ffffff',.65),colors[2]],time,11),.6);
   context.restore();
   destination.save();destination.globalAlpha*=fade;destination.translate(x,y);destination.rotate((Number(layer.rotation)||0)*Math.PI/180);destination.drawImage(g.frame,-g.width/2,-g.height/2);destination.restore();

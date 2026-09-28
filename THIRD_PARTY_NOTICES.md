@@ -72,3 +72,7 @@ Mordor mode uses the unmodified **Tengwar Annatar 1.20** type family by Johan Wi
 ## Showcase typefaces
 
 Cinzel Decorative, MedievalSharp, Uncial Antiqua, Pirata One, Almendra, IM Fell English, Lato, Lora, Open Sans, Orbitron, Oxanium, Rajdhani, Cormorant SC, and Grenze Gotisch are bundled unmodified from the Google Fonts repository under the SIL Open Font License 1.1. Each family includes its original copyright and license in public/fonts/showcase/<family>/OFL.txt, copied into dist/fonts/showcase/. Font file provenance is in public/fonts/showcase/README.md.
+
+## User-supplied Friz Quadrata TT
+
+`public/fonts/showcase/frizquadrata/FRIZQT__.TTF` is the unmodified font supplied by the user for Showcase. Its embedded notice reads: (c) Copyright 1997 International Typeface Corporation. All rights reserved. It retains those rights and is not one of the SIL Open Font License families above.

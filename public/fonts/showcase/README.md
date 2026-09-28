@@ -1,6 +1,6 @@
 # Showcase typefaces
 
-These unmodified fonts are bundled for offline use under the SIL Open Font License 1.1. Each family includes its upstream OFL.txt with copyright and reserved font names. Local font.ttf is the upstream file listed below, renamed without modifying its contents.
+The unmodified Google Fonts families listed in the table below are bundled for offline use under the SIL Open Font License 1.1. Each family includes its upstream OFL.txt with copyright and reserved font names. Local font.ttf is the upstream file listed below, renamed without modifying its contents.
 
 | Family | Upstream file | Source |
 | --- | --- | --- |
@@ -18,3 +18,7 @@ These unmodified fonts are bundled for offline use under the SIL Open Font Licen
 | Rajdhani | Rajdhani-Regular.ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/rajdhani) |
 | Cormorant SC | CormorantSC-Regular.ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/cormorantsc) |
 | Grenze Gotisch | GrenzeGotisch[wght].ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/grenzegotisch) |
+
+## User-supplied font
+
+Friz Quadrata TT Regular is the unmodified `FRIZQT__.TTF` supplied by the user. Embedded notice: (c) Copyright 1997 International Typeface Corporation. All rights reserved. This file is separate from the OFL families listed above; no OFL license is claimed for it.

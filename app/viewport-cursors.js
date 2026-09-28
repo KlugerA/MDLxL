@@ -6,3 +6,13 @@ export function viewportCursor(cameraMode = 'work', transformMode = 'select', ro
   if (rotating || cameraMode === 'rotate' || cameraMode === 'work' && ['rotate', 'rotateNormals', 'rotate-normals'].includes(transformMode)) return ROTATION_CURSOR;
   return cameraMode === 'zoom' ? 'ns-resize' : cameraMode === 'move' ? 'grab' : 'default';
 }
+
+// Showcase shows a tool cursor only during its gesture. Both arrow variants
+// retain a contrasting edge, including over a changing image/video background.
+const showcaseArrows=[false,true].map(light=>{
+  const fill=light?'#ffffff':'#161616',stroke=light?'#161616':'#ffffff';
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="19" height="23" viewBox="0 0 19 23"><path fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.2" stroke-linejoin="round" d="M2 1v17l4.5-4 3.5 7 3-1.5-3.5-7H16z"/></svg>';
+  return 'url("data:image/svg+xml,'+encodeURIComponent(svg)+'") 2 1, default';
+});
+const showcaseRotations=[ROTATION_CURSOR,'url("data:image/svg+xml,'+encodeURIComponent(rotation.replace('fill="black"','fill="white" stroke="#161616" stroke-width=".5"'))+'") 8 8, crosshair'];
+export function showcaseCursor(rotating,light) { return (rotating?showcaseRotations:showcaseArrows)[light?1:0]; }
