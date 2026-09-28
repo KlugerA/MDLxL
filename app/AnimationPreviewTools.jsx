@@ -2,10 +2,9 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { CAPTURE_QUALITIES, normalizeCapture } from '../src/capture-settings.js';
 import { recordingTimeline } from './showcase-timeline.js';
 import { validateShowcaseExport, showcaseExportPreferences } from './showcase-export.js';
-import { cropPixels } from './showcase-crop.js';
 import { queueRecording, subscribeRecordings, recordingQueueSnapshot, retryRecordingSaves, setRecordingSession, beginRecordingGroup, retryCatboxUpload } from './preview-recording-queue.js';
 
-export default function AnimationPreviewTools({ active, sessionId, captureAPI, modelName, loop, length, crop, disabled, onStatus, onBusy, preferences, locked=false,recordingList=[],prepareTake,onTakeComplete,beforeBatch,afterBatch,exportTarget='hive',onExportTarget }) {
+export default function AnimationPreviewTools({ active, sessionId, captureAPI, modelName, loop, length, crop, disabled, onStatus, onBusy, preferences, locked=false,recordingList=[],prepareTake,onTakeComplete,beforeBatch,afterBatch,exportTarget=null,onExportTarget,cropAspect,mainPicture=false }) {
   const [copyStatus,setCopyStatus]=useState('');
   const [state,setState] = useState('idle'), [progress,setProgress] = useState(''), [error,setError] = useState(''), [batchLabel,setBatchLabel]=useState('');
   const latest = useRef(); latest.current = {onStatus,onBusy,prepareTake,onTakeComplete,beforeBatch,afterBatch};
@@ -32,20 +31,19 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
   }
   function stop() { if(running.current){running.current.stop=true;running.current.finish?.();} }
   async function record(job,take) {
-    const {length,crop,preferences,loop,modelName}=take;validateShowcaseExport(job.exportTarget,length);
-    const settings=normalizeCapture(showcaseExportPreferences(preferences,job.exportTarget).capture);
+    const {length,crop,cropAspect,mainPicture,preferences,loop,modelName}=take;validateShowcaseExport(mainPicture?'hive-main':job.exportTarget,length);
+    const settings=normalizeCapture(showcaseExportPreferences(preferences,mainPicture?'hive-main':job.exportTarget).capture);
     let worker,jobId;
     const api=job.api, timing=recordingTimeline(length,settings.fps), quality=CAPTURE_QUALITIES[settings.recordingQuality];
     try {
       await api.prepareRecording(); if(job.stop)return;
       // Size allocation and encoder preparation happen before the visible clock starts.
-      const initial=api.captureFrame({maxDimension:quality.gifSize});
-      const selection=cropPixels(initial.width,initial.height,crop);
+      const selection=api.recordingDimensions({maxDimension:mainPicture?612:quality.gifSize,crop,aspect:mainPicture?612/490:cropAspect});
       const canvas=document.createElement('canvas');canvas.width=selection.width;canvas.height=selection.height;
       const context=canvas.getContext('2d',{willReadFrequently:true});
       let request;
       if(window.desktop){
-        ({jobId}=await window.desktop.beginPreviewRecording({width:canvas.width,height:canvas.height,quality:settings.recordingQuality,loop:!!loop,modelName,exportTarget:job.exportTarget}));
+        ({jobId}=await window.desktop.beginPreviewRecording({width:canvas.width,height:canvas.height,quality:settings.recordingQuality,loop:!!loop,modelName,exportTarget:mainPicture?'hive-main':job.exportTarget||undefined}));
         request=message=>window.desktop.writePreviewRecordingFrame({jobId,...message});
       } else {
         worker=new Worker(new URL('./preview-gif.worker.js',import.meta.url),{type:'module'});
@@ -99,7 +97,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
       const end=Math.max(20,duration);
       let result;
       if(jobId){
-        queueRecording({jobId,time:end,onStatus:latest.current.onStatus,upload:job.exportTarget==='catbox',group:job.group});
+        queueRecording({jobId,time:end,onStatus:latest.current.onStatus,upload:!mainPicture&&job.exportTarget==='catbox',group:job.group});
         // The queue now owns this job, including save retries. Release the
         // preview immediately; its next take must never share this cleanup.
         jobId=null;return;
@@ -113,12 +111,13 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
       if(jobId)await window.desktop.discardPreviewRecording(jobId);
     }
   }
+  const uploads=exportTarget==='catbox'&&(recordingList.length?recordingList.some(item=>!item.setup.mainPicture):!mainPicture);
   async function start(){
     if(running.current||retained.current)return;
     try{
-      if(exportTarget==='catbox'&&!window.desktop?.uploadPreviewToCatbox)throw Error('Catbox upload requires the desktop app.');
-      if(recordingList.length)for(const item of recordingList){const setup=item.setup,portrait=setup.mode==='portrait';validateShowcaseExport(exportTarget,portrait?setup.portraitLength:setup.sequenceLength,portrait?setup.portraitPlaylist:setup.sequencePlaylist);}
-      else validateShowcaseExport(exportTarget,length);
+      if(uploads&&!window.desktop?.uploadPreviewToCatbox)throw Error('Catbox upload requires the desktop app.');
+      if(recordingList.length)for(const item of recordingList){const setup=item.setup,portrait=setup.mode==='portrait';validateShowcaseExport(setup.mainPicture?'hive-main':exportTarget,portrait?setup.portraitLength:setup.sequenceLength,portrait?setup.portraitPlaylist:setup.sequencePlaylist);}
+      else validateShowcaseExport(mainPicture?'hive-main':exportTarget,length);
     }catch(error){setError(error.message);return;}
     // Snapshot the list once: editing or completing one row cannot alter later takes.
     const plan=recordingList.slice(),job={stop:false,promise:null,api:captureAPI,exportTarget,group:beginRecordingGroup(sessionId)};running.current=job;setCopyStatus('');
@@ -138,7 +137,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
           }
         }else{
           if(!job.api)throw Error('The Showcase preview is still loading.');
-          await record(job,{length,crop,preferences,loop,modelName});
+          await record(job,{length,crop,cropAspect,mainPicture,preferences,loop,modelName});
         }
       }catch(cause){if(mounted.current)setError(cause.message);latest.current.onStatus?.(cause.message,true);}
       finally{
@@ -164,9 +163,9 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
   async function copyLink(row,bbcode){try{await window.desktop.copyPreviewLink(row.exportId,bbcode);setCopyStatus(bbcode?'Hive BBCode copied':'Link copied');}catch{setCopyStatus('Could not copy the link. Select and copy the text.');}}
   const stoppable=['starting','recording','finishing'].includes(state);
   return <div className="showcase-capture">
-    <button className="showcase-record" disabled={!stoppable&&(state!=='idle'||!captureAPI||locked||(disabled&&!recordingList.length))} onClick={stoppable?stop:start}>{stoppable?'STOP':exportTarget==='catbox'?'RECORD & UPLOAD':'RECORD'}</button>
+    <button className="showcase-record" disabled={!stoppable&&(state!=='idle'||!captureAPI||locked||(disabled&&!recordingList.length))} onClick={stoppable?stop:start}>{stoppable?'STOP':uploads?'RECORD & UPLOAD':'RECORD'}</button>
     <div className="showcase-export-target" role="group" aria-label="GIF destination"><button disabled={state!=='idle'||locked} aria-pressed={exportTarget==='hive'} onClick={()=>onExportTarget?.('hive')}>HIVE</button><button disabled={state!=='idle'||locked} aria-pressed={exportTarget==='catbox'} title="Record saves locally, then uploads the exact GIF anonymously to Catbox" onClick={()=>onExportTarget?.('catbox')}>CATBOX</button></div>
-    <small className="showcase-export-note">{exportTarget==='catbox'?'864 px max · 30 FPS · ≤20 MB · uploads after Record':'Hive · 5s max · 30 FPS'}</small>
+    <small className="showcase-export-note">{mainPicture?'Hive Main Picture · 612 × 490 · 5s max · local GIF':exportTarget==='catbox'?'864 px max · 30 FPS · ≤20 MB · uploads after Record':exportTarget==='hive'?'Hive · 5s max · 30 FPS':'Original quality · local GIF'}</small>
     {background.results.length>0&&<div className="showcase-upload-results" aria-label="Catbox links">{background.results.map((row,index)=><div className="showcase-upload-result" key={row.exportId}><small title={row.path}>{index+1}. {row.name}</small>{row.url?<><label><input readOnly aria-label={'Link '+(index+1)} value={row.url} onFocus={event=>event.target.select()}/><button onClick={()=>copyLink(row,false)}>Copy Link</button></label><label><input readOnly aria-label={'Hive BBCode '+(index+1)} value={'[IMG]'+row.url+'[/IMG]'} onFocus={event=>event.target.select()}/><button onClick={()=>copyLink(row,true)}>Copy Hive BBCode</button></label></>:<><span role="status">{row.state==='uploading'?'Uploading...':''}</span>{row.error&&<div className="capture-error" role="alert">{row.error}</div>}<button disabled={row.state==='uploading'} onClick={()=>retryCatboxUpload(row.exportId)}>{row.state==='failed'?'Retry Upload':'Upload to Catbox'}</button><small>GIF saved locally</small></>}</div>)}</div>}
     {copyStatus&&<small role="status">{copyStatus}</small>}
     {state!=='idle'&&<div className="showcase-capture-status" role="status">{state==='retry'?'Save needs retry':state==='saving'?'Saving…':batchLabel+progress}</div>}

@@ -92,7 +92,7 @@ class PreviewRecordingStore {
   }
   async begin(owner, options) {
     const { width, height, quality, loop, modelName, exportTarget } = options || {};
-    if(exportTarget!==undefined&&!['hive','catbox'].includes(exportTarget))throw Error('Invalid export target.');
+    if(exportTarget!==undefined&&!['hive','catbox','hive-main'].includes(exportTarget))throw Error('Invalid export target.');
     if (![width,height].every(n => Number.isInteger(n) && n > 0 && n <= 1920) || !['low','medium','high'].includes(quality) || typeof loop !== 'boolean') throw Error('Invalid recording settings.');
     if (this.starting.has(owner) || [...this.jobs.values()].some(job => job.owner === owner && job.phase === 'recording')) throw Error('Finish capturing the current recording first.');
     this.starting.add(owner);
@@ -162,19 +162,20 @@ class PreviewRecordingStore {
     await job.queue;
     if (job.encoder) { await job.encoder.terminate(); job.encoder = null; }
     const timing = timeline(job.frames, time);
-    if(job.exportTarget==='hive'&&timing.duration>5000)throw Error('Hive does not support GIF previews longer than 5 seconds.');
+    if(['hive','hive-main'].includes(job.exportTarget)&&timing.duration>5000)throw Error('Hive does not support GIF previews longer than 5 seconds.');
     const manifest = entries => 'ffconcat version 1.0\n' + entries.map(entry => `file '${entry.file}'\noption framerate 100\nduration ${(entry.ticks / 100).toFixed(2)}\n`).join('');
     await fs.writeFile(path.join(job.directory, 'frames.ffconcat'), manifest(timing.entries), { flag: 'wx' });
     const input = name => ['-f','concat','-safe','0','-i',name];
     const colors = job.quality === 'low' ? 128 : 256;
     // Preserve the frame schedule and palette quality. Size is controlled by
     // spatial resolution, never by dropping frames or truncating the take.
-    const limit = job.exportTarget==='catbox'?CATBOX_GIF_LIMIT:Math.max(90000, Math.floor(45_000_000 * timing.duration / 10000));
+    const limit = job.exportTarget==='catbox'?CATBOX_GIF_LIMIT:job.exportTarget==='hive'?Math.max(90000, Math.floor(45_000_000 * timing.duration / 10000)):Infinity;
     const target = limit * .94;
     const presetScale=job.exportTarget==='catbox'?Math.min(1,864/Math.max(job.width,job.height)):job.exportTarget==='hive'?Math.min(1,Math.sqrt(300000/(job.width*job.height))):1;
     let width=Math.max(1,Math.floor(job.width*presetScale)),height=Math.max(1,Math.floor(job.height*presetScale));
+    if(job.exportTarget==='hive-main'){width=612;height=490;}
     const output = path.join(job.directory, 'capture.gif');
-    const scale = () => `scale=${width}:${height}:flags=lanczos`;
+    const scale = () => `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1`;
     const palette = () => runFFmpeg(this.executable, [...input('frames.ffconcat'), '-vf', `${scale()},palettegen=stats_mode=full:max_colors=${colors}`, '-frames:v','1','-y','palette.pam'], job);
     const encode = (name, file, last) => runFFmpeg(this.executable, [...input(name), '-i','palette.pam','-lavfi',`[0:v]${scale()}[scaled];[scaled][1:v]paletteuse=dither=${job.quality === 'low' ? 'none' : 'sierra2_4a'}:diff_mode=rectangle`,
       '-fps_mode','passthrough','-enc_time_base','1:100','-loop',job.loop ? '0' : '-1','-final_delay',String(last),'-y',file], job);
@@ -234,7 +235,7 @@ class PreviewRecordingStore {
     if (job.phase !== 'ready') throw Error('The recording is not ready to save.');
     job.phase = 'saving';
     try {
-      const result = await savePreviewCaptureFile(showcaseDirectory(this.destination, job.modelName), job.output);
+      const result = await savePreviewCaptureFile(showcaseDirectory(this.destination, job.modelName), job.output,job.exportTarget==='hive-main'?'Hive-Main-Picture':'Preview');
       await this.discard(owner, id).catch(error => console.warn(`Saved capture; temporary cleanup failed: ${error.message}`)); return result;
     } catch (error) { job.phase = 'ready'; throw error; }
   }

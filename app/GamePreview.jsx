@@ -13,7 +13,7 @@ import { drawCollisionSpheres } from './optimizexl-overlays.js';
 import { ModelRenderer } from 'war3-model';
 import { advanceShowcaseModel } from './showcase-playback.js';
 import { showcaseOrbitRadius, setShowcaseOrbitCamera, showcaseFraming } from './showcase-orbit.js';
-import { cropPixels } from './showcase-crop.js';
+import { cropPixels, containRect, recordingDimensions } from './showcase-crop.js';
 import { textureFromAsset } from './Viewport.jsx';
 import { drawGeosetHighlight } from './geoset-highlight.js';
 import { allNodes, localSequenceAtFrame, sampleGeosetAnimation, sampleNodeMatrices, skinGeoset, skinGeosetNormals } from '../src/animation.js';
@@ -593,10 +593,10 @@ export default function GamePreview(inputProps) {
       reportProjectionView(); invalidate();
       if (state.portraitActive) { state.cameraDetached = true; latest.current.onPlayingChange?.(false); }
     }
-    const viewCamera = event => { if (applyModelCamera(perspective, controls, event.detail)) { camera = perspective; state.appliedView = 'perspective'; invalidate(); } };
+    const viewCamera = event => { if (latest.current.suspended)return;if (applyModelCamera(perspective, controls, event.detail)) { camera = perspective; state.appliedView = 'perspective'; invalidate(); } };
     window.addEventListener('mdlxl-view-camera', viewCamera);
     function fit() {
-      if (state.portraitActive) return;
+      if (state.portraitActive || latest.current.suspended) return;
       const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1);
       perspective.position.copy(center).add(new THREE.Vector3(1, -1.5, .9).normalize().multiplyScalar(perspectiveFitDistance(fitRadius(), perspective.fov, width / height)));
       controls.target.copy(center); perspective.zoom = ortho.zoom = 1; resize(); setView(latest.current.view || 'perspective');
@@ -705,7 +705,7 @@ export default function GamePreview(inputProps) {
       state.cameraEditing = false; reportProjectionView(); invalidate();
     };
     controls.addEventListener('start', cameraStarted); controls.addEventListener('end', cameraEnded);
-    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = cursorFor(latest.current); }, setCameraAngles: values => { if (state.portraitActive) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); cameraChanged(); } } }; runtime.current = state;
+    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = cursorFor(latest.current); }, setCameraAngles: values => { if (state.portraitActive || latest.current.suspended) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); cameraChanged(); } } }; runtime.current = state;
     observer = new ownerWindow.ResizeObserver(resize); observer.observe(host.current);
     const saved = cameraMemory.current || latest.current.cameraHandoff?.current;
     // UV edits may rebuild geometry/materials, but never own the user's view.
@@ -901,7 +901,7 @@ export default function GamePreview(inputProps) {
         if (wireframe) gl.colorMask(false, false, false, false);
         try { native.render(displayCamera.matrixWorldInverse.elements, displayCamera.projectionMatrix.elements, { wireframe: false, useEnvironmentMap: p.shaded !== false && graphics.lighting }); }
         finally { gl.colorMask(true, true, true, true); }
-        if (!wireframe) eventPreview.render({ frame:native.getFrame(), sequenceIndex:poseSequence, globalTime:globalClock, camera:displayCamera, teamColor:p.teamColor });
+        if (!wireframe) eventPreview.render({ frame:native.getFrame(), sequenceIndex:poseSequence, globalTime:globalClock, playback:p.showcase?showcaseSample:undefined, camera:displayCamera, teamColor:p.teamColor });
         if (!captureOnly && !p.portraitMode) presentation.draw(camera, p.preferences, p.workplane, false, center, radius, bounds.min.z, { platformOnly: true });
       } catch (cause) { setError(`Warcraft preview error: ${cause.message}`); return false; }
       if (!captureOnly) {
@@ -1029,6 +1029,12 @@ export default function GamePreview(inputProps) {
       },
       setCameraView(view) { camera = perspective; controls.object = camera; state.cameraDetached = true; applyEvaluatedModelCamera(camera, controls, view, canvas.width / canvas.height); invalidate(); },
       modelCenter() { return center.toArray(); },
+      effectDefinitions() { return eventPreview.definitions; },
+      recordingDimensions({crop,maxDimension,aspect}={}) {
+        resize();
+        const source=portraitHasFrame(latest.current)?composePortraitCapture(canvas,portraitFrame.current.canvas):canvas;
+        return recordingDimensions(source.width,source.height,crop,maxDimension,aspect);
+      },
       async prepareRecording() {
         // Prepare the animation without changing the current framing or zoom.
         latest.current.showcase?.begin(state.cameraView(), { center: center.toArray() });
@@ -1070,7 +1076,10 @@ export default function GamePreview(inputProps) {
         }
         const selection = cropPixels(source.width,source.height,crop);
         context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
-        context.drawImage(source,selection.x,selection.y,selection.width,selection.height,0,0,destination.width,destination.height);
+        const fitted=containRect(selection.width,selection.height,destination.width,destination.height);
+        context.fillStyle=latest.current.portraitMode?'#000000':viewportAppearanceOptions(latest.current.preferences).background.color;
+        context.fillRect(0,0,destination.width,destination.height);
+        context.drawImage(source,selection.x,selection.y,selection.width,selection.height,fitted.x,fitted.y,fitted.width,fitted.height);
       },
       playbackState() { return showcaseSample; },
       focusPoint(values) {

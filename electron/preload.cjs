@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('desktop', {
   writeRecovery: payload => ipcRenderer.invoke('recovery:write',payload),
   listRecovery: () => ipcRenderer.invoke('recovery:list'),
   readRecovery: id => ipcRenderer.invoke('recovery:read',id),
+  openShowcaseModel: () => ipcRenderer.invoke('preview:openModel'),
   open: () => ipcRenderer.invoke('model:open'),
   listParts: () => ipcRenderer.invoke('parts:list'),
   readPart: id => ipcRenderer.invoke('parts:read', id),
@@ -71,7 +72,7 @@ contextBridge.exposeInMainWorld('desktop', {
   textureFolder: (paths) => ipcRenderer.invoke('texture:folder', paths),
   recent: () => ipcRenderer.invoke('model:recent'),
   clearRecent: () => ipcRenderer.invoke('model:clearRecent'),
-  openRecent: (path) => ipcRenderer.invoke('model:openRecent', path),
+  openRecent: (path,showcase=false) => ipcRenderer.invoke('model:openRecent', path,showcase),
   setDirty: (dirty) => ipcRenderer.send('model:dirty', !!dirty),
   onMenu: (callback) => { const listener=(_,action)=>callback(action); ipcRenderer.on('menu',listener); return ()=>ipcRenderer.removeListener('menu',listener); },
 });

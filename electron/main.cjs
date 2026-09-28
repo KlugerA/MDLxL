@@ -80,15 +80,21 @@ async function persistRecents(file){
   const operation=recentQueue.catch(()=>{}).then(async()=>{await fs.mkdir(profile,{recursive:true});await fs.writeFile(path.join(profile,'recent.json'),encoded);});
   recentQueue=operation; await operation; if(commandCatalog)refreshMenu();
 }
-async function readModel(file){
+async function readModel(file,remember=true){
   const extension=path.extname(file).toLowerCase();if(!['.mdl','.mdx','.mdlxlpaint'].includes(extension))throw new Error('Choose an MDL, MDX, or MDLxL Paint Project.');
   const stat=await fs.stat(file),limit=extension==='.mdlxlpaint'?512:128;if(stat.size>limit*1024*1024)throw new Error(`This file exceeds the current ${limit} MB opening limit.`);
-  const bytes=await fs.readFile(file);openedPaths.add(path.resolve(file));await persistRecents(file);
-  initialModel={name:path.basename(file),path:file,bytes};
-  return initialModel;
+  const bytes=await fs.readFile(file);openedPaths.add(path.resolve(file));
+  const result={name:path.basename(file),path:file,bytes};
+  if(remember){await persistRecents(file);initialModel=result;}
+  return result;
 }
-async function selectOpen(){const result=await dialog.showOpenDialog(win,{filters,properties:['openFile']});if(result.canceled)return [];return Promise.all(result.filePaths.map(readModel));}
+async function selectOpen(){const result=await dialog.showOpenDialog(win,{filters,properties:['openFile']});if(result.canceled)return [];return Promise.all(result.filePaths.map(file=>readModel(file)));}
 ipcMain.handle('model:open',selectOpen);
+ipcMain.handle('preview:openModel',async event=>{
+  captureOwner(event);
+  const result=await dialog.showOpenDialog(win,{title:'Load Showcase model',filters:[{name:'Warcraft model',extensions:['mdl','mdx']}],properties:['openFile']});
+  return result.canceled?null:readModel(result.filePaths[0],false);
+});
 ipcMain.handle('parts:list',()=>getBitsAndPartsLibrary().list());
 ipcMain.handle('parts:read',(_,id)=>getBitsAndPartsLibrary().read(id));
 ipcMain.handle('parts:folder',async()=>{const {directory}=await getBitsAndPartsLibrary().list();const error=await shell.openPath(directory);if(error)throw Error(error);return directory;});
@@ -125,9 +131,9 @@ ipcMain.handle('preview:copyLink',(event,{exportId,bbcode}={})=>clipboard.writeT
 ipcMain.handle('preview:recordDiscard',(event,id)=>captureOperation(previewRecordings.discard(captureOwner(event),id)));
 ipcMain.handle('model:recent',()=>recents);
 ipcMain.handle('model:clearRecent',async()=>{recents=[];await persistRecents();return [];});
-ipcMain.handle('model:openRecent',async(_,p)=>{
+ipcMain.handle('model:openRecent',async(_,p,showcase=false)=>{
   if(!recents.includes(p))throw new Error('Not in recent files.');
-  try{return await readModel(p);}catch(error){
+  try{return await readModel(p,!showcase);}catch(error){
     if(['ENOENT','ENOTDIR'].includes(error.code)){recents=recents.filter(file=>file!==p);await persistRecents();throw new Error('This recent file was moved or deleted: '+p);}
     throw error;
   }

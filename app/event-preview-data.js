@@ -87,7 +87,7 @@ export function resolveEventDefinition(name, tables, { textureExtension = 'blp' 
 }
 
 /** Stateless event instances: rewinding/repeating a frame returns the same keys. */
-export function activeEventInstances(model, definitions, { sequenceIndex = -1, frame = 0, globalTime = frame, maxInstances = 128 } = {}) {
+export function activeEventInstances(model, definitions, { sequenceIndex = -1, frame = 0, globalTime = frame, playback, maxInstances = 128 } = {}) {
   const result = [], interval = model.Sequences?.[sequenceIndex]?.Interval;
   const limit = Number.isFinite(maxInstances) ? clamp(Math.floor(maxInstances), 0, 512) : 128;
   for (const [eventIndex, event] of (model.EventObjects || []).entries()) {
@@ -108,6 +108,12 @@ export function activeEventInstances(model, definitions, { sequenceIndex = -1, f
           const ageMs = now - (cycle * duration + triggerFrame);
           if (ageMs >= definition.lifeSpanMs) break;
           if (ageMs >= 0) { result.push({ key: `${eventIndex}:g${globalId}:${cycle}:${triggerFrame}`, event, eventIndex, definition, triggerFrame, ageMs }); count++; }
+        }
+      } else if(playback?.motionSeconds!=null && triggerFrame>=interval[0]&&triggerFrame<=interval[1]){
+        const speed=Math.max(.001,playback.speed||1),span=interval[1]-interval[0],loops=playback.durationLoops||1;
+        for(let cycle=0;cycle<loops;cycle++){
+          const ageMs=playback.clipTime-(cycle*span+triggerFrame-interval[0])/speed;
+          if(ageMs>=0&&ageMs<definition.lifeSpanMs)result.push({key:`${eventIndex}:s${sequenceIndex}:${playback.segment}:${cycle}:${triggerFrame}`,event,eventIndex,definition,triggerFrame,ageMs});
         }
       } else if (triggerFrame >= interval[0] && triggerFrame <= interval[1] && triggerFrame <= now && now - triggerFrame < definition.lifeSpanMs) {
         result.push({ key: `${eventIndex}:s${sequenceIndex}:${triggerFrame}`, event, eventIndex, definition, triggerFrame, ageMs: now - triggerFrame }); count++;

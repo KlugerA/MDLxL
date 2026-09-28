@@ -9,7 +9,7 @@ export function showcaseAnimation(model, playlist, seconds, repeat = true) {
   const length = row => positive(row.seconds, 3);
   const activeTime = (row, elapsed) => {
     const sequence = model.Sequences[row.sequence], duration = Math.max(0, sequence.Interval[1] - sequence.Interval[0]);
-    const amount = elapsed * 1000 * (Number.isFinite(Number(row.speed)) ? Math.max(0, Math.min(2, Number(row.speed))) : 1);
+    const amount = Math.min(elapsed,row.useDuration&&Number.isFinite(row.motionSeconds)?row.motionSeconds:Infinity) * 1000 * (Number.isFinite(Number(row.speed)) ? Math.max(0, Math.min(2, Number(row.speed))) : 1);
     return row.loop === false || (sequence.NonLooping && !(row.useDuration && row.durationLoops===2)) ? Math.min(duration, amount) : duration > 0 ? amount : 0;
   };
   const total = rows.reduce((sum, row) => sum + length(row), 0);
@@ -20,8 +20,9 @@ export function showcaseAnimation(model, playlist, seconds, repeat = true) {
     if (remaining < span || index === rows.length - 1) {
       const sequence = model.Sequences[row.sequence], [start, end] = sequence.Interval;
       const elapsed = activeTime(row, remaining), duration = end - start;
-      const looping = row.loop !== false && (!sequence.NonLooping || (row.useDuration && row.durationLoops===2));
-      return { sequenceIndex: row.sequence, frame: start + (looping && duration > 0 ? elapsed % duration : Math.min(duration, elapsed)), localTime: elapsed, globalTime: time*1000, looping,
+      const finishing=row.useDuration&&Number.isFinite(row.motionSeconds)&&remaining>=row.motionSeconds;
+      const looping = !finishing && row.loop !== false && (!sequence.NonLooping || (row.useDuration && row.durationLoops===2));
+      return { sequenceIndex: row.sequence, clipTime:remaining*1000, speed:Number(row.speed??1), durationLoops:row.durationLoops, motionSeconds:row.motionSeconds, emissionEnds:row.useDuration?row.emissionEnds:undefined, effectTail:finishing, frame: start + (looping && duration > 0 ? elapsed % duration : Math.min(duration, elapsed)), localTime: elapsed, globalTime: time*1000, looping,
         active: duration > 0 && (looping || elapsed < duration) && (repeat || time < total), segment: cycles * rows.length + index,
         portrait: /portrait/i.test(sequence.Name || '') };
     }

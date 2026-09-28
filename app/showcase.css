@@ -162,3 +162,5 @@
 .showcase-sidebar .showcase-upload-result label { gap:3px; margin:2px 0; }
 .showcase-upload-result input { flex:1; min-width:0; width:0; font-size:10px; }
 .showcase-upload-result button { font-size:10px; white-space:nowrap; padding:1px 3px; }
+
+.showcase-model-file{display:flex;align-items:center;gap:5px;margin:4px 0}.showcase-model-file small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
