@@ -2,6 +2,8 @@
 
 Open **OptimizeXL** from the existing optimizer toolbar button or command. It opens a separate editor window, using the same detached-window mechanism as UV. The main document is not edited.
 
+Future examples follow the [teaching agreement](OPTIMIZEXL_TEACHING.md): reusable rules, explicit correction ownership, no conflicting overlap and preserved accepted results.
+
 ## Review workflow
 
 The left viewport and its file size stay pinned to the model as it entered OptimizeXL. The right shows the approved changes plus the current proposal. Approval never replaces the original on the left. The saving estimate compares that original with the current After. Both render surfaces align to physical screen pixels so fractional pane widths do not soften one side. Left-drag either viewport to rotate both; use the wheel to zoom both. OptimizeXL always uses wheel zoom regardless of the main editor's sensitivity-adjustment mode, without changing that saved setting. Pan, animation selection, scrubbing, playback and speed are also shared. Each adjustment is calculated from the last approved model, so lowering strength restores detail rather than simplifying an already simplified candidate.
