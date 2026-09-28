@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { EditorCameraControls, editorCameraAngles, preserveShiftCameraAction, setEditorCameraAngles } from './editor-camera-controls.js';
+import { EditorCameraControls, editorCameraAngles, preserveShiftCameraAction, setEditorCameraAngles, zoomEditorCamera } from './editor-camera-controls.js';
 import { viewportCursor, showcaseCursor } from './viewport-cursors.js';
 import { createPreviewSceneGL } from './preview-scene-gl.js';
 import { projectPreviewGeosets, pickPreviewGeoset, selectPreviewUVCoordinates, selectPreviewVertices } from './preview-selection.js';
@@ -11,7 +11,7 @@ import { billboardCameraCorrection } from './preview-pose.js';
 import { drawModelCameraOverlay } from './model-camera-overlay.js';
 import { ModelRenderer } from 'war3-model';
 import { advanceShowcaseModel } from './showcase-playback.js';
-import { showcaseOrbitRadius, setShowcaseOrbitCamera } from './showcase-orbit.js';
+import { showcaseOrbitRadius, setShowcaseOrbitCamera, showcaseFraming } from './showcase-orbit.js';
 import { cropPixels } from './showcase-crop.js';
 import { textureFromAsset } from './Viewport.jsx';
 import { drawGeosetHighlight } from './geoset-highlight.js';
@@ -22,7 +22,7 @@ import { applyMovementTransform, movementRestricted } from '../src/movement.js';
 import { movementBoneVertexCenter } from '../src/movement-selection.js';
 import { drawAttachGuide, drawBoneConnectors, drawMovementOverlay, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from './movement-overlay.js';
 import { applyRestPoseMatrices, isUVOnlyPreviewChange, portraitBlankDragRotatesCamera, restorePreviewCamera } from './game-preview-data.js';
-import { installWarcraftPreviewAdapter, resetPreviewEffects } from './warcraft-preview-adapter.js';
+import { installWarcraftPreviewAdapter, resetPreviewEffects, previewGeosetTint } from './warcraft-preview-adapter.js';
 import { composePreviewCapture, drawPreviewBackground, previewPlaybackStep } from './game-preview-capture.js';
 import { createGLPreviewBackground } from './game-preview-background-gl.js';
 import { createAnimatedPreviewBackground } from './animated-preview-background.js';
@@ -570,7 +570,7 @@ export default function GamePreview(inputProps) {
       perspective.position.copy(center).add(new THREE.Vector3(1, -1.5, .9).normalize().multiplyScalar(perspectiveFitDistance(fitRadius(), perspective.fov, width / height)));
       controls.target.copy(center); perspective.zoom = ortho.zoom = 1; resize(); setView(latest.current.view || 'perspective');
     }
-    function centerShowcaseModel(crop) {
+    function centerShowcaseModel(crop, fullOrbit = false) {
       const p=latest.current;if(!p.showcase)return;
       const x=crop?crop.x+crop.width/2:.5,y=crop?crop.y+crop.height/2:.5;
       if(p.portraitMode){
@@ -581,6 +581,28 @@ export default function GamePreview(inputProps) {
       // its weapon, glow, particles, or current animation pose. Use the fixed
       // model mid-height so centering also remains stable through an orbit.
       const anchor=new THREE.Vector3(0,0,center.z).add(turntableOffset);
+      const matrices=new Map((native.rendererData?.nodes||[]).flatMap((node,index)=>node?.matrix?[[index,new THREE.Matrix4().fromArray(node.matrix)]]:[]));
+      const points=[],hidden=new Set(p.hiddenGeosets||[]);
+      for(let index=0;index<ownedModel.Geosets.length;index++){
+        const geoset=ownedModel.Geosets[index],layers=ownedModel.Materials[geoset.MaterialID]?.Layers||[];
+        if(hidden.has(index)||!layers.some(layer=>previewGeosetTint(ownedModel,index,layer,native.getFrame(),native.getSequence(),globalClock)[3]>.001))continue;
+        const vertices=skinGeoset(geoset,matrices);
+        for(const id of new Set(geoset.Faces))points.push(new THREE.Vector3().fromArray(vertices,id*3));
+      }
+      // Include the currently drawn particle/ribbon geometry, not buffer capacity
+      // or future emissions. The animation pose and clocks remain untouched.
+      for(const emitter of native.particlesController?.emitters||[]){
+        for(const vertices of [emitter.headVertices,emitter.tailVertices])if(vertices)
+          for(let i=0;i<emitter.particles.length*12;i+=3)points.push(new THREE.Vector3().fromArray(vertices,i));
+      }
+      for(const emitter of native.ribbonsController?.emitters||[]){
+        if(emitter.vertices)for(let i=0;i<emitter.creationTimes.length*6;i+=3)points.push(new THREE.Vector3().fromArray(emitter.vertices,i));
+      }
+      if(points.length){
+        const framing=showcaseFraming(camera,points,anchor,{crop,width:canvas.width,height:canvas.height,angle:showcaseSample?.angle||0,radius:showcaseOrbitRadius(center,boundsSize,p.showcaseRadius),fullOrbit});
+        zoomEditorCamera(camera,framing.zoom);
+        camera.position.addScaledVector(framing.back,framing.retreat);controls.target.addScaledVector(framing.back,framing.retreat);
+      }
       camera.updateMatrixWorld();camera.updateProjectionMatrix();
       const projected=anchor.clone().project(camera);
       const dx=(x-(projected.x+1)/2)*canvas.width;
@@ -917,6 +939,7 @@ export default function GamePreview(inputProps) {
       invalidate() { state.scheduler.invalidate(); },
       fit() { fit(); },
       centerModel(crop) { centerShowcaseModel(crop); },
+      maximalZoom(crop) { centerShowcaseModel(crop,true); },
       setCameraView(view) { camera = perspective; controls.object = camera; state.cameraDetached = true; applyEvaluatedModelCamera(camera, controls, view, canvas.width / canvas.height); invalidate(); },
       modelCenter() { return center.toArray(); },
       async prepareRecording() {
