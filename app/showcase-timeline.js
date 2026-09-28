@@ -32,7 +32,7 @@ export function showcaseAnimation(model, playlist, seconds, repeat = true) {
       return {...pose, sequenceIndex: row.sequence, clipTime: remaining * 1000, animationRow: row,
         durationLoops: row.durationLoops, motionSeconds: row.motionSeconds, cycleSeconds: row.cycleSeconds,
         finishEffects: row.finishEffects, emissionEnds: row.useDuration ? row.emissionEnds : undefined,
-        cycleGlobalEmitters: row.cycleGlobalEmitters, disabledEmitters: row.disabledEmitters,
+        disabledEmitters: row.disabledEmitters,
         globalTime: time * 1000, active: (pose.looping || pose.frame < sequence.Interval[1]) && (repeat || time < total),
         segment: cycles * rows.length + index, portrait: /portrait/i.test(sequence.Name || '')};
     }

@@ -27,11 +27,15 @@ export function showcaseEmitters(model) {
       .map(node => ({id: node.ObjectId, name: node.Name || `${kind === 'RibbonEmitters' ? 'Ribbon' : 'Emitter'} ${node.ObjectId}`, kind, node})));
 }
 
+export function hasGlobalEmission(model, emitter) {
+  return [emitter.Visibility, emitter.EmissionRate].some(track => globalPeriod(model, track) > 0);
+}
+
 function emitterIsAction(model, sequence, emitter) {
+  if (hasGlobalEmission(model, emitter)) return false;
   const tracks = [emitter.Visibility, emitter.EmissionRate];
   const hasLocal = tracks.some(track => !globalPeriod(model, track) && localKeys(track, sequence).length);
   if (emitter.Squirt && hasLocal) return true;
-  if (!hasLocal && tracks.some(track => globalPeriod(model, track))) return false;
   // A gate that changes during this action, or disables emission in other
   // animations, identifies action effects without treating constant auras as tails.
   if (tracks.some(track => !globalPeriod(model, track) && localKeys(track, sequence).some(key => value(key.Vector) <= 0) && localKeys(track, sequence).some(key => value(key.Vector) > 0))) return true;
@@ -44,32 +48,20 @@ function emitterIsAction(model, sequence, emitter) {
   }));
 }
 
-// Each one-shot cycle owns its action-emitter clock. This includes a local action
-// gate combined with global burst visibility, such as the Knight's slam. Only
-// those emission gates use this clock; global bones/materials/auras stay continuous.
-// globalStart is deliberately irrelevant: identical actions must have identical
-// displayed durations when reordered or recorded in a different batch position.
+// Only local action effects contribute to duration. Global emission gates retain
+// their independent clock and never create an animation tail or emission cutoff.
 export function loopEffectTiming(model, index, loops = 1, speed = 1, globalStart = 0, definitions = new Map(), disabledEmitters = []) {
   const sequence = model.Sequences?.[index], requested = Number(loops);
   const count = Number.isSafeInteger(requested) && requested > 0 ? requested : 1;
-  if (!sequence || !(speed > 0)) return {seconds: 0, motionSeconds: 0, emissionEnds: {}, cycleGlobalEmitters: [], finishEffects: false};
+  if (!sequence || !(speed > 0)) return {seconds: 0, motionSeconds: 0, emissionEnds: {}, finishEffects: false};
   const [start, end] = sequence.Interval, duration = Math.max(0, end - start), motion = duration / speed;
-  const finishEffects = finishesShowcaseEffects(sequence), emissionEnds = {}, cycleGlobalEmitters = [];
+  const finishEffects = finishesShowcaseEffects(sequence), emissionEnds = {};
   const disabled = new Set(disabledEmitters);
   let finish = motion;
   const sample = (track, time, fallback) => sampleTrack(track, start + Math.min(duration, time * speed), {
     interval: sequence.Interval, globalSequences: model.GlobalSequences, globalTime: time, fallback,
   });
-  const timeKeys = (track, horizon) => {
-    const period = globalPeriod(model, track), times = [];
-    if (period) {
-      for (let cycle = 0; cycle * period <= horizon; cycle++) for (const key of track.Keys || []) {
-        const time = cycle * period + key.Frame;
-        if (time <= horizon) times.push(time);
-      }
-    } else for (const key of localKeys(track, sequence)) times.push((key.Frame - start) / speed);
-    return times;
-  };
+  const timeKeys = track => localKeys(track, sequence).map(key => (key.Frame - start) / speed);
   if (finishEffects) for (const {id, kind, node: emitter} of showcaseEmitters(model)) {
     if (disabled.has(id)) continue;
     if (kind === 'EventObjects') {
@@ -82,28 +74,25 @@ export function loopEffectTiming(model, index, loops = 1, speed = 1, globalStart
     }
     if (!emitterIsAction(model, sequence, emitter)) continue;
     const lifeTrack = emitter.LifeSpan;
-    const lifeKeys = globalPeriod(model, lifeTrack) ? lifeTrack.Keys || [] : localKeys(lifeTrack, sequence);
+    if (globalPeriod(model, lifeTrack)) continue;
+    const lifeKeys = localKeys(lifeTrack, sequence);
     const life = (typeof lifeTrack === 'number' ? lifeTrack : Math.max(0, ...lifeKeys.map(key => value(key.Vector)))) * 1000;
-    let horizon = motion;
-    for (const track of [emitter.Visibility, emitter.EmissionRate]) {
-      const period = globalPeriod(model, track), keys = track?.Keys || [];
-      if (period) cycleGlobalEmitters.push(id);
-      if (period && keys.some(key => value(key.Vector) <= 0) && keys.some(key => value(key.Vector) > 0)) horizon = Math.max(horizon, Math.ceil(motion / period) * period);
-    }
-    const times = [...new Set([0, motion, horizon, ...timeKeys(emitter.Visibility, horizon), ...timeKeys(emitter.EmissionRate, horizon)])].sort((a, b) => a - b);
+    const times = [...new Set([0, motion, ...timeKeys(emitter.Visibility), ...timeKeys(emitter.EmissionRate)])].sort((a, b) => a - b);
     const emitting = time => sample(emitter.Visibility, time, kind === 'RibbonEmitters' ? 0 : 1) > 0 && sample(emitter.EmissionRate, time, 0) > 0;
     let last = -1;
     if (emitter.Squirt && emitter.EmissionRate?.Keys) {
-      for (const time of [...new Set([0, ...timeKeys(emitter.EmissionRate, horizon)])]) if (emitting(time)) last = Math.max(last, time);
+      for (const time of [...new Set([0, ...timeKeys(emitter.EmissionRate)])]) if (emitting(time)) last = Math.max(last, time);
     } else for (let i = 1; i < times.length; i++) if (emitting((times[i - 1] + times[i]) / 2)) last = times[i];
-    emissionEnds[id] = last;
+    // A Squirt key is a trigger, not the end of its emission window. Let the
+    // renderer consume the authored key before stopping emission at motion end.
+    emissionEnds[id] = emitter.Squirt && last >= 0 ? motion : last;
     if (last >= 0) finish = Math.max(finish, last + life);
   }
   // A complete action includes its own tail, BEFORE the next action starts.
   // Continuous loops keep the exact authored period (no per-loop rounding/holds).
   const cycleSeconds = finishEffects ? roundUp((finish + (finish > motion + 1e-6 ? 1000 / 30 : 0)) / 1000) : motion / 1000;
   return {seconds: roundUp(cycleSeconds * count), durationLoops: count, motionSeconds: motion * count / 1000,
-    cycleSeconds, cycleMotionSeconds: motion / 1000, finishEffects, emissionEnds, cycleGlobalEmitters: [...new Set(cycleGlobalEmitters)]};
+    cycleSeconds, cycleMotionSeconds: motion / 1000, finishEffects, emissionEnds};
 }
 
 export function timeShowcasePlaylist(model, rows, definitions) {
@@ -111,6 +100,7 @@ export function timeShowcasePlaylist(model, rows, definitions) {
     if (!row.useDuration) return row;
     const timing = loopEffectTiming(model, row.sequence, row.durationLoops ?? 1, row.speed > 0 ? row.speed : 1, 0, definitions, row.disabledEmitters);
     const extraTime = Math.max(0, Number(row.extraTime) || 0);
-    return {...row, ...timing, extraTime, seconds: Math.round((timing.seconds + extraTime) * 100) / 100};
+    const {cycleGlobalEmitters, ...localRow} = row;
+    return {...localRow, ...timing, extraTime, seconds: Math.round((timing.seconds + extraTime) * 100) / 100};
   });
 }
