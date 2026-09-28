@@ -72,9 +72,9 @@ const nearVector=(actual,expected)=>{assert.equal(actual.length,expected.length)
   await popup.getByLabel('Strength',{exact:true}).fill('100');
   await popup.waitForFunction(()=>document.querySelector('.ox-savings strong')&&!document.querySelector('.ox-savings').textContent.includes('Updating'));
   await popup.screenshot({path:path.join(out,'04-nuclear.png')});
-  await popup.getByRole('button',{name:'Approve',exact:true}).click();await popup.getByRole('button',{name:'Save Before + After',exact:true}).waitFor();
+  await popup.getByRole('button',{name:'Approve',exact:true}).click();await popup.getByRole('button',{name:'Optimize New Copy',exact:true}).waitFor();
   await app.evaluate(({dialog},directory)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[directory]});},out);
-  await popup.getByRole('button',{name:'Save Before + After',exact:true}).click();await popup.getByText('Saved both copies:',{exact:false}).waitFor();
+  await popup.getByRole('button',{name:'Optimize New Copy',exact:true}).click();await popup.getByText('Saved both copies:',{exact:false}).waitFor();
   assert.equal(fs.readdirSync(out).filter(n=>/\.mdx$/i.test(n)&&!previousFiles.has(n)).length,2);assert.deepEqual(fs.readFileSync(model),source);
   assert.equal(JSON.parse(fs.readFileSync(path.join(profile,'settings.json'),'utf8')).preferences.wheelMode,'scroll','OptimizeXL must not change the main editor wheel preference');
   await popup.screenshot({path:path.join(out,'05-saved.png')});

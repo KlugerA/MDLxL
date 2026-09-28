@@ -26,10 +26,12 @@ Irregularity proposals cover rare living-sequence appearances of portrait/corpse
 
 ## Saving: exactly two new files
 
-At the final stage, **Save Before + After** asks for an output folder and creates:
+**Optimize New Copy**, at the top right, is the editor's only save action. It is available at every stage, including while a new preview is being calculated. It asks for an output folder and creates:
 
 - `Model_Before.mdx`: the model as it entered OptimizeXL, including any existing unsaved editor changes.
 - `Model_After.mdx`, or `Model_After_NUCLEAR.mdx` when a nuclear stage was approved: the approved result.
+
+Saving includes only approved changes; the current unapproved preview is excluded. With no approvals, both copies contain the entry snapshot. Saving leaves the current stage and proposal open so you can keep reviewing. The same header button remains available after the final stage.
 
 The original and all existing files are protected by exclusive file creation. Occupied names receive a matching numeric suffix. Nuclear does not create a third copy. Both files are verified after writing. A failed save removes only newly created partial outputs. Input MDL is exported as MDX in both copies; sizes refer to MDX, not text MDL or an MPQ-compressed size.
 
