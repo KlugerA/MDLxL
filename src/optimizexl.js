@@ -10,6 +10,7 @@ import { boundsProposals, repairBounds } from './optimizexl-bounds.js';
 import { repairMotionIrregularity, scanIrregularMotion } from './optimizexl-motion.js';
 import { repairSuspiciousSnap, scanSuspiciousSnaps } from './optimizexl-snaps.js';
 import { repairContextMotion, scanModelMotionContext } from './optimizexl-motion-context.js';
+import { openingTrackProposals, applyOpeningTrack } from './optimizexl-opening-tracks.js';
 
 export const STAGES = [
   {id:'duplicates',name:'Duplicate data'}, {id:'animation',name:'Animation optimization'},
@@ -112,7 +113,7 @@ export function findIrregularities(m){const findings=[],seq=m.Sequences,live=seq
 }
 export function sanityProposals(m){const findings=boundsProposals(m);for(const [i,e]of m.ParticleEmitters2.entries())if(e.Gravity?.Keys)findings.push({id:`gravity:${i}`,kind:'gravity',emitter:i,value:e.Gravity.Keys[0]?.Vector[0]||0,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${e.Name}: animated gravity`,detail:'Hive flags animated gravity. Choose a static value and review its particle motion.'});
  for(const {track:t,path}of tracks(m)){if(t.GlobalSeqId>=0&&m.GlobalSequences[t.GlobalSeqId]>0&&t.Keys.some(k=>k.Frame>m.GlobalSequences[t.GlobalSeqId])&&t.Keys.some(k=>k.Frame<=m.GlobalSequences[t.GlobalSeqId]))findings.push({id:`outside:${path.join('.')}`,kind:'globalKeys',path,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${path.join('.')}: keys beyond global duration`,detail:'Remove keys outside the declared global sequence. Review effects and animation before approval.'});}
- return findings;}
+ return [...findings,...openingTrackProposals(m,tracks(m))];}
 function applyRepair(m,fix,settings,evidenceModel=m){
  if(!fix)return;
  if(fix.kind==='batch'){
@@ -128,6 +129,11 @@ function applyRepair(m,fix,settings,evidenceModel=m){
  if(fix.kind==='motion'){repairMotionIrregularity(m,fix,evidenceModel);return;}
  if(fix.kind==='snap'){repairSuspiciousSnap(m,fix,evidenceModel);return;}
  if(fix.kind==='motionContext'){repairContextMotion(m,fix,evidenceModel);return;}
+ if(fix.kind==='openingTrack'){
+  const current=openingTrackProposals(evidenceModel,tracks(evidenceModel)).find(f=>f.id===fix.id);
+  if(!current||!same(current,fix))throw Error('This opening-track finding changed. Select it again.');
+  applyOpeningTrack(m,current);return;
+ }
  if(fix.kind==='gravity'){
   const emitter=m.ParticleEmitters2[fix.emitter];emitter.Gravity=Number(settings.gravity??fix.value);
   // The animated field's separate MDX base ceases to exist when it is static.

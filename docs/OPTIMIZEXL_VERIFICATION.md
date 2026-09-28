@@ -199,6 +199,18 @@ Current main `4fd7e2d` added Showcase and animation-copy changes after the revie
 
 133 of 135 selected optimizer/shared-preview tests pass. The two failures in `showcase.test.js` (nonlooping global time and zero-speed global time) reproduce on isolated exact files from current main and are unrelated to this integration. The 92 optimizer tests pass. All 52 flail MDX outputs and four finding lists still match the accepted baseline. Native selection/approval/undo and all-animation global playback tests pass. At 125% display scaling, native pixels and displayed screenshots match across four widths; Advanced hover/click help and the existing Hive bounds repair also pass. The sharpness test compares model data instead of requiring both previews to share one object, matching the established pinned-original behavior. Evidence is under `D:\MDLxL-Reviews\OptimizeXL-merge-20260928` and ignored `out/optimizexl-merge-tests.log` / `out/main-showcase-baseline-result.log`.
 
+## Missing local opening-track repair
+
+Both supplied Flail02 files reproduce one severe Hive finding: BlastFlare Translation lacks its Attack - Slam opening key at 170000. The existing repair catalog omitted this diagnostic. Insanity Fixer now offers a previewable opening-track repair using the bundled Hive rule, with stale-plan validation and the existing individual/batch approval workflow. A flat lead-in preserves native playback before the first authored key. Only its previously unused incoming cubic control is adjusted; copying that control into the new interval would introduce a jerk.
+
+45 focused tests pass, including linear/Hermite/Bezier translation and quaternion channels, scalar particle channels, unsupported domains, stale plans, existing repairs, exclusions and approved-only save behavior. On each supplied file, all 143,815 native millisecond samples across 13 animations have zero particle-position difference. Geometry, animation intervals, collision shapes and other tracks remain unchanged. Serialization adds 40 bytes. The bundled Hive checker changes from 0 errors / 1 severe / 0 warnings / 3 unused to 0 errors / 0 severe / 0 warnings / 3 unused. The three unused local keys remain intact; this is not a claim that every notice is resolved.
+
+All 52 previously accepted flail MDX outputs remain byte-identical, and every accepted finding remains available in its original order. Flail03 additionally gains the same missing-opening repair; approving it adds 40 bytes. The regression checks that added capability separately from the immutable accepted outputs and allows no other new repair kind. The accepted baseline was not recaptured.
+
+Source and packaged Electron checks pass for finding selection, animation seeking, preview, approval, cleared severe count, retained unused records, pinned original Before and Back. Input bytes remain unchanged. The review package verifies 609 runtime/asset files and 55 locales. Evidence is under `D:\MDLxL-Reviews\OptimizeXL-opening-20260928\source-proofs` and `packaged-proofs`. Native renderer sampling and packaged UI tests do not substitute for user visual acceptance or Warcraft runtime testing.
+
+Reproduce with `node --test test/optimizexl-opening-tracks.test.js`, `node test/optimizexl-opening-models.mjs <flail02> <flail02-after>` and `node test/optimizexl-opening.electron.cjs`. The Electron test accepts the existing Playwright, EXE and proof-root environment variables and optional `MDLXL_OPENING_MODEL` input.
+
 ## Reproducing
 
 ```powershell
@@ -216,7 +228,7 @@ Run `node test/optimizexl-save.electron.cjs` with the same environment for appro
 
 Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. Run `node test/optimizexl-playback.electron.cjs` with Flail03 for percentage speed and native global playback; its proofs go to `out/optimizexl-playback-proof/`. All six desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-context-review-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-opening-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 
