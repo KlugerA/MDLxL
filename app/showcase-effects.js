@@ -50,7 +50,8 @@ function emitterIsAction(model, sequence, emitter) {
 // globalStart is deliberately irrelevant: identical actions must have identical
 // displayed durations when reordered or recorded in a different batch position.
 export function loopEffectTiming(model, index, loops = 1, speed = 1, globalStart = 0, definitions = new Map(), disabledEmitters = []) {
-  const sequence = model.Sequences?.[index], count = loops === 2 ? 2 : 1;
+  const sequence = model.Sequences?.[index], requested = Number(loops);
+  const count = Number.isSafeInteger(requested) && requested > 0 ? requested : 1;
   if (!sequence || !(speed > 0)) return {seconds: 0, motionSeconds: 0, emissionEnds: {}, cycleGlobalEmitters: [], finishEffects: false};
   const [start, end] = sequence.Interval, duration = Math.max(0, end - start), motion = duration / speed;
   const finishEffects = finishesShowcaseEffects(sequence), emissionEnds = {}, cycleGlobalEmitters = [];
@@ -101,7 +102,7 @@ export function loopEffectTiming(model, index, loops = 1, speed = 1, globalStart
   // A complete action includes its own tail, BEFORE the next action starts.
   // Continuous loops keep the exact authored period (no per-loop rounding/holds).
   const cycleSeconds = finishEffects ? roundUp((finish + (finish > motion + 1e-6 ? 1000 / 30 : 0)) / 1000) : motion / 1000;
-  return {seconds: roundUp(cycleSeconds * count), motionSeconds: motion * count / 1000,
+  return {seconds: roundUp(cycleSeconds * count), durationLoops: count, motionSeconds: motion * count / 1000,
     cycleSeconds, cycleMotionSeconds: motion / 1000, finishEffects, emissionEnds, cycleGlobalEmitters: [...new Set(cycleGlobalEmitters)]};
 }
 

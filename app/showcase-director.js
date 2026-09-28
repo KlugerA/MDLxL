@@ -76,38 +76,50 @@ export function screenshotPlan(model, playlist, base, { viewpoint = 'frontal', a
     });
   });
 }
-/** Wall time owns recording and globals; local animation and orbit have independent speeds. */
+// Manual speed has a fixed reference rate: 100% = one revolution per 10 seconds.
+// Full Circle instead derives its rate from the finished recording duration.
+function orbitRate(settings) {
+  const turnsPerSecond = settings.orbitTiming === 'circle'
+    ? 1 / Math.max(.02, Number(settings.length))
+    : clamp(Number(settings.orbitSpeed ?? 100), 0, 200) / 100 / 10;
+  return turnsPerSecond * Math.PI * 2 * (settings.orbitDirection === -1 ? -1 : 1);
+}
+/** Animation and orbit preview are independent; recording drives both clocks. */
 export function createShowcaseDirector(getSettings, now = () => performance.now()) {
-  const clock = { seconds: 0, globalTime: 0, angle: 0, revision: 0, recording: false, live: false };
+  const clock = {seconds: 0, orbitSeconds: 0, globalTime: 0, angle: 0, revision: 0, recording: false, live: false};
   return {
     clock,
     // Globals keep running even when local animation/orbit preview is paused.
     get playing() { return true; },
     get recording() { return clock.recording; },
     sample(delta = 0) {
-      const settings = getSettings(), previous = clock.seconds;
-      if (clock.live) clock.seconds = Math.min(clock.duration, Math.max(0,now()-clock.started)) / 1000;
-      else if (settings.playing && !clock.recording) clock.seconds += delta/1000;
-      if (clock.live) clock.globalTime = clock.seconds*1000;
-      else clock.globalTime += Math.max(0,delta);
-      if(clock.recording || settings.previewOrbit !== false) {
-        if(settings.orbitTiming==='circle')clock.angle=(Number(settings.startAngle)||0)+clock.seconds*Math.PI*2/Math.max(.02,Number(settings.length))*(settings.orbitDirection===-1?-1:1);
-        else clock.angle += (clock.seconds-previous) * Math.PI*2 / Math.max(.02,Number(settings.length)) * clamp(Number(settings.orbitSpeed ?? 100),0,200)/100*(settings.orbitDirection===-1?-1:1);
+      const settings = getSettings(), elapsed = Math.max(0, delta) / 1000;
+      if (clock.live) {
+        clock.seconds = Math.min(clock.duration, Math.max(0, now() - clock.started)) / 1000;
+        clock.orbitSeconds = clock.seconds;
+      } else if (!clock.recording) {
+        if (settings.playing) clock.seconds += elapsed;
+        if (settings.previewOrbit) clock.orbitSeconds += elapsed;
       }
-      const span=Math.max(.02,Number(settings.length)),cycle=clock.recording?0:Math.floor(clock.seconds/span);
-      const animation = showcaseAnimation(settings.model,settings.playlist,clock.recording?clock.seconds:clock.seconds%span,false);
-      if(!clock.recording)animation.segment+=cycle*settings.playlist.filter(row=>settings.model.Sequences?.[row.sequence]).length;
-      return { ...animation, timeline:{playlist:settings.playlist,length:span,seconds:clock.seconds,repeat:!clock.recording}, portrait:!!settings.portrait, globalTime:clock.globalTime, angle:clock.angle, revision:clock.revision, presentationTime:clock.seconds*1000 };
+      if (clock.live) clock.globalTime = clock.seconds * 1000;
+      else clock.globalTime += Math.max(0, delta);
+      if (clock.recording || settings.previewOrbit) clock.angle = (Number(settings.startAngle) || 0) + clock.orbitSeconds * orbitRate(settings);
+      const span = Math.max(.02, Number(settings.length)), cycle = clock.recording ? 0 : Math.floor(clock.seconds / span);
+      const animation = showcaseAnimation(settings.model, settings.playlist, clock.recording ? clock.seconds : clock.seconds % span, false);
+      if (!clock.recording) animation.segment += cycle * settings.playlist.filter(row => settings.model.Sequences?.[row.sequence]).length;
+      return {...animation, timeline: {playlist: settings.playlist, length: span, seconds: clock.seconds, repeat: !clock.recording}, portrait: !!settings.portrait,
+        globalTime: clock.globalTime, angle: clock.angle, revision: clock.revision, presentationTime: (clock.recording ? clock.seconds : clock.seconds % span) * 1000};
     },
-    reset() { Object.assign(clock,{seconds:0,angle:Number(getSettings().startAngle)||0,revision:clock.revision+1}); },
+    reset() { Object.assign(clock, {seconds: 0, orbitSeconds: 0, angle: Number(getSettings().startAngle) || 0, revision: clock.revision + 1}); },
     begin(view, options = {}) {
-      Object.assign(clock,{seconds:0,globalTime:0,angle:Number(getSettings().startAngle)||0,revision:clock.revision+1,recording:true,live:!!options.live,started:now(),duration:options.duration});
+      Object.assign(clock, {seconds: 0, orbitSeconds: 0, globalTime: 0, angle: Number(getSettings().startAngle) || 0, revision: clock.revision + 1,
+        recording: true, live: !!options.live, started: now(), duration: options.duration});
     },
     seekRecording(milliseconds) {
-      const settings = getSettings(); clock.seconds=milliseconds/1000; clock.globalTime=milliseconds;
-      clock.angle=(Number(settings.startAngle)||0)+clock.seconds*Math.PI*2/Math.max(.02,Number(settings.length))*(settings.orbitTiming==='circle'?1:clamp(Number(settings.orbitSpeed ?? 100),0,200)/100)*(settings.orbitDirection===-1?-1:1);
+      const settings = getSettings(); clock.seconds = milliseconds / 1000; clock.orbitSeconds = clock.seconds; clock.globalTime = milliseconds;
+      clock.angle = (Number(settings.startAngle) || 0) + clock.orbitSeconds * orbitRate(settings);
     },
-    freeze(milliseconds) { this.seekRecording(milliseconds); clock.live=false; },
-    end() { clock.recording=false; clock.live=false; },
+    freeze(milliseconds) { this.seekRecording(milliseconds); clock.live = false; },
+    end() { clock.recording = false; clock.live = false; },
   };
 }

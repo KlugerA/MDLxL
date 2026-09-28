@@ -14,6 +14,15 @@
 .showcase-section { border-top:1px solid #aaa; padding-top:6px; margin-top:7px; }
 .showcase-section > header { display:flex; justify-content:space-between; align-items:center; gap:3px; margin-bottom:4px; }
 .showcase-section > header button { padding:1px 4px; }
+.showcase-section.is-collapsed > :not(header) { display:none !important; }
+.showcase-section-toggle::before { content:'▾ '; }
+.showcase-section-toggle[aria-expanded=false]::before { content:'▸ '; }
+.showcase-section > header .showcase-section-toggle { padding-left:0; white-space:nowrap; }
+.showcase-section > header .showcase-collapse-icon { padding:0; width:12px; flex:none; }
+.showcase-section > header .showcase-collapse-icon::before { content:'▾'; }
+.showcase-section > header .showcase-collapse-icon[aria-expanded=false]::before { content:'▸'; }
+.showcase-section > header [hidden] { display:none; }
+
 .showcase-wide,.showcase-sidebar select.showcase-wide { width:100%; max-width:100%; }
 .showcase-file { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .showcase-list { list-style:none; background:#fff; color:#111; border:1px inset #aaa; padding:1px; margin:3px 0; min-height:76px; max-height:140px; overflow:auto; }
