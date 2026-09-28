@@ -13,6 +13,7 @@ function explanation(finding) {
     case 'pose-spike': return 'The bone briefly changes pose and returns. The changed pose or its neighboring keys may be unwanted; the intended movement is uncertain.';
     case 'abrupt-change': return 'The bone jumps to this pose in ' + (finding.end - finding.start) + ' ms. This key may be too close to the previous one.';
     case 'step': return 'This track holds each pose, then jumps to the next. Inspect the key and its existing Controller type setting.';
+    case 'repeated-curve-reversals': return 'The bone repeatedly bounces between key poses. Its curve controls repeat position values, which can cause shaking. Replay this section and inspect the curve controls before changing them.';
     default: return 'The movement swings past the key poses here. No single responsible key is identified.';
   }
 }

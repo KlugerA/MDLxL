@@ -5,6 +5,7 @@ Exact dependency versions and transitive packages are recorded in `package-lock.
 This packaged checkout restores the parser/save test dependencies in `pnpm-lock.yaml`; it does not contain the full application manifest or the original `package-lock.json`. The versions below continue to describe the bundled application.
 
 - **war3-model 4.0.1**, 4eb0da and contributors — MIT. Model parsing/generation, BLP1 decoding and Warcraft rendering. [Project source](https://github.com/4eb0da/war3-model).
+- **mdx-m3-viewer 5.12.0**, ghostwolf and contributors — MIT. OptimizeXL runs its official MDLX sanity checker locally. The unmodified npm UMD build and complete license are in `public/vendor/hive-viewer-5.12.0.js` and `public/vendor/hive-viewer-LICENSE.txt`, copied into `dist/vendor/` in the desktop package. [Project source](https://github.com/flowtsohg/mdx-m3-viewer).
 - **Three.js 0.183.2**, three.js authors — MIT. Editing viewport, math, camera controls and texture loaders.
 - **React / React DOM 19.2.4**, Meta Platforms, Inc. and affiliates — MIT.
 - **Lucide React 0.577.0**, Lucide contributors — ISC; inherited Feather icons under MIT.
@@ -63,6 +64,10 @@ Runtime dependencies: Intel oneVPL (MIT), OpenH264 (BSD-2-Clause), mingw-w64 win
 ## Clipper geometry dependency
 
 Forge uses clipper-lib 6.4.2 (Angus Johnson / Timo), with embedded JSBN by Tom Wu. The complete Boost Software License and JSBN notice are in docs/licenses/clipper-lib.txt in the source, and LICENSES.bundled.txt in the portable package.
+
+## Meshoptimizer simplifier
+
+OptimizeXL uses the unmodified WebAssembly/JavaScript simplifier from **meshoptimizer 1.3.0**, copyright Arseny Kapoulkine, under the MIT License. The module, complete license and pinned official npm package integrity/module hash are in `src/vendor/meshoptimizer-1.3.0/` and included in the portable package. Upstream: https://github.com/zeux/meshoptimizer/tree/master/js . Nuclear uses attribute-aware quadric simplification; it does not use the vertex-update, sloppy or component-pruning modes.
 
 ## Tengwar Annatar typeface (Mordor mode)
 

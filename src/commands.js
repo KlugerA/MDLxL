@@ -25,7 +25,7 @@ export const COMMANDS = coreWarmKeyDefaults([
   ...group('View', [['normals','Show normals','N'],['orthographic','Orthographic view']]),
   ...group('Resources', [['GeosetAnims','Geoset Animation Manager']]),
   ...group('View', [['bones','Bones rest-pose workspace'],['grid:small','Small grid'],['grid:xz','XZ-grid'],['grid:yz','YZ-grid'],['grid:xy','XY-grid'],['axes','Axis guides'],['wireframe','Wireframe'],['workplaneEnabled','Constrain to workplane']]),
-  ...group('Modules', [['optimizeModel','Optimize Model']]),
+  ...group('Modules', [['optimizeModel','OptimizeXL']]),
   ...group('Tools', [['anchorSelect','Choose Zoom anchor','1']]),
   ...group('Modules', [['paint','Citadel Paint']]),
   ...group('Citadel Paint', [['paint:select','Select geoset or light'],['paint:draw','Paint / draw']]),

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { EditorCameraControls, editorCameraAngles, preserveShiftCameraAction, setEditorCameraAngles, zoomEditorCamera } from './editor-camera-controls.js';
 import { viewportCursor, showcaseCursor } from './viewport-cursors.js';
@@ -9,6 +9,7 @@ import { createRigMarkersGL } from './rig-markers-gl.js';
 import { boneVertexHighlights } from '../src/bone-tools.js';
 import { billboardCameraCorrection } from './preview-pose.js';
 import { drawModelCameraOverlay } from './model-camera-overlay.js';
+import { drawCollisionSpheres } from './optimizexl-overlays.js';
 import { ModelRenderer } from 'war3-model';
 import { advanceShowcaseModel } from './showcase-playback.js';
 import { showcaseOrbitRadius, setShowcaseOrbitCamera, showcaseFraming } from './showcase-orbit.js';
@@ -131,6 +132,18 @@ export default function GamePreview(inputProps) {
   const appearanceBackgroundUrl = props.backgroundUrl || (viewportBackground.type === 'image' ? viewportBackground.imageData : '');
   const appearanceBackgroundType = props.backgroundUrl ? props.backgroundType : appearanceBackgroundUrl ? appearanceBackgroundUrl.slice(5, appearanceBackgroundUrl.indexOf(';')) : '';
   const globalPreviewId = !props.restPose && Number.isInteger(props.globalSeqId) && model?.GlobalSequences?.[props.globalSeqId] > 0 ? props.globalSeqId : null;
+  // Equal comparison panes can occupy half a CSS pixel. Align the complete
+  // render surface (including hover/collision overlays) to physical pixels.
+  useLayoutEffect(() => {
+    if (!props.pixelAligned || !root.current || props.portraitMode) return;
+    const element=root.current, stage=element.querySelector('.game-preview-stage'), owner=element.ownerDocument.defaultView;
+    const align=()=>{
+      const r=element.getBoundingClientRect(), dpr=owner.devicePixelRatio||1;
+      Object.assign(stage.style,{left:`${Math.ceil(r.x*dpr-1e-6)/dpr-r.x}px`,top:`${Math.ceil(r.y*dpr-1e-6)/dpr-r.y}px`,right:'auto',bottom:'auto',width:`${Math.max(1,Math.floor(r.width*dpr)-1)/dpr}px`,height:`${Math.max(1,Math.floor(r.height*dpr)-1)/dpr}px`});
+    };
+    const observer=new owner.ResizeObserver(align);observer.observe(element);owner.addEventListener('resize',align);align();
+    return()=>{observer.disconnect();owner.removeEventListener('resize',align);for(const key of ['left','top','right','bottom','width','height'])stage.style[key]='';};
+  },[props.pixelAligned,props.portraitMode]);
   const timelineStart = sequenceIndex < 0 ? globalPreviewId !== null ? 0 : Number(props.timelineInterval?.[0]) : NaN;
   const timelineEnd = sequenceIndex < 0 ? globalPreviewId !== null ? model.GlobalSequences[globalPreviewId] : Number(props.timelineInterval?.[1]) : NaN;
 
@@ -278,7 +291,14 @@ export default function GamePreview(inputProps) {
       const key = [...viewMatrix, ...projectionMatrix].map(value => value.toFixed(6)).join(',');
       if (key !== projectionKey) { projectionKey = key; latest.current.onProjectionViewChange?.({ viewMatrix, projectionMatrix }); }
     };
-    const cameraChanged = () => { latest.current.onCameraAnglesChange?.(editorCameraAngles(camera)); reportProjectionView(); invalidate(); };
+    let syncingCamera = false, compareRegistered = false, collisionCanvas = null, externalSeek;
+    const snapshotCamera = () => ({ camera: camera === ortho ? 'ortho' : 'perspective', perspective: perspective.clone(), ortho: ortho.clone(), target: controls.target.clone() });
+    const receiveCamera = saved => { syncingCamera = true; camera = restorePreviewCamera(saved, perspective, ortho, controls); resize(); reportProjectionView(); invalidate(); syncingCamera = false; };
+    const cameraChanged = () => {
+      latest.current.onCameraAnglesChange?.(editorCameraAngles(camera)); reportProjectionView(); invalidate();
+      const bus = latest.current.compareCamera;
+      if (bus && compareRegistered && !syncingCamera) { bus.saved = snapshotCamera(); for (const receive of bus.listeners) if (receive !== receiveCamera) receive(bus.saved); }
+    };
     controls.addEventListener('change', cameraChanged);
     let leftGesture = null, previewSelectHeld = false;
     const cancelPreviewGesture = () => {
@@ -544,7 +564,8 @@ export default function GamePreview(inputProps) {
       }
     }
     function resize() {
-      const width = Math.max(1, host.current?.clientWidth || 1), height = Math.max(1, host.current?.clientHeight || 1), pixelRatio = latest.current.showcase ? graphicsOptions(latest.current.preferences).pixelRatio : viewportPixelRatio(graphicsOptions(latest.current.preferences), ownerWindow.devicePixelRatio);
+      const rect=latest.current.pixelAligned?host.current?.getBoundingClientRect():null;
+      const width = Math.max(1, rect?.width || host.current?.clientWidth || 1), height = Math.max(1, rect?.height || host.current?.clientHeight || 1), pixelRatio = latest.current.showcase ? graphicsOptions(latest.current.preferences).pixelRatio : viewportPixelRatio(graphicsOptions(latest.current.preferences), ownerWindow.devicePixelRatio);
       canvas.height = Math.round(height * pixelRatio); canvas.width = portraitHasFrame(latest.current) ? Math.round(canvas.height * PORTRAIT_ASPECT) : Math.round(width * pixelRatio); gl.viewport(0, 0, canvas.width, canvas.height);
       perspective.aspect = portraitHasFrame(latest.current) ? PORTRAIT_ASPECT : width / height; perspective.updateProjectionMatrix();
       const aspect = portraitHasFrame(latest.current) ? PORTRAIT_ASPECT : width / height;
@@ -678,6 +699,8 @@ export default function GamePreview(inputProps) {
       if (saved && saved.view === view) { camera = restorePreviewCamera(saved, perspective, ortho, controls); reportProjectionView(); }
     }
     if (latest.current.portraitMode) enterPortrait(evaluateModelCamera(model, model?.Cameras?.[latest.current.portraitCameraIndex], latest.current.time, sequenceIndex, latest.current.time));
+    const compareCamera = latest.current.compareCamera;
+    if (compareCamera) { if (compareCamera.saved) receiveCamera(compareCamera.saved); else compareCamera.saved = snapshotCamera(); compareCamera.listeners.add(receiveCamera); compareRegistered = true; }
     const checker = new Uint8ClampedArray(8 * 8 * 4);
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const value = ((x >> 1) + (y >> 1)) % 2 ? 135 : 90; checker.set([value, value, value, 255], (y * 8 + x) * 4); }
     const assets = textureAssets instanceof Map ? textureAssets : new Map(Object.entries(textureAssets || {}));
@@ -740,6 +763,7 @@ export default function GamePreview(inputProps) {
     function render(now, delta, { captureOnly = false } = {}) {
       if (disposed) return;
       const p = latest.current;
+      const sharedGlobals = !p.showcase && p.syncPlayback && Number.isFinite(p.playbackGlobalTime);
       let showcaseNext;
       if (p.showcase) {
         showcaseNext = p.showcase.sample(captureOnly ? 0 : delta);
@@ -762,25 +786,36 @@ export default function GamePreview(inputProps) {
         native.rendererData.animation = timelineSequenceIndex;
         native.rendererData.animationInfo = sequence;
       }
-      const userSeek = !p.showcase && p.time !== externalFrame && Math.abs((p.time || 0) - (reportedFrame ?? -Infinity)) > 1;
+      const userSeek = !p.showcase && (p.syncPlayback ? p.seekId !== externalSeek || (!sharedGlobals && p.time < externalFrame) : p.time !== externalFrame && Math.abs((p.time || 0) - (reportedFrame ?? -Infinity)) > 1);
+      externalSeek = p.seekId;
       if (sequenceChanged || userSeek || p.playing && !lastPlaying) playbackStopped = false;
       if (!p.showcase && (sequenceChanged || userSeek)) resetPreviewEffects(native);
-      const requestedSeek = sequenceChanged || userSeek || !p.playing || !lastPlaying;
+      const requestedSeek = p.syncPlayback ? sequenceChanged || userSeek || (!sharedGlobals && !p.playbackRunning) : sequenceChanged || userSeek || !p.playing || !lastPlaying;
       if (!p.showcase && (nodeGesture || requestedSeek)) {
         const frame = p.restPose ? start : nodeGesture?.frame ?? Math.min(end, Math.max(start, p.time ?? start));
-        setPreviewFrame(frame); globalClock = frame;
+        setPreviewFrame(frame); globalClock = sharedGlobals ? p.playbackGlobalTime : frame;
         // The pinned upstream renderer exposes no public global-sequence seek.
         // Synchronize its existing clock array so timeline scrubbing and the
         // editable skeleton agree on the same global pose.
         const clocks = native.rendererData?.globalSequencesFrames;
         if (clocks) for (let i = 0; i < (ownedModel.GlobalSequences?.length || 0); i++) {
-          const duration = ownedModel.GlobalSequences[i]; if (duration > 0) clocks[i] = ((frame % duration) + duration) % duration;
+          const duration = ownedModel.GlobalSequences[i]; if (duration > 0) clocks[i] = ((globalClock % duration) + duration) % duration;
         }
       }
       externalFrame = p.time; lastPlaying = p.playing;
-      const playback = previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
+      const playback = p.syncPlayback ? { frame: Math.min(end, Math.max(start, p.time ?? start)), elapsed: requestedSeek ? 0 : sharedGlobals ? Math.max(0,p.playbackGlobalTime-globalClock) : Math.max(0, Math.min(end,p.time)-native.getFrame()), finished: false } : previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
       const dt = p.showcase ? 0 : playback.elapsed;
-      globalClock += dt;
+      globalClock = sharedGlobals ? p.playbackGlobalTime : globalClock + dt;
+      const updateNative = (step, globalFrame = globalClock) => {
+        // OptimizeXL supplies one continuous clock for both views. Seed the
+        // clock before update, which advances it before evaluating nodes and
+        // effects. Preserve the wrap remainder the upstream increment drops.
+        if (sharedGlobals) for (let i = 0; i < (ownedModel.GlobalSequences?.length || 0); i++) {
+          const duration = ownedModel.GlobalSequences[i];
+          if (duration > 0) native.rendererData.globalSequencesFrames[i] = ((globalFrame % duration) + duration) % duration - step;
+        }
+        native.update(step);
+      };
       controls.update();
       displayCamera = camera;
       if (p.showcase && !p.portraitMode) {
@@ -802,17 +837,17 @@ export default function GamePreview(inputProps) {
             if (native.getFrame() >= end) setPreviewFrame(start);
             const step = Math.min(particlesEnabled && dt > 33 ? 20 : remaining, remaining, end - native.getFrame());
             if (!(step > 0)) break;
-            native.update(step); remaining -= step;
+            updateNative(step, globalClock - remaining + step); remaining -= step;
           }
-        } else native.update(0);
+        } else updateNative(0);
         if (!p.showcase && playback.finished) {
           playbackStopped = true; setPreviewFrame(start); globalClock = start; resetPreviewEffects(native);
           const clocks = native.rendererData?.globalSequencesFrames;
           if (clocks) for (let i = 0; i < (ownedModel.GlobalSequences?.length || 0); i++) { const duration = ownedModel.GlobalSequences[i]; if (duration > 0) clocks[i] = start % duration; }
-          native.update(0);
-        } else if (!p.showcase && Math.abs(native.getFrame() - playback.frame) > 1e-5) { setPreviewFrame(playback.frame); native.update(0); }
+          updateNative(0);
+        } else if (!p.showcase && Math.abs(native.getFrame() - playback.frame) > 1e-5) { setPreviewFrame(playback.frame); updateNative(0); }
         poseSequence = useAuthoredSequenceInterval(native.getFrame());
-        if (poseSequence !== selected) native.update(0);
+        if (poseSequence !== selected) updateNative(0);
         applyRestPoseMatrices(native.rendererData, p.restPose);
         if (p.portraitMode && !state.cameraEditing && !state.cameraDetached) {
           const evaluated = evaluateModelCamera(p.model, p.model?.Cameras?.[p.portraitCameraIndex], native.getFrame(), poseSequence, globalClock);
@@ -850,6 +885,11 @@ export default function GamePreview(inputProps) {
         if (!captureOnly && !p.portraitMode) presentation.draw(camera, p.preferences, p.workplane, false, center, radius, bounds.min.z, { platformOnly: true });
       } catch (cause) { setError(`Warcraft preview error: ${cause.message}`); return false; }
       if (!captureOnly) {
+      if (p.showCollisionSpheres) {
+        if (!collisionCanvas) { collisionCanvas = ownerDocument.createElement('canvas'); collisionCanvas.dataset.collisionOverlay = ''; collisionCanvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:30'; host.current.appendChild(collisionCanvas); }
+        collisionCanvas.width=canvas.width; collisionCanvas.height=canvas.height;
+        drawCollisionSpheres(collisionCanvas.getContext('2d'),ownedModel,camera,native,canvas.width,canvas.height);
+      } else if (collisionCanvas) { collisionCanvas.remove(); collisionCanvas=null; }
       const overlayOptions = { ...previewOverlayOptions(p.overlays, p.showNodes), preferences: p.preferences, workplane: p.workplane };
       overlayOptions.selectableGeosets = p.selectableGeosets ?? [];
       overlayOptions.grid = false;
@@ -1052,6 +1092,7 @@ export default function GamePreview(inputProps) {
         ? { camera:portraitBackup.camera, view:portraitBackup.appliedView, perspective:portraitBackup.perspective.clone(), ortho:portraitBackup.ortho.clone(), target:portraitBackup.target.clone() }
         : { camera:camera === ortho ? 'ortho' : 'perspective', view:state.appliedView, perspective:perspective.clone(), ortho:ortho.clone(), target:controls.target.clone() };
       if (latest.current.cameraHandoff) latest.current.cameraHandoff.current = cameraMemory.current;
+      compareCamera?.listeners.delete(receiveCamera); collisionCanvas?.remove();
       disposed = true; leaveGeoset(); canvas.removeEventListener('pointermove', hoverGeoset); canvas.removeEventListener('pointerleave', leaveGeoset); latest.current.onCaptureReady?.(null); backgroundCanvas.remove(); hoverCanvas?.remove(); connectorCanvas?.remove(); nodeCanvas?.remove(); geometryCanvas?.remove(); cameraCanvas?.remove(); scheduler.dispose(); ownerDocument.removeEventListener('visibilitychange', scheduler.sync); window.removeEventListener('mdlvis-frame', fit); window.removeEventListener('mdlxl-view-camera', viewCamera); unbindScroll(); observer?.disconnect(); ownerWindow.removeEventListener('keydown', previewKeyDown, true); ownerWindow.removeEventListener('keyup', previewKeyUp, true); ownerWindow.removeEventListener('blur', previewWindowBlur); canvas.removeEventListener('lostpointercapture', endShowcaseCursor); canvas.removeEventListener('pointerdown', pointerDown, true); canvas.removeEventListener('pointermove', suppressAdjustedMove, true); canvas.removeEventListener('pointerup', finishLeftGesture, true); canvas.removeEventListener('pointercancel', finishLeftGesture, true); canvas.removeEventListener('pointermove', nodePointerMove, true); canvas.removeEventListener('pointerup', finishNodeGesture, true); canvas.removeEventListener('pointercancel', finishNodeGesture, true); canvas.removeEventListener('keydown', cancelNodeGesture, true); controls.removeEventListener('change', cameraChanged); controls.removeEventListener('start', cameraStarted); controls.removeEventListener('end', cameraEnded); controls.dispose(); canvas.removeEventListener('webglcontextlost', contextLost); runtime.current = null; rigMarkers.dispose(); presentation.dispose(); nativeBackground.dispose(); eventPreview.dispose(); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas);
     };
   }, [rendererModel, rendererRevision, textureAssets, props.modelPath, graphics.antialias, graphics.anisotropy, graphics.textureFiltering, graphics.particles, props.showParticles, graphics.lighting, graphics.textures, timelineStart, timelineEnd, globalPreviewId]);
@@ -1076,6 +1117,7 @@ export default function GamePreview(inputProps) {
 
   useEffect(() => { runtime.current?.scheduler.sync(); }, [props.showcasePlaying, props.showcaseConfig, props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.rotateOnOwnAxis, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
 
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.showCollisionSpheres, props.seekId, props.playbackRunning, props.playbackGlobalTime]);
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, framed = portraitHasFrame(props), hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];
   return <div ref={root} className={`game-preview-root${framed ? ' portrait-preview-root' : ''}`} style={{ minHeight: props.presentation === 'preview' ? 0 : 180, background: props.showcase && portrait ? viewportBackground.color : undefined }}>

@@ -46,6 +46,12 @@ test('inherited and curved motion do not invent responsible holding keys', () =>
     assert.doesNotMatch(html, /Delete selected key|Select holding key/);
   }
 });
+
+test('repeated curve warning explains shaking without proposing key deletion', () => {
+  const html = render({ motion: { ...motion, active: { ...finding, kind: 'repeated-curve-reversals', property: 'Translation', targets: [] } } });
+  assert.match(html, /repeatedly bounces between key poses/); assert.match(html, /Replay section/);
+  assert.doesNotMatch(html, /Select .*holding key|Delete selected key/);
+});
 test('held-pose warning identifies the old-pose neighbors without treating the new pose as disposable', () => {
   const html = render({ motion: { ...motion, active: { ...finding, kind: 'pose-spike', time: 900, targets: [{ role: 'surrounding-holds', time: 800, keyTimes: [800, 1000], returnTime: 1000, preserveTime: 900 }] }, visible: [finding, { ...finding, signature: 'two' }] } });
   assert.match(html, /Old-pose keys hold until 800 ms and pull back at 1000 ms/);
