@@ -73,3 +73,11 @@ OptimizeXL uses the unmodified WebAssembly/JavaScript simplifier from **meshopti
 
 Mordor mode uses the unmodified **Tengwar Annatar 1.20** type family by Johan Winge (2004–2005), distributed as freeware. Its complete original package—including all face variants, `readme.txt`, licence text, and documentation PDF—is retained under `public/fonts/tengwar-annatar/` and copied intact to `dist/fonts/tengwar-annatar/` in the portable package. The original licence permits no-fee redistribution only when all original files are included unchanged; it also notes that commercial use and use of Tolkien's script may require additional permission. The typeface is used here solely as an optional, local, humorous UI mode.
 
+
+## Showcase typefaces
+
+Cinzel Decorative, MedievalSharp, Uncial Antiqua, Pirata One, Almendra, IM Fell English, Lato, Lora, Open Sans, Orbitron, Oxanium, Rajdhani, Cormorant SC, and Grenze Gotisch are bundled unmodified from the Google Fonts repository under the SIL Open Font License 1.1. Each family includes its original copyright and license in public/fonts/showcase/<family>/OFL.txt, copied into dist/fonts/showcase/. Font file provenance is in public/fonts/showcase/README.md.
+
+## User-supplied Friz Quadrata TT
+
+`public/fonts/showcase/frizquadrata/FRIZQT__.TTF` is the unmodified font supplied by the user for Showcase. Its embedded notice reads: (c) Copyright 1997 International Typeface Corporation. All rights reserved. It retains those rights and is not one of the SIL Open Font License families above.

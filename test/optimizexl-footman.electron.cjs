@@ -18,9 +18,9 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
    const state=await p.evaluate(()=>{
     const s=sides(),canvases=s.map(x=>x.root.querySelector('[data-clean-model-canvas]')),captures=s.map(x=>x.runtime.captureApi.captureFrame());
     const pixels=captures.map(c=>c.getContext('2d').getImageData(0,0,c.width,c.height).data);let changed=0;for(let i=0;i<pixels[0].length;i++)if(pixels[0][i]!==pixels[1][i])changed++;
-    return {sameModel:s[0].props.model===s[1].props.model,changed,dpr:devicePixelRatio,canvases:canvases.map(c=>({rect:c.getBoundingClientRect().toJSON(),width:c.width,height:c.height}))};
+    return {sameModelData:JSON.stringify(s[0].props.model)===JSON.stringify(s[1].props.model),changed,dpr:devicePixelRatio,canvases:canvases.map(c=>({rect:c.getBoundingClientRect().toJSON(),width:c.width,height:c.height}))};
    });
-   assert.equal(state.sameModel,true);assert.equal(state.changed,0,'Equal inputs have equal native pixels');assert.equal(state.canvases[0].width,state.canvases[1].width);
+   assert.equal(state.sameModelData,true,'Pinned original and unchanged After contain equal model data');assert.equal(state.changed,0,'Equal inputs have equal native pixels');assert.equal(state.canvases[0].width,state.canvases[1].width);
    for(const c of state.canvases){for(const v of [c.rect.x,c.rect.y,c.rect.width,c.rect.height])assert.ok(Math.abs(v*state.dpr-Math.round(v*state.dpr))<.025,'Canvas edges align with physical pixels');assert.ok(Math.abs(c.rect.width*state.dpr-c.width)<.025);}
    // Locator screenshots round fractional CSS clips before device scaling.
    // Crop the full screenshot at physical pixel edges instead, so 125% DPI

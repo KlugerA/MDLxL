@@ -70,3 +70,13 @@ test('classic portrait uses clamped vertex lighting without changing ordinary in
   assert.ok(fragment.includes('if (uMdlxlPortrait > .5) { if (uMdlxlLighting > .5) gl_FragColor.rgb *= vMdlxlPortraitLight; } else if (uMdlxlLegacy > .5)'));
   assert.ok(fragment.includes('mdlxlEncodeSRGB(max(inspectionBase'));
 });
+
+test('Showcase Low and Highest change actual GPU texture filtering',()=>{
+  const calls=[],gl={TEXTURE_2D:1,TEXTURE_BINDING_2D:2,TEXTURE_MAG_FILTER:3,TEXTURE_MIN_FILTER:4,LINEAR:5,LINEAR_MIPMAP_LINEAR:6,LINEAR_MIPMAP_NEAREST:7,
+    getParameter:key=>key===9?16:null,bindTexture(){},generateMipmap(){},texParameteri:(...args)=>calls.push(args),texParameterf:(...args)=>calls.push(args)};
+  const native={rendererData:{textures:{skin:'texture'}},anisotropicExt:{TEXTURE_MAX_ANISOTROPY_EXT:8,MAX_TEXTURE_MAX_ANISOTROPY_EXT:9}};
+  improveNativeTexture(gl,native,'skin',{textureFiltering:'bilinear',anisotropy:1});
+  assert.ok(calls.some(call=>call[1]===4&&call[2]===7));assert.ok(calls.some(call=>call[1]===8&&call[2]===1));
+  calls.length=0;improveNativeTexture(gl,native,'skin',{textureFiltering:'trilinear',anisotropy:16});
+  assert.ok(calls.some(call=>call[1]===4&&call[2]===6));assert.ok(calls.some(call=>call[1]===8&&call[2]===16));
+});

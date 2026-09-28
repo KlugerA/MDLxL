@@ -7,7 +7,7 @@ import { setSequenceOptions } from '../src/animation.js';
 import { clampAlphaPercentText } from '../src/animation-controller-inputs.js';
 import { wheelOptionIndex } from '../src/dropdown-wheel.js';
 import {
-  createGlobalSequence, createSequence, deleteGlobalSequence, deleteSequence,
+  createGlobalSequence, createSequence, createSequenceFromCurrent, deleteGlobalSequence, deleteSequence,
   setGlobalSequenceDuration, setSequenceInterval, setSequenceMoveSpeed, setSequenceName,
 } from '../src/sequence-editor.js';
 import './AnimationController.css';
@@ -116,6 +116,13 @@ export default function AnimationController({
     if (commit('Create animation sequence', ['Sequences', 'Geosets'], current => {
       index = createSequence(current); start = current.Sequences[index].Interval[0]; return index;
     }, 'One-second blank sequence created.')) { onTimelineChange?.(index); onSeek?.(start); }
+  }
+
+  function copyCurrentSequence() {
+    let index = -1, start = 0;
+    if (commit('Create animation from current', ['Sequences', 'Geosets', 'GeosetAnims', 'Materials', 'TextureAnims', 'Nodes', 'Cameras'], current => {
+      index = createSequenceFromCurrent(current, sequenceIndex); start = current.Sequences[index].Interval[0]; return index;
+    }, 'Current animation copied.')) { onTimelineChange?.(index); onSeek?.(start); }
   }
 
   function addGlobal() {
@@ -250,7 +257,7 @@ export default function AnimationController({
       <input aria-label="Sequence first frame" type="number" min="0" step="1" disabled={disabled || !sequence || globalDomain} value={startText} onChange={event => setStartText(event.target.value)} onBlur={commitInterval} onKeyDown={enterBlurs}/><span>–</span>
       <input aria-label="Sequence last frame" type="number" min={globalDomain ? 1 : Math.max(0, Number(startText) || 0)} step="1" disabled={disabled || !sequence && !globalDomain} value={endText} onChange={event => setEndText(event.target.value)} onBlur={commitInterval} onKeyDown={enterBlurs}/>
     </div>
-    <div className="ac-sequence-actions"><button disabled={disabled} onClick={addSequence}>Create</button><button disabled={disabled} onClick={addGlobal}>Global</button><button disabled={disabled || !sequence && !globalDomain} onClick={removeCurrent}>Delete</button></div>
+    <div className="ac-sequence-actions"><button disabled={disabled} onClick={addSequence}>Create</button><button disabled={noLocalSequence} onClick={copyCurrentSequence}>Create from current</button><button disabled={disabled} onClick={addGlobal}>Global</button><button disabled={disabled || !sequence && !globalDomain} onClick={removeCurrent}>Delete</button></div>
     <div className="ac-geoset-animation">
       <div className="ac-visibility"><span>Visibility:</span>{missingGeosets.length ? <button className="ac-create-visibility" disabled={disabled || !geosetIds.length} onClick={createVisibility}>Create Visibility</button> : <label><input type="checkbox" aria-label="Visible at current frame" checked={visibleChecked} ref={input => { if (input) input.indeterminate = mixedOrPartial; }} disabled={colorBlocked} onChange={event => setVisibility(event.target.checked)}/>On</label>}
         <label className="ac-alpha">Alpha:<input aria-label="Visibility alpha percent" type="number" min="0" max="100" step="1" placeholder={geosetIds.length ? 'Mixed' : ''} disabled={colorBlocked} value={alpha} onChange={event => setAlpha(clampAlphaPercentText(event.target.value))} onBlur={commitAlpha} onKeyDown={enterBlurs}/></label>

@@ -36,6 +36,13 @@ test('GIF background respects durations, loops finite GIFs and holds only one de
   assert.equal(f.canvas.width, 0); assert.equal(f.canvas.height, 0);
 });
 
+test('GIF background can pause on its current frame and resume at the remaining frame delay', async () => {
+  const f = fixture(), player = createAnimatedPreviewBackground('blob:synthetic', f.options);
+  await player.ready; await flush(); player.pause(); assert.equal(f.timers.size, 0);
+  await flush(); assert.deepEqual(f.drawn, [0]); player.resume(); await flush(); assert.equal([...f.timers.values()][0].delay, 80);
+  await f.advance(); assert.deepEqual(f.drawn, [0, 1]); player.dispose();
+});
+
 test('replacing GIF while first decode is pending closes late frame and rejects readiness', async () => {
   const f = fixture({ delayedDecode: true }), player = createAnimatedPreviewBackground('blob:synthetic', f.options);
   await flush(); assert.equal(f.pending.length, 1);

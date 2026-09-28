@@ -43,7 +43,7 @@ let saveQueue=Promise.resolve();
 let artifactSaveQueue=Promise.resolve();
 let captureBusy=false;
 const captureOperations=new Set();
-const previewRecordings=new PreviewRecordingStore({destination:path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), 'Screenshots')});
+const previewRecordings=new PreviewRecordingStore({destination:path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), 'Showcase Recordings')});
 function captureOperation(operation){captureOperations.add(operation);operation.finally(()=>captureOperations.delete(operation)).catch(()=>{});return operation;}
 function captureOwner(event){if(event.sender!==win?.webContents)throw Error('Preview capture is unavailable in this window.');return event.sender.id;}
 const recoveryStore=new RecoveryStore(path.join(profile,'recovery'));
@@ -108,7 +108,7 @@ ipcMain.handle('paint:exportTexture',async(_,payload)=>{
 ipcMain.on('preview:busy',(event,value)=>{if(event.sender===win?.webContents)captureBusy=!!value;});
 ipcMain.handle('preview:capture',(event,payload)=>{
   captureOwner(event);
-  const operation=savePreviewCapture(path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), 'Screenshots'),payload);
+  const operation=savePreviewCapture(path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), 'Showcase Recordings'),payload);
   captureOperations.add(operation);operation.finally(()=>captureOperations.delete(operation)).catch(()=>{});return operation;
 });
 ipcMain.handle('preview:recordBegin',(event,payload)=>captureOperation(previewRecordings.begin(captureOwner(event),payload)));

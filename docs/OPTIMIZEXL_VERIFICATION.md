@@ -1,6 +1,6 @@
 # OptimizeXL review evidence — 2026-09-28
 
-This is an unmerged feature review build, not a published version. The primary checkout and installed application were not modified.
+This document records feature review and merge-integration checks. The review packages are development builds, not published versions. The primary checkout and installed application were not modified.
 
 ## First review correction: viewport navigation
 
@@ -193,6 +193,12 @@ Rebuilt-source and packaged Electron selection tests verify red/orange details o
 
 New commands: `node --test test/optimizexl-motion-context.test.js` and `node test/optimizexl-context-models.mjs <unoptimized-footman> <original-footman> <flail03> <optimized-flail>`. Existing flail, snap-reference and Electron commands remain applicable. Current source and packaged UI evidence is under `D:\MDLxL-Reviews\OptimizeXL-context-review-20260928`.
 
+## Integration with current main for the authorized merge
+
+Current main `4fd7e2d` added Showcase and animation-copy changes after the reviewed optimizer build. Shared GamePreview conflicts were resolved by retaining Showcase's director/portrait behavior alongside OptimizeXL's synchronized playback, physical-pixel alignment and comparison cleanup. Tracked dist was regenerated from the combined source instead of resolving hashed assets by hand.
+
+133 of 135 selected optimizer/shared-preview tests pass. The two failures in `showcase.test.js` (nonlooping global time and zero-speed global time) reproduce on isolated exact files from current main and are unrelated to this integration. The 92 optimizer tests pass. All 52 flail MDX outputs and four finding lists still match the accepted baseline. Native selection/approval/undo and all-animation global playback tests pass. At 125% display scaling, native pixels and displayed screenshots match across four widths; Advanced hover/click help and the existing Hive bounds repair also pass. The sharpness test compares model data instead of requiring both previews to share one object, matching the established pinned-original behavior. Evidence is under `D:\MDLxL-Reviews\OptimizeXL-merge-20260928` and ignored `out/optimizexl-merge-tests.log` / `out/main-showcase-baseline-result.log`.
+
 ## Reproducing
 
 ```powershell
@@ -214,4 +220,4 @@ The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-context-re
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 
-Warcraft in-game selection/animation, external Retera/MDLVis playback, and the user's visual acceptance have not been exercised. No public release or merge to online `main` has been performed.
+Warcraft in-game selection/animation and external Retera/MDLVis playback have not been exercised. No public release or installed-application replacement was performed by this feature's merge workflow.

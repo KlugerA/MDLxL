@@ -98,9 +98,9 @@ test('native boundary rejects malformed/stale/foreign frames, handles storage bu
   const missing=await fixture(t,{executable:path.join(os.tmpdir(),'no-such-ffmpeg-mdlxl.exe')});
   await assert.rejects(missing.begin(1,{width:16,height:8,quality:'medium',loop:false}),/missing/);
 });
-test('oversized completed GIF is rejected by file size without a renderer buffer', async t => {
+test('large invalid GIF is rejected by its contents without a renderer buffer', async t => {
   const store=await fixture(t); await fs.mkdir(store.temporaryRoot,{recursive:true});
   const file=path.join(store.temporaryRoot,'large.gif');
   const handle=await fs.open(file,'w'); await handle.truncate(MAX_CAPTURE_BYTES+1); await handle.close();
-  await assert.rejects(validateGIFFile(file),/256 MB/);
+  await assert.rejects(validateGIFFile(file),/complete GIF/);
 });

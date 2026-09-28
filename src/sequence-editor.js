@@ -84,6 +84,36 @@ export function createSequence(model, duration = 1000) {
   return index;
 }
 
+export function createSequenceFromCurrent(model, sourceIndex) {
+  const source = model.Sequences?.[sourceIndex];
+  if (!source?.Interval) throw new Error('Select an animation before copying it.');
+  const name = `${source.Name} - copy`;
+  if (new TextEncoder().encode(name).length > 79) throw new Error('An animation name must fit in 79 UTF-8 bytes.');
+  const [start, end] = source.Interval;
+  const index = createSequence(model, Math.max(1, end - start));
+  const targetStart = model.Sequences[index].Interval[0], offset = targetStart - start;
+  model.Sequences[index] = { ...structuredClone(source), Name: name, Interval: intervalLike(source.Interval, targetStart, end + offset) };
+  for (const geoset of model.Geosets || []) {
+    if (geoset.Anims?.[sourceIndex]) geoset.Anims[index] = structuredClone(geoset.Anims[sourceIndex]);
+  }
+  visitModel(model, {
+    track(track) {
+      if (Number.isInteger(track.GlobalSeqId) && track.GlobalSeqId >= 0) return;
+      const copies = track.Keys.filter(key => key.Frame >= start && key.Frame <= end).map(key => ({ ...structuredClone(key), Frame: key.Frame + offset }));
+      track.Keys.push(...copies);
+      track.Keys.sort((a, b) => a.Frame - b.Frame);
+    },
+    event(node) {
+      if (Number.isInteger(node.GlobalSeqId) && node.GlobalSeqId >= 0) return;
+      const frames = Array.from(node.EventTrack);
+      const copies = frames.filter(frame => frame >= start && frame <= end).map(frame => frame + offset);
+      const combined = [...frames, ...copies].sort((a, b) => a - b);
+      node.EventTrack = ArrayBuffer.isView(node.EventTrack) ? new node.EventTrack.constructor(combined) : combined;
+    },
+  });
+  return index;
+}
+
 export function createGlobalSequence(model, duration = 1000) {
   model.GlobalSequences ||= [];
   duration = wholeFrame(duration, 'The global sequence length');
