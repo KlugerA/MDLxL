@@ -577,20 +577,38 @@ export default function GamePreview(inputProps) {
         // Reframe the authored portrait projection; its animated camera stays owned by the model.
         portraitFraming.set(x-.5,y-.5);invalidate();return;
       }
-      const posedBounds=new THREE.Box3(),vertex=new THREE.Vector3();
+      const posedBounds=new THREE.Box3(),vertex=new THREE.Vector3(),points=[];
+      const rotation=turntableRotation.clone().invert();
       const matrices=new Map((native.rendererData?.nodes||[]).flatMap((node,index)=>node?.matrix?[[index,new THREE.Matrix4().fromArray(node.matrix)]]:[]));
       const hidden=new Set(p.hiddenGeosets||[]);
       for(let index=0;index<ownedModel.Geosets.length;index++){
         if(hidden.has(index)||sampleGeosetAnimation(ownedModel,index,native.getFrame(),native.getSequence(),globalClock).alpha<=.001)continue;
-        const vertices=skinGeoset(ownedModel.Geosets[index],matrices);
-        for(let i=0;i<vertices.length;i+=3)posedBounds.expandByPoint(vertex.fromArray(vertices,i));
+        const geoset=ownedModel.Geosets[index],vertices=skinGeoset(geoset,matrices);
+        for(const id of new Set(geoset.Faces)){
+          const point=new THREE.Vector3().fromArray(vertices,id*3).applyQuaternion(rotation).add(turntableOffset);
+          points.push(point);posedBounds.expandByPoint(point);
+        }
       }
-      const anchor=posedBounds.isEmpty()?center.clone():posedBounds.getCenter(new THREE.Vector3());
-      anchor.applyQuaternion(turntableRotation.clone().invert()).add(turntableOffset);
-      camera.updateMatrixWorld();camera.updateProjectionMatrix();
-      const screen=anchor.clone().project(camera);
-      const translation=screenPlaneTranslation(camera,anchor,canvas.width,canvas.height,(x-(screen.x+1)/2)*canvas.width,(y-(1-screen.y)/2)*canvas.height);
-      camera.position.sub(translation);controls.target.sub(translation);controls.update();cameraChanged();
+      if(!points.length)return;
+      const anchor=posedBounds.getCenter(new THREE.Vector3()),target=new THREE.Vector2(x*2-1,1-y*2);
+      // Center the displayed silhouette bounds, not a projected 3D box center.
+      // A perspective pan moves near/far vertices by different screen amounts,
+      // so refine the pan until the projected bounds meet the crop midpoint.
+      for(let pass=0;pass<8;pass++){
+        camera.updateMatrixWorld();camera.updateProjectionMatrix();
+        const projected=new THREE.Box2();
+        for(const point of points){
+          vertex.copy(point).project(camera);
+          if(Number.isFinite(vertex.x)&&Number.isFinite(vertex.y)&&vertex.z>=-1&&vertex.z<=1)projected.expandByPoint(vertex);
+        }
+        if(projected.isEmpty())break;
+        const midpoint=projected.getCenter(new THREE.Vector2());
+        const dx=(target.x-midpoint.x)*canvas.width/2,dy=(midpoint.y-target.y)*canvas.height/2;
+        if(Math.abs(dx)<.1&&Math.abs(dy)<.1)break;
+        const translation=screenPlaneTranslation(camera,anchor,canvas.width,canvas.height,dx,dy);
+        camera.position.sub(translation);controls.target.sub(translation);controls.update();
+      }
+      cameraChanged();
     }
     function updateUV(nextModel) {
       const priorBuffer = gl.getParameter(gl.ARRAY_BUFFER_BINDING);
