@@ -22,7 +22,7 @@ test('unselected profiles retain original quality, FPS and duration',()=>{
 test('model replacement remaps by name, removes missing entries and retains every other setting',()=>{
  const a={Sequences:[{Name:'Stand'},{Name:'Walk'},{Name:'Portrait Talk'}]},b={Sequences:[{Name:'Portrait Talk'},{Name:'Stand'}]};
  const rows=[{sequence:0,seconds:4,speed:.75},{sequence:1,seconds:2,speed:1}];
- assert.deepEqual(remapShowcasePlaylist(rows,a,b),[{sequence:1,seconds:4,speed:.75}]);
+ assert.deepEqual(remapShowcasePlaylist(rows,a,b),[{sequence:1,seconds:4,speed:.75,disabledEmitters:[]}]);
  const take={id:'one',setup:{sequencePlaylist:rows,portraitPlaylist:[{sequence:2,seconds:3}],mode:'sequences',sequenceLength:4,cropPreset:'classic',color:'#123456',layers:[{text:'Megazord'}],view:{zoom:2}}};
  const mapped=remapShowcaseTake(take,a,b);assert.equal(mapped.id,'one');assert.equal(mapped.setup.portraitPlaylist[0].sequence,0);assert.equal(mapped.setup.color,'#123456');assert.deepEqual(mapped.setup.layers,take.setup.layers);assert.deepEqual(mapped.setup.view,take.setup.view);assert.equal(take.setup.sequencePlaylist.length,2);
 });

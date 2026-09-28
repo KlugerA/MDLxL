@@ -21,3 +21,26 @@ export function remapShowcaseTake(take,previous,next){
   const rows=setup.mode==='portrait'?setup.portraitPlaylist:setup.sequencePlaylist;
   return {...take,setup,name:rows.map(row=>next.Sequences[row.sequence].Name).join(' → ')+' · '+(setup.mode==='portrait'?setup.portraitLength:setup.sequenceLength)+'s'};
 }
+
+// A queued recording owns a frozen model and its textures. Loading a different
+// editor model must not rebind that recording or revoke the textures it needs.
+export async function snapshotShowcaseModel({model, modelName, modelPath, revision, sessionId, textureAssets}) {
+  const source=structuredClone({model,modelName,modelPath,revision,sessionId,textureAssets});
+  for (const asset of new Set(source.textureAssets.values())) {
+    if (!asset.url) continue;
+    if (!asset.blob) {
+      const response=await fetch(asset.url);
+      if (!response.ok) throw Error('Could not preserve model texture: '+asset.name);
+      asset.blob=await response.blob();
+    }
+    delete asset.url;
+  }
+  return source;
+}
+export function hydrateShowcaseModel(source, urls) {
+  const restored=structuredClone(source);
+  for (const asset of new Set(restored.textureAssets.values())) if (asset.blob) {
+    asset.url=URL.createObjectURL(asset.blob);urls.add(asset.url);
+  }
+  return restored;
+}

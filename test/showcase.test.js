@@ -5,13 +5,13 @@ import { showcaseAnimation, showcaseCamera, orbitView, recordingTimeline } from 
 const { showcaseDirectory } = createRequire(import.meta.url)('../electron/preview-capture.cjs');
 const model = { Sequences: [{ Name: 'Stand', Interval: [100, 1100] }, { Name: 'Death', Interval: [2000, 2500], NonLooping: true }, { Name: 'Portrait Talk', Interval: [3000, 4000] }] };
 const view = { position: [10, 0, 0], target: [0, 0, 0], fieldOfView: .8, roll: 0, near: .1, far: 1000 };
-test('Showcase stops local and global time at nonlooping end, resumes on the next entry', () => {
+test('Showcase holds the completed local pose while global time continues across entries', () => {
   const list = [{ sequence: 1, seconds: 2, speed: 2 }, { sequence: 0, seconds: 1, speed: .5 }];
   const a = showcaseAnimation(model, list, .25), b = showcaseAnimation(model, list, 1.99);
-  assert.equal(a.frame, 2500); assert.equal(b.frame, 2500); assert.equal(a.globalTime, 500); assert.equal(b.globalTime, 500); assert.equal(b.active, false);
-  const c = showcaseAnimation(model, list, 2.5); assert.equal(c.frame, 350); assert.equal(c.globalTime, 750); assert.equal(c.active, true);
-  assert.ok(Math.abs(showcaseAnimation(model, list, 3.1).globalTime - 1200) < 1e-8);
-  assert.equal(showcaseAnimation(model, list, 30, false).globalTime, 1000);
+  assert.equal(a.frame, 2500); assert.equal(b.frame, 2500); assert.equal(a.globalTime, 250); assert.equal(b.globalTime, 1990); assert.equal(b.active, false);
+  const c = showcaseAnimation(model, list, 2.5); assert.equal(c.frame, 350); assert.equal(c.globalTime, 2500); assert.equal(c.active, true);
+  assert.ok(Math.abs(showcaseAnimation(model, list, 3.1).globalTime - 3100) < 1e-8);
+  assert.equal(showcaseAnimation(model, list, 30, false).globalTime, 30000);
 });
 test('static, portrait selection and authored looping are literal', () => {
   assert.equal(showcaseAnimation(model, [], 100).active, false);
@@ -60,7 +60,7 @@ test('camera path controls preserve endpoints and arcs do not cut through the mo
 });
 test('speed zero freezes pose and overflow includes partly truncated entries',()=>{
   const frozen=showcaseAnimation(model,[{sequence:0,seconds:10,speed:0}],8);
-  assert.equal(frozen.frame,100);assert.equal(frozen.globalTime,0);
+  assert.equal(frozen.frame,100);assert.equal(frozen.globalTime,8000);
   assert.deepEqual(overflowEntries([{seconds:4},{seconds:7},{seconds:1}],10),[false,true,true]);
   assert.deepEqual(overflowEntries([{seconds:4},{seconds:6}],10),[false,false]);
 });

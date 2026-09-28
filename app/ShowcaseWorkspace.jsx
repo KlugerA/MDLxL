@@ -9,7 +9,7 @@ import { SHOWCASE_PRESETS, builtinSetup, listShowcasePresets, saveShowcasePreset
 import { validateShowcaseExport } from './showcase-export.js';
 import { moveDragPoint } from './classic-gestures.js';
 import { loopEffectTiming, timeShowcasePlaylist, showcaseEmitters } from './showcase-effects.js';
-import { remapShowcasePlaylist, remapShowcaseTake } from './showcase-model.js';
+import { remapShowcasePlaylist, snapshotShowcaseModel, hydrateShowcaseModel } from './showcase-model.js';
 import { alignShowcaseText } from './showcase-text.js';
 
 const GamePreview = lazy(() => import('./GamePreview.jsx'));
@@ -67,7 +67,15 @@ function AnimationDialog({ model, initial, portrait, exportTarget, definitions, 
   </Dialog>;
 }
 
-export default function ShowcaseWorkspace({ model, modelName, modelPath, revision, textureAssets, preferences, teamColor, sessionId, background, backgroundLibrary, onBackground, onStatus, active=true, onLoadModel }) {
+export default function ShowcaseWorkspace({ model: inputModel, modelName: inputModelName, modelPath: inputModelPath, revision: inputRevision, textureAssets: inputTextureAssets, preferences, teamColor, sessionId: inputSessionId, background, backgroundLibrary, onBackground, onStatus, active=true, onLoadModel }) {
+  const [recordingModel,setRecordingModel]=useState(null);
+  useEffect(()=>()=>{for(const asset of new Set(recordingModel?.textureAssets.values()||[]))if(asset.url)URL.revokeObjectURL(asset.url);},[recordingModel]);
+  const incomingModel=useRef({sessionId:inputSessionId,revision:inputRevision});
+  const incomingChanged=incomingModel.current.sessionId!==inputSessionId||incomingModel.current.revision!==inputRevision;
+  if(incomingChanged){incomingModel.current={sessionId:inputSessionId,revision:inputRevision};if(recordingModel)setRecordingModel(null);}
+  const source=incomingChanged?null:recordingModel;
+  const model=source?.model||inputModel,modelName=source?.modelName||inputModelName,modelPath=source?source.modelPath:inputModelPath;
+  const revision=source?.revision??inputRevision,sessionId=source?.sessionId||inputSessionId,textureAssets=source?.textureAssets||inputTextureAssets;
   const [api,setAPI] = useState(null), [playing,setPlaying] = useState(false), [previewOrbit,setPreviewOrbit] = useState(false), [busy,setBusy] = useState(false);
   const [crop,setCrop] = useState(null), [cropPreset,setCropPreset] = useState('free'), [cropEditing,setCropEditing] = useState(false), cropDrag = useRef(null);
   const previewRef = useRef(null), [previewSize,setPreviewSize] = useState({width:1,height:1});
@@ -111,9 +119,10 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
     const previous=previousModel.current.model;
     modelView.current={view:apiRef.current?.showcaseView(),previousAPI:apiRef.current};
     previousModel.current={model,sessionId};
-    setSequencePlaylist(rows=>timeShowcasePlaylist(model,remapShowcasePlaylist(rows,previous,model)));setPortraitPlaylist(rows=>timeShowcasePlaylist(model,remapShowcasePlaylist(rows,previous,model)));
-    setRecordingList(rows=>rows.map(row=>remapShowcaseTake(row,previous,model)));
-    if(recordingDraft.current)recordingDraft.current=remapShowcaseTake({setup:recordingDraft.current},previous,model).setup;
+    // Only the working setup follows a newly loaded model. Queued takes and
+    // the edit/batch return setup keep their own model and animation indices.
+    if(!pendingApply.current){setSequencePlaylist(rows=>timeShowcasePlaylist(model,remapShowcasePlaylist(rows,previous,model)));setPortraitPlaylist(rows=>timeShowcasePlaylist(model,remapShowcasePlaylist(rows,previous,model)));}
+    else modelView.current=null;
     setSelected(0);stopPreview();setAnimationDialog(null);
   }else previousModel.current.model=model;
   useEffect(()=>{if(!api)return;let live=true;api.whenReady().then(()=>{if(!live)return;const definitions=api.effectDefinitions();
@@ -213,25 +222,28 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
     if(!apiRef.current)throw Error('The Showcase preview is still loading.');
     if(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)throw Error('Wait for the background to finish loading.');
     await apiRef.current.whenReady();
-    return snapshotShowcase({version:1,orbitAngle:director.clock.angle,mainPicture,mode,sequenceLength,portraitLength,sequenceExtraTime,portraitExtraTime,orbitSpeed,orbitDirection,orbitTiming,orbitRadius,light,quality,fps,backgroundMode,color,crop,cropPreset,media,background,backgroundAsset:backgroundMode==='folder'&&(backgroundAsset?.url||backgroundLibrary.url)?{id:backgroundAsset?.id||background,name:backgroundAsset?.name||backgroundLibrary.items.find(item=>item.id===background)?.label||background,type:backgroundAsset?.type||backgroundLibrary.type,url:backgroundAsset?.url||backgroundLibrary.url,blob:backgroundAsset?.blob}:null,trim,portraitZoom,portraitFrameEnabled,grid,gridDensity,layers,view:apiRef.current.showcaseView(),...(animations?{sequencePlaylist,portraitPlaylist}:{})});
+    return snapshotShowcase({version:1,orbitAngle:director.clock.angle,mainPicture,mode,sequenceLength,portraitLength,sequenceExtraTime,portraitExtraTime,orbitSpeed,orbitDirection,orbitTiming,orbitRadius,light,quality,fps,backgroundMode,color,crop,cropPreset,media,background,backgroundAsset:backgroundMode==='folder'&&(backgroundAsset?.url||backgroundLibrary.url)?{id:backgroundAsset?.id||background,name:backgroundAsset?.name||backgroundLibrary.items.find(item=>item.id===background)?.label||background,type:backgroundAsset?.type||backgroundLibrary.type,url:backgroundAsset?.url||backgroundLibrary.url,blob:backgroundAsset?.blob}:null,trim,portraitZoom,portraitFrameEnabled,grid,gridDensity,layers,view:apiRef.current.showcaseView(),...(animations?{sequencePlaylist,portraitPlaylist,modelSource:await snapshotShowcaseModel({model,modelName,modelPath,revision,sessionId,textureAssets})}:{})});
   }
   function applySetup(snapshot){
     return new Promise((resolve,reject)=>{
       const previousURLs=[...setupURLs.current],setup=hydrateShowcase(snapshot,setupURLs.current);
-      pendingApply.current={setup,resolve,reject,previousURLs};
+      const modelSource=setup.modelSource?hydrateShowcaseModel(setup.modelSource,new Set()):null;
+      const targetModel=modelSource?.model||model,definitions=modelSource?undefined:apiRef.current?.effectDefinitions();
+      pendingApply.current={setup,resolve,reject,previousURLs,previousAPI:apiRef.current,modelSource};
       flushSync(()=>{
+        if(modelSource)setRecordingModel(modelSource);
         stopPreview();setCropEditing(false);setMainPicture(!!setup.mainPicture);setMode(setup.mode);setSequenceExtraTime(setup.sequenceExtraTime??Math.max(0,(Number(setup.sequenceLength)||0)-(setup.sequencePlaylist||sequencePlaylist).reduce((sum,row)=>sum+Number(row.seconds),0)));setPortraitExtraTime(setup.portraitExtraTime??Math.max(0,(Number(setup.portraitLength)||0)-(setup.portraitPlaylist||portraitPlaylist).reduce((sum,row)=>sum+Number(row.seconds),0)));
         setOrbitTiming(setup.orbitTiming==='circle'?'circle':'speed');setOrbitSpeed(setup.orbitSpeed);setOrbitDirection(setup.orbitDirection===-1?-1:1);setOrbitRadius(setup.orbitRadius);setOrbitAngle(setup.orbitAngle||0);setLight(setup.light);setQuality(setup.quality);setFPS(setup.fps);
         setBackgroundMode(setup.backgroundMode);setColor(setup.color);setCrop(setup.crop);setCropPreset(setup.cropPreset);setMedia(setup.media);setBackgroundAsset(setup.backgroundAsset);onBackground(setup.background||'');setTrim(setup.trim);setVideoDuration(0);
         setPortraitZoom(setup.portraitZoom);setPortraitFrameEnabled(setup.portraitFrameEnabled);setGrid(!!setup.grid);setGridDensity(setup.gridDensity||5);setLayers(setup.layers);setActiveLayer(null);setLayersEditing(false);setSelected(0);
-        if(setup.sequencePlaylist)setSequencePlaylist(timeShowcasePlaylist(model,setup.sequencePlaylist,apiRef.current?.effectDefinitions()));if(setup.portraitPlaylist)setPortraitPlaylist(timeShowcasePlaylist(model,setup.portraitPlaylist,apiRef.current?.effectDefinitions()));
+        if(setup.sequencePlaylist)setSequencePlaylist(timeShowcasePlaylist(targetModel,setup.sequencePlaylist,definitions));if(setup.portraitPlaylist)setPortraitPlaylist(timeShowcasePlaylist(targetModel,setup.portraitPlaylist,definitions));
         setApplyVersion(value=>value+1);
       });
       director.reset();
     });
   }
   useEffect(()=>{
-    const pending=pendingApply.current;if(!pending||!api||apiRef.current!==api)return;
+    const pending=pendingApply.current;if(!pending||!api||apiRef.current!==api||(pending.modelSource&&api===pending.previousAPI))return;
     let cancelled=false;
     (async()=>{
       await new Promise(requestAnimationFrame);if(cancelled)return;await api.whenReady();if(cancelled||apiRef.current!==api)return;
@@ -292,14 +304,14 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   }
   return <div className="showcase-workspace">
     <aside className="showcase-sidebar" aria-label="Showcase controls">
-      <AnimationPreviewTools exportTarget={exportTarget} onExportTarget={chooseExportTarget} mainPicture={mainPicture} cropAspect={framedPortrait?undefined:mainPicture?612/490:SHOWCASE_CROP_PRESETS[cropPreset]} active={active} sessionId={sessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={framedPortrait?null:selectedCrop} locked={setupBusy||!!editingRecording} recordingList={recordingList} prepareTake={take=>applySetup(take.setup)} onTakeComplete={id=>setRecordingList(rows=>rows.filter(row=>row.id!==id))} beforeBatch={async()=>{batchRestore.current=await captureSetup(true);}} afterBatch={async()=>{const saved=batchRestore.current;batchRestore.current=null;if(saved)await applySetup(saved);}} disabled={!!exportError || setupBusy || overflow.some(Boolean) || !playlist.length || portrait && cameraIndex < 0 || !portrait && backgroundMode === 'folder' && !backgroundAsset && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)stopPreview();}}/>
+      <AnimationPreviewTools exportTarget={exportTarget} onExportTarget={chooseExportTarget} mainPicture={mainPicture} cropAspect={framedPortrait?undefined:mainPicture?612/490:SHOWCASE_CROP_PRESETS[cropPreset]} active={active} sessionId={inputSessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={framedPortrait?null:selectedCrop} locked={setupBusy||!!editingRecording} recordingList={recordingList} prepareTake={take=>applySetup(take.setup)} onTakeComplete={id=>setRecordingList(rows=>rows.filter(row=>row.id!==id))} beforeBatch={async()=>{batchRestore.current=await captureSetup(true);}} afterBatch={async()=>{const saved=batchRestore.current;batchRestore.current=null;if(saved)await applySetup(saved);}} disabled={!!exportError || setupBusy || overflow.some(Boolean) || !playlist.length || portrait && cameraIndex < 0 || !portrait && backgroundMode === 'folder' && !backgroundAsset && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)stopPreview();}}/>
       {exportError&&<div className="showcase-error" role="alert">{exportError}</div>}
       <fieldset disabled={busy||setupBusy} className="showcase-fields">
         <div className="showcase-model-file"><button onClick={()=>window.desktop?onLoadModel?.():modelInput.current.click()}>Load model</button><small title={modelPath||modelName}>{modelName}</small></div>
         <input ref={modelInput} type="file" accept=".mdl,.mdx" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)onLoadModel?.(file);}}/>
         <div className="showcase-preset-actions"><button disabled={!api} onClick={()=>{setPresetName(modelName.replace(/\.[^.]+$/,'')+' setup');setPresetDialog('save');}}>Save Preset</button><button disabled={!api} onClick={()=>setPresetDialog('load')}>Load Preset</button></div>
         {editingRecording?<div className="showcase-preset-actions"><button disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={()=>finishRecordingEdit(true)}>Save changes</button><button onClick={()=>finishRecordingEdit(false)}>Cancel</button></div>:<button className="showcase-wide" disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={addRecording}>Add to recording list{recordingList.length?' · '+recordingList.length:''}</button>}
-        {recordingList.length>0&&<ol className="showcase-recording-list" aria-label="Recording list">{recordingList.map((take,index)=><li key={take.id}><button className="showcase-recording-edit" aria-label={'Edit recording '+(index+1)} aria-pressed={editingRecording===take.id} disabled={!!editingRecording} title={'Edit '+take.name} onClick={()=>editRecording(take)}>{index+1}. {take.name}</button><button disabled={!!editingRecording} aria-label={'Remove recording '+(index+1)} onClick={()=>setRecordingList(rows=>rows.filter(row=>row.id!==take.id))}>×</button></li>)}</ol>}
+        {recordingList.length>0&&<ol className="showcase-recording-list" aria-label="Recording list">{recordingList.map((take,index)=><li key={take.id}><button className="showcase-recording-edit" aria-label={'Edit recording '+(index+1)} aria-pressed={editingRecording===take.id} disabled={!!editingRecording} title={'Edit '+take.name+(take.setup.modelSource?' · '+take.setup.modelSource.modelName:'')} onClick={()=>editRecording(take)}>{index+1}. {take.name}</button><button disabled={!!editingRecording} aria-label={'Remove recording '+(index+1)} onClick={()=>setRecordingList(rows=>rows.filter(row=>row.id!==take.id))}>×</button></li>)}</ol>}
         <ExtraTimeField value={portrait?portraitExtraTime:sequenceExtraTime} base={portrait?portraitBase:sequenceBase} onChange={portrait?setPortraitExtraTime:setSequenceExtraTime}/>
         {(!portrait||framedPortrait)&&<section className={sectionClass('background')} aria-label={portrait?"Portrait color":"Background"}>
           <header>{sectionToggle('background',portrait?'Color':'Background')}{!portrait&&!collapsed.background&&<select aria-label="Background source" value={backgroundMode} onChange={event=>setBackgroundMode(event.target.value)}><option value="folder">Backgrounds</option><option value="color">Color</option><option value="media">Image/Video</option></select>}</header>
