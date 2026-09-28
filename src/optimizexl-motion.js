@@ -192,8 +192,8 @@ export function scanIrregularMotion(model) {
  * Stored frames remain available to unrelated axes. Exterior control handles,
  * other animation intervals, and unrelated transform channels stay untouched.
  */
-export function repairMotionIrregularity(model, fix) {
-  const warning = scanIrregularMotion(model).find(f => f.id === fix.id);
+export function repairMotionIrregularity(model, fix, evidenceModel = model) {
+  const warning = scanIrregularMotion(evidenceModel).find(f => f.id === fix.id);
   if (!warning) throw Error('This motion finding no longer matches the current model.');
   if (warning.signature !== fix.signature || JSON.stringify(warning.segments) !== JSON.stringify(fix.segments) || JSON.stringify(warning.bridges) !== JSON.stringify(fix.bridges))
     throw Error('The affected curve segments changed. Select the finding again.');

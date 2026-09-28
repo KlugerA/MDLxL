@@ -1,0 +1,72 @@
+const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
+const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright');
+(async () => {
+  const model = process.env.MDLXL_FOOTMAN_MODEL || 'C:/Users/PC/Downloads/Footman (Unoptimized).mdx', source = fs.readFileSync(model);
+  const out = path.resolve(process.env.MDLXL_OPTIMIZEXL_PROOF_ROOT || 'out', 'selection-ui'); fs.mkdirSync(out, { recursive: true });
+  const exe = process.env.MDLXL_OPTIMIZEXL_EXE;
+  const app = await _electron.launch({ executablePath: exe || path.resolve('node_modules/electron/dist/electron.exe'), args: [...(exe ? [] : [process.cwd()]), model],
+    env: { ...process.env, MDLVIS_HEADLESS: '1', MDLXL_PROFILE: path.join(out, 'profile-' + Date.now()) }, timeout: 60000 });
+  const errors = [];
+  try {
+    const main = await app.firstWindow(); await main.getByTitle('OptimizeXL', { exact: true }).waitFor({ timeout: 60000 });
+    const pending = app.waitForEvent('window'); await main.getByTitle('OptimizeXL', { exact: true }).click(); const p = await pending; p.setDefaultTimeout(20000); p.on('pageerror', e => errors.push(e.message));
+    await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) { w.webContents.setBackgroundThrottling(false); w.setBounds({ x: -3500, y: 0, width: 1600, height: 1000 }); w.showInactive(); } });
+    const stage = name => p.getByRole('navigation', { name: 'Optimization stages' }).getByRole('button', { name, exact: true }).click();
+    const ready = () => p.waitForFunction(() => !!document.querySelector('.ox-savings strong') && !document.querySelector('.ox-error'));
+    await ready();
+    await p.evaluate(() => { window.sides = () => Array.from(document.querySelectorAll('.ox-preview .game-preview-root'), root => { let props, runtime; for (let f = root[Object.keys(root).find(k => k.startsWith('__reactFiber'))]; f; f = f.return) for (let h = f.memoizedState; h; h = h.next) { const c = h.memoizedState?.current; if (c?.model?.Geosets && c?.compareCamera) props = c; if (c?.native && c?.controls) runtime = c; } return { props, runtime }; }); });
+    const original = await p.evaluate(() => JSON.stringify(sides()[0].props.model)), originalHeader = await p.locator('[aria-label="Before preview"] h2').textContent();
+    const originalUnchanged = async () => { assert.equal(await p.evaluate(() => JSON.stringify(sides()[0].props.model)), original); assert.equal(await p.locator('[aria-label="Before preview"] h2').textContent(), originalHeader); };
+    const animation = p.getByLabel('Animation', { exact: true }), frame = p.getByLabel('Animation frame', { exact: true });
+    // All native selects in the detached document share the normal wheel API.
+    await p.getByRole('button', { name: 'Play', exact: true }).click(); await animation.hover(); await p.mouse.wheel(0, 100);
+    await p.waitForFunction(() => document.querySelector('[aria-label="Animation"]').value === '1'); assert.equal(await p.getByRole('button', { name: 'Pause', exact: true }).count(), 1);
+    await p.waitForFunction(() => Number(document.querySelector('[aria-label="Animation frame"]').value) > 2100);
+    await p.getByRole('button', { name: 'Pause', exact: true }).click(); await animation.selectOption('0'); await frame.fill('1000');
+    await stage('Irregularities Fixer');
+    const select = p.getByLabel('Proposed fix', { exact: true }), selection = p.locator('.ox-fix-selection'), summary = selection.locator('summary');
+    assert.equal(await selection.locator('details').getAttribute('open'), null); assert.equal(await p.locator('.ox-controls').evaluate(e => e.getBoundingClientRect().width), 255);
+    const ids = await select.locator('option').evaluateAll(os => os.map(o => o.value).filter(Boolean));
+    await select.hover(); await p.mouse.wheel(0, 100); await p.waitForFunction(id => document.querySelector('[aria-label="Proposed fix"]').value === id, ids[0]); await ready();
+    await select.hover(); await p.mouse.wheel(0, 100); await p.waitForFunction(id => document.querySelector('[aria-label="Proposed fix"]').value === id, ids[1]); await ready();
+    // Approve and Skip must advance without opening the dropdown again.
+    await select.selectOption('motion:0:25:Translation'); await ready(); await p.getByRole('button', { name: 'Approve', exact: true }).click();
+    await p.waitForFunction(() => document.querySelector('[aria-label="Proposed fix"]').value && document.querySelector('[aria-label="Proposed fix"]').value !== 'motion:0:25:Translation'); await ready(); await originalUnchanged();
+    await p.getByRole('button', { name: 'Back', exact: true }).click(); await ready(); assert.equal(await select.inputValue(), 'motion:0:25:Translation');
+    await p.getByRole('button', { name: 'Skip fix', exact: true }).click(); await p.waitForFunction(() => document.querySelector('[aria-label="Proposed fix"]').value && document.querySelector('[aria-label="Proposed fix"]').value !== 'motion:0:25:Translation'); await ready();
+    await stage('Duplicate data'); assert.equal(await animation.inputValue(), '0'); assert.equal(await frame.inputValue(), '1000');
+    await stage('Irregularities Fixer'); await summary.click();
+    const preview = p.getByRole('button', { name: 'Preview all selected fixes', exact: true }); assert.equal(await preview.isEnabled(), false);
+    await selection.getByRole('button', { name: 'Select all', exact: true }).click();
+    const total = await selection.getByRole('checkbox').count(); assert.ok(total > 2); assert.equal(await selection.locator('input:checked').count(), total);
+    await preview.click(); await ready(); assert.equal(await p.getByRole('button', { name: 'Approve selected', exact: true }).isEnabled(), true, 'The complete selected queue must also compose successfully');
+    await originalUnchanged();
+    await selection.getByRole('button', { name: 'Clear all', exact: true }).click(); assert.equal(await selection.locator('input:checked').count(), 0); assert.equal(await preview.isEnabled(), false);
+    const labels = ['Stand - 4: irregular movement (Bone_Root)', 'Stand - 4: suspicious whole-body snap (Bone_Root)'];
+    for (const label of labels) await selection.getByRole('checkbox', { name: 'Select ' + label, exact: true }).check();
+    assert.equal(await p.getByRole('button', { name: 'Approve', exact: true }).isEnabled(), false, 'Checkbox changes wait for the requested combined preview');
+    await preview.click(); await ready(); assert.equal(await p.getByRole('button', { name: 'Approve selected', exact: true }).isEnabled(), true);
+    assert.match(await selection.textContent(), /Previewing 2 selected fixes/); await frame.fill('8500');
+    await p.waitForFunction(() => sides().every(s => s.props.time === 8500));
+    const after = await p.evaluate(() => JSON.stringify(sides()[1].props.model));
+    const positions = await p.evaluate(() => sides().map(s => { const r = s.runtime.native; return Array.from(r.interp.vec3(new Float32Array(3), s.props.model.Nodes[25].Translation)); }));
+    assert.ok(Math.abs(positions[0][0] - positions[1][0]) > .3); assert.ok(Math.abs(positions[1][0] + 13.172800064086914) < 1e-5);
+    await originalUnchanged(); await p.screenshot({ path: path.join(out, 'selected-stand4-fixes.png') });
+    // Browsing one selected finding keeps the combined model active.
+    await select.selectOption({ label: labels[1] }); await ready(); assert.equal(await p.evaluate(() => JSON.stringify(sides()[1].props.model)), after);
+    await p.getByRole('button', { name: 'Approve selected', exact: true }).click(); await p.waitForFunction(() => !Array.from(document.querySelector('[aria-label="Proposed fix"]').options).some(o => o.value === 'snap:3:25')); await originalUnchanged();
+    await p.getByRole('button', { name: 'Back', exact: true }).click(); await ready(); assert.equal(await selection.locator('input:checked').count(), 2);
+    assert.equal(await p.getByRole('button', { name: 'Approve selected', exact: true }).isEnabled(), true); assert.equal(await p.evaluate(() => JSON.stringify(sides()[1].props.model)), after); await originalUnchanged();
+    await selection.getByRole('checkbox', { name: 'Select ' + labels[1], exact: true }).uncheck();
+    await p.waitForFunction(() => !document.querySelector('.ox-savings strong')); assert.equal(await p.getByRole('button', { name: 'Approve', exact: true }).isEnabled(), false);
+    await preview.click(); await ready(); assert.notEqual(await p.evaluate(() => JSON.stringify(sides()[1].props.model)), after, 'Unchecked fixes are excluded from the proposal');
+    await stage('Sphereomancer'); await ready(); const preset = p.getByLabel('Sphere preset', { exact: true }), previous = Number(await preset.inputValue());
+    await preset.hover(); await p.mouse.wheel(0, 100); await p.waitForFunction(n => Number(document.querySelector('[aria-label="Sphere preset"]').value) === n + 1, previous); await ready();
+    await stage('Insanity FIxer'); await p.getByLabel('Proposed fix', { exact: true }).waitFor(); await summary.click(); await selection.getByRole('button', { name: 'Select all', exact: true }).click(); await preview.click(); await ready();
+    assert.equal(await p.getByRole('button', { name: 'Approve selected', exact: true }).isEnabled(), true); await p.getByRole('button', { name: 'Approve selected', exact: true }).click();
+    await p.waitForFunction(() => !Array.from(document.querySelectorAll('[aria-label="Proposed fix"] option')).some(o => o.value === 'invalidBounds')); await originalUnchanged();
+    assert.deepEqual(fs.readFileSync(model), source); assert.deepEqual(errors, []);
+    fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify({ passed: true, packaged: !!exe, checkboxSubset: true, selectAllClearAll: true, combinedPreviewApprovalAndUndo: true, autoAdvanceApproveAndSkip: true, dropdownWheel: ['Animation', 'Proposed fix', 'Sphere preset'], animationSelectionKeepsPlaying: true, beforePinned: true, noSourceWrites: true, errors }, null, 2));
+    console.log('Passed selected-fix previews, atomic approval/Back, auto-next, dropdown wheels, playback continuity and pinned original.');
+  } finally { await app.close(); }
+})().catch(e => { console.error(e); process.exitCode = 1; });

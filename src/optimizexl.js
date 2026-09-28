@@ -8,6 +8,7 @@ import { optimizationReview } from './optimizexl-review.js';
 import { reduceAnimationTrack } from './optimizexl-animation.js';
 import { boundsProposals, repairBounds } from './optimizexl-bounds.js';
 import { repairMotionIrregularity, scanIrregularMotion } from './optimizexl-motion.js';
+import { repairSuspiciousSnap, scanSuspiciousSnaps } from './optimizexl-snaps.js';
 
 export const STAGES = [
   {id:'duplicates',name:'Duplicate data'}, {id:'animation',name:'Animation optimization'},
@@ -104,12 +105,33 @@ export function findIrregularities(m){const findings=[],seq=m.Sequences,live=seq
  // Dissipate is inferred only when most animated roots travel substantially
  // while a small, separately rooted visible component remains stationary.
  const dissipate=seq.findIndex(s=>seqName(s)==='dissipate');if(dissipate>=0){const [lo,hi]=seq[dissipate].Interval,nodes=allNodes(m),byId=new Map(nodes.map(n=>[n.ObjectId,n]));const root=id=>{let n=byId.get(id),seen=new Set();while(n?.Parent!=null&&!seen.has(n.Parent)){seen.add(n.Parent);n=byId.get(n.Parent);}return n;};const motion=gi=>Math.max(0,...m.Geosets[gi].Groups.flat().map(id=>{const n=root(id);return n?trackError(sample(m,n.Translation,'Translation',dissipate,lo),sample(m,n.Translation,'Translation',dissipate,hi),false):0;}));const vis=m.Geosets.map((_,gi)=>gi).filter(gi=>allVisible(m,gi,dissipate)),moving=vis.filter(gi=>motion(gi)>dimensions(m)*.15);if(moving.length>vis.length*.75)for(const gi of vis)if(motion(gi)<.01)findings.push({id:`dissipate:${gi}`,kind:'hide',geoset:gi,sequence:dissipate,frame:hi,label:`Geoset ${gi+1} remains behind during Dissipate`,detail:'Most visible geometry travels away, but this separately rooted component stays still. Proposed correction hides this component in Dissipate.'});}
+ findings.push(...scanSuspiciousSnaps(m,findings.filter(f=>f.kind==='motion')));
  return findings;
 }
 export function sanityProposals(m){const findings=boundsProposals(m);for(const [i,e]of m.ParticleEmitters2.entries())if(e.Gravity?.Keys)findings.push({id:`gravity:${i}`,kind:'gravity',emitter:i,value:e.Gravity.Keys[0]?.Vector[0]||0,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${e.Name}: animated gravity`,detail:'Hive flags animated gravity. Choose a static value and review its particle motion.'});
  for(const {track:t,path}of tracks(m)){if(t.GlobalSeqId>=0&&m.GlobalSequences[t.GlobalSeqId]>0&&t.Keys.some(k=>k.Frame>m.GlobalSequences[t.GlobalSeqId])&&t.Keys.some(k=>k.Frame<=m.GlobalSequences[t.GlobalSeqId]))findings.push({id:`outside:${path.join('.')}`,kind:'globalKeys',path,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${path.join('.')}: keys beyond global duration`,detail:'Remove keys outside the declared global sequence. Review effects and animation before approval.'});}
  return findings;}
-function applyRepair(m,fix,settings){if(!fix)return;if(fix.kind==='motion'){repairMotionIrregularity(m,fix);return;}if(fix.kind==='bounds'){repairBounds(m,fix);return;}if(fix.kind==='commonPose'){applyCommonEndpointPose(m,fix);return;}switch(fix.kind){case'hide':hideGeoset(m,fix.geoset,fix.sequence);break;case'gravity':m.ParticleEmitters2[fix.emitter].Gravity=Number(settings.gravity??fix.value);break;case'globalKeys':{let t=m;for(const p of fix.path)t=t[p];t.Keys=t.Keys.filter(k=>k.Frame<=m.GlobalSequences[t.GlobalSeqId]);break;}case'pose':{const source=settings.reverse?fix.sequence:fix.from,sourceFrame=settings.reverse?fix.frame:fix.fromFrame,target=settings.reverse?fix.from:fix.sequence,targetFrame=settings.reverse?fix.fromFrame:fix.frame;for(const n of allNodes(m))for(const p of ['Translation','Rotation','Scaling']){const t=n[p];if(!local(t)||![0,1].includes(t.LineType))continue;const value=sample(m,t,p,source,sourceFrame),before=sample(m,t,p,target,targetFrame);if(same(value,before))continue;const interval=m.Sequences[target].Interval,keys=t.Keys.filter(k=>k.Frame>=interval[0]&&k.Frame<=interval[1]);setKey(t,targetFrame,value);if(keys.length<=1)setKey(t,targetFrame===interval[0]?interval[1]:interval[0],value);}}break;}}
+function applyRepair(m,fix,settings,evidenceModel=m){
+ if(!fix)return;
+ if(fix.kind==='batch'){
+  if(!['sanity','irregularities'].includes(fix.stage)||!fix.entries?.length)throw Error('Select at least one fix to preview.');
+  const baseline=structuredClone(m),catalog=fix.stage==='sanity'?sanityProposals(baseline):findIrregularities(baseline);
+  const selected=new Map();for(const entry of fix.entries){const actual=catalog.find(f=>f.id===entry.fix?.id);if(!actual||!same(actual,entry.fix))throw Error('A selected finding changed. Select the fixes again.');if(selected.has(actual.id))throw Error('A fix was selected twice.');selected.set(actual.id,entry);}
+  // Validate every finding against the same snapshot, then apply in the normal
+  // stage order. A new snap repair can refine an existing curve repair without
+  // invalidating its original evidence or silently dropping selected work.
+  for(const f of catalog)if(selected.has(f.id)){const entry=selected.get(f.id);applyRepair(m,entry.fix,entry.settings||{},baseline);}
+  return;
+ }
+ if(fix.kind==='motion'){repairMotionIrregularity(m,fix,evidenceModel);return;}
+ if(fix.kind==='snap'){repairSuspiciousSnap(m,fix,evidenceModel);return;}
+ if(fix.kind==='gravity'){
+  const emitter=m.ParticleEmitters2[fix.emitter];emitter.Gravity=Number(settings.gravity??fix.value);
+  // The animated field's separate MDX base ceases to exist when it is static.
+  if(emitter._MdxDefaults){delete emitter._MdxDefaults.Gravity;if(!Object.keys(emitter._MdxDefaults).length)delete emitter._MdxDefaults;}
+  return;
+ }
+ if(fix.kind==='bounds'){repairBounds(m,fix);return;}if(fix.kind==='commonPose'){applyCommonEndpointPose(m,fix);return;}switch(fix.kind){case'hide':hideGeoset(m,fix.geoset,fix.sequence);break;case'globalKeys':{let t=m;for(const p of fix.path)t=t[p];t.Keys=t.Keys.filter(k=>k.Frame<=m.GlobalSequences[t.GlobalSeqId]);break;}case'pose':{const source=settings.reverse?fix.sequence:fix.from,sourceFrame=settings.reverse?fix.frame:fix.fromFrame,target=settings.reverse?fix.from:fix.sequence,targetFrame=settings.reverse?fix.fromFrame:fix.frame;for(const n of allNodes(m))for(const p of ['Translation','Rotation','Scaling']){const t=n[p];if(!local(t)||![0,1].includes(t.LineType))continue;const value=sample(m,t,p,source,sourceFrame),before=sample(m,t,p,target,targetFrame);if(same(value,before))continue;const interval=m.Sequences[target].Interval,keys=t.Keys.filter(k=>k.Frame>=interval[0]&&k.Frame<=interval[1]);setKey(t,targetFrame,value);if(keys.length<=1)setKey(t,targetFrame===interval[0]?interval[1]:interval[0],value);}}break;}}
 function spheres(m,settings){const chosen=settings.spheres||SPHERE_PRESETS[settings.preset||0].spheres,size=clamp(settings.size??1,.01,20),old=m.CollisionShapes;
  if(allNodes(m).some(n=>!old.includes(n)&&old.some(c=>c.ObjectId===n.Parent)))throw Error('A collision shape has non-collision child nodes; adjust that hierarchy before replacing spheres.');
  for(let i=0;i<chosen.length;i++){const [x,y,z,r]=chosen[i];if(![x,y,z,r].every(Number.isFinite)||r<=0)throw Error('Sphere coordinates must be finite and radius must be positive.');let n=old[i];if(!n)n=createNode(m,'CollisionShape');Object.assign(n,{Shape:2,Name:`OptimizeXL Sphere ${i+1}`,Parent:null,Vertices:new Float32Array([x*size,y*size,z*size]),BoundsRadius:r*size});for(const k of ['Translation','Rotation','Scaling'])delete n[k];}

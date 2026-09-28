@@ -36,10 +36,11 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
   }
   // Changing findings must keep the original return point, not the last finding.
   await inspect();await p.getByLabel('Proposed fix',{exact:true}).selectOption('visibility:45:13');await ready();await p.getByRole('button',{name:'Next stage',exact:true}).click();await restored();
-  // Clearing, skipping and approving all finish the temporary inspection.
+  // Clearing finishes inspection. Skip/Approve inspect the next finding;
+  // leaving that queue still restores the original return point.
   await inspect();await p.getByLabel('Proposed fix',{exact:true}).selectOption('');await restored();
-  await inspect('decay:38');await p.getByRole('button',{name:'Skip fix',exact:true}).click();await restored();
-  await inspect();await p.getByRole('button',{name:'Approve',exact:true}).click();await restored();
+  await inspect('decay:38');await p.getByRole('button',{name:'Skip fix',exact:true}).click();assert.notEqual(await p.getByLabel('Proposed fix',{exact:true}).inputValue(),'decay:38');await p.getByRole('button',{name:'Duplicate data',exact:true}).click();await restored();
+  await inspect();await p.getByRole('button',{name:'Approve',exact:true}).click();assert.notEqual(await p.getByLabel('Proposed fix',{exact:true}).inputValue(),'decay:37');await p.getByRole('button',{name:'Duplicate data',exact:true}).click();await restored();
   // Back reopens the undone finding, then leaving it restores normal playback.
   await p.getByRole('button',{name:'Back',exact:true}).click();assert.equal(await p.getByLabel('Proposed fix',{exact:true}).inputValue(),'decay:37');await p.waitForFunction(()=>inspectState().every(s=>s?.sequence===10));
   await p.getByRole('button',{name:'Duplicate data',exact:true}).click();await restored();
