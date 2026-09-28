@@ -936,6 +936,15 @@ export default function GamePreview(inputProps) {
     state.captureApi = {
       get isReady() { return !disposed && texturesReady && eventPreview.isReady && backgroundState.current.status === 'ready' && layerAPI.current?.isReady !== false && (!portraitHasFrame(latest.current) || portraitFrame.current.status !== 'loading'); },
       cameraView() { return state.cameraView(); },
+      showcaseView() { return {camera:state.cameraView(),anchor:[0,0,center.z],radius,portraitFraming:portraitFraming.toArray()}; },
+      restoreShowcaseView(saved) {
+        portraitFraming.fromArray(saved.portraitFraming||[0,0]);
+        if(latest.current.portraitMode){state.cameraDetached=false;invalidate();return;}
+        const origin=saved.anchor||[0,0,center.z],scale=radius/(saved.radius||radius),anchor=[0,0,center.z];
+        const view={...saved.camera,position:saved.camera.position.map((v,i)=>anchor[i]+(v-origin[i])*scale),target:saved.camera.target.map((v,i)=>anchor[i]+(v-origin[i])*scale)};
+        camera=perspective;controls.object=camera;state.cameraDetached=true;
+        applyEvaluatedModelCamera(camera,controls,view,canvas.width/canvas.height);invalidate();
+      },
       invalidate() { state.scheduler.invalidate(); },
       fit() { fit(); },
       centerModel(crop) { centerShowcaseModel(crop); },
@@ -1062,7 +1071,7 @@ export default function GamePreview(inputProps) {
       <div ref={host} className={`game-preview-surface${framed ? ' portrait-model-surface' : ''}`} />
       {selectionBox && <div className={`game-preview-selection-layer${framed ? ' portrait-model-surface' : ''}`}><div data-selection-marquee="" style={{ position: 'absolute', zIndex: 90, pointerEvents: 'none', boxSizing: 'border-box', border: `1px dashed ${marqueeColor}`, background: `${marqueeColor}24`, boxShadow: '0 0 0 1px #fff', ...selectionBox }} /></div>}
       {framed && frame.status === 'ready' && <img className="portrait-human-frame" src={frame.url} alt="" aria-hidden="true" data-frame-version={portraitFrameVersion}/>}
-      {props.showcase && <ShowcaseLayers ref={layerAPI} layers={props.showcaseLayers} activeId={props.showcaseActiveLayer} editing={props.showcaseLayerEditing} onSelect={props.onShowcaseLayerSelect} onChange={props.onShowcaseLayerChange} onError={props.onShowcaseLayerError} onInvalidate={()=>runtime.current?.scheduler.invalidate()}/>}
+      {props.showcase && <ShowcaseLayers ref={layerAPI} grid={props.showcaseGrid} gridDensity={props.showcaseGridDensity} crop={props.showcaseCrop} layers={props.showcaseLayers} activeId={props.showcaseActiveLayer} editing={props.showcaseLayerEditing} onSelect={props.onShowcaseLayerSelect} onChange={props.onShowcaseLayerChange} onError={props.onShowcaseLayerError} onInvalidate={()=>runtime.current?.scheduler.invalidate()}/>}
       {portrait && !hasCamera && <div className="portrait-message" role="status">Create or select a camera to view the portrait</div>}
       {framed && frame.status === 'loading' && <div className="portrait-frame-status" role="status">Loading Human UI frame from installed Warcraft III data…</div>}
       {framed && frame.status === 'failed' && <div className="portrait-frame-status portrait-frame-error" role="status">{frame.error}</div>}

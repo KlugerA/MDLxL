@@ -89,7 +89,7 @@
 .showcase-text-colors { display:flex; flex-direction:column; gap:7px; align-items:stretch; padding-top:2px; }
 .showcase-text-colors label { display:flex; gap:2px; margin:0; font-size:9px; }
 .showcase-text-colors input[type=color] { width:24px; min-width:24px; height:25px; padding:1px; }
-.showcase-text-format { display:grid; grid-template-columns:58px 53px minmax(0,1fr) 22px; gap:3px; align-items:center; margin:4px 0; }
+.showcase-text-format { display:grid; grid-template-columns:58px minmax(0,1fr) 22px 19px 28px; gap:3px; align-items:center; margin:4px 0; }
 .showcase-text-format label { display:flex; gap:2px; margin:0; font-size:10px; }
 .showcase-text-format label input[type=number] { width:34px; min-width:0; height:22px; padding:1px; box-sizing:border-box; font-size:11px; }
 .showcase-text-style { display:flex; gap:2px; justify-content:flex-end; }
@@ -131,3 +131,19 @@
 .showcase-signature-handle { position:absolute; right:-5px; bottom:-5px; width:11px; height:11px; background:#fff; border:1px solid #222; box-sizing:border-box; cursor:nwse-resize; }
 
 .showcase-text-format input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+
+.showcase-grid-toggle { width:19px; height:22px; min-height:0; min-width:0; padding:0; }
+.showcase-grid-toggle svg { display:block; width:17px; height:17px; }
+.showcase-sidebar input.showcase-grid-density { width:28px; min-width:0; height:22px; padding:1px; box-sizing:border-box; font-size:11px; }
+.showcase-alignment-grid { position:absolute; pointer-events:none; opacity:.65; }
+.showcase-align { position:relative; display:inline-block; font-size:10px; }
+.showcase-align summary { cursor:pointer; }
+.showcase-align-menu { position:absolute; z-index:5; top:100%; left:0; width:90px; padding:4px; background:var(--ui-panel,#eee); border:1px solid #888; box-shadow:1px 2px 4px #0005; }
+.showcase-align-grid,.showcase-paragraph-align { display:grid; grid-template-columns:repeat(3,1fr); gap:2px; margin:2px 0; }
+.showcase-align-menu button { min-height:22px; padding:0; }
+.showcase-preset-actions { display:flex; gap:3px; margin:4px 0; }
+.showcase-preset-actions button { flex:1; }
+.showcase-recording-list { margin:4px 0; padding:0; list-style:none; max-height:110px; overflow:auto; }
+.showcase-recording-list li { display:flex; align-items:center; gap:3px; margin:2px 0; }
+.showcase-recording-list span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+.showcase-recording-list button { padding:0 4px; min-height:18px; }

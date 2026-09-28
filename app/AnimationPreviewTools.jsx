@@ -4,11 +4,10 @@ import { recordingTimeline } from './showcase-timeline.js';
 import { cropPixels } from './showcase-crop.js';
 import { queueRecording, subscribeRecordings, recordingQueueSnapshot, retryRecordingSaves } from './preview-recording-queue.js';
 
-export default function AnimationPreviewTools({ active, sessionId, captureAPI, modelName, loop, length, crop, disabled, onStatus, onBusy, preferences }) {
-  const [state,setState] = useState('idle'), [progress,setProgress] = useState(''), [error,setError] = useState('');
-  const latest = useRef(); latest.current = {onStatus,onBusy};
+export default function AnimationPreviewTools({ active, sessionId, captureAPI, modelName, loop, length, crop, disabled, onStatus, onBusy, preferences, locked=false,recordingList=[],prepareTake,onTakeComplete,beforeBatch,afterBatch }) {
+  const [state,setState] = useState('idle'), [progress,setProgress] = useState(''), [error,setError] = useState(''), [batchLabel,setBatchLabel]=useState('');
+  const latest = useRef(); latest.current = {onStatus,onBusy,prepareTake,onTakeComplete,beforeBatch,afterBatch};
   const running = useRef(null), retained = useRef(null), mounted = useRef(true);
-  const settings = normalizeCapture(preferences?.capture);
   const background = useSyncExternalStore(subscribeRecordings,recordingQueueSnapshot);
   function status(next) { if(mounted.current)setState(next); latest.current.onBusy?.(next!=='idle'); }
   async function save(payload) {
@@ -30,7 +29,8 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
     }
   }
   function stop() { if(running.current){running.current.stop=true;running.current.finish?.();} }
-  async function record(job) {
+  async function record(job,take) {
+    const {length,crop,preferences,loop,modelName}=take,settings=normalizeCapture(preferences?.capture);
     let worker,jobId;
     const api=job.api, timing=recordingTimeline(length,settings.fps), quality=CAPTURE_QUALITIES[settings.recordingQuality];
     try {
@@ -112,14 +112,35 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
   }
   async function start(){
     if(running.current||retained.current)return;
-    const job={stop:false,promise:null,api:captureAPI};running.current=job;
+    // Snapshot the list once: editing or completing one row cannot alter later takes.
+    const plan=recordingList.slice(),job={stop:false,promise:null,api:captureAPI};running.current=job;
     setError('');setProgress('Preparing…');status('starting');
     job.promise=(async()=>{
+      let batchStarted=false;
       try{
-        if(!job.api)throw Error('The Showcase preview is still loading.');
-        await record(job);
+        if(plan.length){
+          await latest.current.beforeBatch?.();batchStarted=true;
+          for(let index=0;index<plan.length&&!job.stop;index++){
+            if(mounted.current){setBatchLabel('Take '+(index+1)+' / '+plan.length+' · ');setProgress('Loading setup…');}status('starting');
+            const take=await latest.current.prepareTake(plan[index]);job.api=take.api;
+            if(job.stop)break;
+            try{await record(job,take);}finally{job.api?.endRecording();job.api=null;job.finish=null;}
+            if(retained.current)break;
+            if(!job.stop)latest.current.onTakeComplete?.(plan[index].id);
+          }
+        }else{
+          if(!job.api)throw Error('The Showcase preview is still loading.');
+          await record(job,{length,crop,preferences,loop,modelName});
+        }
       }catch(cause){if(mounted.current)setError(cause.message);latest.current.onStatus?.(cause.message,true);}
-      finally{job.api?.endRecording();running.current=null;if(!retained.current)status('idle');}
+      finally{
+        job.api?.endRecording();
+        if(batchStarted&&mounted.current){
+          try{if(mounted.current)setProgress('Restoring setup…');await latest.current.afterBatch?.();}
+          catch(cause){if(mounted.current)setError(cause.message);latest.current.onStatus?.('Could not restore setup: '+cause.message,true);}
+        }
+        running.current=null;if(mounted.current)setBatchLabel('');if(!retained.current)status('idle');
+      }
     })();
     await job.promise;
   }
@@ -131,10 +152,10 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
   },[]);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;stop();};},[sessionId]);
   useEffect(()=>{if(!active)stop();},[active]);
-  const stoppable=state==='recording';
+  const stoppable=['starting','recording','finishing'].includes(state);
   return <div className="showcase-capture">
-    <button className="showcase-record" disabled={!stoppable&&(state!=='idle'||!captureAPI||disabled)} onClick={stoppable?stop:start}>{stoppable?'STOP':'RECORD'}</button>
-    {state!=='idle'&&<div className="showcase-capture-status" role="status">{state==='retry'?'Save needs retry':state==='saving'?'Saving…':progress}</div>}
+    <button className="showcase-record" disabled={!stoppable&&(state!=='idle'||!captureAPI||locked||(disabled&&!recordingList.length))} onClick={stoppable?stop:start}>{stoppable?'STOP':'RECORD'}</button>
+    {state!=='idle'&&<div className="showcase-capture-status" role="status">{state==='retry'?'Save needs retry':state==='saving'?'Saving…':batchLabel+progress}</div>}
     {background.pending>0&&<div className="showcase-capture-status" role="status">Making GIFs… {background.pending}</div>}
     {state==='retry'&&<button onClick={retry}>Retry Save</button>}
     {background.retry>0&&<button onClick={retryRecordingSaves}>Retry Save{background.retry>1?' · '+background.retry:''}</button>}

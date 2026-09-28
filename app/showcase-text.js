@@ -44,7 +44,7 @@ function geometry(context,layer,size) {
   let cache=caches.get(context);if(!cache){cache=new Map();caches.set(context,cache);}
   const document=context.canvas.ownerDocument||globalThis.document;
   const font=(layer.italic?'italic ':'')+(layer.bold?'700 ':'400 ')+size+'px "'+textFont(layer)+'"';
-  const key=JSON.stringify([font,layer.text,!!layer.underline,document.fonts.check(font)]),id=layer.id||'text';
+  const key=JSON.stringify([font,layer.text,!!layer.underline,layer.textAlign,document.fonts.check(font)]),id=layer.id||'text';
   const prior=cache.get(id);if(prior?.key===key)return prior;
   const lines=String(layer.text).split('\n'),measure=document.createElement('canvas').getContext('2d');measure.font=font;
   const metrics=lines.map(line=>measure.measureText(line)),padding=Math.ceil(size*.85),lineHeight=size*1.2;
@@ -57,10 +57,11 @@ function geometry(context,layer,size) {
   const mask=make(),edge=make(),tube=make(),surface=make(),scratch=make(),frame=make();
   const x=width/2,top=(height-textHeight)/2,baseline=top+ascent,bottom=top+textHeight;
   function glyphs(ctx,stroke=false) {
-    ctx.font=font;ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.lineJoin='round';
+    ctx.font=font;ctx.textAlign=layer.textAlign||'center';ctx.textBaseline='alphabetic';ctx.lineJoin='round';
+    const origin=ctx.textAlign==='left'?x-textWidth/2:ctx.textAlign==='right'?x+textWidth/2:x;
     ctx.fillStyle=ctx.strokeStyle='#ffffff';
-    lines.forEach((line,index)=>stroke?ctx.strokeText(line,x,baseline+index*lineHeight):ctx.fillText(line,x,baseline+index*lineHeight));
-    if(layer.underline){ctx.lineWidth=size*.04;lines.forEach((line,index)=>{const y=baseline+index*lineHeight+descent*.6;ctx.beginPath();ctx.moveTo(x-metrics[index].width/2,y);ctx.lineTo(x+metrics[index].width/2,y);ctx.stroke();});}
+    lines.forEach((line,index)=>stroke?ctx.strokeText(line,origin,baseline+index*lineHeight):ctx.fillText(line,origin,baseline+index*lineHeight));
+    if(layer.underline){ctx.lineWidth=size*.04;lines.forEach((line,index)=>{const y=baseline+index*lineHeight+descent*.6;ctx.beginPath();const left=ctx.textAlign==='left'?origin:ctx.textAlign==='right'?origin-metrics[index].width:origin-metrics[index].width/2;ctx.moveTo(left,y);ctx.lineTo(left+metrics[index].width,y);ctx.stroke();});}
   }
   glyphs(mask.getContext('2d'));
   const edgeContext=edge.getContext('2d');edgeContext.lineWidth=Math.max(1,size*.1);glyphs(edgeContext,true);
@@ -383,4 +384,16 @@ export function paintShowcaseText(destination,layer,width,height,milliseconds=0,
   if(effect==='arcane')drawTint(context,g,g.tube,flowing(context,g,[colors[1],mix(colors[0],'#ffffff',.65),colors[2]],time,11),.6);
   context.restore();
   destination.save();destination.globalAlpha*=fade;destination.translate(x,y);destination.rotate((Number(layer.rotation)||0)*Math.PI/180);destination.drawImage(g.frame,-g.width/2,-g.height/2);destination.restore();
+}
+
+/** Place the visible text, including its current rotation, against the crop. */
+export async function alignShowcaseText(layer,horizontal,vertical,crop,width,height){
+  await document.fonts.load('48px "'+textFont(layer)+'"');
+  const context=document.createElement('canvas').getContext('2d'),size=Math.max(6,Number(layer.size)||48)*width/800;
+  const g=geometry(context,layer,size),angle=(layer.rotation||0)*Math.PI/180,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle));
+  const halfWidth=(g.textWidth*c+g.textHeight*s)/2/width,halfHeight=(g.textWidth*s+g.textHeight*c)/2/height;
+  const frame=crop||{x:0,y:0,width:1,height:1},margin=.015;
+  const x=horizontal===0?frame.x+halfWidth+frame.width*margin:horizontal===2?frame.x+frame.width-halfWidth-frame.width*margin:frame.x+frame.width/2;
+  const y=vertical===0?frame.y+halfHeight+frame.height*margin:vertical===2?frame.y+frame.height-halfHeight-frame.height*margin:frame.y+frame.height/2;
+  return {...layer.rect,x:x-layer.rect.width/2,y:y-layer.rect.height/2};
 }

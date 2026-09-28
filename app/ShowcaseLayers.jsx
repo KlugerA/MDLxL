@@ -2,7 +2,7 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react
 import { createAnimatedPreviewBackground } from './animated-preview-background.js';
 import { paintShowcaseText, textFont } from './showcase-text.js';
 
-export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,onSelect,onChange,onError,onInvalidate},ref) {
+export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,onSelect,onChange,onError,onInvalidate,grid=false,gridDensity=5,crop},ref) {
   const root=useRef(null),canvas=useRef(null),records=useRef(new Map()),drag=useRef(null),lastTime=useRef(0),lastCinematic=useRef({enabled:false,time:0}),latest=useRef();
   latest.current={layers,activeId,editing,onSelect,onChange,onError,onInvalidate};
   function paint(context,width,height,time=lastTime.current,cinematic=lastCinematic.current){
@@ -82,8 +82,10 @@ export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,on
     latest.current.onChange?.(row.id,{rect:next,...(row.resize&&row.size?{size:Math.max(6,Math.min(300,Math.round(row.size*next.width/rect.width)))}:{})});event.stopPropagation();
   }
   function end(event){drag.current=null;event.stopPropagation();}
-  const selected=layers.find(layer=>layer.id===activeId);
+  const selected=layers.find(layer=>layer.id===activeId),frame=crop||{x:0,y:0,width:1,height:1},divisions=3+Math.max(1,Math.min(99,gridDensity));
+  const gridPath=Array.from({length:divisions+1},(_,i)=>{const n=i*100/divisions;return `M${n} 0V100M0 ${n}H100`;}).join(' ');
   return <div className="showcase-layer-stage" ref={root}><canvas ref={canvas} aria-label="Showcase image and text layers"/>
+    {grid&&<svg className="showcase-alignment-grid" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" style={{left:frame.x*100+'%',top:frame.y*100+'%',width:frame.width*100+'%',height:frame.height*100+'%'}}><path d={gridPath} fill="none" stroke="#084817" strokeWidth="1.6" vectorEffect="non-scaling-stroke"/><path d={gridPath} fill="none" stroke="#39ff58" strokeWidth=".6" vectorEffect="non-scaling-stroke"/></svg>}
     {editing&&selected&&<div className="showcase-layer-selection" style={{left:selected.rect.x*100+'%',top:selected.rect.y*100+'%',width:selected.rect.width*100+'%',height:selected.rect.height*100+'%',transform:selected.kind==='text'?'rotate('+(selected.rotation||0)+'deg)':undefined}} onPointerDown={event=>start(event,selected)} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
       {selected.kind==='text'&&<button type="button" className="showcase-text-rotate" data-layer-rotate="true" aria-label="Rotate text" title="Drag to rotate text">↻</button>}
       <span className="showcase-signature-handle" data-layer-resize="true" aria-hidden="true"/>
