@@ -23,9 +23,9 @@ test('Black is short and the display options remain visible',()=>{
 test('Vis is a reversible presentation toggle, not a model or editing command',()=>{
   assert.match(app,/\[visUI, setVisUI\] = useState\(false\)/);
   assert.match(app,/data-vis-ui=\{visUI \|\| undefined\}/);
-  assert.match(app,/onClick=\{\(\) => setVisUI\(value => !value\)\}>\{visUI \? 'XL' : 'Vis'\}/);
+  assert.match(app,/<Tool className="vis-toggle".*?badge=\{visUI \? 'XL' : 'VIS'\}.*?onClick=\{\(\) => setVisUI\(value => !value\)\}/);
   const group=app.match(/<div className="classic-toolbar-group toolbar-visibility">(.*?)<\/div>/)[1];
-  assert.ok(group.indexOf("'Vis'")<group.indexOf('data-warmkey="hide"'));
+  assert.doesNotMatch(group,/visUI/);
   assert.match(group,/onClick=\{hide\}/);
   assert.match(group,/onClick=\{\(\) => setHidden\(\{\}\)\}/);
   assert.match(css,/data-vis-ui\]>\.classic-modules/);

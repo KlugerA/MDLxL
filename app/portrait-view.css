@@ -36,7 +36,8 @@
 .classic-app .classic-toolbar .toolbar-visibility button{min-width:38px;height:23px;min-height:23px;padding:0 6px}
 /* Vis trims only the top presentation. Menus/hotkeys and the Movement portrait
    toolbar stay available, and no renderer or editor state is remounted. */
-.classic-app[data-vis-ui]>.classic-modules,
+.classic-app[data-vis-ui]>.classic-modules>:not(.toolbar-modules),
+.classic-app[data-vis-ui]>.classic-modules>.toolbar-modules>:not(.vis-toggle),
 .classic-app[data-vis-ui]>.classic-toolbar :is(.toolbar-modules,.addon-menu,.language-switch,[data-warmkey="new"],[data-warmkey="redo"],[data-warmkey="copy"],[data-warmkey="paste"],[data-warmkey="convertVersion"]),
 .classic-app[data-vis-ui]>.classic-toolbar .quick-display-options,
 .classic-app[data-vis-ui] .classic-view-label>:not(:first-child){display:none}
