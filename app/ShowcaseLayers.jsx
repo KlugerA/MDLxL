@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { scaleTextRuns } from './showcase-rich-text.js';
 import { createAnimatedPreviewBackground } from './animated-preview-background.js';
-import { paintShowcaseText, textFont } from './showcase-text.js';
+import { paintShowcaseText, textFonts } from './showcase-text.js';
 
 export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,onSelect,onChange,onError,onInvalidate,grid=false,gridDensity=5,crop},ref) {
   const root=useRef(null),canvas=useRef(null),records=useRef(new Map()),drag=useRef(null),lastTime=useRef(0),lastCinematic=useRef({enabled:false,time:0}),latest=useRef();
@@ -47,14 +48,14 @@ export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,on
     }
     draw();
   },[imageKey]);
-  const fontKey=[...new Set(layers.filter(layer=>layer.kind==='text').map(textFont))].sort().join('|');
-  useEffect(()=>{let active=true;Promise.all(latest.current.layers.filter(layer=>layer.kind==='text').map(layer=>document.fonts.load('48px "'+textFont(layer)+'"'))).then(()=>{if(active){draw();latest.current.onInvalidate?.();}}).catch(error=>{if(active)latest.current.onError?.('Could not load text font: '+error.message);});return()=>{active=false;};},[fontKey]);
+  const fontKey=[...new Set(layers.filter(layer=>layer.kind==='text').flatMap(textFonts))].sort().join('|');
+  useEffect(()=>{let active=true;Promise.all(latest.current.layers.filter(layer=>layer.kind==='text').flatMap(textFonts).map(font=>document.fonts.load(font))).then(()=>{if(active){draw();latest.current.onInvalidate?.();}}).catch(error=>{if(active)latest.current.onError?.('Could not load text font: '+error.message);});return()=>{active=false;};},[fontKey]);
   useEffect(()=>{draw();},[layers]);
   useEffect(()=>{const observer=new ResizeObserver(()=>draw());if(root.current)observer.observe(root.current);return()=>observer.disconnect();},[]);
   useEffect(()=>()=>{for(const entry of records.current.values())entry.dispose();records.current.clear();},[]);
   useImperativeHandle(ref,()=>({
-    get isReady(){return [...records.current.values()].every(entry=>entry.status==='ready')&&latest.current.layers.filter(layer=>layer.kind==='text').every(layer=>document.fonts.check('48px "'+textFont(layer)+'"'));},
-    async whenReady(){await Promise.all([...records.current.values()].map(entry=>entry.promise));await Promise.all(latest.current.layers.filter(layer=>layer.kind==='text').map(layer=>document.fonts.load('48px "'+textFont(layer)+'"')));},
+    get isReady(){return [...records.current.values()].every(entry=>entry.status==='ready')&&latest.current.layers.filter(layer=>layer.kind==='text').flatMap(textFonts).every(font=>document.fonts.check(font));},
+    async whenReady(){await Promise.all([...records.current.values()].map(entry=>entry.promise));await Promise.all(latest.current.layers.filter(layer=>layer.kind==='text').flatMap(textFonts).map(font=>document.fonts.load(font)));},
     pause(){for(const entry of records.current.values())entry.animation?.pause();},
     resume(){for(const entry of records.current.values())entry.animation?.resume();},
     async seek(seconds){await Promise.all([...records.current.values()].map(entry=>entry.animation?.seek(seconds)));},
@@ -64,7 +65,7 @@ export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,on
     if(!latest.current.editing||event.button!==0)return;
     const box=root.current.getBoundingClientRect();latest.current.onSelect?.(layer.id);
     const centerX=box.left+(layer.rect.x+layer.rect.width/2)*box.width,centerY=box.top+(layer.rect.y+layer.rect.height/2)*box.height;
-    drag.current={id:layer.id,x:event.clientX,y:event.clientY,width:box.width,height:box.height,rect:layer.rect,size:layer.size,angle:(layer.kind==='text'?Number(layer.rotation)||0:0)*Math.PI/180,resize:event.target.dataset.layerResize==='true',rotate:layer.kind==='text'&&!!event.target.closest('[data-layer-rotate]'),centerX,centerY,pointerAngle:Math.atan2(event.clientY-centerY,event.clientX-centerX)};
+    drag.current={id:layer.id,x:event.clientX,y:event.clientY,width:box.width,height:box.height,rect:layer.rect,size:layer.size,layer,angle:(layer.kind==='text'?Number(layer.rotation)||0:0)*Math.PI/180,resize:event.target.dataset.layerResize==='true',rotate:layer.kind==='text'&&!!event.target.closest('[data-layer-rotate]'),centerX,centerY,pointerAngle:Math.atan2(event.clientY-centerY,event.clientX-centerX)};
     event.currentTarget.setPointerCapture(event.pointerId);event.stopPropagation();event.preventDefault();
   }
   function move(event){
@@ -79,7 +80,7 @@ export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,on
     const next=row.resize?{...rect,width:clamp(rect.width+localX,.03,2),height:clamp(rect.height+localY,.03,2)}:
       {...rect,x:clamp(rect.x+dx,-rect.width+.01,.99),y:clamp(rect.y+dy,-rect.height+.01,.99)};
     if(row.resize){const dw=(next.width-rect.width)*row.width,dh=(next.height-rect.height)*row.height;next.x+=((c-1)*dw-s*dh)/2/row.width;next.y+=(s*dw+(c-1)*dh)/2/row.height;}
-    latest.current.onChange?.(row.id,{rect:next,...(row.resize&&row.size?{size:Math.max(6,Math.min(300,Math.round(row.size*next.width/rect.width)))}:{})});event.stopPropagation();
+    latest.current.onChange?.(row.id,{rect:next,...(row.resize&&row.size?{size:Math.max(6,Math.min(300,Math.round(row.size*next.width/rect.width))),runs:scaleTextRuns(row.layer,next.width/rect.width)}:{})});event.stopPropagation();
   }
   function end(event){drag.current=null;event.stopPropagation();}
   const selected=layers.find(layer=>layer.id===activeId),frame=crop||{x:0,y:0,width:1,height:1},divisions=3+Math.max(1,Math.min(99,gridDensity));

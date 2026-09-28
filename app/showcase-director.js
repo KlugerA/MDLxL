@@ -90,7 +90,7 @@ export function createShowcaseDirector(getSettings, now = () => performance.now(
       else if (settings.playing && !clock.recording) clock.seconds += delta/1000;
       if (clock.live) clock.globalTime = clock.seconds*1000;
       else clock.globalTime += Math.max(0,delta);
-      clock.angle += (clock.seconds-previous) * Math.PI*2 / Math.max(.02,Number(settings.length)) * clamp(Number(settings.orbitSpeed ?? 100),0,200)/100;
+      clock.angle += (clock.seconds-previous) * Math.PI*2 / Math.max(.02,Number(settings.length)) * clamp(Number(settings.orbitSpeed ?? 100),0,200)/100*(settings.orbitDirection===-1?-1:1);
       const animation = showcaseAnimation(settings.model,settings.playlist,clock.seconds,!clock.recording);
       return { ...animation, portrait:!!settings.portrait, globalTime:clock.globalTime, angle:clock.angle, revision:clock.revision, presentationTime:clock.seconds*1000 };
     },
@@ -100,7 +100,7 @@ export function createShowcaseDirector(getSettings, now = () => performance.now(
     },
     seekRecording(milliseconds) {
       const settings = getSettings(); clock.seconds=milliseconds/1000; clock.globalTime=milliseconds;
-      clock.angle=(Number(settings.startAngle)||0)+clock.seconds*Math.PI*2/Math.max(.02,Number(settings.length))*clamp(Number(settings.orbitSpeed ?? 100),0,200)/100;
+      clock.angle=(Number(settings.startAngle)||0)+clock.seconds*Math.PI*2/Math.max(.02,Number(settings.length))*clamp(Number(settings.orbitSpeed ?? 100),0,200)/100*(settings.orbitDirection===-1?-1:1);
     },
     freeze(milliseconds) { this.seekRecording(milliseconds); clock.live=false; },
     end() { clock.recording=false; clock.live=false; },

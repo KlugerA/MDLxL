@@ -147,3 +147,6 @@
 .showcase-recording-list li { display:flex; align-items:center; gap:3px; margin:2px 0; }
 .showcase-recording-list span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
 .showcase-recording-list button { padding:0 4px; min-height:18px; }
+
+.showcase-orbit-direction {display:flex;align-items:center;justify-content:space-between;gap:4px;}
+.showcase-orbit-direction button {width:24px;height:20px;font-size:17px;line-height:16px;padding:0;}

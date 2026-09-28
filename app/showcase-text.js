@@ -1,3 +1,4 @@
+import { styledTextRuns } from './showcase-rich-text.js';
 export const SHOWCASE_FONTS = [
   {id:'cinzeldecorative',name:'Cinzel Decorative',family:'Showcase Cinzel'},
   {id:'medievalsharp',name:'MedievalSharp',family:'Showcase Medieval'},
@@ -21,6 +22,7 @@ export const TEXT_EFFECTS = [
   ['prism','Prism'],['wave','Wave'],['shimmer','Shimmer'],
 ];
 export const textFont = layer => SHOWCASE_FONTS.find(font=>font.id===layer.font)?.family || SHOWCASE_FONTS[0].family;
+export const textFonts = layer => [...new Set(styledTextRuns(layer).map(run=>(run.italic?'italic ':'')+(run.bold?'700 ':'400 ')+'48px "'+textFont(run)+'"'))];
 const clamp = (value,min=0,max=1) => Math.max(min,Math.min(max,value));
 const smooth = value => {const t=clamp(value);return t*t*(3-2*t);};
 const rgb = color => [1,3,5].map(index=>parseInt(color.slice(index,index+2),16)||0);
@@ -67,7 +69,7 @@ function geometry(context,layer,size) {
   const edgeContext=edge.getContext('2d');edgeContext.lineWidth=Math.max(1,size*.1);glyphs(edgeContext,true);
   edgeContext.globalCompositeOperation='destination-out';edgeContext.drawImage(mask,0,0);edgeContext.globalCompositeOperation='source-over';
   const tubeContext=tube.getContext('2d');tubeContext.lineWidth=Math.max(.7,size*.027);glyphs(tubeContext,true);
-  const value={key,mask,edge,tube,surface,scratch,frame,width,height,x,top,bottom,textWidth,textHeight,size,rows:lines.map((_,index)=>({top:top+index*lineHeight,bottom:top+index*lineHeight+ascent+descent})),fire:null,frost:null,conduction:null,arcs:new Map()};
+  const value={key,mask,edge,tube,surface,scratch,frame,width,height,x,top,bottom,baseline,ascent,descent,textWidth,textHeight,size,rows:lines.map((_,index)=>({top:top+index*lineHeight,bottom:top+index*lineHeight+ascent+descent})),fire:null,frost:null,conduction:null,arcs:new Map()};
   cache.delete(id);cache.set(id,value);
   // Old removed layers are evicted without retaining an unbounded set of canvases.
   while(cache.size>24)cache.delete(cache.keys().next().value);
@@ -312,8 +314,8 @@ function frostFog(g,time,colors) {
   f.context.putImageData(f.image,0,0);return f.canvas;
 }
 function neonPower(time) {
-  const period=11.5,cycle=Math.floor(time/period),at=time-cycle*period;
-  const failure=3.5+noise(cycle+144)*1.4,recovery=failure+.65+noise(cycle+57)*.65;
+  const period=3.6,cycle=Math.floor(time/period),at=time-cycle*period;
+  const failure=1.65+noise(cycle+144)*.3,recovery=failure+.38+noise(cycle+57)*.25;
   // Brief failed starts surround a longer outage; no frame-dependent random state.
   if(at>=failure&&at<recovery||at>=failure-.62&&at<failure-.43||at>=failure-.24&&at<failure-.08||at>=recovery+.18&&at<recovery+.34)return 0;
   return .88+.12*Math.sin(time*.9)**2;
@@ -321,12 +323,12 @@ function neonPower(time) {
 const dimNeon=color=>mix(color,'#000000',.84);
 
 /** A shared canvas painter owns preview and recording, with deterministic slow effects. */
-export function paintShowcaseText(destination,layer,width,height,milliseconds=0,cinematic) {
+function paintPlainText(destination,layer,width,height,milliseconds=0,cinematic,glyphs) {
   if(!layer.text)return;
   const fade=cinematic?.enabled===false?1:textFadeOpacity(layer,cinematic?.time??milliseconds);
   if(fade<=0)return;
   const rect=layer.rect,time=milliseconds/1000,size=Math.max(6,Number(layer.size)||48)*width/800;
-  const g=geometry(destination,layer,size),context=clear(g.frame),effect=layer.effect||'solid';
+  const g=glyphs||geometry(destination,layer,size),context=clear(g.frame),effect=layer.effect||'solid';
   const colors=[layer.color||'#ffffff',layer.color2||'#c6a46c',layer.color3||'#7895b2'],outline=layer.outlineColor||'#111111';
   const breath=.5+.5*Math.sin(time*Math.PI*2/6);
   const x=(rect.x+rect.width/2)*width,y=(rect.y+rect.height/2)*height;
@@ -386,11 +388,57 @@ export function paintShowcaseText(destination,layer,width,height,milliseconds=0,
   destination.save();destination.globalAlpha*=fade;destination.translate(x,y);destination.rotate((Number(layer.rotation)||0)*Math.PI/180);destination.drawImage(g.frame,-g.width/2,-g.height/2);destination.restore();
 }
 
+// Lay out styled spans on shared baselines, then use the same effect painter for
+// every span in both the viewport and export. No HTML screenshots or font fallback.
+const richLayouts=new WeakMap();
+function richLayout(context,layer,width){
+  let cache=richLayouts.get(context);if(!cache){cache=new Map();richLayouts.set(context,cache);}
+  const fonts=textFonts(layer),key=JSON.stringify([layer.text,layer.runs,width,layer.font,layer.size,layer.bold,layer.italic,layer.underline,layer.outline,layer.outlineColor,layer.color,layer.color2,layer.color3,layer.effect,layer.textAlign,fonts.map(font=>document.fonts.check(font))]);
+  const previous=cache.get(layer.id);if(previous?.key===key)return previous;
+  const rows=[{parts:[],width:0,ascent:0,descent:0,size:0}];
+  let index=0;
+  for(const run of styledTextRuns(layer)){
+    const lines=run.text.split('\n');
+    lines.forEach((text,line)=>{
+      if(line)rows.push({parts:[],width:0,ascent:0,descent:0,size:0});
+      const row=rows.at(-1),size=Math.max(6,Number(run.size)||48)*width/800;
+      row.size=Math.max(row.size,size);row.ascent=Math.max(row.ascent,size*.65);row.descent=Math.max(row.descent,size*.15);
+      if(!text)return;
+      const part={...run,id:layer.id+':span:'+index++,text,textAlign:'center',rotation:0,runs:undefined};
+      const g=geometry(context,part,size);
+      row.parts.push({layer:part,g,left:row.width});row.width+=g.textWidth;
+      row.ascent=Math.max(row.ascent,g.ascent);row.descent=Math.max(row.descent,g.descent);
+    });
+  }
+  const textWidth=Math.max(1,...rows.map(row=>row.width)),parts=[];
+  let textHeight=0;
+  rows.forEach((row,i)=>{
+    const left=layer.textAlign==='left'?0:layer.textAlign==='right'?textWidth-row.width:(textWidth-row.width)/2;
+    const baseline=textHeight+row.ascent;
+    for(const part of row.parts)parts.push({...part,x:left+part.left+part.g.textWidth/2,y:baseline+part.g.height/2-part.g.baseline});
+    textHeight+=row.ascent+row.descent+(i<rows.length-1?row.size*.4:0);
+  });
+  const layout={key,parts,textWidth,textHeight};cache.set(layer.id,layout);
+  while(cache.size>24)cache.delete(cache.keys().next().value);
+  return layout;
+}
+export function paintShowcaseText(destination,layer,width,height,milliseconds=0,cinematic){
+  if(!layer.runs?.length)return paintPlainText(destination,layer,width,height,milliseconds,cinematic);
+  const fade=cinematic?.enabled===false?1:textFadeOpacity(layer,cinematic?.time??milliseconds);if(fade<=0)return;
+  const layout=richLayout(destination,layer,width),rect=layer.rect;
+  destination.save();destination.globalAlpha*=fade;
+  destination.translate((rect.x+rect.width/2)*width,(rect.y+rect.height/2)*height);
+  destination.rotate((Number(layer.rotation)||0)*Math.PI/180);
+  destination.translate(-layout.textWidth/2,-layout.textHeight/2);
+  for(const part of layout.parts)paintPlainText(destination,{...part.layer,rect:{x:part.x/width,y:part.y/height,width:0,height:0}},width,height,milliseconds,{enabled:false},part.g);
+  destination.restore();
+}
+
 /** Place the visible text, including its current rotation, against the crop. */
 export async function alignShowcaseText(layer,horizontal,vertical,crop,width,height){
-  await document.fonts.load('48px "'+textFont(layer)+'"');
+  await Promise.all(textFonts(layer).map(font=>document.fonts.load(font)));
   const context=document.createElement('canvas').getContext('2d'),size=Math.max(6,Number(layer.size)||48)*width/800;
-  const g=geometry(context,layer,size),angle=(layer.rotation||0)*Math.PI/180,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle));
+  const g=layer.runs?.length?richLayout(context,layer,width):geometry(context,layer,size),angle=(layer.rotation||0)*Math.PI/180,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle));
   const halfWidth=(g.textWidth*c+g.textHeight*s)/2/width,halfHeight=(g.textWidth*s+g.textHeight*c)/2/height;
   const frame=crop||{x:0,y:0,width:1,height:1},margin=.015;
   const x=horizontal===0?frame.x+halfWidth+frame.width*margin:horizontal===2?frame.x+frame.width-halfWidth-frame.width*margin:frame.x+frame.width/2;
