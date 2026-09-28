@@ -15,6 +15,8 @@ const {TexturePreviewCache}=require('./texture-preview-cache.cjs');
 const {SessionJournal}=require('./session.cjs');
 const {savePreviewCapture}=require('./preview-capture.cjs');
 const {PreviewRecordingStore}=require('./preview-ffmpeg.cjs');
+const {CatboxUploads}=require('./catbox-upload.cjs');
+const catboxUploads=new CatboxUploads();
 const {saveForgeAssets}=require('./forge-assets.cjs');
 const {saveOptimizeXLPair}=require('./optimizexl-save.cjs');
 const {BackgroundLibrary}=require('./preview-backgrounds.cjs');
@@ -78,15 +80,21 @@ async function persistRecents(file){
   const operation=recentQueue.catch(()=>{}).then(async()=>{await fs.mkdir(profile,{recursive:true});await fs.writeFile(path.join(profile,'recent.json'),encoded);});
   recentQueue=operation; await operation; if(commandCatalog)refreshMenu();
 }
-async function readModel(file){
+async function readModel(file,remember=true){
   const extension=path.extname(file).toLowerCase();if(!['.mdl','.mdx','.mdlxlpaint'].includes(extension))throw new Error('Choose an MDL, MDX, or MDLxL Paint Project.');
   const stat=await fs.stat(file),limit=extension==='.mdlxlpaint'?512:128;if(stat.size>limit*1024*1024)throw new Error(`This file exceeds the current ${limit} MB opening limit.`);
-  const bytes=await fs.readFile(file);openedPaths.add(path.resolve(file));await persistRecents(file);
-  initialModel={name:path.basename(file),path:file,bytes};
-  return initialModel;
+  const bytes=await fs.readFile(file);openedPaths.add(path.resolve(file));
+  const result={name:path.basename(file),path:file,bytes};
+  if(remember){await persistRecents(file);initialModel=result;}
+  return result;
 }
-async function selectOpen(){const result=await dialog.showOpenDialog(win,{filters,properties:['openFile']});if(result.canceled)return [];return Promise.all(result.filePaths.map(readModel));}
+async function selectOpen(){const result=await dialog.showOpenDialog(win,{filters,properties:['openFile']});if(result.canceled)return [];return Promise.all(result.filePaths.map(file=>readModel(file)));}
 ipcMain.handle('model:open',selectOpen);
+ipcMain.handle('preview:openModel',async event=>{
+  captureOwner(event);
+  const result=await dialog.showOpenDialog(win,{title:'Load Showcase model',filters:[{name:'Warcraft model',extensions:['mdl','mdx']}],properties:['openFile']});
+  return result.canceled?null:readModel(result.filePaths[0],false);
+});
 ipcMain.handle('parts:list',()=>getBitsAndPartsLibrary().list());
 ipcMain.handle('parts:read',(_,id)=>getBitsAndPartsLibrary().read(id));
 ipcMain.handle('parts:folder',async()=>{const {directory}=await getBitsAndPartsLibrary().list();const error=await shell.openPath(directory);if(error)throw Error(error);return directory;});
@@ -108,19 +116,24 @@ ipcMain.handle('paint:exportTexture',async(_,payload)=>{
 ipcMain.on('preview:busy',(event,value)=>{if(event.sender===win?.webContents)captureBusy=!!value;});
 ipcMain.handle('preview:capture',(event,payload)=>{
   captureOwner(event);
-  const operation=savePreviewCapture(path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), 'Showcase Recordings'),payload);
+  const operation=savePreviewCapture(path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), 'Showcase Recordings'),payload).then(result=>payload.format==='gif'?catboxUploads.remember(captureOwner(event),result):result);
   captureOperations.add(operation);operation.finally(()=>captureOperations.delete(operation)).catch(()=>{});return operation;
 });
 ipcMain.handle('preview:recordBegin',(event,payload)=>captureOperation(previewRecordings.begin(captureOwner(event),payload)));
 ipcMain.handle('preview:recordFrame',(event,payload)=>captureOperation(previewRecordings.frame(captureOwner(event),payload)));
 ipcMain.handle('preview:recordFinish',(event,payload)=>captureOperation(previewRecordings.finish(captureOwner(event),payload)));
-ipcMain.handle('preview:recordSave',(event,id)=>captureOperation(previewRecordings.save(captureOwner(event),id)));
+ipcMain.handle('preview:recordSave',(event,id)=>{const owner=captureOwner(event);return captureOperation(previewRecordings.save(owner,id).then(result=>catboxUploads.remember(owner,result)));});
+ipcMain.handle('preview:catboxUpload',(event,id)=>{
+  const owner=captureOwner(event);
+  return captureOperation(catboxUploads.upload(owner,id).then(url=>({ok:true,url}),error=>{console.warn('Catbox upload:',error);return {ok:false,error:{code:error.code||'network',message:error.message}};}));
+});
+ipcMain.handle('preview:copyLink',(event,{exportId,bbcode}={})=>clipboard.writeText(catboxUploads.link(captureOwner(event),exportId,bbcode===true)));
 ipcMain.handle('preview:recordDiscard',(event,id)=>captureOperation(previewRecordings.discard(captureOwner(event),id)));
 ipcMain.handle('model:recent',()=>recents);
 ipcMain.handle('model:clearRecent',async()=>{recents=[];await persistRecents();return [];});
-ipcMain.handle('model:openRecent',async(_,p)=>{
+ipcMain.handle('model:openRecent',async(_,p,showcase=false)=>{
   if(!recents.includes(p))throw new Error('Not in recent files.');
-  try{return await readModel(p);}catch(error){
+  try{return await readModel(p,!showcase);}catch(error){
     if(['ENOENT','ENOTDIR'].includes(error.code)){recents=recents.filter(file=>file!==p);await persistRecents();throw new Error('This recent file was moved or deleted: '+p);}
     throw error;
   }

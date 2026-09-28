@@ -145,6 +145,7 @@ export default function App() {
   const changePointerSensitivity = value => changePreferences({ ...preferencesRef.current, pointerSensitivity: value });
   const toggleWheelMode = mode => changePreferences(previous => ({ ...previous, wheelMode: previous.wheelMode === mode ? 'rotate' : mode }));
   const toggleCamera = () => setCameraMode(previous => previous === 'work' ? 'rotate' : 'work');
+  const [showcaseSession,setShowcaseSession]=useState(null),[showcaseVisited,setShowcaseVisited]=useState(false);
   const [session, setSession] = useState(newSession), [tick, setTick] = useState(0), [status, setStatus] = useState('Ready');
   const [repairReceipt, setRepairReceipt] = useState(null);
   const [mode, setMode] = useState('vertices'), [cameraMode, setCameraMode] = useState('work'), [view, setStoredView] = useState('orthographic'), [portraitView, setPortraitView] = useState('perspective'), [workplane, setWorkplane] = useState('xy');
@@ -268,7 +269,7 @@ export default function App() {
   const selectionHistory = useMemo(() => new SelectionHistory(doc), [doc]);
   const selectionState = { selectable, selection, hidden, activeGeoset, uvSet, selectedNodeIds };
   useLayoutEffect(() => { if (selectionHistory.observe(selectionState)) setTick(value => value + 1); }, [selectionHistory, selectable, selection, hidden, activeGeoset, uvSet, selectedNodeIds, doc.revision]);
-  latest.current = { session, doc, model, selection, selectable, hidden, mode, dialog, settingsTab, preferencesReady };
+  latest.current = { session, showcaseSession, doc, model, selection, selectable, hidden, mode, dialog, settingsTab, preferencesReady };
   const refresh = () => setTick(value => value + 1);
   const say = (message, error = false) => setStatus((error ? 'Error: ' : '') + message);
   const selectBackground = value => { setBackground(value); localStorage.setItem('mdlvis-preview-background', value); };
@@ -495,10 +496,10 @@ export default function App() {
   const uvAction = (kind, value) => window.dispatchEvent(new CustomEvent('mdlvis-uv-action', { detail: { kind, value } }));
 
   function releaseUnusedTextureUrls() {
-    const keep = new Set([...latest.current.session.assets.values(), ...(clipboard.current?.assets.values() || [])].map(asset=>asset.url));
+    const keep = new Set([...latest.current.session.assets.values(), ...(latest.current.showcaseSession?.assets.values()||[]), ...(clipboard.current?.assets.values() || [])].map(asset=>asset.url));
     for(const url of textureUrls.current) if(!keep.has(url)) {URL.revokeObjectURL(url);textureUrls.current.delete(url);}
   }
-  useEffect(() => { releaseUnusedTextureUrls(); },[session, session.assets]);
+  useEffect(() => { releaseUnusedTextureUrls(); },[session, session.assets,showcaseSession,showcaseSession?.assets]);
   useEffect(() => () => {for(const url of textureUrls.current)URL.revokeObjectURL(url);textureUrls.current.clear();},[]);
   const nextTextureResolution = target => {
     const generation = (textureResolutions.current.get(target) || 0) + 1;
@@ -526,7 +527,7 @@ export default function App() {
       } catch (error) { say(`${record.name || 'Texture'}: ${error.message}`, true); }
     }
     if (!current()) { discard(); return 0; }
-    target.assets = assets; releaseUnusedTextureUrls(); if (latest.current.session.id === target.id) refresh(); return count;
+    target.assets = assets; releaseUnusedTextureUrls(); if (latest.current.session.id === target.id || latest.current.showcaseSession?.id === target.id) refresh(); return count;
   }
   async function resolveTextures(target = session) {
     if (!window.desktop?.resolveTextures) return;
@@ -546,6 +547,7 @@ export default function App() {
     if (window.desktop?.writeRecovery) await window.desktop.writeRecovery(envelope); else await browserRecovery('put', envelope);
   }
   function install(next) {
+    setShowcaseSession(null);
     setRepairReceipt(null); setPortraitEnabled(false);
     const history = settings.current; next.doc.configureHistory({ budgetBytes: history.historyBudgetBytes ?? 512 * 1024 * 1024, maxSteps: history.historyMaxSteps ?? 10000 });
     setSelectedNodeIds([]); setLiveUV(null);
@@ -568,11 +570,22 @@ export default function App() {
       const opened = openDocument(bytes, record.name); if (!opened.model || opened.version == null) throw new Error('This file has no readable model header. The current model was kept.'); install(newSession(opened, record.path || null));
     } catch (error) { say(error.message, true); }
   }
+  async function loadShowcaseModel(record){
+    try{
+      record ||= await window.desktop?.openShowcaseModel();if(!record)return;
+      const opened=openDocument(await readInputBytes(record),record.name);
+      if(!opened.model||opened.version==null)throw Error('This file has no readable model. The Showcase model was kept.');
+      const next=newSession(opened,record.path||null);
+      latest.current.showcaseSession=next;setShowcaseSession(next);
+      await resolveTextures(next);refresh();say('Showcase: '+record.name);
+    }catch(error){say(error.message,true);}
+  }
+  useEffect(()=>{if(mode==='showcase')setShowcaseVisited(true);},[mode]);
   function withUnsaved(operation) { if (savingRef.current) return; window.dispatchEvent(new CustomEvent('mdlxl-paint-flush')); if (doc.dirty || hasUVPreview || hasTrackDrafts || session.paintProject?.dirty) setDialog({ type: 'unsaved', operation }); else operation(); }
   async function showRecent() { try { setRecentFiles(await window.desktop.recent()); setDialog({type:'recent'}); } catch(error) { say(error.message,true); } }
-  function openRecent(path) { if(repairReceipt)return; withUnsaved(async()=>{try{await loadFile(await window.desktop.openRecent(path));}catch(error){say(error.message,true);}}); }
+  function openRecent(path) { if(repairReceipt)return;if(mode==='showcase'){window.desktop.openRecent(path,true).then(loadShowcaseModel).catch(error=>say(error.message,true));return;} withUnsaved(async()=>{try{await loadFile(await window.desktop.openRecent(path));}catch(error){say(error.message,true);}}); }
   async function clearRecent() { try { setRecentFiles(await window.desktop.clearRecent()); say('Recent files history cleared.'); } catch(error) { say(error.message,true); } }
-  function open() { withUnsaved(async () => { try { if (window.desktop) { const records = await window.desktop.open(); if (records?.length) await loadFile(records[0]); } else files.current.click(); } catch (error) { say(error.message, true); } }); }
+  function open() { if(mode==='showcase'){if(window.desktop)loadShowcaseModel();else files.current.click();return;}withUnsaved(async () => { try { if (window.desktop) { const records = await window.desktop.open(); if (records?.length) await loadFile(records[0]); } else files.current.click(); } catch (error) { say(error.message, true); } }); }
   async function repairDuplicateAnimations(options) {
     if (savingRef.current) return;
     if (!window.desktop?.repairGeosetAnimations || !session.path) throw Error('Save a local MDL or MDX copy first; automatic backup and disk Undo require the desktop build.');
@@ -1038,7 +1051,8 @@ export default function App() {
             return expanded;
           });
           setSelection(filterVertexSelection(next, new Set(Object.keys(uvEntrySelection).map(Number)), doc.model));
-        }}        onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
+        }}
+        onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
         onMaterialPreset={(id, preset, tint) => edit(preset, ['Materials', 'Textures'], current => applyMaterialPreset(current, id, preset, tint))}
         onWrappingChange={(textureIDs, enabled) => edit(`${enabled ? 'Enable' : 'Disable'} UV texture wrapping`, ['Textures'], current => setUVTextureWrapping(current, textureIDs, enabled))}
         onGeosetChange={(index, coordId = 0) => { if (index < 0) return; setActiveGeoset(index); setUvSet(coordId); setLiveUV(null); }}
@@ -1070,8 +1084,8 @@ export default function App() {
       <button onClick={() => { const operation = dialog.operation; setDialog(null); operation(); }}>Don't save</button>
       <button onClick={() => setDialog(null)}>Cancel</button></>}><p>Save changes to {doc.name} before opening another model?</p></Dialog>}
   </>;
-  return <WarmKeysProvider preferences={preferences} catalog={commandCatalog} activeScope={settingsTab?'settings':dialog?'dialog':mode==='paint'?'paint':'editor'} onAction={id=>runLatest.current(id)}><div data-vis-ui={visUI || undefined} data-warmkey-scope={mode==='paint'?'paint':'editor'} className={`classic-app${rigWorkspace?' rig-workspace':''}${mode==='bones'?' bones-workspace':''}${activePortrait?' portrait-workspace':''}${mode==='uv'?' uv-mode':''}${mode==='paint'?' paint-mode':''}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const records = [...event.dataTransfer.files], record = records.find(file => /\.(mdl|mdx|mdlxlpaint)$/i.test(file.name)); if (record) withUnsaved(async () => { await loadFile(record); }); else loadTextures(records).catch(error => say(error.message, true)); }} onClick={() => context && setContext(null)}>
-    <input hidden ref={files} type="file" accept=".mdl,.mdx,.mdlxlpaint" onChange={event => { const file = event.target.files[0]; event.target.value = ''; if (file) loadFile(file); }}/><input hidden ref={textures} type="file" accept=".blp,.tga,.dds,.png,.jpg,.jpeg,.webp" multiple onChange={event => { loadTextures([...event.target.files]); event.target.value = ''; }}/><input hidden ref={folder} type="file" webkitdirectory="" multiple onChange={event => loadTextures([...event.target.files])}/>
+  return <WarmKeysProvider preferences={preferences} catalog={commandCatalog} activeScope={settingsTab?'settings':dialog?'dialog':mode==='paint'?'paint':'editor'} onAction={id=>runLatest.current(id)}><div data-vis-ui={visUI || undefined} data-warmkey-scope={mode==='paint'?'paint':'editor'} className={`classic-app${rigWorkspace?' rig-workspace':''}${mode==='bones'?' bones-workspace':''}${activePortrait?' portrait-workspace':''}${mode==='uv'?' uv-mode':''}${mode==='paint'?' paint-mode':''}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const records = [...event.dataTransfer.files], record = records.find(file => /\.(mdl|mdx|mdlxlpaint)$/i.test(file.name)); if(record&&mode==='showcase')loadShowcaseModel(record);else if (record) withUnsaved(async () => { await loadFile(record); }); else loadTextures(records).catch(error => say(error.message, true)); }} onClick={() => context && setContext(null)}>
+    <input hidden ref={files} type="file" accept=".mdl,.mdx,.mdlxlpaint" onChange={event => { const file = event.target.files[0]; event.target.value = ''; if (file) (mode==='showcase'?loadShowcaseModel:loadFile)(file); }}/><input hidden ref={textures} type="file" accept=".blp,.tga,.dds,.png,.jpg,.jpeg,.webp" multiple onChange={event => { loadTextures([...event.target.files]); event.target.value = ''; }}/><input hidden ref={folder} type="file" webkitdirectory="" multiple onChange={event => loadTextures([...event.target.files])}/>
     {!window.desktop && <nav className="classic-menu">{[['File', [['New', 'new'], ['Open...', 'open'], ['Save', 'save'], ['Save as...', 'saveAs'], ['Recovery...', 'recovery']]], ['Edit', [['Undo', 'undo'], ['Redo', 'redo'], ['Copy', 'copy'], ['Paste', 'paste'], ['Special paste...', 'pasteSpecial'], ['Select all', 'selectAll'], ['Clear selection', 'clear'], ['Undo settings...', 'history'], ['Copy keyframes','keyframe:copy'], ['Copy Frame','keyframe:copyPose'], ['Paste keyframes','keyframe:paste'], ['Delete keyframes','keyframe:delete'], ['Clear keyframes','keyframe:clear']]], ['View', VIEW_MENU[displayMode] || []], ['Modules', [['Vertices', 'vertices'], ['Bones', 'bones'], ['UV-maps', 'uv'], ['Movement', 'animation'], ['Animations', 'animations']]], ['Shape', SHAPE_TOOLS.map(tool=>[tool,'shape:'+tool.toLowerCase()])], ['Windows', [['Material & Texture Library', 'textureLibrary'], ['Particle Editor', 'particles'], ...resources.map(v => [v, v])]], ['Settings', [['Mouse and general…', 'settings'], ['Keyboard Shortcuts…', 'warmkeys'], ['Graphical settings…', 'graphics'], ['Recording and screenshots…','captureSettings'], ['Appearance…','appearanceSettings'], ['Configuration…','configurationSettings'], ['Grid…','gridSettings'], ['Warcraft III…','gameDataSettings'], null, ['Undo cache…', 'history'], ['Show pressed keys','pressedKeys'], ['Choose Warcraft III folder…','gameData']]], ['Help', [['Help', 'help'], ['Diagnostics', 'diagnostics'], ['About', 'about']]]].map(([name, items]) => <details key={name}><summary>{name}</summary><div role="menu">{items.map((row,index) => { if(!row)return <hr key={index}/>; const [label,action]=row; return <button data-warmkey={action} role={name==='View' && action!=='clearDisplay'?'menuitemcheckbox':'menuitem'} aria-checked={name==='View' && action!=='clearDisplay'?!!menuChecks[action]:undefined} disabled={!commandEnabled(action)} key={action} onClick={event => { event.currentTarget.closest('details').open = false; runLatest.current(action); }}><span>{name==='View'?(menuChecks[action]?'✓ ':'　 '):''}{label}</span>{['frame','frameSelection','normals'].includes(action)&&<kbd>{(preferences.hotkeys[action]||COMMANDS.find(item=>item.id===action)?.defaultKeys||[]).find(key=>key.length===1)||''}</kbd>}</button>;})}</div></details>)}</nav>}
     <div className="classic-toolbar">
       <div className="classic-toolbar-group"><Tool action="new" icon="new-document" title="New" onClick={() => commands.current.new()}/><Tool action="open" icon="sb_open" title="Open" onClick={open}/><Tool action="save" icon="sb_save" title="Save" onClick={() => save()}/></div>
@@ -1100,7 +1114,7 @@ export default function App() {
     {mode === 'animation' && animationPanel === 'movement' && <PortraitToolbar model={model} active={activePortrait} cameraIndex={portraitCameraIndex} disabled={doc.readOnly || saving} controlModel={controlsWholeModel(selectedNodeIds)} controlGroups={controlGroups} controlModelGroup={controlModelGroup} onControlModel={() => selectControlModel()} onControlModelGroup={selectControlModel} onToggle={() => activePortrait ? setPortraitEnabled(false) : enablePortrait()} onCameraIndex={value => { setPortraitView('perspective'); setPortraitCameraIndex(value); }} onSetView={updatePortraitCamera} onSnap={() => { setPortraitView('perspective'); setPortraitSnapRevision(value => value + 1); }}/>}
     <main className={`classic-workspace${mode === 'vertices' && quadView ? ' quad-workspace' : ''}${mode === 'animation' ? ' animation-workspace' : ''}${mode === 'uv' ? ' uv-immersive' : ''}${mode === 'paint' ? ' paint-immersive' : ''}${mode === 'showcase' ? ' showcase-immersive' : ''}`} inert={saving || undefined}><section className="classic-view">
       {mode !== 'uv' && mode !== 'paint' && mode !== 'showcase' && <div className="classic-view-label"><select data-warmkey="viewDirection" aria-label="View direction" value={cameraPortraitActive ? portraitView : mode === 'vertices' && quadView ? activeVertexPane?.view || 'front' : view} onChange={event => cameraPortraitActive ? setPortraitView(event.target.value) : setView(event.target.value)}>{(mode === 'vertices' && quadView ? QUAD_VIEW_OPTIONS : views.map(name => [name, name[0].toUpperCase() + name.slice(1)])).map(([name, label]) => <option key={name} value={name}>{label}</option>)}</select>{!cleanAnimationPreview && <select aria-label="Render mode" value={renderMode} onChange={event=>{setRenderMode(event.target.value);setCleanViews(previous=>({...previous,[mode]:false}));}}><option value="wireframe">Wireframe</option><option value="solid">Surface</option><option value="textured">Textured View</option></select>}{mode === 'vertices' && <button aria-pressed={quadView} onClick={toggleQuadView}>Quad View</button>}<button data-warmkey="fit" title="Fit model" onClick={()=>frame(false)}>Fit</button><button data-warmkey="fitSelection" title="Fit selection" onClick={()=>frame(true)}>Fit selection</button></div>}
-      {mode === 'showcase' && <Suspense fallback={<div className="classic-empty-view">Loading Showcase…</div>}><ShowcaseWorkspace key={session.id} model={model} modelName={doc.name} modelPath={session.path} revision={doc.revision} textureAssets={session.assets} preferences={preferences} teamColor={teamColor} sessionId={session.id} background={background} backgroundLibrary={backgroundLibrary} onBackground={selectBackground} onStatus={say}/></Suspense>}
+      {(mode === 'showcase'||showcaseVisited) && <div style={{display:mode==='showcase'?'contents':'none'}}><Suspense fallback={<div className="classic-empty-view">Loading Showcase…</div>}><ShowcaseWorkspace active={mode==='showcase'} onLoadModel={loadShowcaseModel} model={showcaseSession?.doc.model||model} modelName={showcaseSession?.doc.name||doc.name} modelPath={showcaseSession?showcaseSession.path:session.path} revision={showcaseSession?.doc.revision??doc.revision} textureAssets={showcaseSession?.assets||session.assets} preferences={preferences} teamColor={teamColor} sessionId={showcaseSession?.id||session.id} background={background} backgroundLibrary={backgroundLibrary} onBackground={selectBackground} onStatus={say}/></Suspense></div>}
       {normalsXL && <div className="normals-xl-prompt" role="status"><span><b>NormalsXL · Pick 1 normal</b> Click one vertex whose normal correctly faces out of the surface (or into it). This pick corrects the original selection.</span><button onClick={() => setNormalsXL(null)}>Cancel</button></div>}
       {preferencesReady && mode === 'vertices' && <Viewport cameraHandoff={cameraHandoff} quadView={quadView} viewRequest={vertexViewRequest} onActivePaneChange={setActiveVertexPane} workplaneEnabled={workplaneEnabled} {...cameraProps} rotationNormals={dialog?.type==='normalRotate'} onInspectGeoset={inspectGeoset} onHoverGeoset={setViewHoveredGeoset} highlightSelection={!cleanView && preferences.highlightSelection && highlightAppearance.viaView} onViewChange={setView} preferences={preferences} onSensitivityChange={changeSensitivity} onPointerSensitivityChange={changePointerSensitivity} onCameraModeToggle={toggleMiddleCamera} suspended={!!dialog || (!!settingsTab && settingsTab !== 'visuals')} key={session.id} hoveredGeoset={highlightedFromSelection} model={previewModel} revision={doc.revision} selectedGeoset={activeGeoset} selectedVertices={(normalsXL ? normalsXLSelection : validSelection)[activeGeoset] || []} selectableGeosets={selectable} selectionByGeoset={normalsXL ? normalsXLSelection : validSelection} onSelectionChange={next => setSelection(filterVertexSelection(next, selectable, doc.model))} onPickNormalReference={normalsXL ? pickNormalsXLReference : undefined} hiddenVertices={hidden} hiddenGeosets={showAllGeosets ? new Set() : new Set([...allGeosets(model.Geosets.length)].filter(i => !selectable.has(i)))} onSelectGeoset={setActiveGeoset} mode={cleanView ? 'textured' : renderMode} overlays={normalsXL ? { ...overlays, normals: true } : overlays} showVertices={!!normalsXL || showVertices} showSkeleton={overlays.bones || overlays.nodes || overlays.attachments || overlays.particles} showGrid={showGrid} showAxes={showAxes} shaded={shaded} view={view} cameraMode={normalsXL ? 'work' : cameraMode} workplane={workplane} transformMode={normalsXL ? 'select' : tool} zoomAnchor={zoomAnchor} choosingZoomAnchor={!normalsXL && choosingZoomAnchor} onChooseZoomAnchor={next => { if (tool === 'scale' && validSelection[next.geosetIndex]?.includes(next.vertexIndex)) { setZoomAnchor(next); setChoosingZoomAnchor(false); say('Anchor vertex selected.'); } }} rgbPreview={rgbPreview} rgbPreviewSequenceIndex={rgbSequence} sequenceIndex={-1} time={0} playing={false} teamColor={teamColor} textureAssets={session.assets} onTransform={transform}/>}
       {mode === 'uv' && (window.desktop ? <div className="uv-detached-message">UV Wrapper is open in its own window.</div> : uvWorkspace)}

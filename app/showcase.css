@@ -14,6 +14,15 @@
 .showcase-section { border-top:1px solid #aaa; padding-top:6px; margin-top:7px; }
 .showcase-section > header { display:flex; justify-content:space-between; align-items:center; gap:3px; margin-bottom:4px; }
 .showcase-section > header button { padding:1px 4px; }
+.showcase-section.is-collapsed > :not(header) { display:none !important; }
+.showcase-section-toggle::before { content:'▾ '; }
+.showcase-section-toggle[aria-expanded=false]::before { content:'▸ '; }
+.showcase-section > header .showcase-section-toggle { padding-left:0; white-space:nowrap; }
+.showcase-section > header .showcase-collapse-icon { padding:0; width:12px; flex:none; }
+.showcase-section > header .showcase-collapse-icon::before { content:'▾'; }
+.showcase-section > header .showcase-collapse-icon[aria-expanded=false]::before { content:'▸'; }
+.showcase-section > header [hidden] { display:none; }
+
 .showcase-wide,.showcase-sidebar select.showcase-wide { width:100%; max-width:100%; }
 .showcase-file { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .showcase-list { list-style:none; background:#fff; color:#111; border:1px inset #aaa; padding:1px; margin:3px 0; min-height:76px; max-height:140px; overflow:auto; }
@@ -25,6 +34,13 @@
 .showcase-list li.overflow.selected { outline:1px solid #bd3030; outline-offset:-1px; }
 .showcase-list-actions,.showcase-camera-actions { display:flex; gap:3px; }
 .showcase-list-actions { justify-content:flex-end; }
+.showcase-sequence-preview { margin-right:auto; }
+.showcase-emitters { margin-top:5px; }
+.showcase-emitters summary { cursor:pointer; }
+.showcase-emitters > div { max-height:140px; overflow:auto; margin-top:3px; }
+.showcase-dialog .showcase-emitters label { justify-content:flex-start; margin:2px 0; }
+.showcase-emitters input { flex:none; margin:0; }
+.showcase-emitters span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .showcase-list-actions button { min-height:19px; padding:0 5px; }
 .showcase-camera-actions button { flex:1; }
 .showcase-camera-list { min-height:60px; max-height:100px; }
@@ -145,8 +161,26 @@
 .showcase-preset-actions button { flex:1; }
 .showcase-recording-list { margin:4px 0; padding:0; list-style:none; max-height:110px; overflow:auto; }
 .showcase-recording-list li { display:flex; align-items:center; gap:3px; margin:2px 0; }
-.showcase-recording-list span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+.showcase-recording-list .showcase-recording-edit { flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
 .showcase-recording-list button { padding:0 4px; min-height:18px; }
 
 .showcase-orbit-direction {display:flex;align-items:center;justify-content:space-between;gap:4px;}
 .showcase-orbit-direction button {width:24px;height:20px;font-size:17px;line-height:16px;padding:0;}
+
+.showcase-model-tools { display:flex; align-items:center; justify-content:space-between; gap:4px; }
+
+.showcase-export-target { display:flex; gap:2px; margin-top:3px; }
+.showcase-export-target button { width:50%; min-height:24px; }
+.showcase-export-note { display:block; margin:3px 0; font-size:10px; }
+.showcase-upload-results { margin:4px 0; }
+.showcase-upload-result { border-bottom:1px solid #aaa; padding:4px 0; }
+.showcase-upload-result > small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.showcase-sidebar .showcase-upload-result label { gap:3px; margin:2px 0; }
+.showcase-upload-result input { flex:1; min-width:0; width:0; font-size:10px; }
+.showcase-upload-result button { font-size:10px; white-space:nowrap; padding:1px 3px; }
+
+.showcase-model-file{display:flex;align-items:center;gap:5px;margin:4px 0}.showcase-model-file small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.showcase-sidebar .showcase-extra-time,.showcase-dialog .showcase-extra-time { display:grid; grid-template-columns:1fr 60px 52px; white-space:nowrap; }
+.showcase-extra-time input[type=number] { width:60px; min-width:0; }
+.showcase-extra-time output { text-align:right; font-size:10px; overflow:hidden; text-overflow:ellipsis; }

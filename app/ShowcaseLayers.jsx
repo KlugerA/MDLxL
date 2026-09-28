@@ -1,4 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { moveDragPoint } from './classic-gestures.js';
 import { scaleTextRuns } from './showcase-rich-text.js';
 import { createAnimatedPreviewBackground } from './animated-preview-background.js';
 import { paintShowcaseText, textFonts } from './showcase-text.js';
@@ -65,11 +66,12 @@ export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,on
     if(!latest.current.editing||event.button!==0)return;
     const box=root.current.getBoundingClientRect();latest.current.onSelect?.(layer.id);
     const centerX=box.left+(layer.rect.x+layer.rect.width/2)*box.width,centerY=box.top+(layer.rect.y+layer.rect.height/2)*box.height;
-    drag.current={id:layer.id,x:event.clientX,y:event.clientY,width:box.width,height:box.height,rect:layer.rect,size:layer.size,layer,angle:(layer.kind==='text'?Number(layer.rotation)||0:0)*Math.PI/180,resize:event.target.dataset.layerResize==='true',rotate:layer.kind==='text'&&!!event.target.closest('[data-layer-rotate]'),centerX,centerY,pointerAngle:Math.atan2(event.clientY-centerY,event.clientX-centerX)};
+    const point={x:event.clientX,y:event.clientY};
+    drag.current={motion:{pointer:point,point,shift:event.shiftKey,axis:null},id:layer.id,x:event.clientX,y:event.clientY,width:box.width,height:box.height,rect:layer.rect,size:layer.size,layer,angle:(layer.kind==='text'?Number(layer.rotation)||0:0)*Math.PI/180,resize:event.target.dataset.layerResize==='true',rotate:layer.kind==='text'&&!!event.target.closest('[data-layer-rotate]'),centerX,centerY,pointerAngle:Math.atan2(event.clientY-centerY,event.clientX-centerX)};
     event.currentTarget.setPointerCapture(event.pointerId);event.stopPropagation();event.preventDefault();
   }
   function move(event){
-    const row=drag.current;if(!row)return;const dx=(event.clientX-row.x)/row.width,dy=(event.clientY-row.y)/row.height,rect=row.rect;
+    const row=drag.current;if(!row)return;const point=moveDragPoint(row.motion,{x:event.clientX,y:event.clientY},event.shiftKey),dx=(point.x-row.x)/row.width,dy=(point.y-row.y)/row.height,rect=row.rect;
     if(row.rotate){
       const angle=row.angle+Math.atan2(event.clientY-row.centerY,event.clientX-row.centerX)-row.pointerAngle;
       const rotation=((Math.round(angle*180/Math.PI)+180)%360+360)%360-180;
@@ -82,6 +84,12 @@ export default forwardRef(function ShowcaseLayers({layers=[],activeId,editing,on
     if(row.resize){const dw=(next.width-rect.width)*row.width,dh=(next.height-rect.height)*row.height;next.x+=((c-1)*dw-s*dh)/2/row.width;next.y+=(s*dw+(c-1)*dh)/2/row.height;}
     latest.current.onChange?.(row.id,{rect:next,...(row.resize&&row.size?{size:Math.max(6,Math.min(300,Math.round(row.size*next.width/rect.width))),runs:scaleTextRuns(row.layer,next.width/rect.width)}:{})});event.stopPropagation();
   }
+  useEffect(()=>{
+    const shift=event=>{if(event.key==='Shift'&&drag.current)moveDragPoint(drag.current.motion,drag.current.motion.pointer,event.shiftKey);};
+    const cancel=()=>{drag.current=null;};
+    window.addEventListener('keydown',shift);window.addEventListener('keyup',shift);window.addEventListener('blur',cancel);
+    return()=>{window.removeEventListener('keydown',shift);window.removeEventListener('keyup',shift);window.removeEventListener('blur',cancel);};
+  },[]);
   function end(event){drag.current=null;event.stopPropagation();}
   const selected=layers.find(layer=>layer.id===activeId),frame=crop||{x:0,y:0,width:1,height:1},divisions=3+Math.max(1,Math.min(99,gridDensity));
   const gridPath=Array.from({length:divisions+1},(_,i)=>{const n=i*100/divisions;return `M${n} 0V100M0 ${n}H100`;}).join(' ');

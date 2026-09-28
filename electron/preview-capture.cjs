@@ -117,10 +117,10 @@ async function joinGIFSections(files, destination) {
   } finally { await output.close(); }
 }
 
-async function savePreviewCaptureFile(directory, source) {
+async function savePreviewCaptureFile(directory, source, prefix='Preview') {
   const size = await validateGIFFile(source);
   await fs.mkdir(directory, { recursive: true });
-  const name = `Preview-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(6).toString('hex')}.gif`;
+  const name = `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(6).toString('hex')}.gif`;
   const destination = path.join(directory, name);
   // COPYFILE_EXCL preserves unique/no-overwrite semantics, including retries.
   try { await fs.copyFile(source, destination, 1); }

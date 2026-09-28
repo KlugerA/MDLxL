@@ -1,3 +1,4 @@
+import { moveDragPoint } from './classic-gestures.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Euler, MOUSE, Quaternion, Vector3 } from 'three';
 
@@ -34,11 +35,31 @@ export function zoomEditorCamera(camera, zoom) {
  * depth precision. Override its two zoom hooks so mouse/touch/key zoom agree. */
 export class EditorCameraControls extends OrbitControls {
   update(deltaTime) {
+    if (this.keepWorldUp?.()) {
+      this.object.up.set(0,0,1);
+      this.minPolarAngle=.0001;this.maxPolarAngle=Math.PI-.0001;
+    }
     // OrbitControls caches its up-vector transform at construction. View presets
     // and editable roll change up later, so keep that cached basis synchronized.
     if (this._quat) { this._quat.setFromUnitVectors(this.object.up.clone().normalize(), new Vector3(0, 1, 0)); this._quatInverse.copy(this._quat).invert(); }
     return super.update(deltaTime);
   }
+  _startScreenDrag(event) {
+    const point={x:event.clientX,y:event.clientY};
+    this.screenDrag=this.lockScreenAxis?{pointer:point,point,shift:event.shiftKey,axis:null}:null;
+  }
+  shiftScreenDrag(shift) {
+    if(this.screenDrag)moveDragPoint(this.screenDrag,this.screenDrag.pointer,shift);
+  }
+  _screenDragEvent(event) {
+    if(!this.screenDrag)return event;
+    const point=moveDragPoint(this.screenDrag,{x:event.clientX,y:event.clientY},event.shiftKey);
+    return {clientX:point.x,clientY:point.y};
+  }
+  _handleMouseDownPan(event) { this._startScreenDrag(event);super._handleMouseDownPan(event); }
+  _handleMouseDownRotate(event) { this._startScreenDrag(event);super._handleMouseDownRotate(event); }
+  _handleMouseMovePan(event) { super._handleMouseMovePan(this._screenDragEvent(event)); }
+  _handleMouseMoveRotate(event) { super._handleMouseMoveRotate(this._screenDragEvent(event)); }
   _dollyIn(scale) { this._projectionZoom(1 / scale); }
   _dollyOut(scale) { this._projectionZoom(scale); }
   _projectionZoom(scale) {

@@ -156,12 +156,12 @@ export function createEventPreview({ gl, model, modelPath, textureAssets, textur
     return world;
   }
   return {
-    ready, get isReady() { return loaded; },
-    render({ frame, sequenceIndex, globalTime, camera, teamColor }) {
+    ready, definitions, get isReady() { return loaded; },
+    render({ frame, sequenceIndex, globalTime, playback, camera, teamColor }) {
       if (disposed || !loaded) return;
       const restore = preserveGLState(gl);
       try {
-      const active = activeEventInstances(model, definitions, { frame, sequenceIndex, globalTime, maxInstances:64 }), keys = new Set(active.map(item => item.key));
+      const active = activeEventInstances(model, definitions, { frame, sequenceIndex, globalTime, playback, maxInstances:64 }), keys = new Set(active.map(item => item.key));
       for (const [key, state] of instances) if (!keys.has(key)) { if (state.native) destroyRenderer(state.native); if (state.vao) gl.deleteVertexArray(state.vao); instances.delete(key); }
       for (const item of active) {
         const resource = resources.get(pathKey(item.definition.resourcePath)); if (!resource) continue;
