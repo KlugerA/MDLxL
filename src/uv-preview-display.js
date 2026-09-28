@@ -1,5 +1,5 @@
 /** Live selection is opt-in and independent of editing visibility/model data. */
-export const DEFAULT_UV_PREVIEW_DISPLAY = Object.freeze({mesh:'none',size:.25,textureFrame:false});
+export const DEFAULT_UV_PREVIEW_DISPLAY = Object.freeze({mesh:'none',size:.25,textureFrame:false,snapTextureFrame:false});
 
 export function normalizeUVPreviewDisplay(value) {
   const input = value && typeof value === 'object' ? value : {};
@@ -8,6 +8,7 @@ export function normalizeUVPreviewDisplay(value) {
     mesh: ['none','all','selected'].includes(input.mesh) ? input.mesh : 'none',
     size: input.size !== null && input.size !== '' && Number.isFinite(size) ? Math.round(Math.max(.25,Math.min(3,size))*100)/100 : .25,
     textureFrame: input.textureFrame === true,
+    snapTextureFrame: input.snapTextureFrame === true,
   };
 }
 

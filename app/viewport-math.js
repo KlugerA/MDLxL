@@ -73,9 +73,13 @@ export function updateDepthClipping(camera, center, radius, extent = radius) {
 export function modelClipRadius(model, center, radius) {
   let result = radius;
   const extents = [model?.Info, ...(model?.Sequences || []), ...(model?.Geosets || []).flatMap(geo => [geo, ...(geo.Anims || [])])];
-  for (const extent of extents) for (const property of ['MinimumExtent', 'MaximumExtent']) {
-    const point = extent?.[property];
-    if (point?.length >= 3 && Array.from(point).every(Number.isFinite)) result = Math.max(result, new Vector3().fromArray(point).distanceTo(center));
+  for (const extent of extents) {
+    const min = extent?.MinimumExtent, max = extent?.MaximumExtent;
+    // Empty animation bounds can use reversed float extrema. They are not geometry.
+    if (min?.length >= 3 && max?.length >= 3 && [0, 1, 2].some(axis => min[axis] > max[axis])) continue;
+    for (const point of [min, max]) {
+      if (point?.length >= 3 && Array.from(point).every(Number.isFinite)) result = Math.max(result, new Vector3().fromArray(point).distanceTo(center));
+    }
   }
   return result;
 }

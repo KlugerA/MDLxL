@@ -7,6 +7,7 @@ import {validatePaintAssignments,repairPaintMaterials} from '../src/paint-materi
 import {preparePaintModelCommit,commitPaintModel,adoptCommittedPaintUVs} from '../src/paint-model-integration.js';
 import Addons from './Addons.jsx';
 import { directlyBoundBoneIds } from '../src/binding-inspection.js';
+import { applyPortraitModelTransform, modelControlGroups, modelControlRoots } from '../src/portrait-model-control.js';
 import { attachToBone, changeVertexBinding, createRigNode, deleteRigNode, detachFromBone, renameRigNode, setBoneBillboarded } from '../src/bone-tools.js';
 import { builtinTextureAssets } from '../src/builtin-textures.js';
 const BitsAndParts = lazy(() => import('./BitsAndParts.jsx'));
@@ -42,9 +43,11 @@ import { retainedForgeAssets, forgeExportArchive, isForgeAssetPath, missingForge
 import { applyMovementTransform, movementRestricted, constrainMovementVector, movementProperties } from '../src/movement.js';
 import { classicTimelineDomain } from '../src/classic-keyframes.js';
 import { beginUVPreview, applyUVPreviews, revertUVPreviews, uvPreviewModel, restoreUVPreviews, addLibraryTexture, validateUVPreview, captureUVPreviewGuard, validateUVPreviewGuard, getUVPreviewSelection } from '../src/uv-preview.js';
+import { applyMaterialPreset } from '../src/material-presets.js';
 import { setUVTextureWrapping, uncoupleUVVertices } from '../src/uv-tools.js';
 import './modules.css';
 import './texture-library.css';
+import './material-properties.css';
 const Settings = lazy(() => import('./Settings.jsx'));
 import { installTextureLibraryDecoder } from './asset-preload-client.js';
 import { flushRecordingQueue } from './preview-recording-queue.js';
@@ -158,6 +161,9 @@ export default function App() {
   const lockedVertexPlane = mode === 'vertices' && quadView ? activeVertexPane?.workplane : null;
   const [cameraAngles, setCameraAngles] = useState({x:0,y:0,z:0}), [cameraAnglesRequest,setCameraAnglesRequest] = useState(null), [cameraGesture,setCameraGesture] = useState(false);
   const [portraitEnabled, setPortraitEnabled] = useState(false), [portraitCameraIndex, setPortraitCameraIndex] = useState(0);
+  const [controlModelIds, setControlModelIds] = useState([]);
+  const [controlModelGroup, setControlModelGroup] = useState('all');
+  useEffect(() => { setControlModelGroup('all'); setControlModelIds([]); }, [session.id]);
   const [portraitSnapRevision, setPortraitSnapRevision] = useState(0);
   const receiveCameraAngles = useCallback(value => setCameraAngles(previous => ['x','y','z'].some(axis=>Math.abs(previous[axis]-value[axis])>.001)?value:previous), []);
   const cameraProps = {onCameraAnglesChange:receiveCameraAngles,cameraAnglesRequest,onCameraGestureChange:setCameraGesture,onSensitivityIndicator:setAdjustingInput};
@@ -371,6 +377,13 @@ export default function App() {
     if (index !== false) { setPortraitCameraIndex(index); setPortraitView('perspective'); }
     return index;
   };
+  const selectControlModel = (group = controlModelGroup) => {
+    try {
+      const ids = group === 'all' ? modelControlRoots(model).map(root => root.id) : modelControlGroups(model)[Number(group)]?.ids;
+      if (!ids?.length) throw new Error('Control Model group is unavailable.');
+      setControlModelGroup(group); setControlModelIds(ids); setSelectedNodeIds(ids); setMovementMode('move'); setMovementSpace('world'); setTool('translate'); setCameraMode('work'); setPlaying(false);
+    } catch (cause) { say(cause.message, true); }
+  };
   const setMissingPortraitCamera = () => {
     const index = updatePortraitCamera();
     if (index === false) return;
@@ -452,11 +465,13 @@ export default function App() {
   const openParticles = id => { setPlaying(false); setDialog({type:'particles',nodeId:Number.isInteger(id)?id:selectedNodeIds.at(-1)}); };
   const inspectGeoset = index => { if(model.Geosets[index])setActiveGeoset(index); };
   const openNodeManager = () => setDialog({ type: 'resource', kind: 'Nodes' });
+  const controlsWholeModel = ids => portraitModeActive && controlModelIds.length > 0 && ids.length === controlModelIds.length && controlModelIds.every(id => ids.includes(id));
   const moveNodes = payload => {
     const change = {...payload, restPose, rotateOnOwnAxis: payload.rotateOnOwnAxis ?? rotateOnOwnAxis, workplaneEnabled: payload.workplaneEnabled ?? workplaneEnabled, workplane, restrictions};
     if (movementRestricted(payload.mode || movementMode, restrictions)) return false;
     setPlaying(false); if (!restPose) setTime(payload.time ?? time);
-    const result = edit(restPose ? 'Move rest-pose nodes' : 'Transform bones and nodes', restPose ? ['Nodes','PivotPoints'] : ['Nodes'], m => applyMovementTransform(m, payload.nodeIds || selectedNodeIds, Math.round(payload.time ?? time), payload.sequenceIndex ?? sequence, change));
+    const ids = payload.nodeIds || selectedNodeIds, controlModel = controlsWholeModel(ids) && ['move', 'rotate'].includes(change.mode);
+    const result = edit(controlModel ? 'Control Model' : restPose ? 'Move rest-pose nodes' : 'Transform bones and nodes', restPose ? ['Nodes','PivotPoints'] : ['Nodes'], m => controlModel ? applyPortraitModelTransform(m, ids, Math.round(payload.time ?? time), payload.sequenceIndex ?? sequence, change) : applyMovementTransform(m, ids, Math.round(payload.time ?? time), payload.sequenceIndex ?? sequence, change));
     if (result !== false) liveMovementRevision.current = doc.revision;
     return result;
   };
@@ -936,7 +951,7 @@ export default function App() {
     return () => clearTimeout(timer);
   },[preferences,preferencesReady]);
   useEffect(() => window.desktop?.onBeforeClose?.(async () => { const captures=[]; window.dispatchEvent(new CustomEvent('mdlvis-flush-captures',{detail:captures})); await Promise.all(captures); await flushRecordingQueue(); clearTimeout(preferencesTimer.current); if(!latest.current.preferencesReady)return; const current=preferencesRef.current, encoded=JSON.stringify(current); if(savedPreferences.current!==encoded) {await window.desktop.configure({preferences:current});savedPreferences.current=encoded;} }),[]);
-  useEffect(() => { if(preferencesReady) resolveTextures(); },[preferencesReady]);
+  useEffect(() => { if(preferencesReady) resolveTextures(); },[preferencesReady, JSON.stringify(model.Textures.map(texture => texture.Image))]);
 
 
   // NonLooping is a Warcraft III serialization flag. Editor playback loops
@@ -994,11 +1009,11 @@ export default function App() {
       }
     });
   };
-  const uncoupleUVSelection = (currentSelection, coordId = uvSet) => {
+  const uncoupleUVSelection = (currentSelection, coordByGeoset = {}) => {
     let nextSelection = { ...validSelection }, nextDomain = { ...uvEntrySelection };
     const result = edit('Uncouple UV vertices', ['Geosets'], current => {
       for (const [indexText, ids] of Object.entries(currentSelection || {})) {
-        const index = Number(indexText), uncoupled = uncoupleUVVertices(current.Geosets[index], ids, coordId);
+        const index = Number(indexText), uncoupled = uncoupleUVVertices(current.Geosets[index], ids, coordByGeoset[index] ?? uvSet);
         nextSelection[index] = [];
         nextDomain[index] = [...new Set([...(nextDomain[index] || []), ...uncoupled.created])];
       }
@@ -1017,9 +1032,8 @@ export default function App() {
             return expanded;
           });
           setSelection(filterVertexSelection(next, new Set(Object.keys(uvEntrySelection).map(Number)), doc.model));
-        }}
-        onWorkingSelectionChange={next => { const indices = new Set(Object.keys(next).map(Number)); setUVEntrySelection(next); setSelectable(indices); setSelection(filterVertexSelection(next, indices, doc.model)); setHidden({}); setActiveGeoset(indices.values().next().value ?? -1); setLiveUV(null); }}
-        onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
+        }}        onUVChanges={commitUVChanges} onPreviewChanges={changes => setLiveUV(changes?.length ? changes : null)} onUncouple={uncoupleUVSelection}
+        onMaterialPreset={(id, preset, tint) => edit(preset, ['Materials', 'Textures'], current => applyMaterialPreset(current, id, preset, tint))}
         onWrappingChange={(textureIDs, enabled) => edit(`${enabled ? 'Enable' : 'Disable'} UV texture wrapping`, ['Textures'], current => setUVTextureWrapping(current, textureIDs, enabled))}
         onGeosetChange={(index, coordId = 0) => { if (index < 0) return; setActiveGeoset(index); setUvSet(coordId); setLiveUV(null); }}
         textureAssets={session.assets} teamColor={teamColor} preferences={preferences} onPreferences={changePreferences} readOnly={doc.readOnly || saving}
@@ -1036,6 +1050,7 @@ export default function App() {
     {inspectingMotion && animationPanel === 'movement' && motion.active && <Suspense fallback={null}><MotionInspector time={time} selectedNodeIds={selectedNodeIds} mode={movementMode} motion={motion} anchor={motionAnchor} onClose={closeMotion} onSelect={selectMotion} onReplay={replayMotion}/></Suspense>}
   </KeyframeTimeline></Suspense>);
   const activePortrait = portraitModeActive;
+  const controlGroups = useMemo(() => { try { return modelControlGroups(model); } catch { return []; } }, [model, doc.revision]);
   const cameraPortraitActive = activePortrait && !!model.Cameras?.[portraitCameraIndex];
   // Gate BEFORE mounting the timeline/controllers. Their duplicate-owner edit
   // invariant remains strict; malformed models get a choice instead of a crash.
@@ -1076,7 +1091,7 @@ export default function App() {
       {mode === 'vertices' && <><label className="check"><input type="checkbox" aria-label="RGB Preview" checked={rgbPreview} onChange={event=>{setRGBPreview(event.target.checked);if(rgbSequence<0 && model.Sequences.length)setRGBSequence(0);}}/>RGB Preview</label><select aria-label="RGB preview animation" disabled={!rgbPreview} value={rgbSequence} onChange={event=>setRGBSequence(Number(event.target.value))}><option value={-1}>Static RGB</option>{model.Sequences.map((item,index)=><option key={index} value={index}>{item.Name}</option>)}</select></>}
       {inputStrength}
     </div>
-    {mode === 'animation' && animationPanel === 'movement' && <PortraitToolbar model={model} active={activePortrait} cameraIndex={portraitCameraIndex} disabled={doc.readOnly || saving} onToggle={() => activePortrait ? setPortraitEnabled(false) : enablePortrait()} onCameraIndex={value => { setPortraitView('perspective'); setPortraitCameraIndex(value); }} onSetView={updatePortraitCamera} onSnap={() => { setPortraitView('perspective'); setPortraitSnapRevision(value => value + 1); }}/>}
+    {mode === 'animation' && animationPanel === 'movement' && <PortraitToolbar model={model} active={activePortrait} cameraIndex={portraitCameraIndex} disabled={doc.readOnly || saving} controlModel={controlsWholeModel(selectedNodeIds)} controlGroups={controlGroups} controlModelGroup={controlModelGroup} onControlModel={() => selectControlModel()} onControlModelGroup={selectControlModel} onToggle={() => activePortrait ? setPortraitEnabled(false) : enablePortrait()} onCameraIndex={value => { setPortraitView('perspective'); setPortraitCameraIndex(value); }} onSetView={updatePortraitCamera} onSnap={() => { setPortraitView('perspective'); setPortraitSnapRevision(value => value + 1); }}/>}
     <main className={`classic-workspace${mode === 'vertices' && quadView ? ' quad-workspace' : ''}${mode === 'animation' ? ' animation-workspace' : ''}${mode === 'uv' ? ' uv-immersive' : ''}${mode === 'paint' ? ' paint-immersive' : ''}${mode === 'showcase' ? ' showcase-immersive' : ''}`} inert={saving || undefined}><section className="classic-view">
       {mode !== 'uv' && mode !== 'paint' && mode !== 'showcase' && <div className="classic-view-label"><select data-warmkey="viewDirection" aria-label="View direction" value={cameraPortraitActive ? portraitView : mode === 'vertices' && quadView ? activeVertexPane?.view || 'front' : view} onChange={event => cameraPortraitActive ? setPortraitView(event.target.value) : setView(event.target.value)}>{(mode === 'vertices' && quadView ? QUAD_VIEW_OPTIONS : views.map(name => [name, name[0].toUpperCase() + name.slice(1)])).map(([name, label]) => <option key={name} value={name}>{label}</option>)}</select>{!cleanAnimationPreview && <select aria-label="Render mode" value={renderMode} onChange={event=>{setRenderMode(event.target.value);setCleanViews(previous=>({...previous,[mode]:false}));}}><option value="wireframe">Wireframe</option><option value="solid">Surface</option><option value="textured">Textured View</option></select>}{mode === 'vertices' && <button aria-pressed={quadView} onClick={toggleQuadView}>Quad View</button>}<button data-warmkey="fit" title="Fit model" onClick={()=>frame(false)}>Fit</button><button data-warmkey="fitSelection" title="Fit selection" onClick={()=>frame(true)}>Fit selection</button></div>}
       {mode === 'showcase' && <Suspense fallback={<div className="classic-empty-view">Loading Showcase…</div>}><ShowcaseWorkspace key={session.id} model={model} modelName={doc.name} modelPath={session.path} revision={doc.revision} textureAssets={session.assets} preferences={preferences} teamColor={teamColor} sessionId={session.id} background={background} backgroundLibrary={backgroundLibrary} onBackground={selectBackground} onStatus={say}/></Suspense>}
@@ -1086,10 +1101,10 @@ export default function App() {
       {preferencesReady && mode === 'paint' && <Suspense fallback={<div className="classic-empty-view">{paintMessage('paint.loading')}</div>}><PaintBoundary key={session.id} onSave={()=>savePaintProject()} onExit={()=>selectMode('vertices')}><PaintWorkspace key={session.id} model={session.paintWorkingModel||model} originalModel={paintOriginalModel} revision={doc.revision+session.paintWorkingRevision} modelName={doc.name} modelPath={session.path} textureAssets={session.assets} project={session.paintProject} activeGeoset={activeGeoset} onGeosetChange={setActiveGeoset} onWorkingModelChange={value=>{session.paintWorkingModel=value;session.paintWorkingRevision++;refresh();}} onProjectChange={value=>{if(!session.paintProject&&value){session.paintOriginalModelBytes=doc.serialize(doc.format);session.paintWorkingModel ||= structuredClone(model);}if(!value){session.paintWorkingModel=null;session.paintWorkingRevision++;delete session.paintAppliedRevision;}session.paintProject=value;refresh();}} onEnsureTarget={ensurePaintTarget} onSaveProject={savePaintProject} onOpenProject={open} onExport={exportPaintProject} onApply={applyPaintToModel} onExit={()=>selectMode('vertices')} onStatus={say} preferences={preferences} cameraProps={{...cameraProps,onWorkMode:()=>setCameraMode('work'),onSensitivityChange:changeSensitivity,onPointerSensitivityChange:changePointerSensitivity,onCameraModeToggle:toggleMiddleCamera}} view={view} cameraMode={cameraMode} teamColor={teamColor} readOnly={doc.readOnly||saving||model.Version!==800}/></PaintBoundary></Suspense>}
 
       {(mode === 'animation' || mode === 'bones') && <Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview cameraHandoff={cameraHandoff} attachSourceIds={mode === 'bones' ? attachSourceIds : []} onAttachTarget={finishAttach} onCancelAttach={() => setAttachSourceIds([])} previewMode={previewRenderModes.animation} presentation={cleanAnimationPreview?"preview":"editor"} restPose={restPose} cleanAnimationPreview={cleanAnimationPreview} workplaneEnabled={workplaneEnabled} restrictions={restrictions} multiple={multipleNodes} {...cameraProps} onInspectGeoset={inspectGeoset} onHoverGeoset={setViewHoveredGeoset} highlightSelection={!cleanView && preferences.highlightSelection && highlightAppearance.viaView} selectedGeoset={activeGeoset} selectionByGeoset={validSelection} selectableGeosets={selectable} onSelectionChange={next=>setSelection(filterVertexSelection(next,selectable,doc.model))} hiddenGeosets={showAllGeosets?new Set():new Set([...allGeosets(model.Geosets.length)].filter(i=>!selectable.has(i)))} modelPath={session.path} mode={cleanView ? 'textured' : renderMode} shaded={shaded} showGrid={cameraPortraitActive ? false : showGrid} showAxes={cameraPortraitActive ? false : showAxes} workplane={workplane} backgroundUrl={backgroundLibrary.url} backgroundType={backgroundLibrary.type} onCaptureReady={setCaptureAPI} timelineInterval={[animationDomain.start,animationDomain.end]} overlays={cameraPortraitActive ? portraitOverlays : panelOverlays} loop={previewLoop} hoveredGeoset={highlightedFromSelection} preferences={preferences} onSensitivityChange={changeSensitivity} onPointerSensitivityChange={changePointerSensitivity} onCameraModeToggle={toggleMiddleCamera} suspended={previewSuspended} key={session.id} model={previewModel} revision={doc.revision} sequenceIndex={sequence} time={time} playing={playing} onTimeChange={setTime} onPlayingChange={setPlaying} teamColor={teamColor} textureAssets={session.assets} view={cameraPortraitActive ? portraitView : view} cameraMode={cameraMode}
-        portraitMode={activePortrait} portraitCameraIndex={portraitCameraIndex} portraitSnapRevision={portraitSnapRevision} liveMovementRevision={liveMovementRevision.current} playbackRange={inspectingMotion ? motion.focus : null} globalSeqId={globalSeqId} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onNodeTransform={doc.readOnly || saving || sharedMotionChannel || !rigWorkspace || !restPose && globalSeqId !== null ? undefined : moveNodes} showNodes={showNodes} showParticles={overlays.particles} transformMode={rigWorkspace ? movementMode : 'select'} transformSpace={movementSpace} rotateOnOwnAxis={rotateOnOwnAxis} /></Suspense>}
+        portraitMode={activePortrait} controlModel={controlsWholeModel(selectedNodeIds)} portraitCameraIndex={portraitCameraIndex} portraitSnapRevision={portraitSnapRevision} liveMovementRevision={liveMovementRevision.current} playbackRange={inspectingMotion ? motion.focus : null} globalSeqId={globalSeqId} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onNodeTransform={doc.readOnly || saving || sharedMotionChannel || !rigWorkspace || !restPose && globalSeqId !== null ? undefined : moveNodes} showNodes={showNodes} showParticles={overlays.particles} transformMode={rigWorkspace ? movementMode : 'select'} transformSpace={movementSpace} rotateOnOwnAxis={rotateOnOwnAxis} /></Suspense>}
 
     </section>{mode !== 'uv' && mode !== 'paint' && mode !== 'showcase' && <aside className="classic-sidebar">
-      {cameraRotating && cameraPanel}
+      {cameraRotating && !activePortrait && cameraPanel}
       {!rigWorkspace && mode !== 'animation' && !cameraRotating && <><div className="classic-counts"><div>Vertices: <span>{totalVertices}</span></div><div>Selected: <span>{selectionCount}</span></div><div>Hidden: <span>{hiddenCount}</span></div><div>Triangles: <span>{totalFaces}</span></div><div>Selected: <span>{selectedFaces}</span></div></div>
       <div className="classic-coordinates" data-label={preferences.language === 'zh' ? 'Coords:' : translate('Coords:')}>{['X', 'Y', 'Z'].map((axis, i) => <Coordinate key={axis} axis={axis} value={centroid[i]} disabled={!editable || !selectionCount || mode === 'uv'} onCommit={value => { const translation = [0, 0, 0]; translation[i] = value - centroid[i]; transform({ translation }); }}/>)}</div>
       <fieldset className="classic-planes"><legend><label><input data-warmkey="workplaneEnabled" aria-label="Workplane" type="checkbox" disabled={!!lockedVertexPlane} checked={!!lockedVertexPlane || workplaneEnabled} onChange={event => setWorkplaneEnabled(event.target.checked)}/>Workplane</label></legend>{[['xy', 'XY'], ['xz', 'ZX'], ['yz', 'YZ']].map(([value, label]) => <label key={value}><input data-warmkey={`plane:${value}`} aria-label={`${label} workplane`} type="radio" name="workplane" disabled={!!lockedVertexPlane} checked={(lockedVertexPlane || workplane) === value} onChange={() => setWorkplane(value)}/>{label}</label>)}</fieldset>
@@ -1102,7 +1117,7 @@ export default function App() {
       {mode === 'bones' && !cameraRotating && <Suspense fallback={<p>Loading controller…</p>}><MovementController restPose={restPose} selectionByGeoset={validSelection} workplaneEnabled={workplaneEnabled} onWorkplaneEnabled={setWorkplaneEnabled} workplane={workplane} onWorkplane={setWorkplane} restrictions={restrictions} onRestrictions={setRestrictions} multiple={multipleNodes} onMultiple={setMultipleNodes} onVertexTransform={transform} globalSeqId={restPose ? null : globalSeqId} onTimelineChange={selectTimeline} highlightKeyframes={highlightKeyframes} onHighlightKeyframes={setHighlightKeyframes} preferences={preferences} disabled={doc.readOnly || saving} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onEdit={edit} onSeek={setTime} onSequenceChange={selectSequence} playing={playing} onPlayingChange={setPlaying} transformMode={movementMode} onTransformMode={value => setWorkTool(value==='move'?'translate':value)} transformSpace={movementSpace} rotateOnOwnAxis={rotateOnOwnAxis} onTransformSpace={setMovementSpace} onRotateOnOwnAxis={setRotateOnOwnAxis} showNodes={showNodes} onShowNodes={setShowNodes} showParticles={preferences.graphics.particles} onShowParticles={showParticlePreview} onOpenNodeManager={openNodeManager} onDeleteNode={deleteSelectedNode} onRenameNode={renameSelectedNode} onBillboarded={setSelectedBoneBillboarded} onCreateRigNode={createBoneOrAttachment} onAttach={beginAttach} onDetach={detachSelectedNode} onSoftBind={() => bindSelectedVertices('soft')} onHardBind={() => bindSelectedVertices('hard')} onDetachVertices={() => bindSelectedVertices('detach')} attachActive={attachSourceIds.length > 0} createOpen={boneCreateOpen} onCreateOpen={setBoneCreateOpen} canDeleteNode={!!singleRigNode} canAttach={selectedRigNodes.length > 0 && (multipleNodes || selectedRigNodes.length === 1)} canDetach={parentedRigNodes.length > 0 && (multipleNodes || selectedRigNodes.length === 1)} canBind={!!selectedBone && selectionCount > 0} /></Suspense>}
       {mode === 'animation' && !cameraRotating && <Suspense fallback={<p>Loading controller…</p>}>
 
-        {animationPanel === 'movement' ? !cameraRotating && <MovementController restPose={restPose} selectionByGeoset={validSelection} workplaneEnabled={workplaneEnabled} onWorkplaneEnabled={setWorkplaneEnabled} workplane={workplane} onWorkplane={setWorkplane} restrictions={restrictions} onRestrictions={setRestrictions} multiple={multipleNodes} onMultiple={setMultipleNodes} onVertexTransform={transform} globalSeqId={restPose ? null : globalSeqId} onTimelineChange={selectTimeline} highlightKeyframes={highlightKeyframes} onHighlightKeyframes={setHighlightKeyframes} preferences={preferences} disabled={doc.readOnly || saving} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onEdit={edit} onSeek={setTime} onSequenceChange={selectSequence} playing={playing} onPlayingChange={setPlaying} transformMode={movementMode} onTransformMode={value => setWorkTool(value==='move'?'translate':value)} transformSpace={movementSpace} rotateOnOwnAxis={rotateOnOwnAxis} onTransformSpace={setMovementSpace} onRotateOnOwnAxis={setRotateOnOwnAxis} showNodes={showNodes} onShowNodes={setShowNodes} showParticles={preferences.graphics.particles} onShowParticles={showParticlePreview} onOpenNodeManager={openNodeManager} portraitMode={activePortrait} /> : <>
+        {animationPanel === 'movement' ? !cameraRotating && <MovementController restPose={restPose} selectionByGeoset={validSelection} workplaneEnabled={workplaneEnabled} onWorkplaneEnabled={setWorkplaneEnabled} workplane={workplane} onWorkplane={setWorkplane} restrictions={restrictions} onRestrictions={setRestrictions} multiple={multipleNodes} onMultiple={setMultipleNodes} onVertexTransform={transform} globalSeqId={restPose ? null : globalSeqId} onTimelineChange={selectTimeline} highlightKeyframes={highlightKeyframes} onHighlightKeyframes={setHighlightKeyframes} preferences={preferences} disabled={doc.readOnly || saving} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedNodeIds={selectedNodeIds} onSelectNodes={setSelectedNodeIds} onEdit={edit} onSeek={setTime} onSequenceChange={selectSequence} playing={playing} onPlayingChange={setPlaying} transformMode={movementMode} onTransformMode={value => setWorkTool(value==='move'?'translate':value)} transformSpace={movementSpace} rotateOnOwnAxis={rotateOnOwnAxis} onTransformSpace={setMovementSpace} onRotateOnOwnAxis={setRotateOnOwnAxis} showNodes={showNodes} onShowNodes={setShowNodes} showParticles={preferences.graphics.particles} onShowParticles={showParticlePreview} onOpenNodeManager={openNodeManager} portraitMode={activePortrait} controlModel={controlsWholeModel(selectedNodeIds)} /> : <>
           <AnimationController globalSeqId={globalSeqId} key={session.id} model={model} revision={doc.revision} sequenceIndex={sequence} time={time} selectedGeosets={[...selectable]} onEdit={edit} onTimelineChange={selectTimeline} onSeek={value => { setPlaying(false); setTime(value); }} disabled={doc.readOnly || saving} />
           {geosetPicker}
 

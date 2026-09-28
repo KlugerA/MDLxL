@@ -1,3 +1,4 @@
+import { setMaterialLayerTexture } from './material-presets.js';
 import { sampleTrack } from './animation.js';
 
 const normal = value => String(value || '').replaceAll('/', '\\').toLowerCase();
@@ -119,7 +120,7 @@ export function applyUVPreviews(model, drafts) {
     });
     material.Layers ||= [];
     if (layerIndex === material.Layers.length) material.Layers.push({ FilterMode: material.Layers.length ? 1 : 0, Alpha: 1, Shading: 0, CoordId: 0 });
-    material.Layers[layerIndex].TextureID = textureID;
+    setMaterialLayerTexture(material, layerIndex, textureID);
     // Checked geosets with the same replacement stay together. Other users of
     // the old material retain their texture and any animated texture track.
     geoset.MaterialID = model.Materials.length;

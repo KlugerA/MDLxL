@@ -29,7 +29,8 @@ export function compositeMaterialPixels(layers, width, height) {
         db = (sb * sa + db * da * (1 - sa)) / divisor;
         a = outAlpha;
       } else if (filter === 3) {
-        dr += sr; dg += sg; db += sb; a = Math.max(da, sa);
+        // Warcraft additive ignores texture alpha, but layer alpha scales source RGB.
+        dr += sr * opacity; dg += sg * opacity; db += sb * opacity; a = Math.max(da, sa);
       } else if (filter === 4) {
         dr += sr * sa; dg += sg * sa; db += sb * sa; a = Math.max(da, sa);
       } else if (filter === 5 || filter === 6) {

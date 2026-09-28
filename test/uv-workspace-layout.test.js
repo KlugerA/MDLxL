@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  UV_PREVIEW_DEFAULT, UV_PREVIEW_MAX, UV_SELECT_PREVIEW_DEFAULT, UV_SIDE_DEFAULT,
+  UV_PREVIEW_DEFAULT, UV_PREVIEW_MAX, UV_SIDE_DEFAULT,
   clampUVPreviewPercent, clampUVSidePercent, uvPreviewPercentAtPointer, uvSidePercentAtPointer,
 } from '../app/uv-workspace-layout.js';
 
-test('UV workspace opens with a wider side pane and a larger Select New preview', () => {
+test('UV workspace retains the compact side and preview defaults', () => {
   assert.equal(UV_SIDE_DEFAULT, 40);
-  assert.ok(UV_SELECT_PREVIEW_DEFAULT > UV_PREVIEW_DEFAULT);
+  assert.equal(UV_PREVIEW_DEFAULT, 62);
 });
 
 test('UV workspace splitters convert pointer positions into bounded pane percentages', () => {

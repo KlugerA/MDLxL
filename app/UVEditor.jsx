@@ -11,10 +11,10 @@ import { normalizeUVGrid, snapUVCoordinates, visibleUVGridLines } from '../src/u
 const indicesOf = selection => Array.from(selection || []);
 
 /** Classic select/move/rotate/scale tools. UV V retains Warcraft's top-down convention. */
-export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, uvGrid, showTextureFrame = false, textureFrameColor = '#4cff59' }) {
+export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, uvGrid, showTextureFrame = false, textureFrameColor = '#4cff59', snapTextureFrame = false, axis = null }) {
   const host = useRef(null), canvas = useRef(null);
   const state = useRef({ zoom: .55, panX: 0, panY: 0, uv: new Float32Array(), drag: null, image: null, draw: () => {} });
-  const current = useRef({}); current.current = { geoset, uvSet, textureSize, selectedVertices, eligibleVertices, hiddenVertices, onSelectVertices, onChange, onPreviewChange, transformMode, cameraMode, preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended, showWires, showVertices, uvGrid, showTextureFrame, textureFrameColor };
+  const current = useRef({}); current.current = { geoset, uvSet, textureSize, selectedVertices, eligibleVertices, hiddenVertices, onSelectVertices, onChange, onPreviewChange, transformMode, cameraMode, preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended, showWires, showVertices, uvGrid, showTextureFrame, textureFrameColor, snapTextureFrame, axis };
   const [imageError, setImageError] = useState(false), [adjustingSensitivity, setAdjustingSensitivity] = useState(null);
   const graphics = graphicsOptions(preferences);
   const count = (geoset?.TVertices?.[uvSet]?.length || 0) / 2;
@@ -55,8 +55,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
     function draw() {
       const p = current.current, { sizeX, sizeY, x, y } = mapping();
       element.style.cursor = s.drag?.cursor || viewportCursor(p.cameraMode, p.transformMode);
-      // Suspended locks editing input (for example while Select New owns the
-      // model preview), but the texture workstation must remain visible.
+      // Suspended input leaves the texture workstation visible.
       if (ownerDocument === document && ownerDocument.hidden && graphicsOptions(p.preferences).pauseWhenHidden) return;
       const visuals = visualOptions(p.preferences);
       context.setTransform(ratio, 0, 0, ratio, 0, 0); context.clearRect(0, 0, width, height);
@@ -147,15 +146,33 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
         s.uv.set(drag.original);
         const a = [drag.x - drag.pivotScreen[0], drag.y - drag.pivotScreen[1]], b = [x - drag.pivotScreen[0], y - drag.pivotScreen[1]];
         let angle = Math.hypot(...a) > 12 && Math.hypot(...b) > 12 ? Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]) : dx * .01;
-        if (event.shiftKey) angle = Math.round(angle / (Math.PI / 12)) * Math.PI / 12;
         const factor = Math.max(0, 1 + dx / 100);
+        const lockedAxis = event.shiftKey ? p.axis : null;
         for (const index of drag.indices) {
           const offset = index * 2, u = drag.original[offset] - drag.center[0], v = drag.original[offset + 1] - drag.center[1];
-          if (drag.type === 'translate' || drag.type === 'move') { s.uv[offset] += dx / drag.sizeX; if (!event.shiftKey) s.uv[offset + 1] += dy / drag.sizeY; }
-          if (drag.type === 'scale') { s.uv[offset] = drag.center[0] + u * factor; s.uv[offset + 1] = drag.center[1] + v * (event.shiftKey ? 1 : factor); }
-          if (drag.type === 'rotate') { s.uv[offset] = drag.center[0] + u * Math.cos(angle) - v * Math.sin(angle); s.uv[offset + 1] = drag.center[1] + u * Math.sin(angle) + v * Math.cos(angle); }
+          let nextU = drag.original[offset], nextV = drag.original[offset + 1];
+          if (drag.type === 'translate' || drag.type === 'move') { nextU += dx / drag.sizeX; nextV += dy / drag.sizeY; }
+          if (drag.type === 'scale') { nextU = drag.center[0] + u * factor; nextV = drag.center[1] + v * factor; }
+          if (drag.type === 'rotate') { nextU = drag.center[0] + u * Math.cos(angle) - v * Math.sin(angle); nextV = drag.center[1] + u * Math.sin(angle) + v * Math.cos(angle); }
+          if (lockedAxis !== 'Y') s.uv[offset] = nextU;
+          if (lockedAxis !== 'X') s.uv[offset + 1] = nextV;
         }
-        if ((drag.type === 'translate' || drag.type === 'move') && p.uvGrid?.snap) s.uv.set(snapUVCoordinates(s.uv, drag.indices, p.uvGrid));
+        if ((drag.type === 'translate' || drag.type === 'move') && p.uvGrid?.snap) {
+          s.uv.set(snapUVCoordinates(s.uv, drag.indices, p.uvGrid));
+          if (lockedAxis) for (const index of drag.indices) s.uv[index * 2 + (lockedAxis === 'X' ? 1 : 0)] = drag.original[index * 2 + (lockedAxis === 'X' ? 1 : 0)];
+        }
+        if ((drag.type === 'translate' || drag.type === 'move') && p.snapTextureFrame) {
+          for (const axis of [0, 1]) {
+            if (lockedAxis === 'X' && axis === 1 || lockedAxis === 'Y' && axis === 0) continue;
+            const size = axis === 0 ? drag.sizeX : drag.sizeY;
+            let adjustment = 8 / Math.abs(size);
+            for (const index of drag.indices) {
+              const value = s.uv[index * 2 + axis], delta = Math.round(value) - value;
+              if (Math.abs(delta) < Math.abs(adjustment)) adjustment = delta;
+            }
+            if (Math.abs(adjustment) < 8 / Math.abs(size)) for (const index of drag.indices) s.uv[index * 2 + axis] += adjustment;
+          }
+        }
       }
       if (['translate', 'move', 'rotate', 'scale'].includes(drag.type)) {
         const preview = restrictUVChange(p.geoset, p.uvSet, s.uv, drag.indices);
