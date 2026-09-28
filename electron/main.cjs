@@ -18,6 +18,7 @@ const {PreviewRecordingStore}=require('./preview-ffmpeg.cjs');
 const {CatboxUploads}=require('./catbox-upload.cjs');
 const catboxUploads=new CatboxUploads();
 const {saveForgeAssets}=require('./forge-assets.cjs');
+const {saveOptimizeXLPair}=require('./optimizexl-save.cjs');
 const {BackgroundLibrary}=require('./preview-backgrounds.cjs');
 const {PaintTextureLibrary}=require('./paint-textures.cjs');
 const {BitsAndPartsLibrary}=require('./bits-and-parts.cjs');
@@ -161,6 +162,16 @@ async function saveModel(payload){
   }catch(error){await fs.unlink(temporary).catch(()=>{});throw error;}
 }
 ipcMain.handle('model:save',(_,payload)=>{const operation=saveQueue.catch(()=>{}).then(()=>saveModel(payload));saveQueue=operation;return operation;});
+ipcMain.handle('optimizexl:save',(event,payload)=>{
+  if(event.sender!==win?.webContents)throw Error('OptimizeXL saves are only available from the editor.');
+  const operation=saveQueue.catch(()=>{}).then(async()=>{
+    const {validateOptimizeXLCopies}=require('../dist/optimizexl-validation.cjs');
+    validateOptimizeXLCopies(payload);
+    const selected=await dialog.showOpenDialog(win,{title:'Save OptimizeXL Before and After copies',buttonLabel:'Save two new copies here',properties:['openDirectory','createDirectory']});
+    if(selected.canceled)return null;
+    return saveOptimizeXLPair(selected.filePaths[0],payload);
+  });saveQueue=operation;return operation;
+});
 for(const [channel,operationName] of [['model:repairGeosetAnimations','repair'],['model:undoGeosetRepair','undo']]){
   ipcMain.handle(channel,(event,payload)=>{
     if(event.sender!==win?.webContents)throw Error('Repair is only available in the editor window.');
@@ -351,7 +362,7 @@ async function createWindow(bounds={}){
   const current=new BrowserWindow({width:1100,height:760,...bounds,minWidth:720,minHeight:480,show:process.env.MDLVIS_HEADLESS!=='1',backgroundColor:(APPLICATION_THEMES[settings.preferences?.theme] || APPLICATION_THEMES.light).colors.panel,title:'MDLxL',icon:path.join(__dirname,'../dist/branding/MDLxL.ico'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   if(process.env.MDLVIS_HEADLESS!=='1')current.maximize();
   win=current;nativeEditorState={readOnly:true,saving:false};
-  win.webContents.setWindowOpenHandler(({url,frameName})=> url==='about:blank' && frameName==='MDLxL-UV' ? {action:'allow',overrideBrowserWindowOptions:{parent:current,modal:false,width:900,height:700,minWidth:500,minHeight:400,show:process.env.MDLVIS_HEADLESS!=='1',title:'MDLxL — UV Editor',icon:path.join(__dirname,'../dist/branding/MDLxL.ico'),autoHideMenuBar:true,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}}} : {action:'deny'});
+  win.webContents.setWindowOpenHandler(({url,frameName})=> url==='about:blank' && ['MDLxL-UV','MDLxL-OptimizeXL'].includes(frameName) ? {action:'allow',overrideBrowserWindowOptions:{parent:current,modal:false,width:frameName==='MDLxL-UV'?900:1280,height:frameName==='MDLxL-UV'?700:800,minWidth:frameName==='MDLxL-UV'?500:950,minHeight:frameName==='MDLxL-UV'?400:500,show:process.env.MDLVIS_HEADLESS!=='1',title:frameName==='MDLxL-UV'?'MDLxL — UV Editor':'OptimizeXL',icon:path.join(__dirname,'../dist/branding/MDLxL.ico'),autoHideMenuBar:true,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}}} : {action:'deny'});
   current.webContents.on('did-create-window',child=>{child.setMenu(null);if(process.env.MDLVIS_HEADLESS!=='1')child.maximize();else child.webContents.setBackgroundThrottling(false);child.webContents.setWindowOpenHandler(()=>({action:'deny'}));child.webContents.on('will-navigate',event=>event.preventDefault());});
   win.webContents.on('will-navigate',(event,url)=>{if(url!==win.webContents.getURL())event.preventDefault();});
   refreshMenu();

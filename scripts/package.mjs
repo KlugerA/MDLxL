@@ -97,6 +97,9 @@ async function makeStage(stage) {
 }
 
 async function verifyStage(stage) {
+  const validationBundle=path.join(stage,'dist','optimizexl-validation.cjs');
+  if(!await exists(validationBundle))throw Error('Build the portable OptimizeXL save validator before packaging.');
+  if(typeof createRequire(import.meta.url)(validationBundle).validateOptimizeXLCopies!=='function')throw Error('The bundled OptimizeXL save validator could not be loaded.');
   await verifyFFmpegBundle(path.join(stage, 'electron', 'ffmpeg'));
   const actual = (await fs.readdir(stage)).sort();
   if (JSON.stringify(actual) !== JSON.stringify(stageEntries)) throw Error(`Unexpected runtime staging entries: ${actual.join(', ')}`);

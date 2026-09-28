@@ -16,7 +16,8 @@ const UVWorkspace = lazy(() => import('./UVWorkspace.jsx'));
 // Detached UV windows copy styles before their lazy contents mount.
 import './uv-workspace.css';
 import DetachedWindow from './DetachedWindow.jsx';
-import { openDetachedUVWindow } from './detached-window.js';
+import { openDetachedUVWindow, openOptimizeXLWindow } from './detached-window.js';
+import './optimizexl.css';
 import { applyApplicationTheme } from './theme.js';
 import PressedKeys from './PressedKeys.jsx';
 import LanguageSwitch from './LanguageSwitch.jsx';
@@ -31,8 +32,7 @@ const TextureLibrary = lazy(() => import('./TextureLibrary.jsx'));
 const PaintWorkspace = lazy(() => import('./PaintWorkspace.jsx'));
 const ShowcaseWorkspace = lazy(() => import('./ShowcaseWorkspace.jsx'));
 const Forge = lazy(() => import('./Forge.jsx'));
-const OptimizeModel = lazy(() => import('./OptimizeModel.jsx'));
-import { commitOptimization, OPTIMIZER_SECTIONS } from '../src/model-optimizer.js';
+const OptimizeXL = lazy(() => import('./OptimizeXL.jsx'));
 const ShapingDialog = lazy(() => import('./ShapingDialog.jsx'));
 const KeyframeTimeline = lazy(() => import('./KeyframeTimeline.jsx'));
 const MotionInspector = lazy(() => import('./MotionInspector.jsx'));
@@ -401,6 +401,12 @@ export default function App() {
     const child = openDetachedUVWindow(window);
     if (!child) { say('The UV window could not be opened.', true); return false; }
     uvWindowRef.current = child; setUVWindow(child); return true;
+  };
+  const openOptimizeXL = () => {
+    if (dialog?.type === 'optimizeModel' && dialog.child && !dialog.child.closed) { dialog.child.focus(); return; }
+    const child = openOptimizeXLWindow(window);
+    if (!child) { say('The OptimizeXL window could not be opened.', true); return; }
+    setPlaying(false); setDialog({ type:'optimizeModel', child });
   };
   const selectMode = async next => {
     if (savingRef.current || next === mode) return;
@@ -843,7 +849,7 @@ export default function App() {
   }
   commands.current = { 'paint:select':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'select'})), 'paint:draw':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'draw'})), open, recent:showRecent, openRecent, clearRecent, save: () => mode==='paint'?savePaintProject():save(), saveAs: () => mode==='paint'?savePaintProject():setDialog({type:'saveFormat'}), new: () => withUnsaved(() => install(newSession(createStarterDocument(preferences.newModelVersion)))), recovery: listRecovery, gameData, undo: () => undo(false), redo: () => undo(true), copy, paste: () => paste(), pasteSpecial: () => { if (clipboard.current) { setAnchor(''); setDialog({ type: 'pasteSpecial' }); } }, selectAll, clear: () => { if (normalsXL) { setNormalsXL(null); return; } if (mode === 'bones' && attachSourceIds.length) { setAttachSourceIds([]); return; } if (mode === 'vertices' && quadView && !window.dispatchEvent(new Event('mdlxl-cancel-gesture', { cancelable: true }))) return; if(mode==='uv')return uvAction('select-none');setSelectedNodeIds([]); setSelection({}); }, history: showHistory, grid: () => setShowGrid(v => !v), frame: toggleTextured, frameSelection: () => setViewRenderMode('solid'), fit: () => frame(false), fitSelection: () => frame(true), vertices: () => selectMode('vertices'), bones: () => {setMovementMode('select');selectMode('bones');}, uv: () => selectMode('uv'), paint: () => {setRenderMode('textured');setView('perspective');selectMode('paint');}, animation: () => selectAnimationPanel('movement'), animations: () => selectAnimationPanel('animations'), textureLibrary: () => openLibrary(), help: () => setDialog({ type: 'help' }), diagnostics: () => setDialog({ type: 'diagnostics' }), about: () => setDialog({ type: 'about' }), ...Object.fromEntries(resources.map(kind => [kind, () => setDialog({ type: 'resource', kind })])), ...Object.fromEntries(views.map(name => [name, () => setView(name)])) };
   Object.assign(commands.current, {
-    forge:()=>setDialog({type:'forge'}), optimizeModel:()=>setDialog({type:'optimizeModel'}), bitsAndParts:()=>setDialog({type:'bitsAndParts'}), particles:()=>openParticles(),
+    forge:()=>setDialog({type:'forge'}), optimizeModel:()=>openOptimizeXL(), bitsAndParts:()=>setDialog({type:'bitsAndParts'}), particles:()=>openParticles(),
     ...Object.fromEntries(SHAPE_TOOLS.map(tool=>['shape:'+tool.toLowerCase(),()=>setDialog({type:'shape',tool})])),
     ...Object.fromEntries(['set','copy','paste','copyPose','delete','clear','selectAll','previous','next'].map(id=>['keyframe:'+id,()=>timelineCommands.current[id]?.()])),
     exit: () => window.desktop?.close?.(), settings: () => setSettingsTab('mouse'), warmkeys: () => setSettingsTab('warmkeys'), graphics: () => setSettingsTab('graphics'), appearanceSettings: () => setSettingsTab('visuals'), configurationSettings: () => setSettingsTab('configuration'), gridSettings: () => setSettingsTab('grid'), gameDataSettings: () => setSettingsTab('gameData'),
@@ -1072,7 +1078,7 @@ export default function App() {
       <div className="classic-toolbar-group">{[['work', 'sb_cross', 'Work mode'], ['zoom', 'sb_zoom', 'Zoom'], ['rotate', 'sb_rot', 'Camera rotation'], ['move', 'sb_move', 'Move camera']].map(([value, icon, title]) => <Tool action={`camera:${value}`} key={value} icon={icon} title={title} active={cameraMode === value} onClick={() => setCameraMode(value)}/>)}</div>
       <div className="classic-toolbar-group"><Tool action="undo" icon="sb_undo" title="Undo" disabled={!commandEnabled('undo')} onClick={() => undo(false)}/><Tool action="redo" icon="sb_undo" flip title="Redo" disabled={!commandEnabled('redo')} onClick={() => undo(true)}/><Tool action="copy" icon="sb_copy" title="Copy" disabled={mode!=='animation'&&!selectable.size} onClick={copy}/><Tool action="paste" icon="sb_paste" title="Paste" disabled={mode==='showcase'||doc.readOnly||(mode!=='animation'&&!clipboard.current)} onClick={() => paste()}/></div>
       <div className="classic-toolbar-group toolbar-visibility"><button aria-pressed={visUI} onClick={() => setVisUI(value => !value)}>{visUI ? 'XL' : 'Vis'}</button><button data-warmkey="hide" onClick={hide} disabled={!selectionCount}>Hide</button><button data-warmkey="show" onClick={() => setHidden({})} disabled={!hiddenCount}>Show</button></div>
-      <div className="classic-toolbar-group toolbar-modules"><Tool action="forge" icon="wc3-forge.gif" title="Forge" disabled={doc.readOnly||saving} onClick={()=>setDialog({type:'forge'})}/><Tool action="bitsAndParts" icon="wc3-bits-and-parts" title="BitsAndParts / Clockwork" disabled={doc.readOnly||saving} onClick={()=>setDialog({type:'bitsAndParts'})}/><Tool action="optimizeModel" icon="wc3-optimize" title="Optimize Model" disabled={!commandEnabled('optimizeModel')} onClick={()=>setDialog({type:'optimizeModel'})}/><PressedKeysTool icon={pressedKeysIcon} active={preferences.showPressedKeys} onClick={()=>commands.current.pressedKeys()}/><Tool action="textureLibrary" icon="wc3-library" title="Material and Texture Library" onClick={() => openLibrary()}/></div>
+      <div className="classic-toolbar-group toolbar-modules"><Tool action="forge" icon="wc3-forge.gif" title="Forge" disabled={doc.readOnly||saving} onClick={()=>setDialog({type:'forge'})}/><Tool action="bitsAndParts" icon="wc3-bits-and-parts" title="BitsAndParts / Clockwork" disabled={doc.readOnly||saving} onClick={()=>setDialog({type:'bitsAndParts'})}/><Tool action="optimizeModel" icon="wc3-optimize" title="OptimizeXL" disabled={!commandEnabled('optimizeModel')} onClick={openOptimizeXL}/><PressedKeysTool icon={pressedKeysIcon} active={preferences.showPressedKeys} onClick={()=>commands.current.pressedKeys()}/><Tool action="textureLibrary" icon="wc3-library" title="Material and Texture Library" onClick={() => openLibrary()}/></div>
 
       <Addons onCommand={runCommand} isEnabled={id=>!dialog&&!settingsTab&&commandEnabled(id)}/>
       <button data-warmkey="convertVersion" title="Convert between MDX800 and MDX1000; unsupported data blocks conversion" disabled={doc.readOnly||saving} onClick={()=>commands.current.convertVersion()}>MDX{model.Version} ⇄</button>
@@ -1148,7 +1154,7 @@ export default function App() {
     {dialog?.type === 'diagnostics' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="Model diagnostics" onClose={() => setDialog(null)}>{doc.diagnostics.length ? doc.diagnostics.map((item, i) => <p key={i}><b>{item.severity}: </b>{item.message}</p>) : <p>No model diagnostics.</p>}</Dialog>}
     {dialog?.type === 'help' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="MDLxL help" onClose={() => setDialog(null)}><p>Default Hotkeys (customize in Settings): F1 vertices · F2 selected UV maps · F3 Movement. Bones edits the unanimated rig. Animations edits visibility and RGB; BAKE applies current visibility and RGB across the selected animation; ALL applies them across every animation. Bake Text applies edited text tracks. A select · M/Q move · R rotate · Z scale. W switches between work and camera rotation. F toggles Textured View on and off; S selects Surface. Wireframe remains available beside the view direction. Use View / Fit to frame the model.</p><p>Geoset checkboxes control which meshes can be selected. Only checkboxes change selection; Shift checks a range. All, Clear and Invert act on the geoset list. Hide/Show affects editor visibility only.</p><p>T creates a triangle from three selected points. U uncouples, C collapses and B welds points. Welding retains the last selected vertex's UVs and binding. Copy remains available after opening another model.</p><p>Windows opens the material, texture and node managers. Changes can be undone. Untouched saves preserve original bytes; edited sections regenerate through the codec.</p></Dialog>}
     {dialog?.type === 'about' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="About MDLxL" onClose={() => setDialog(null)}><p>MDLxL model editor.</p><p>Based on the original 1.41 form layout, with integrated material/node editing and recoverable undo history. The original application is unchanged.</p><p>Format 1200 remains read-only. Model and rendering compatibility still require Warcraft testing.</p></Dialog>}
-    {dialog?.type === 'optimizeModel' && <Suspense fallback={<div className="classic-empty-view">Analyzing model…</div>}><OptimizeModel doc={doc} onClose={()=>setDialog(null)} onApply={result=>{const applied=edit('Optimize Model',OPTIMIZER_SECTIONS,m=>commitOptimization(m,result,doc),{rethrow:true});if(applied!==false){setSelection({});setHidden({});setUVEntrySelection({});if(mode==='uv')selectMode('vertices');say('Optimization complete. Save or Save As to write the optimized model.');}return applied;}}/></Suspense>}
+    {dialog?.type === 'optimizeModel' && <DetachedWindow childWindow={dialog.child} title="OptimizeXL" preferences={preferences} forwardKeys={false} onClose={()=>setDialog(null)}><Suspense fallback={<div className="classic-empty-view">Loading OptimizeXL…</div>}><OptimizeXL doc={doc} preferences={preferences} textureAssets={session.assets} teamColor={teamColor} onClose={()=>setDialog(null)}/></Suspense></DetachedWindow>}
     {settingsTab && <Suspense fallback={null}><Settings modelPath={session.path} preferences={preferences} initialTab={settingsTab} gameDataPath={gameDataPath} onChooseGameData={window.desktop?.chooseGameData ? gameData : undefined} onClearGameData={window.desktop?.clearGameData ? clearGameData : undefined} onChange={changePreferences} onClose={()=>setSettingsTab(null)}/></Suspense>}
     <PressedKeys enabled={preferences.showPressedKeys}/>
   </div></WarmKeysProvider>;
