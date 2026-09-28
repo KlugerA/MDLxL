@@ -10,9 +10,9 @@ The strengthened Electron regression failed against the original build with `Lef
 
 The user accepted viewport navigation, Nuclear, inspection restoration and Optimize New Copy, then requested geoset exclusions and the next addition together. Remaining review work is recorded here so it is not lost:
 
-- Geoset exclusions and green stage stars are ready for the next user visual check.
+- Geoset exclusions and green stage stars are in the preceding review build. Changed-data review guidance and common endpoint-pose correction are ready for the next visual check.
 - Inspect the supplied Magos installation and modernize its familiar collision-sphere display. The shortcut resolves to `D:\WarcraftStuff\War3 Model Editor\War3ModelEditor\War3ModelEditor.exe`; Windows computer-use initialization currently fails with `failed to write kernel assets: The system cannot find the path specified. (os error 3)`, including after a reset. No visual reference inspection is claimed.
-- Show which records Duplicate data and Unused data propose deleting.
+- Show which records Unused data proposes deleting. Duplicate data now reports affected geosets and merged-record counts.
 - Add a clickable **I** explanation next to every Advanced option.
 
 ## Second review correction: Nuclear surface and texture preservation
@@ -57,11 +57,21 @@ C: ran out of space while packaging, so the review was built on D: without delet
 
 The UI test originally read stale React fiber props and could see a previous completed candidate. It now reads the preview's current props reference and waits for the excluded geometry to reach the renderer. An inspection assertion also encountered approximately 1e-12 camera-coordinate rounding; its tolerance now matches the existing camera-motion test (1e-8). These were test-observation issues, not model or camera adjustments.
 
+## Sixth review correction: changed-data guidance and common endpoint poses
+
+The supplied screenshots were reproduced with `C:\Users\PC\Desktop\WH_WOC_KnightKhorneFlail03.mdx` (236,630 bytes). Attack - 1, Attack - 2 and Stand Ready agree at both endpoints, as does Death's first frame. Attack - Slam differs at both ends. The old fixer offered two separate proposals, each changing just one end; that left first/last poses different during either preview. The new common-pose scan compares complete local skinned-rig endpoint poses, requires a strict majority across at least two sequences, and offers one paired-endpoint correction per outlying Attack/Stand Ready animation. Death contributes and receives only its first pose. The proposal names the supporting animations. Stand Ready itself can be corrected when it is the outlier. Interior keys, independent effects/global tracks and Death's final pose are retained.
+
+Duplicate and Animation optimization now record the changes actually performed and expose a collapsed **Review changes** section. It lists affected geosets, merged records/removed keys and named animation buttons. Hover reuses both previews' Appearance highlight. Animation buttons seek affected keyframe regions; geometry review omits animations without a sampled visible pose. The previous inspection-restoration mechanism returns to the user's animation/frame when details close or the stage changes. No sidebar width or reduction algorithm changed.
+
+Six new unit regressions cover paired endpoints, an outlying Stand Ready, Death's final pose including implicit endpoint keys, ambiguous reference groups, actual duplicate-geoset reporting with visibility and exclusions, and animation reporting through shared rig dependencies. The new packaged Electron test passes with Flail03: closed-by-default details, 10 affected duplicate geosets at 40% strength, 46 geosets affected by animation reduction at 40%, named animation navigation, matching orange Appearance overlay pixels, inspection restoration, one Slam proposal, both rendered endpoints, approval/undo and unchanged source bytes. Counts refer to separate unapproved proposals from the original input, not cumulative reductions.
+
+The first native endpoint assertion included the shield's independent global animation at different clocks, producing a difference only in its two geosets. The test now compares every rendered vertex against the common reference at each matching global clock, and compares local-only geometry directly across endpoints. The latter difference is zero; the full-model reference difference is below 0.00001 model units. Screenshots of both endpoints and both review lists were inspected. The existing complete workflow, inspection-restoration, approved-only save and geoset-exclusion Electron regressions also pass against this same standalone package. This correction changes the intended local rig pose, not the shield's independent global motion. It is finite renderer evidence; in-game and user visual acceptance remain outstanding.
+
 ## Automated checks
 
-- 102/102 focused tests passed: OptimizeXL operations, geoset exclusions, stage state, bundled validation, Nuclear quality/target regressions and paired-save failures/races, existing model optimizer, preview presentation/compositing/capture, and the 56-case codec compatibility suite.
+- 108/108 focused tests passed: OptimizeXL operations and review metadata, common endpoint poses, geoset exclusions, stage state, bundled validation, Nuclear quality/target regressions and paired-save failures/races, existing model optimizer, preview presentation/compositing/capture, and the 56-case codec compatibility suite.
 - The production Vite bundle built successfully. Its existing large-chunk advisory remains.
-- Packaging verified 566 runtime/asset files and 55 Electron locale files, including the portable save validator, unmodified local Hive checker, meshoptimizer module and their licenses.
+- Packaging verified 568 runtime/asset files and 55 Electron locale files, including the portable save validator, unmodified local Hive checker, meshoptimizer module and their licenses.
 - The packaged EXE passed the isolated Playwright/Electron workflow: launch popup, switch Simple/Advanced, synchronized camera orbit/zoom and preservation across candidate rebuilds, matching playback frames, actual Hive check, selected visibility repair and approval, wheel cycling of collision presets, sphere overlays present only during Sphereomancer, real nuclear reduction, and final two-file save. No page errors were recorded and the source file remained byte-identical.
 - Source-path `git diff --check` passed. Generated bundles retain upstream shader text and are not hand-edited.
 
@@ -87,7 +97,7 @@ The flail irregularity scan found the original Stand-3 portrait/corpse visibilit
 ## Reproducing
 
 ```powershell
-node --test test/optimizexl-exclusions.test.js test/optimizexl-validation.test.js test/optimizexl-nuclear.test.js test/optimizexl.test.js test/model-optimizer.test.js test/preview-presentation.test.js test/preview-blend-order.test.js test/game-preview-capture.test.js tests/*.test.js
+node --test test/optimizexl-review.test.js test/optimizexl-exclusions.test.js test/optimizexl-validation.test.js test/optimizexl-nuclear.test.js test/optimizexl.test.js test/model-optimizer.test.js test/preview-presentation.test.js test/preview-blend-order.test.js test/game-preview-capture.test.js tests/*.test.js
 node test/optimizexl-models.mjs path/to/flail.mdx path/to/axe.mdx
 node node_modules/vite/bin/vite.js build
 node scripts/package.mjs --out out/optimizexl-save-review
@@ -99,9 +109,9 @@ Run `node test/optimizexl-inspection.electron.cjs` with the same environment for
 
 Run `node test/optimizexl-save.electron.cjs` with the same environment for approved-only, any-stage saving. Its screenshots, output pairs and result are under `out/optimizexl-save-proof/` by default.
 
-Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. All four desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
+Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. All five desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-geosets-20260928\portable-review\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `portable-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-guidance-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 

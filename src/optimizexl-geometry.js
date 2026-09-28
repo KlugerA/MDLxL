@@ -23,7 +23,7 @@ export function compactVertices(g, representatives, faces) {
   g.Faces = new g.Faces.constructor(Array.from(faces, i => remap.get(i)));
 }
 
-export function mergeDuplicateVertices(model, settings) {
+export function mergeDuplicateVertices(model, settings, onChange) {
   let removed = 0, groups = 0;
   const excluded = excludedGeosets(model, settings);
   for (const [index, g] of model.Geosets.entries()) {
@@ -47,6 +47,7 @@ export function mergeDuplicateVertices(model, settings) {
     const unique = [], groupMap = [];
     for (const group of g.Groups) { let i = unique.findIndex(other => same(group, other)); if (i < 0) { i = unique.length; unique.push(group); } groupMap.push(i); }
     groups += g.Groups.length - unique.length;
+    if(count!==kept.length||g.Groups.length!==unique.length)onChange?.({geoset:index,vertices:count-kept.length,groups:g.Groups.length-unique.length});
     g.VertexGroup = new g.VertexGroup.constructor(Array.from(g.VertexGroup, i => groupMap[i]));
     g.Groups = unique; g.TotalGroupsCount = unique.reduce((n, group) => n + group.length, 0);
   }
