@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const { createReadStream } = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
@@ -12,7 +13,7 @@ function showcaseDirectory(root, modelName) {
 async function savePreviewCapture(directory, payload) {
   if (!payload || !['png', 'gif'].includes(payload.format)) throw Error('Choose PNG or GIF capture.');
   const bytes = Buffer.from(payload.bytes || []);
-  if (bytes.length < 10 || bytes.length > 256 * 1024 * 1024) throw Error('Capture must be smaller than 256 MB.');
+  if (bytes.length < 10 || bytes.length > MAX_CAPTURE_BYTES) throw Error('Capture must be smaller than 256 MB.');
   const valid = payload.format === 'png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : ['GIF87a','GIF89a'].includes(bytes.subarray(0, 6).toString('ascii')) && bytes.at(-1) === 0x3b;
   if (!valid) throw Error('Invalid capture image.');
   directory = showcaseDirectory(directory, payload.modelName);
@@ -28,12 +29,14 @@ async function savePreviewCapture(directory, payload) {
   catch (error) { throw Error(`Could not write Showcase Recordings: ${error.message}`); }
   return { name, path: destination, modelDirectory };
 }
+// Only renderer-supplied byte buffers use this IPC/memory limit. Native GIFs
+// stay on disk and are bounded by the recording store's disk-space budget.
 const MAX_CAPTURE_BYTES = 256 * 1024 * 1024;
 async function validateGIFFile(file) {
   const handle = await fs.open(file, 'r');
   try {
     const stat = await handle.stat();
-    if (stat.size < 14 || stat.size > MAX_CAPTURE_BYTES) throw Error('Encoded GIF exceeds the 256 MB capture limit or is empty.');
+    if (stat.size < 14) throw Error('FFmpeg did not produce a complete GIF.');
     const head = Buffer.alloc(13), tail = Buffer.alloc(1);
     await handle.read(head, 0, head.length, 0); await handle.read(tail, 0, 1, stat.size - 1);
     if (!['GIF87a','GIF89a'].includes(head.subarray(0,6).toString('ascii')) || !head.readUInt16LE(6) || !head.readUInt16LE(8) || tail[0] !== 0x3b) throw Error('FFmpeg did not produce a complete GIF.');
@@ -45,42 +48,68 @@ async function validateGIFFile(file) {
 // image. One header, one loop extension and one trailer serve the whole GIF.
 async function joinGIFSections(files, destination) {
   const output = await fs.open(destination, 'wx');
-  let header, bytes = 0, frames = 0, duration = 0;
+  let header, frames = 0, duration = 0;
   try {
     for (let index = 0; index < files.length; index++) {
-      await validateGIFFile(files[index]);
-      const data = await fs.readFile(files[index]);
-      const headerEnd = 13 + (data[10] & 128 ? 3 * (1 << ((data[10] & 7) + 1)) : 0);
-      if (headerEnd >= data.length) throw Error('Incomplete GIF section palette.');
-      if (!header) header = Buffer.from(data.subarray(0, headerEnd));
-      else if (!data.subarray(6, headerEnd).equals(header.subarray(6))) throw Error('GIF sections must share their size and palette.');
-      let offset = headerEnd, sectionFrames = 0, finished = false;
-      const ranges = index === 0 ? [{ start: 0, end: headerEnd }] : [];
-      const take = length => { if (offset + length > data.length) throw Error('Incomplete GIF section.'); offset += length; };
-      const blocks = () => { for (;;) { take(1); const length = data[offset - 1]; if (!length) return; take(length); } };
-      while (offset < data.length) {
-        const start = offset, type = data[offset++];
-        let keep = true;
-        if (type === 0x3b) { if (offset !== data.length) throw Error('GIF section has data after its trailer.'); finished = true; break; }
-        if (type === 0x21) {
-          take(1); const label = data[offset - 1];
-          if (label === 0xf9) { if (data[offset] !== 4 || offset + 6 > data.length) throw Error('Invalid GIF frame control.'); duration += data.readUInt16LE(offset + 2) * 10; }
-          if (index > 0 && label === 0xff && data.subarray(offset + 1, offset + 12).toString() === 'NETSCAPE2.0') keep = false;
-          blocks();
-        } else if (type === 0x2c) {
-          take(9); const descriptor = offset - 9, packed = data[offset - 1];
-          if (sectionFrames === 0 && (data.readUInt16LE(descriptor) || data.readUInt16LE(descriptor + 2) || data.readUInt16LE(descriptor + 4) !== header.readUInt16LE(6) || data.readUInt16LE(descriptor + 6) !== header.readUInt16LE(8))) throw Error('GIF section must start with a complete frame.');
-          if (packed & 128) take(3 * (1 << ((packed & 7) + 1)));
-          take(1); blocks(); sectionFrames++; frames++;
-        } else throw Error('Invalid GIF section block.');
-        if (keep) { const previous = ranges.at(-1); if (previous?.end === start) previous.end = offset; else ranges.push({ start, end: offset }); }
-      }
-      if (!finished || !sectionFrames) throw Error('Incomplete GIF section.');
-      for (const range of ranges) {
-        bytes += range.end - range.start;
-        if (bytes + 1 > MAX_CAPTURE_BYTES) throw Error('Encoded GIF exceeds the 256 MB capture limit.');
-        await output.writeFile(data.subarray(range.start, range.end));
-      }
+      const size = await validateGIFFile(files[index]);
+      const input = await fs.open(files[index], 'r');
+      try {
+        // Scan block boundaries in a fixed-size window. Never allocate a whole
+        // encoded section, even when a long high-quality take exceeds 256 MB.
+        const buffer = Buffer.allocUnsafe(1024 * 1024);
+        let offset = 0, windowStart = -1, windowEnd = -1;
+        const take = async length => {
+          if (offset + length > size) throw Error('Incomplete GIF section.');
+          if (offset < windowStart || offset + length > windowEnd) {
+            windowStart = offset; let filled = 0;
+            while (filled < length) {
+              const result = await input.read(buffer, filled, Math.min(buffer.length - filled, size - offset - filled), offset + filled);
+              if (!result.bytesRead) throw Error('Incomplete GIF section.');
+              filled += result.bytesRead;
+            }
+            windowEnd = windowStart + filled;
+          }
+          const result = buffer.subarray(offset - windowStart, offset - windowStart + length);
+          offset += length; return result;
+        };
+        const skip = length => { if (offset + length > size) throw Error('Incomplete GIF section.'); offset += length; };
+        const blocks = async () => { for (;;) { const length = (await take(1))[0]; if (!length) return; skip(length); } };
+        const logicalScreen = Buffer.from(await take(13));
+        const paletteSize = logicalScreen[10] & 128 ? 3 * (1 << ((logicalScreen[10] & 7) + 1)) : 0;
+        const sectionHeader = paletteSize ? Buffer.concat([logicalScreen, await take(paletteSize)]) : logicalScreen;
+        if (offset >= size) throw Error('Incomplete GIF section palette.');
+        if (!header) header = sectionHeader;
+        else if (!sectionHeader.subarray(6).equals(header.subarray(6))) throw Error('GIF sections must share their size and palette.');
+        let sectionFrames = 0, finished = false;
+        const ranges = index === 0 ? [{ start: 0, end: offset }] : [];
+        while (offset < size) {
+          const start = offset, type = (await take(1))[0];
+          let keep = true;
+          if (type === 0x3b) { if (offset !== size) throw Error('GIF section has data after its trailer.'); finished = true; break; }
+          if (type === 0x21) {
+            const label = (await take(1))[0], length = (await take(1))[0];
+            const first = await take(length);
+            if (label === 0xf9) {
+              if (length !== 4) throw Error('Invalid GIF frame control.');
+              duration += first.readUInt16LE(1) * 10;
+              if ((await take(1))[0] !== 0) throw Error('Invalid GIF frame control.');
+            } else {
+              if (index > 0 && label === 0xff && first.toString('ascii') === 'NETSCAPE2.0') keep = false;
+              if (length) await blocks();
+            }
+          } else if (type === 0x2c) {
+            const descriptor = await take(9), packed = descriptor[8];
+            if (sectionFrames === 0 && (descriptor.readUInt16LE(0) || descriptor.readUInt16LE(2) || descriptor.readUInt16LE(4) !== header.readUInt16LE(6) || descriptor.readUInt16LE(6) !== header.readUInt16LE(8))) throw Error('GIF section must start with a complete frame.');
+            if (packed & 128) skip(3 * (1 << ((packed & 7) + 1)));
+            skip(1); await blocks(); sectionFrames++; frames++;
+          } else throw Error('Invalid GIF section block.');
+          if (keep) { const previous = ranges.at(-1); if (previous?.end === start) previous.end = offset; else ranges.push({ start, end: offset }); }
+        }
+        if (!finished || !sectionFrames) throw Error('Incomplete GIF section.');
+        for (const range of ranges) {
+          for await (const chunk of createReadStream(files[index], { start: range.start, end: range.end - 1, highWaterMark: 1024 * 1024 })) await output.writeFile(chunk);
+        }
+      } finally { await input.close(); }
     }
     if (!frames) throw Error('GIF contains no frames.');
     await output.writeFile(Buffer.from([0x3b]));
