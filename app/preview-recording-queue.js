@@ -13,7 +13,7 @@ async function save(row){
   row.state='saving';row.error='';publish();
   try{
     const result=await row.desktop.savePreviewRecording(row.jobId);
-    jobs.delete(row.jobId);row.onStatus?.('Saved '+result.path);return true;
+    jobs.delete(row.jobId);row.onStatus?.('Saved '+result.path+(row.output?.width?' · '+row.output.width+' × '+row.output.height+' · '+(result.size/1_000_000).toFixed(1)+' MB':''));return true;
   }catch(error){
     row.state='retry';row.error='GIF retained. Save failed: '+error.message;
     row.onStatus?.(row.error,true);return false;
@@ -23,7 +23,7 @@ export function queueRecording({jobId,time,onStatus}){
   const row={jobId,desktop:window.desktop,onStatus,state:'encoding',error:'',promise:null};
   jobs.set(jobId,row);failure='';publish();
   row.promise=(async()=>{
-    try{await row.desktop.finishPreviewRecording({jobId,time});}
+    try{row.output=await row.desktop.finishPreviewRecording({jobId,time});}
     catch(error){jobs.delete(jobId);failure='GIF encoding failed: '+error.message;row.onStatus?.(failure,true);publish();return false;}
     return save(row);
   })();

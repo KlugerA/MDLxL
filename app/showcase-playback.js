@@ -15,7 +15,7 @@ export function advanceShowcaseModel(native, model, sample, previous) {
   while(remaining>1e-7){
     const step=Math.min(20,remaining), fraction=(elapsed-remaining+step)/elapsed;
     const local=fromLocal+(toLocal-fromLocal)*fraction;
-    const frame=start+((sample.looping === false || sequence.NonLooping) ? Math.min(duration,local) : duration>0 ? local%duration : 0);
+    const frame=start+(!(sample.looping ?? !sequence.NonLooping) ? Math.min(duration,local) : duration>0 ? local%duration : 0);
     // Upstream update adds delta before evaluating nodes and effects. Offset only
     // its private local clock so effects age even at 0% animation speed.
     setFrame(frame-step);setClocks(sample.globalTime-remaining);

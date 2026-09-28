@@ -269,7 +269,9 @@ export default function GamePreview(inputProps) {
     const perspective = new THREE.PerspectiveCamera(42, 1, .2, 1000); perspective.up.set(0, 0, 1);
     const ortho = new THREE.OrthographicCamera(-100, 100, 100, -100, .2, 1000); ortho.up.set(0, 0, 1);
     let camera = perspective;
-    const controls = new EditorCameraControls(camera, canvas); controls.enableDamping = false;
+    const controls = new EditorCameraControls(camera, canvas);
+    controls.keepWorldUp=()=>!!latest.current.showcase&&!latest.current.portraitMode;
+    controls.lockScreenAxis=!!latest.current.showcase; controls.enableDamping = false;
     controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: null, RIGHT: THREE.MOUSE.PAN };
     let projectionKey = '';
     const reportProjectionView = () => {
@@ -390,7 +392,7 @@ export default function GamePreview(inputProps) {
         : event.button === 0 ? action === 'rotate' : event.button === 1 ? binding.middle === 'rotate' : binding.right === 'rotate';
       p.onCameraGestureChange?.(rotating); canvas.style.cursor = cursorFor(p);
       controls.mouseButtons.LEFT = preserveShiftCameraAction(mouseAction(action === 'move' ? 'pan' : action), event);
-      controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(p.preferences?.pointerSensitivity) * (event.shiftKey ? p.preferences?.fineSensitivity ?? .2 : 1);
+      controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(p.preferences?.pointerSensitivity) * (event.shiftKey && !p.showcase ? p.preferences?.fineSensitivity ?? .2 : 1);
     };
     function restoreGestureTracks(gesture) {
       if (gesture.restPose) ownedModel.PivotPoints = structuredClone(gesture.pivotPoints);
@@ -492,16 +494,18 @@ export default function GamePreview(inputProps) {
     canvas.addEventListener('lostpointercapture', endShowcaseCursor);
     canvas.addEventListener('pointerdown', pointerDown, true); canvas.addEventListener('pointermove', suppressAdjustedMove, true); canvas.addEventListener('pointerup', finishLeftGesture, true); canvas.addEventListener('pointercancel', finishLeftGesture, true);
     const previewKeyDown = event => {
+      if(event.key==='Shift')controls.shiftScreenDrag(event.shiftKey);
       if (event.key?.toLowerCase() === 'a' && !event.ctrlKey && !event.metaKey && !event.altKey &&
           !event.target?.closest?.('input, textarea, select, [contenteditable="true"]') &&
           (!latest.current.previewSelectionMode || canvas.closest('.uv-workspace-body')?.dataset.pointerRegion === 'preview')) previewSelectHeld = true;
     };
     const previewKeyUp = event => {
+      if(event.key==='Shift')controls.shiftScreenDrag(event.shiftKey);
       if (event.key?.toLowerCase() !== 'a') return;
       previewSelectHeld = false;
       if (selectionGesture?.uv) finishNodeGesture({ pointerId: selectionGesture.id, type: 'pointercancel', preventDefault() {}, stopImmediatePropagation() {} });
     };
-    const previewWindowBlur = () => { previewSelectHeld = false; endShowcaseCursor(); };
+    const previewWindowBlur = () => { previewSelectHeld = false; controls.screenDrag=null; endShowcaseCursor(); };
     ownerWindow.addEventListener('keydown', previewKeyDown, true);
     ownerWindow.addEventListener('keyup', previewKeyUp, true);
     ownerWindow.addEventListener('blur', previewWindowBlur);
@@ -576,7 +580,7 @@ export default function GamePreview(inputProps) {
       perspective.position.copy(center).add(new THREE.Vector3(1, -1.5, .9).normalize().multiplyScalar(perspectiveFitDistance(fitRadius(), perspective.fov, width / height)));
       controls.target.copy(center); perspective.zoom = ortho.zoom = 1; resize(); setView(latest.current.view || 'perspective');
     }
-    function centerShowcaseModel(crop, fullOrbit = false) {
+    function centerShowcaseModel(crop, fullOrbit = false, horizontal = 1, vertical = 1) {
       const p=latest.current;if(!p.showcase)return;
       const x=crop?crop.x+crop.width/2:.5,y=crop?crop.y+crop.height/2:.5;
       if(p.portraitMode){
@@ -611,9 +615,25 @@ export default function GamePreview(inputProps) {
       }
       camera.updateMatrixWorld();camera.updateProjectionMatrix();
       const projected=anchor.clone().project(camera);
-      const dx=(x-(projected.x+1)/2)*canvas.width;
-      const dy=(y-(1-projected.y)/2)*canvas.height;
+      const dx=(x-(projected.x+1)/2)*canvas.width,dy=(y-(1-projected.y)/2)*canvas.height;
       const translation=screenPlaneTranslation(camera,anchor,canvas.width,canvas.height,dx,dy);
+      if(points.length&&(horizontal!==1||vertical!==1)){
+        const frame=crop||{x:0,y:0,width:1,height:1},angle=showcaseSample?.angle||0,r=showcaseOrbitRadius(center,boundsSize,p.showcaseRadius),c=Math.cos(angle),s=Math.sin(angle);
+        const right=new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion),up=new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion);
+        const edgeX=horizontal===0?frame.x+1/canvas.width:frame.x+frame.width-1/canvas.width;
+        const edgeY=vertical===0?frame.y+1/canvas.height:frame.y+frame.height-1/canvas.height;
+        let shiftX=horizontal===0?-Infinity:Infinity,shiftY=vertical===0?Infinity:-Infinity;
+        // Solve edge placement at each vertex's own depth: close weapons must
+        // not skew the unit's center or make perspective alignment overshoot.
+        for(const point of points){
+          const world=new THREE.Vector3((point.x+r)*c-point.y*s-r,(point.x+r)*s+point.y*c,point.z),q=world.clone().project(camera);
+          const movement=screenPlaneTranslation(camera,world,canvas.width,canvas.height,(edgeX-(q.x+1)/2)*canvas.width,(edgeY-(1-q.y)/2)*canvas.height);
+          shiftX=horizontal===0?Math.max(shiftX,movement.dot(right)):Math.min(shiftX,movement.dot(right));
+          shiftY=vertical===0?Math.min(shiftY,movement.dot(up)):Math.max(shiftY,movement.dot(up));
+        }
+        if(horizontal!==1)translation.addScaledVector(right,shiftX-translation.dot(right));
+        if(vertical!==1)translation.addScaledVector(up,shiftY-translation.dot(up));
+      }
       // Pan both ends of the view together, preserving angle and zoom.
       camera.position.sub(translation);controls.target.sub(translation);controls.update();
       cameraChanged();
@@ -961,6 +981,12 @@ export default function GamePreview(inputProps) {
       fit() { fit(); },
       centerModel(crop) { centerShowcaseModel(crop); },
       maximalZoom(crop) { centerShowcaseModel(crop,true); },
+      alignModel(crop,x,y) { centerShowcaseModel(crop,false,x,y); },
+      realignModel() {
+        if(!latest.current.showcase||latest.current.portraitMode)return;
+        camera.up.set(0,0,1);controls.minPolarAngle=.0001;controls.maxPolarAngle=Math.PI-.0001;
+        controls.update();cameraChanged();
+      },
       setCameraView(view) { camera = perspective; controls.object = camera; state.cameraDetached = true; applyEvaluatedModelCamera(camera, controls, view, canvas.width / canvas.height); invalidate(); },
       modelCenter() { return center.toArray(); },
       async prepareRecording() {

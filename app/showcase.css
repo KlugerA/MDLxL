@@ -150,3 +150,5 @@
 
 .showcase-orbit-direction {display:flex;align-items:center;justify-content:space-between;gap:4px;}
 .showcase-orbit-direction button {width:24px;height:20px;font-size:17px;line-height:16px;padding:0;}
+
+.showcase-model-tools { display:flex; align-items:center; justify-content:space-between; gap:4px; }

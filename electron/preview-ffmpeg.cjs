@@ -164,38 +164,66 @@ class PreviewRecordingStore {
     await fs.writeFile(path.join(job.directory, 'frames.ffconcat'), manifest(timing.entries), { flag: 'wx' });
     const input = name => ['-f','concat','-safe','0','-i',name];
     const colors = job.quality === 'low' ? 128 : 256;
-    // Every frame contributes to the same palette as the original two-pass
-    // encoder. Parallel sections share it and keep the same dithering.
-    await runFFmpeg(this.executable, [...input('frames.ffconcat'), '-vf', `palettegen=stats_mode=full:max_colors=${colors}`, '-frames:v','1','-y','palette.pam'], job);
-    const encode = (name, output, last) => runFFmpeg(this.executable, [...input(name), '-i','palette.pam','-lavfi',`paletteuse=dither=${job.quality === 'low' ? 'none' : 'sierra2_4a'}`,
-      '-fps_mode','passthrough','-enc_time_base','1:100','-loop',job.loop ? '0' : '-1','-final_delay',String(last),'-y',output], job);
+    // Preserve the frame schedule and palette quality. Size is controlled by
+    // spatial resolution, never by dropping frames or truncating the take.
+    const limit = Math.max(90000, Math.floor(45_000_000 * timing.duration / 10000));
+    const target = limit * .94;
+    let width=job.width,height=job.height;
+    const output = path.join(job.directory, 'capture.gif');
+    const scale = () => `scale=${width}:${height}:flags=lanczos`;
+    const palette = () => runFFmpeg(this.executable, [...input('frames.ffconcat'), '-vf', `${scale()},palettegen=stats_mode=full:max_colors=${colors}`, '-frames:v','1','-y','palette.pam'], job);
+    const encode = (name, file, last) => runFFmpeg(this.executable, [...input(name), '-i','palette.pam','-lavfi',`[0:v]${scale()}[scaled];[scaled][1:v]paletteuse=dither=${job.quality === 'low' ? 'none' : 'sierra2_4a'}:diff_mode=rectangle`,
+      '-fps_mode','passthrough','-enc_time_base','1:100','-loop',job.loop ? '0' : '-1','-final_delay',String(last),'-y',file], job);
+    const shrink = size => {
+      const factor=Math.min(.95,Math.sqrt(target/size));
+      const nextWidth=Math.max(1,Math.floor(width*factor)),nextHeight=Math.max(1,Math.floor(height*factor));
+      if(nextWidth===width&&nextHeight===height)throw Error('GIF cannot fit the recording size budget.');
+      width=nextWidth;height=nextHeight;
+    };
+    await palette();
+    // Short consecutive windows spread through the take estimate actual GIF
+    // compression before spending time encoding a huge full-resolution file.
+    if(timing.entries.length>30&&width*height*timing.entries.length*2>limit){
+      const sample=[];
+      for(let group=0;group<3;group++){
+        const start=Math.floor(group*(timing.entries.length-10)/2);
+        sample.push(...timing.entries.slice(start,start+10));
+      }
+      await fs.writeFile(path.join(job.directory,'sample.ffconcat'),manifest(sample));
+      await encode('sample.ffconcat','sample.gif',sample.at(-1).ticks);
+      const estimate=(await validateGIFFile(path.join(job.directory,'sample.gif')))*timing.entries.length/sample.length;
+      await fs.rm(path.join(job.directory,'sample.gif'));
+      if(estimate>limit){shrink(estimate);await palette();}
+    }
     const capacity = Math.min(4, Math.max(1, Math.floor(os.availableParallelism() / 4)));
     const parts = Math.min(capacity, Math.max(1, Math.floor(timing.entries.length / 60)));
-    if (parts === 1) await encode('frames.ffconcat', 'capture.gif', timing.entries.at(-1).ticks);
-    else {
-      const sections = Array.from({ length: parts }, (_, index) => {
-        const entries = timing.entries.slice(Math.floor(index * timing.entries.length / parts), Math.floor((index + 1) * timing.entries.length / parts));
-        return { entries, manifest: 'part-' + index + '.ffconcat', output: 'part-' + index + '.gif' };
-      });
-      const results = await Promise.allSettled(sections.map(async section => {
-        await fs.writeFile(path.join(job.directory, section.manifest), manifest(section.entries), { flag: 'wx' });
-        await encode(section.manifest, section.output, section.entries.at(-1).ticks);
-      }));
-      const failed = results.find(result => result.status === 'rejected');
-      if (failed) throw failed.reason;
-      const joined = await joinGIFSections(sections.map(section => path.join(job.directory, section.output)), path.join(job.directory, 'capture.gif'));
-      if (joined.frames !== timing.entries.length || joined.duration !== timing.duration) throw Error('GIF sections did not preserve the recording timeline.');
-      for (const section of sections) await fs.rm(path.join(job.directory, section.output));
+    const sections = Array.from({ length: parts }, (_, index) => {
+      const entries = timing.entries.slice(Math.floor(index * timing.entries.length / parts), Math.floor((index + 1) * timing.entries.length / parts));
+      return { entries, manifest: 'part-' + index + '.ffconcat', output: 'part-' + index + '.gif' };
+    });
+    for(const section of sections)await fs.writeFile(path.join(job.directory,section.manifest),manifest(section.entries));
+    for(;;){
+      if(parts===1)await encode('frames.ffconcat','capture.gif',timing.entries.at(-1).ticks);
+      else{
+        const results=await Promise.allSettled(sections.map(section=>encode(section.manifest,section.output,section.entries.at(-1).ticks)));
+        const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
+        const joined=await joinGIFSections(sections.map(section=>path.join(job.directory,section.output)),output);
+        if(joined.frames!==timing.entries.length||joined.duration!==timing.duration)throw Error('GIF sections did not preserve the recording timeline.');
+        for(const section of sections)await fs.rm(path.join(job.directory,section.output));
+      }
+      const size=await validateGIFFile(output);
+      if(size<=limit)break;
+      // Re-encode from the lossless captures, never from a previously quantized GIF.
+      shrink(size);await fs.rm(output);await palette();
     }
-    const output = path.join(job.directory, 'capture.gif');
-    await validateGIFFile(output);
+    job.outputWidth=width;job.outputHeight=height;
     if (job.phase === 'discarded') throw Error('Recording was discarded.');
     job.output = output; job.duration = timing.duration;
     // Once the usable result exists, Retry Save only needs that result.
     for (const frame of job.frames) await fs.rm(path.join(job.directory, frame.file), { force: true }).catch(() => {});
     job.frames = []; job.accountedBytes = (await fs.stat(output)).size;
     job.phase = 'ready';
-    return { jobId: job.id, duration: job.duration, storageBytes: job.bytes };
+    return { jobId: job.id, duration: job.duration, storageBytes: job.bytes, width:job.outputWidth, height:job.outputHeight, outputBytes:job.accountedBytes };
   }
   async save(owner, id) {
     const job = this.get(owner, id);
