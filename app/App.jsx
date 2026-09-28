@@ -478,8 +478,9 @@ export default function App() {
   const selectAll = () => { if(mode==='uv')return uvAction('select-all'); if (mode === 'animation' || mode === 'bones') { setSelectedNodeIds(model.Nodes.filter(Boolean).map(node => node.ObjectId)); return; } const next = {}; for (const gi of selectable) { const invisible = new Set(hidden[gi] || []); next[gi] = Array.from({ length: model.Geosets[gi]?.Vertices.length / 3 || 0 }, (_, i) => i).filter(i => !invisible.has(i)); } setSelection(next); };
   const frame = selectionOnly => window.dispatchEvent(new CustomEvent('mdlvis-frame', { detail: { selection: !!selectionOnly } }));
   const isPreviewMode = cleanAnimationPreview || mode==='uv';
-  const effectiveRenderMode = isPreviewMode ? (previewRenderModes[mode] || 'textured') : cleanView ? 'textured' : renderMode;
+  const effectiveRenderMode = mode === 'uv' ? 'textured' : isPreviewMode ? (previewRenderModes[mode] || 'textured') : cleanView ? 'textured' : renderMode;
   const setViewRenderMode = next => {
+    if (mode === 'uv') return;
     if (isPreviewMode) setPreviewRenderModes(previous=>({...previous,[mode]:next}));
     else { setRenderMode(next); setCleanViews(previous=>({...previous,[mode]:false})); }
   };
@@ -1035,7 +1036,7 @@ export default function App() {
         onGeosetChange={(index, coordId = 0) => { if (index < 0) return; setActiveGeoset(index); setUvSet(coordId); setLiveUV(null); }}
         textureAssets={session.assets} teamColor={teamColor} preferences={preferences} onPreferences={changePreferences} readOnly={doc.readOnly || saving}
         draftCount={Object.keys(session.uvPreviews).length} onLibrary={() => openLibrary(true)} onSavePreview={() => finishUVPreview()} onRevertPreview={() => finishUVPreview(true)} onExit={() => selectMode('vertices')}
-        previewProps={{ ...cameraProps, previewMode:previewRenderModes.uv, modelPath:session.path, key: session.id, preferences, onSensitivityChange: changeSensitivity, onPointerSensitivityChange: changePointerSensitivity, onCameraModeToggle: toggleMiddleCamera, suspended: previewSuspended,
+        previewProps={{ ...cameraProps, previewMode:'textured', modelPath:session.path, key: session.id, preferences, onSensitivityChange: changeSensitivity, onPointerSensitivityChange: changePointerSensitivity, onCameraModeToggle: toggleMiddleCamera, suspended: previewSuspended,
           revision: doc.revision, teamColor, textureAssets: session.assets, view, cameraMode }} /></Suspense>);
   const textureLibraryDialog = dialog?.type === 'library' && <Suspense fallback={<div className="classic-modal"><p>Loading texture library…</p></div>}><TextureLibrary model={model} modelPath={session.path} onClose={() => setDialog(dialog.returnTo)} onAddTexture={doc.readOnly ? undefined : addTexture} onPreviewTexture={dialog.preview ? previewTexture : undefined} previewEnabled={dialog.preview && previewSelection.enabled && !doc.readOnly} previewReason={doc.readOnly ? 'This model is read-only.' : previewSelection.reason} onOpenMaterials={() => setDialog({ type: 'resource', kind: 'Materials' })}/></Suspense>;
   const timeline = (<Suspense fallback={<div>Loading keyframes…</div>}><KeyframeTimeline
