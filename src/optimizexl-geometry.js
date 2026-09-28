@@ -54,16 +54,18 @@ export function mergeDuplicateVertices(model, settings, onChange) {
   return { duplicateVertices: removed, duplicateGroups: groups };
 }
 
-export function removeUnusedVertices(model, settings = {}) {
+export function removeUnusedVertices(model, settings = {}, onChange) {
   let removed = 0;
   const excluded = excludedGeosets(model, settings);
   for (const [index, g] of model.Geosets.entries()) {
     if (excluded.has(index)) continue;
     if (!g.Faces.length) continue;
     const kept = [...new Set(g.Faces)].sort((a, b) => a - b);
-    removed += g.Vertices.length / 3 - kept.length;
+    const vertices=g.Vertices.length / 3 - kept.length;
+    removed += vertices;
     compactVertices(g, kept, g.Faces);
     const groups = [...new Set(g.VertexGroup)].sort((a, b) => a - b), map = new Map(groups.map((id, i) => [id, i]));
+    if(vertices||g.Groups.length!==groups.length)onChange?.({geoset:index,vertices,groups:g.Groups.length-groups.length});
     g.VertexGroup = new g.VertexGroup.constructor(Array.from(g.VertexGroup, id => map.get(id)));
     g.Groups = groups.map(id => g.Groups[id]); g.TotalGroupsCount = g.Groups.reduce((sum, group) => sum + group.length, 0);
   }
