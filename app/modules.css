@@ -1,5 +1,6 @@
 .classic-modules {display:flex;align-items:center;gap:4px;padding:4px 6px;border-bottom:1px solid #8c8981;background:#d4d0c8;flex-wrap:wrap}
 .classic-modules button {min-height:25px;padding:2px 12px}
+.classic-modules>button {height:32px;min-height:32px;padding:2px 14px;font-size:14px}
 .classic-modules button[aria-pressed=true] {background:#eae6d8;border-style:inset;font-weight:bold}
 .classic-modules .module-hint {margin-left:auto;color:#49473f;font-size:11px}
 .classic-modules>.animation-preview-tools{min-height:25px;padding:0;border:0;background:transparent;gap:3px;flex-wrap:nowrap}
@@ -31,3 +32,13 @@
 .classic-app .live-node-manager .re-body {grid-template-columns:155px minmax(0,1fr)}
 .classic-app .live-node-manager .re-list-pane {width:155px;min-width:120px}
 @media(max-width:1000px) {.uv-live-preview{min-width:180px;flex-basis:36%}.classic-workspace.animation-workspace .classic-sidebar{width:280px;flex-basis:280px}.module-hint{display:none}}
+
+.classic-modules>.toolbar-modules{display:flex;align-items:center;gap:3px;flex:0 0 auto;margin-left:auto;margin-right:0}
+.classic-modules>.toolbar-modules>button{position:relative;width:32px!important;min-width:32px!important;height:32px;min-height:32px;padding:1px!important;display:inline-flex;align-items:center;justify-content:center;overflow:hidden}
+.classic-modules>.toolbar-modules>button>img{width:28px;height:28px;max-width:28px;max-height:28px;object-fit:contain}
+.classic-modules .pressed-keys-tool>span,.classic-modules .module-icon-badge{position:absolute;left:1px;right:1px;bottom:1px;height:50%;display:flex;align-items:center;justify-content:center;background:#070b12bb;font:900 12px/1 Tahoma,Arial,sans-serif;text-shadow:0 1px #000}
+.classic-modules .module-icon-badge{color:#39ff14}
+
+.classic-modules .vis-toggle>.module-icon-badge{left:4px;right:4px;bottom:4px;height:12px;color:#ff3df2}
+.classic-modules .vis-toggle[aria-pressed=true]>.module-icon-badge{top:4px;bottom:4px;height:auto;background:transparent;font-size:14px}
+:root[data-theme] .classic-modules>.toolbar-modules>.vis-toggle[aria-pressed=true]{border-style:solid;border-color:var(--ui-border);box-shadow:none;background:var(--ui-surface)}
