@@ -143,6 +143,18 @@ Stand -1's root translation changes vertical direction once after this correctio
 
 The focused suite now passes 55 tests, including gap/other-sequence preservation and stale-proposal rejection. The Electron test verifies changed After controls with identical key poses, synchronized playback, enabled Approve, approval removing the finding, Back restoring the proposal, and unchanged original bytes. It also reproduces a clean Hive result after cleanup and bounds repair: the empty fix selector and misleading manual-repair message are replaced with a clear no-issues message pointing to Next stage. Proofs are under `D:\MDLxL-Reviews\OptimizeXL-curve-repair-20260928\proofs\motion-ui`.
 
+## Twelfth review correction: remove the flagged motion, including bad poses
+
+The previous Footman correction removed curve overshoot but preserved an extra dip in the stored root poses at 1033 and 1067 ms. The new proposal replaces those Z values along the retained 900–1233 ms movement and corrects the detected bouncing controls. It does not blend the bad motion back into the result. No model names, node IDs or Footman frame numbers are hard-coded in the detector.
+
+OptimizeXL now examines local translation, rotation and scaling across animations. Short excursions must stand out against nearby movement and the other animations' active motion speeds. Repeated rapid whole-body reversals and scale oscillation provide separate evidence. Copied Hermite position controls also guide the detection of baked excursions in otherwise slow movement. Repairs preserve independent axes, other channels, exterior control handles, sequence boundaries and all key times. Ambiguous intent remains an Approve/Skip decision; globals, steps and overlapping sequences are excluded from automatic motion repair.
+
+The native Footman Stand -1 check samples every millisecond (1,501 poses). The extra dip is absent to floating-point precision. Root travel is 4.52624 model units, matching the Original's normal down/up bob; maximum speed is 3.34406 units/second, versus 24.524 after the rejected tangent-only correction. Maximum root-position difference from the supplied Original is 0.093397 units at an untouched intermediate pose. This is not an exact reconstruction of the Original. Only the two identified key vectors and proposed curve controls change. The detector also finds the dip if the previous tangent-only correction has already been approved.
+
+The source checks cover complete removal of position/rotation spikes, scale distortion, body shaking and a short one-way yank; preservation of simultaneous movement on other axes; stale-proposal rejection; and all-animation speed context. Both the supplied Original Footman's 13 animations and Desktop Flail03 produce no new motion proposals. The pre-existing 13 copied-control findings remain on Unoptimized; the broader detector is not a claim that every damaged pose in that model is recognized.
+
+The focused motion/OptimizeXL checks pass 66 cases. Rebuilt-source and packaged Electron tests pass the real Before/After candidate, changed bad poses, synchronized playback, Approve, Back, clean Hive messaging and source preservation. The separate review package contains 571 verified runtime/asset files and 55 locales. Proofs are under `D:\MDLxL-Reviews\OptimizeXL-jitter-removal-20260928\proofs\motion-ui` and `packaged-proofs\motion-ui`.
+
 ## Reproducing
 
 ```powershell
@@ -160,7 +172,7 @@ Run `node test/optimizexl-save.electron.cjs` with the same environment for appro
 
 Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. Run `node test/optimizexl-playback.electron.cjs` with Flail03 for percentage speed and native global playback; its proofs go to `out/optimizexl-playback-proof/`. All six desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-curve-repair-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-jitter-removal-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 
