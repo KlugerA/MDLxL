@@ -23,7 +23,7 @@ async function savePreviewCapture(directory, payload) {
     directory = showcaseDirectory(directory, path.basename(showcaseDirectory('', payload.animationName || 'Animation')).slice(0, 60) + '-screenshots-' + payload.screenshotBatch);
   }
   await fs.mkdir(directory, { recursive: true });
-  const name = `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(3).toString('hex')}.${payload.format}`;
+  const name = `Preview-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(3).toString('hex')}.${payload.format}`;
   const destination = path.join(directory, name);
   try { await fs.writeFile(destination, bytes, { flag: 'wx' }); }
   catch (error) { throw Error(`Could not write Showcase Recordings: ${error.message}`); }

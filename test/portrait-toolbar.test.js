@@ -88,7 +88,7 @@ test('Portrait hides free XYZ camera controls and locks camera pitch',()=>{
   assert.match(app,/const cameraRotating = cameraMode === 'rotate' && !lockedVertexPlane \|\| cameraGesture;/);
   assert.match(app,/\{cameraRotating && !activePortrait && cameraPanel\}/);
   assert.match(preview,/controls\.minPolarAngle = controls\.maxPolarAngle = controls\.getPolarAngle\(\)/);
-  assert.match(preview,/setCameraAngles: values => \{ if \(state\.portraitActive\) return;/);
+  assert.match(preview,/setCameraAngles: values => \{ if \(state\.portraitActive \|\| latest\.current\.suspended\) return;/);
 });
 
 test('Movement and Portrait share the complete viewpoint dropdown',()=>{
@@ -106,7 +106,7 @@ test('switching Portrait sequences preserves the one shared camera view',()=>{
   const preview=readFileSync(new URL('../app/GamePreview.jsx',import.meta.url),'utf8');
   assert.match(preview,/current\.enterPortrait\(evaluated\);\s*\}, \[props\.portraitMode, props\.portraitCameraIndex, props\.portraitSnapRevision, model, rendererRevision\]\);/);
   assert.doesNotMatch(preview,/current\.enterPortrait\(evaluated\);\s*\}, \[[^\]]*sequenceIndex/);
-  assert.match(preview,/setCameraAngles: values => \{ if \(state\.portraitActive\) return;/);
+  assert.match(preview,/setCameraAngles: values => \{ if \(state\.portraitActive \|\| latest\.current\.suspended\) return;/);
 });
 
 test('snapping restores the native camera projection after temporary viewport navigation without authoring changes',()=>{
