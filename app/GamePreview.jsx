@@ -830,7 +830,7 @@ export default function GamePreview(inputProps) {
       }
       if (!captureOnly && playback.finished) { reportAt = now; reportedFrame = start; p.onTimeChange?.(start); p.onPlayingChange?.(false); }
       else if (!captureOnly && p.playing && !playbackStopped && now - reportAt > 32) { reportAt = now; reportedFrame = native.getFrame(); p.onTimeChange?.(reportedFrame); }
-      layerAPI.current?.draw(showcaseSample?.globalTime || 0);
+      layerAPI.current?.draw(showcaseSample?.globalTime || 0, {time:showcaseSample?.presentationTime || 0,enabled:!!p.showcase?.recording || !!p.showcasePlaying});
       if (!captureOnly && recordingSink) recordingSink(showcaseSample?.presentationTime || 0);
     }
     const contextLost = event => { event.preventDefault(); scheduler?.dispose(); setError('The graphics context was lost. Reopen this preview to restore it.'); };
@@ -890,7 +890,7 @@ export default function GamePreview(inputProps) {
             if (composite.height !== source.height) composite.height=source.height;
             composite.getContext('2d').drawImage(source,0,0); source=composite;
           }
-          layerAPI.current?.paint(source.getContext('2d'),source.width,source.height,showcaseSample?.globalTime || 0);
+          layerAPI.current?.paint(source.getContext('2d'),source.width,source.height,showcaseSample?.globalTime || 0,{time:showcaseSample?.presentationTime || 0,enabled:true});
         }
         const selection = cropPixels(source.width,source.height,crop);
         context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
@@ -925,7 +925,7 @@ export default function GamePreview(inputProps) {
           if (render(performance.now(), 0, { captureOnly: true }) === false) throw new Error('The animation preview could not render a capture.');
           const captured = composePreviewCapture(backgroundCanvas, canvas);
           const result = portraitHasFrame(latest.current) ? composePortraitCapture(captured, portraitFrame.current.canvas) : captured;
-          layerAPI.current?.paint(result.getContext('2d'),result.width,result.height,showcaseSample?.globalTime || 0);
+          layerAPI.current?.paint(result.getContext('2d'),result.width,result.height,showcaseSample?.globalTime || 0,{time:showcaseSample?.presentationTime || 0,enabled:true});
           return result;
         } finally {
           canvas.width = saved.width; canvas.height = saved.height; drawBackground();

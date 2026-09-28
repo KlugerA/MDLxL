@@ -13,3 +13,8 @@ These unmodified fonts are bundled for offline use under the SIL Open Font Licen
 | Lato | `Lato-Regular.ttf` | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/lato) |
 | Lora | `Lora[wght].ttf` | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/lora) |
 | Open Sans | `OpenSans[wdth,wght].ttf` | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/opensans) |
+| Orbitron | Orbitron[wght].ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/orbitron) |
+| Oxanium | Oxanium[wght].ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/oxanium) |
+| Rajdhani | Rajdhani-Regular.ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/rajdhani) |
+| Cormorant SC | CormorantSC-Regular.ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/cormorantsc) |
+| Grenze Gotisch | GrenzeGotisch[wght].ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/grenzegotisch) |

@@ -3,8 +3,7 @@ import { listSignaturePresets, saveSignaturePreset, deleteSignaturePreset } from
 import { SHOWCASE_FONTS, TEXT_EFFECTS } from './showcase-text.js';
 import './showcase-fonts.css';
 
-const TEXT_COLORS=['#ffffff','#9f63ff','#20d676','#1ea5e9','#e739a6','#ff4a24','#e3ba36'];
-export default function ShowcaseLayerTools({layers,onLayers,activeId,onActive,onEditing,onStatus}) {
+export default function ShowcaseLayerTools({layers,onLayers,activeId,onActive,onEditing,onStatus,length=10}) {
   const [signaturesOpen,setSignaturesOpen]=useState(false),[textOpen,setTextOpen]=useState(false),[presets,setPresets]=useState([]),[presetName,setPresetName]=useState('');
   const input=useRef(null),urls=useRef(new Set());
   const active=layers.find(layer=>layer.id===activeId),images=layers.filter(layer=>layer.kind==='image'),texts=layers.filter(layer=>layer.kind==='text');
@@ -24,7 +23,7 @@ export default function ShowcaseLayerTools({layers,onLayers,activeId,onActive,on
     if(added.length<files.length)onStatus?.('Choose images or GIFs for signatures.',true);
   }
   function addText(){
-    const layer={id:crypto.randomUUID(),kind:'text',text:'Your text',font:'cinzeldecorative',size:48,color:'#ffffff',effect:'solid',bold:false,italic:false,underline:false,outline:false,opacity:1,rect:{x:.1,y:.12,width:.8,height:.18}};
+    const layer={id:crypto.randomUUID(),kind:'text',text:'Your text',font:'cinzeldecorative',size:48,color:'#ffffff',color2:'#c6a46c',color3:'#7895b2',outlineColor:'#111111',rotation:0,fadeInStart:0,fadeInLength:0,fadeOutStart:Math.max(0,length-1),fadeOutLength:0,effect:'solid',bold:false,italic:false,underline:false,outline:false,opacity:1,rect:{x:.1,y:.12,width:.8,height:.18}};
     onLayers([...layers,layer]);onActive(layer.id);setTextOpen(true);setSignaturesOpen(false);
   }
   function remove(){
@@ -63,11 +62,19 @@ export default function ShowcaseLayerTools({layers,onLayers,activeId,onActive,on
       <header><button className="showcase-section-toggle" aria-expanded={textOpen} onClick={()=>{setTextOpen(!textOpen);setSignaturesOpen(false);if(active?.kind!=='text')onActive(texts.at(-1)?.id||null);}}>Text{texts.length?' · '+texts.length:''}</button><button onClick={addText}>Add</button></header>
       {textOpen&&<>{layerList(texts,'text')}{active?.kind==='text'&&<>
         <textarea className="showcase-wide" aria-label="Text content" rows="2" value={active.text} onChange={event=>update({text:event.target.value})}/>
-        <div className="showcase-font-grid" role="group" aria-label="Choose font">{SHOWCASE_FONTS.map(font=><button title={font.name} key={font.id} aria-pressed={active.font===font.id} onClick={()=>update({font:font.id})}><strong style={{fontFamily:'"'+font.family+'"'}}>Aa</strong><small>{font.name}</small></button>)}</div>
-        <label>Size<input aria-label="Text size" type="number" min="6" max="300" value={active.size} onChange={event=>update({size:Math.max(6,Number(event.target.value)||6)})}/><div className="showcase-text-style">{[['bold','B'],['italic','I'],['underline','U'],['outline','Outline']].map(([key,label])=><button key={key} aria-label={label==='B'?'Bold':label==='I'?'Italic':label==='U'?'Underline':label} aria-pressed={!!active[key]} onClick={()=>update({[key]:!active[key]})}>{label}</button>)}</div></label>
-        <div className="showcase-text-colors" role="group" aria-label="Text color">{TEXT_COLORS.map(value=><button key={value} aria-label={'Text color '+value} aria-pressed={active.color===value} style={{backgroundColor:value}} onClick={()=>update({color:value})}/>)}<input type="color" aria-label="Custom text color" value={active.color} onChange={event=>update({color:event.target.value})}/></div>
-        <div className="showcase-effect-grid" role="group" aria-label="Choose animated text effect">{TEXT_EFFECTS.map(([id,name])=><button key={id} className={'showcase-effect-tile '+id} aria-pressed={active.effect===id} onClick={()=>update({effect:id})}><span>{name}</span></button>)}</div>
-        <small>Drag to place · corner to resize</small>{actions()}
+
+        <div className="showcase-font-palette">
+          <div className="showcase-font-grid" role="group" aria-label="Choose font">{SHOWCASE_FONTS.map(font=><button title={font.name} aria-label={font.name} key={font.id} aria-pressed={active.font===font.id} onClick={()=>update({font:font.id})}><span style={{fontFamily:'"'+font.family+'"'}}>Aa</span></button>)}</div>
+          <div className="showcase-text-colors" role="group" aria-label="Text colors">{[['color','1','Main color','#ffffff'],['color2','2','Gradient color 2','#c6a46c'],['color3','3','Gradient color 3','#7895b2']].map(([key,label,title,fallback])=><label key={key} title={title}><span>{label}</span><input type="color" aria-label={title} value={active[key]||fallback} onChange={event=>update({[key]:event.target.value})}/></label>)}</div>
+        </div>
+        <div className="showcase-text-format">
+          <label title="Text size">Size<input aria-label="Text size" type="number" min="6" max="300" value={active.size} onChange={event=>update({size:Math.max(6,Math.min(300,Number(event.target.value)||6))})}/></label>
+          <label title="Text rotation in degrees"><span aria-hidden="true">↻</span><input aria-label="Text rotation" type="number" min="-180" max="180" step="1" value={active.rotation||0} onChange={event=>update({rotation:Math.max(-180,Math.min(180,Number(event.target.value)||0))})}/><span>°</span></label>
+          <div className="showcase-text-style">{[['bold','B','Bold'],['italic','I','Italic'],['underline','U','Underline'],['outline','O','Outline']].map(([key,label,title])=><button className={key} style={key==='outline'?{color:'#ffffff'}:undefined} key={key} title={title} aria-label={title} aria-pressed={!!active[key]} onClick={()=>update({[key]:!active[key]})}>{label}</button>)}</div>
+          <input className="showcase-outline-color" type="color" aria-label="Outline color" title="Outline color" value={active.outlineColor||'#111111'} onChange={event=>update({outlineColor:event.target.value})}/>
+        </div>
+        <div className="showcase-effect-grid" role="group" aria-label="Choose animated text effect">{TEXT_EFFECTS.map(([id,name])=><button key={id} className={'showcase-effect-tile '+id} style={{backgroundColor:'#252833',color:'#e6dfe9'}} aria-pressed={active.effect===id} onClick={()=>update({effect:id})}><span>{name}</span></button>)}</div>
+        <details className="showcase-text-fades"><summary>Fades</summary><div className="showcase-fade-grid"><span/><small>Start (s)</small><small>Length (s)</small>{[['In','fadeIn'],['Out','fadeOut']].map(([label,key])=><React.Fragment key={key}><span>{label}</span><input type="number" aria-label={'Fade '+label.toLowerCase()+' start'} min="0" step=".1" value={active[key+'Start']||0} onChange={event=>update({[key+'Start']:Math.max(0,Number(event.target.value)||0)})}/><input type="number" aria-label={'Fade '+label.toLowerCase()+' length'} title="Length in seconds; 0 turns the fade off" min="0" step=".1" value={active[key+'Length']||0} onChange={event=>update({[key+'Length']:Math.max(0,Number(event.target.value)||0)})}/></React.Fragment>)}</div></details><small>Drag to place · corner to resize</small>{actions()}
       </>}</>}
     </section>
   </>;
