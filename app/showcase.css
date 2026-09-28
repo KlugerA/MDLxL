@@ -109,19 +109,18 @@
 .showcase-effect-tile span { display:inline-block; font-size:10px; font-weight:normal; }
 .showcase-effect-tile.neon span { color:#d2edff; text-shadow:0 0 3px #6cc9ff,0 0 6px #5b98cc; animation:showcase-neon 6s ease-in-out infinite; }
 .showcase-effect-tile.gradient span { background:linear-gradient(90deg,#e5dccb,#c6a46c,#7895b2,#e5dccb); background-size:300% 100%; color:transparent; background-clip:text; animation:showcase-shimmer 8s linear infinite; }
-.showcase-effect-tile.flame span { color:#ffe1b5; animation:showcase-flame 5s ease-in-out infinite; }
+.showcase-effect-tile.flame span { color:#b88049; text-shadow:0 -1px 2px #ce4d09; animation:showcase-flame 5s ease-in-out infinite; }
 .showcase-effect-tile.frost span { color:#d4f5ff; text-shadow:0 0 4px #8ac9e1; }
 .showcase-effect-tile.arcane span { color:#cbb9e0; animation:showcase-neon 8s ease-in-out infinite; }
-.showcase-effect-tile.lightning span { color:#d8deed; animation:showcase-neon 6s ease-in-out infinite; }
+.showcase-effect-tile.lightning span { color:#9ca9bd; animation:showcase-lightning 3.8s ease-in-out infinite; }
 .showcase-effect-tile.prism span { background:linear-gradient(140deg,#f4ecdc 20%,#7b90a6 40%,#e8e8ed 49%,#d3b787 60%,#f3f3f6 80%); color:transparent; background-clip:text; }
 .showcase-effect-tile.wave span { color:#c3d8df; animation:showcase-wave 7s ease-in-out infinite; }
 .showcase-effect-tile.shimmer span { background:linear-gradient(90deg,#e5dccb 20%,#c6a46c 40%,#7895b2 50%,#e5dccb 80%); background-size:200% 100%; color:transparent; background-clip:text; animation:showcase-shimmer 6.5s linear infinite; }
-.showcase-effect-tile.ghost span { color:#d1d9de; animation:showcase-ghost 7s ease-in-out infinite; }
 @keyframes showcase-neon { 50% { text-shadow:0 0 6px #9cc6df,0 0 2px #eefaff; } }
-@keyframes showcase-flame { 50% { text-shadow:0 -2px 3px #e78e40,1px -4px 4px #f0b764; } }
+@keyframes showcase-flame { 50% { color:#c99761; text-shadow:0 -1px 2px #ffd580,1px -3px 4px #ca4508; } }
+@keyframes showcase-lightning { 15%,30% { color:#e8f0ff; text-shadow:0 0 2px #a9c6ff,1px -1px 4px #668acc; } }
 @keyframes showcase-wave { 25% { transform:translateY(-1px); } 75% { transform:translateY(1px); } }
 @keyframes showcase-shimmer { to { background-position:200% 0; } }
-@keyframes showcase-ghost { 50% { text-shadow:-3px -1px 1px #b6b2d0bb,3px -2px 1px #b2c8d0bb; } }
 .showcase-layer-stage { position:absolute; inset:0; z-index:84; overflow:hidden; pointer-events:none; }
 .showcase-layer-stage > canvas { display:block; width:100%; height:100%; pointer-events:none; }
 .showcase-layer-selection { position:absolute; box-sizing:border-box; outline:1px dashed #fff; box-shadow:0 0 0 2px #222; pointer-events:auto; cursor:move; touch-action:none; }

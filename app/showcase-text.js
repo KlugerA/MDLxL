@@ -17,7 +17,7 @@ export const SHOWCASE_FONTS = [
 export const TEXT_EFFECTS = [
   ['solid','Solid'],['gradient','Gradient'],['neon','Neon'],['flame','Flame'],
   ['frost','Frost'],['arcane','Arcane'],['lightning','Lightning'],
-  ['prism','Prism'],['wave','Wave'],['shimmer','Shimmer'],['ghost','Ghost'],
+  ['prism','Prism'],['wave','Wave'],['shimmer','Shimmer'],
 ];
 export const textFont = layer => SHOWCASE_FONTS.find(font=>font.id===layer.font)?.family || SHOWCASE_FONTS[0].family;
 const clamp = (value,min=0,max=1) => Math.max(min,Math.min(max,value));
@@ -65,7 +65,7 @@ function geometry(context,layer,size) {
   const edgeContext=edge.getContext('2d');edgeContext.lineWidth=Math.max(1,size*.1);glyphs(edgeContext,true);
   edgeContext.globalCompositeOperation='destination-out';edgeContext.drawImage(mask,0,0);edgeContext.globalCompositeOperation='source-over';
   const tubeContext=tube.getContext('2d');tubeContext.lineWidth=Math.max(.7,size*.027);glyphs(tubeContext,true);
-  const value={key,mask,edge,tube,surface,scratch,frame,width,height,x,top,bottom,textWidth,textHeight,size,rows:lines.map((_,index)=>({top:top+index*lineHeight,bottom:top+index*lineHeight+ascent+descent})),flames:null};
+  const value={key,mask,edge,tube,surface,scratch,frame,width,height,x,top,bottom,textWidth,textHeight,size,rows:lines.map((_,index)=>({top:top+index*lineHeight,bottom:top+index*lineHeight+ascent+descent})),fire:null,conduction:null,arcs:new Map()};
   cache.delete(id);cache.set(id,value);
   // Old removed layers are evicted without retaining an unbounded set of canvases.
   while(cache.size>24)cache.delete(cache.keys().next().value);
@@ -110,51 +110,173 @@ function facets(context,g,time,colors,ice=false) {
     context.beginPath();context.moveTo(x,g.top);context.lineTo(middle,tip);context.lineTo(x+step*.7,g.bottom);context.stroke();
   }
 }
-function glyphTops(g) {
-  if(!g.flames){
-    const data=g.mask.getContext('2d',{willReadFrequently:true}).getImageData(0,0,g.width,g.height).data,points=[];
-    for(let x=Math.floor(g.x-g.textWidth/2+g.size*.1);x<g.x+g.textWidth/2;x+=Math.max(3,Math.round(g.size*.26))){
-      for(const row of g.rows)for(let y=Math.floor(row.top);y<row.bottom;y++)if(data[(y*g.width+x)*4+3]>170){points.push([x,y]);break;}
-    }g.flames=points;
+// One seamless turbulence tile is shared by all fire layers. Animation samples it
+// analytically: seeking a recording frame never needs to simulate earlier frames.
+let turbulence;
+function turbulenceTile() {
+  if(turbulence)return turbulence;
+  turbulence=new Float32Array(256*256);
+  for(let cells=4,weight=.5;cells<=64;cells*=2,weight*=.5){
+    const lattice=Float32Array.from({length:cells*cells},(_,i)=>noise(i+cells*71));
+    for(let y=0;y<256;y++){
+      const py=y*cells/256,iy=Math.floor(py),fy=smooth(py-iy);
+      for(let x=0;x<256;x++){
+        const px=x*cells/256,ix=Math.floor(px),fx=smooth(px-ix);
+        const a=lattice[iy*cells+ix],b=lattice[iy*cells+(ix+1)%cells];
+        const c=lattice[((iy+1)%cells)*cells+ix],d=lattice[((iy+1)%cells)*cells+(ix+1)%cells];
+        turbulence[y*256+x]+=((a+(b-a)*fx)*(1-fy)+(c+(d-c)*fx)*fy)*weight/.96875;
+      }
+    }
   }
-  return g.flames;
+  return turbulence;
 }
-function flameTips(context,g,time,main,accent) {
-  glyphTops(g).forEach(([x,y],index)=>{
-    const phase=index*1.93,breath=.5+.5*Math.sin(time*1.15+phase),height=g.size*(.18+.22*breath),half=g.size*(.045+.025*noise(index)),bend=Math.sin(time*.85+phase)*g.size*.07;
-    const heat=mix(main,'#f77935',.74),core=mix(accent,'#fff0b6',.65),gradient=context.createLinearGradient(x,y,x+bend,y-height);
-    gradient.addColorStop(0,alpha(heat,.72));gradient.addColorStop(.45,alpha(core,.6));gradient.addColorStop(1,alpha(heat,0));
-    context.save();context.fillStyle=gradient;context.shadowColor=heat;context.shadowBlur=g.size*.055;
-    context.beginPath();context.moveTo(x-half,y+g.size*.05);
-    context.bezierCurveTo(x-half*1.7,y-height*.32,x+bend-half,y-height*.67,x+bend,y-height);
-    context.bezierCurveTo(x+bend+half*.4,y-height*.58,x+half*1.6,y-height*.2,x+half,y+g.size*.05);
-    context.closePath();context.fill();context.restore();
-  });
+function heatNoise(tile,x,y) {
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
+  const row=(iy&255)*256,next=((iy+1)&255)*256,left=ix&255,right=(ix+1)&255;
+  return (tile[row+left]*(1-fx)+tile[row+right]*fx)*(1-fy)+(tile[next+left]*(1-fx)+tile[next+right]*fx)*fy;
 }
-
-function electricTrace(context,g,time,colors) {
-  const center=g.x-g.textWidth/2-g.size+(time/7%1)*(g.textWidth+g.size*2),reach=g.size*.85;
-  const points=glyphTops(g).filter(([x])=>Math.abs(x-center)<reach);
-  if(points.length<2)return;
-  const light=mix(colors[0],'#ffffff',.8),gradient=context.createLinearGradient(center-reach,0,center+reach,0);
-  gradient.addColorStop(0,alpha(light,0));gradient.addColorStop(.5,alpha(light,.9));gradient.addColorStop(1,alpha(light,0));
-  context.save();context.strokeStyle=gradient;context.lineWidth=Math.max(.65,g.size*.018);context.lineJoin='round';
-  context.shadowColor=colors[0];context.shadowBlur=g.size*.07;
-  for(const row of g.rows){
-    const contour=points.filter(([,y])=>y>=row.top-1&&y<row.bottom);if(contour.length<2)continue;
-    context.beginPath();contour.forEach(([x,y],index)=>{const lift=g.size*(.045+.045*noise(index+4));index?context.lineTo(x,y-lift):context.moveTo(x,y-lift);});context.stroke();
+function heatAt(f,x,y) {
+  x=clamp(x,0,f.width-1);y=clamp(y,0,f.height-1);
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,right=Math.min(ix+1,f.width-1);
+  const row=iy*f.width,next=Math.min(iy+1,f.height-1)*f.width;
+  return (f.heat[row+ix]*(1-fx)+f.heat[row+right]*fx)*(1-fy)+(f.heat[next+ix]*(1-fx)+f.heat[next+right]*fx)*fy;
+}
+function fireField(g) {
+  if(g.fire)return g.fire;
+  // Bound the simulation surface; text itself is still drawn at full resolution.
+  const scale=Math.min(1,64/g.size,640/g.width,192/g.height);
+  const width=Math.max(2,Math.ceil(g.width*scale)),height=Math.max(2,Math.ceil(g.height*scale)),size=g.size*scale;
+  const canvas=g.mask.ownerDocument.createElement('canvas');canvas.width=width;canvas.height=height;
+  const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(g.mask,0,0,width,height);
+  const pixels=context.getImageData(0,0,width,height).data,heat=new Float32Array(width*height);
+  const decay=Math.exp(-1/Math.max(1,size*.34));
+  // Every part of the silhouette emits heat. Upward diffusion joins the small
+  // sources into irregular sheets of flame instead of a row of flame icons.
+  for(let y=height-1;y>=0;y--)for(let x=0;x<width;x++){
+    const i=y*width+x,row=(y+1)*width;
+    const below=y+1<height?(heat[row+x]*2+heat[row+Math.max(0,x-1)]+heat[row+Math.min(width-1,x+1)])*.25:0;
+    heat[i]=Math.max(pixels[i*4+3]/255,below*decay);
+  }
+  const active=[],reach=Math.ceil(size*.2);
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+    const row=y*width;
+    if(Math.max(heat[row+x],heat[row+Math.max(0,x-reach)],heat[row+Math.min(width-1,x+reach)])>.1)active.push(row+x);
+  }
+  const soot=g.mask.ownerDocument.createElement('canvas');soot.width=width;soot.height=height;
+  const sootContext=soot.getContext('2d'),grain=sootContext.createImageData(width,height),tile=turbulenceTile();
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+    const i=(y*width+x)*4,value=70+heatNoise(tile,x/size*210,y/size*210)*165;
+    grain.data[i]=grain.data[i+1]=grain.data[i+2]=value;grain.data[i+3]=255;
+  }
+  sootContext.putImageData(grain,0,0);
+  g.fire={canvas,context,soot,width,height,size,heat,active:Uint32Array.from(active),image:context.createImageData(width,height),tile,paletteKey:null,palette:null,time:null};
+  return g.fire;
+}
+function burning(g,time,colors) {
+  const f=fireField(g),key=colors.join('|');
+  if(f.paletteKey!==key){
+    const channels=rgb(colors[0]),saturation=(Math.max(...channels)-Math.min(...channels))/255;
+    const orange=mix('#ff710c',colors[0],saturation*.8);
+    const stops=[[0,mix('#390704',colors[2],.08)],[.3,'#b92c06'],[.6,orange],[.82,mix('#ffbd39',colors[1],.14)],[1,mix('#fff4ca',colors[0],.2)]];
+    f.palette=new Uint8ClampedArray(256*3);
+    for(let i=0;i<256;i++){
+      const heat=i/255,upper=stops.findIndex(([at])=>at>=heat),a=stops[Math.max(0,upper-1)],b=stops[upper];
+      const value=rgb(mix(a[1],b[1],a[0]===b[0]?0:(heat-a[0])/(b[0]-a[0])));
+      f.palette.set(value,i*3);
+    }
+    f.paletteKey=key;f.time=null;
+  }
+  if(f.time===time)return f;
+  const pixels=f.image.data;pixels.fill(0);
+  for(const index of f.active){
+    const x=index%f.width,y=Math.floor(index/f.width),u=x/f.size*72,v=y/f.size*58+time*27;
+    const swirl=heatNoise(f.tile,u*.44+91,v*.44),detail=heatNoise(f.tile,u+swirl*18,v+swirl*24);
+    const source=heatAt(f,x+(swirl-.5)*f.size*.32,y+(detail-.5)*f.size*.07);
+    const heat=clamp((source-.1-detail*.46)*1.16);if(heat<=0)continue;
+    const at=index*4,color=Math.round(heat*255)*3;
+    pixels[at]=f.palette[color];pixels[at+1]=f.palette[color+1];pixels[at+2]=f.palette[color+2];
+    pixels[at+3]=255*smooth(heat*3.4)*clamp(heat*2.4);
+  }
+  f.context.putImageData(f.image,0,0);f.time=time;return f;
+}
+function fireRim(context,g,fire) {
+  const rim=clear(g.scratch);rim.drawImage(fire.canvas,0,0,g.width,g.height);
+  rim.globalCompositeOperation='destination-in';rim.drawImage(g.tube,0,0);rim.globalCompositeOperation='source-over';
+  context.drawImage(g.scratch,0,0);
+}
+function conductorEdges(g) {
+  if(g.conduction)return g.conduction;
+  const pixels=g.mask.getContext('2d',{willReadFrequently:true}).getImageData(0,0,g.width,g.height).data;
+  const step=Math.max(1,Math.round(g.size*.025));
+  g.conduction=g.rows.map(row=>{
+    const points=[];
+    for(let y=Math.max(1,Math.floor(row.top)-1);y<Math.min(g.height-1,Math.ceil(row.bottom)+1);y+=step){
+      for(let x=1;x<g.width-1;x+=step){
+        const at=(y*g.width+x)*4+3;
+        if(pixels[at]>128&&(pixels[at-4]<128||pixels[at+4]<128||pixels[at-g.width*4]<128||pixels[at+g.width*4]<128))points.push([x,y]);
+      }
+    }
+    return points;
+  });return g.conduction;
+}
+function forkedBolt(start,end,seed,amplitude) {
+  let points=[start,end];
+  for(let level=0;level<4;level++){
+    const split=[points[0]];
+    for(let index=0;index<points.length-1;index++){
+      const a=points[index],b=points[index+1],dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy)||1;
+      const offset=(noise(seed+level*193+index*17)-.5)*amplitude*2;
+      split.push([(a[0]+b[0])/2-dy/length*offset,(a[1]+b[1])/2+dx/length*offset],b);
+    }
+    points=split;amplitude*=.48;
+  }
+  return points;
+}
+function electricalArc(g,edges,seed) {
+  const start=edges[Math.floor(noise(seed+1)*edges.length)],direction=noise(seed+4)>.5?1:-1;
+  const target=[start[0]+direction*g.size*(.45+.75*noise(seed+7)),start[1]+(noise(seed+12)-.5)*g.size*.7];
+  let end=start,distance=Infinity;
+  for(const point of edges){
+    if(Math.hypot(point[0]-start[0],point[1]-start[1])<g.size*.25)continue;
+    const d=(point[0]-target[0])**2+(point[1]-target[1])**2;
+    if(d<distance){distance=d;end=point;}
+  }
+  if(end===start)return [];
+  const points=forkedBolt(start,end,seed,g.size*.14),branches=[];
+  for(let index=0;index<2;index++){
+    const root=points[5+index*4],reach=g.size*(.15+.14*noise(seed+index+21));
+    branches.push(forkedBolt(root,[root[0]+direction*reach,root[1]+(index?1:-1)*reach*.8],seed+index*43+81,reach*.22));
+  }
+  return [points,...branches];
+}
+function lightningArcs(context,g,time,colors) {
+  const rows=conductorEdges(g),period=3.8;
+  context.save();context.lineJoin='round';context.lineCap='round';
+  for(let row=0;row<rows.length;row++)for(let lane=0;lane<2;lane++){
+    const edges=rows[row];if(edges.length<2)continue;
+    const clock=time+lane*period*.5+noise(row+2)*period,epoch=Math.floor(clock/period),age=clock-epoch*period;
+    const strength=smooth(age/.2)*(1-smooth((age-.55)/1.15));if(strength<=0)continue;
+    const key=row*2+lane;let event=g.arcs.get(key);
+    if(event?.epoch!==epoch){event={epoch,paths:electricalArc(g,edges,epoch*109+row*37+lane*61+5)};g.arcs.set(key,event);}
+    event.paths.forEach((points,index)=>{
+      const amount=strength*(index?.42:1),width=Math.max(.5,g.size*.014)*(index?.65:1);
+      context.beginPath();points.forEach(([x,y],i)=>i?context.lineTo(x,y):context.moveTo(x,y));
+      // Wide low-energy corona, narrow coloured filament, then the white-hot core.
+      context.strokeStyle=alpha(colors[2],amount*.24);context.lineWidth=width*5;context.shadowColor=colors[2];context.shadowBlur=g.size*.13;context.stroke();
+      context.strokeStyle=alpha(mix(colors[0],'#9fbdff',.25),amount*.85);context.lineWidth=width*2;context.shadowBlur=g.size*.045;context.stroke();
+      context.strokeStyle=alpha(mix(colors[0],'#ffffff',.86),amount);context.lineWidth=width;context.shadowBlur=0;context.stroke();
+    });
   }
   context.restore();
 }
-function energy(context,g,time,colors,lightning) {
-  const breath=.5+.5*Math.sin(time*(lightning?1.05:.7));
+function energy(context,g,time,colors) {
   context.save();context.lineCap='round';context.lineJoin='round';
-  for(let row=0;row<(lightning?2:3);row++){
-    const cy=g.top+g.textHeight*(.25+row*(lightning?.45:.25)),step=g.size*(lightning?.14:.12);
-    context.strokeStyle=alpha(mix(colors[(row+1)%3],'#ffffff',.55),lightning?.2+.65*Math.pow(breath,3):.3);
-    context.lineWidth=Math.max(.6,g.size*(lightning?.022:.016));context.shadowBlur=g.size*.06;context.shadowColor=colors[1];context.beginPath();
+  for(let row=0;row<3;row++){
+    const cy=g.top+g.textHeight*(.25+row*.25),step=g.size*.12;
+    context.strokeStyle=alpha(mix(colors[(row+1)%3],'#ffffff',.55),.3);
+    context.lineWidth=Math.max(.6,g.size*.016);context.shadowBlur=g.size*.06;context.shadowColor=colors[1];context.beginPath();
     for(let x=g.x-g.textWidth/2,index=0;x<=g.x+g.textWidth/2;x+=step,index++){
-      const dy=lightning?(noise(index+row*41)-.5)*g.size*.26+Math.sin(time*.6+index)*g.size*.025:Math.sin(x/g.size*2.4+time*.55+row)*g.size*.12;
+      const dy=Math.sin(x/g.size*2.4+time*.55+row)*g.size*.12;
       index?context.lineTo(x,cy+dy):context.moveTo(x,cy+dy);
     }context.stroke();
   }context.restore();
@@ -172,36 +294,35 @@ export function paintShowcaseText(destination,layer,width,height,milliseconds=0,
   const x=(rect.x+rect.width/2)*width,y=(rect.y+rect.height/2)*height;
   context.save();
 
-  // Effects behind the glyph silhouette cannot cover the letter interiors.
-  if(effect==='ghost'){
-    const drift=Math.sin(time*.65)*size*.06;
-    drawTint(context,g,g.mask,colors[2],.3,size*.06,-size*.22+drift,-size*.1);
-    drawTint(context,g,g.mask,colors[1],.38,size*.045,size*.17+drift,-size*.055);
-  }
-  if(effect==='flame')flameTips(context,g,time,colors[0],colors[1]);
-  const luminous=['neon','frost','arcane','lightning'].includes(effect);
+  const fire=effect==='flame'?burning(g,time,colors):null;
+  const luminous=['neon','frost','arcane'].includes(effect);
   const glow=effect==='frost'?mix(colors[0],'#9ddeff',.7):colors[0];
   if(luminous)drawTint(context,g,g.mask,glow,effect==='neon'?.55+.1*breath:effect==='frost'?.44+.06*breath:.28+.08*breath,size*(effect==='neon'?.24:.14));
   if(layer.outline&&effect!=='wave'){
     // An emissive border stays luminous even when its chosen base color is black.
-    const border=effect==='neon'?emissive(outline,colors[0]):effect==='lightning'?mix(outline,colors[0],.5):outline;
+    const border=effect==='neon'?emissive(outline,colors[0]):outline;
     drawTint(context,g,g.edge,border,1,effect==='neon'?size*.16:0);
+  }
+  if(fire){
+    context.save();context.shadowColor='#b93808';context.shadowBlur=size*.07;
+    context.drawImage(fire.canvas,0,0,g.width,g.height);context.restore();
   }
   const surface=clear(g.surface);
   let fill=colors[0];
   if(effect==='gradient'||effect==='arcane')fill=flowing(surface,g,colors,time,effect==='arcane'?11:8);
-  if(effect==='flame')fill=vertical(surface,g,[[0,mix(colors[0],'#ffe6b5',.6)],[.55,colors[0]],[1,mix(colors[0],'#b85b2b',.35)]]);
+  if(fire)fill=vertical(surface,g,[[0,mix(colors[0],'#38150c',.94)],[.28,mix(colors[1],'#b4783d',.75)],[.45,'#492419'],[.75,mix(colors[0],'#26100c',.94)],[1,'#9b4a1c']]);
+  if(effect==='lightning')fill=vertical(surface,g,[[0,mix(colors[0],'#131b2a',.83)],[.28,mix(colors[0],'#6f8095',.4)],[.46,mix(colors[2],'#182131',.65)],[1,mix(colors[0],'#374151',.65)]]);
   if(effect==='frost')fill=vertical(surface,g,[[0,'#f0faff'],[.36,mix(colors[0],'#b5e8ff',.5)],[.5,mix(colors[0],'#397393',.72)],[.62,mix(colors[0],'#abd8ea',.4)],[1,mix(colors[0],'#ddf9ff',.65)]]);
   if(effect==='prism')fill=vertical(surface,g,[[0,mix(colors[0],'#ffffff',.7)],[.42,colors[0]],[.5,mix(colors[2],'#131925',.3)],[.64,mix(colors[0],'#ffffff',.7)],[1,colors[1]]]);
   if(effect==='neon')fill=mix(colors[0],'#0b101b',.42);
   surface.fillStyle=fill;surface.fillRect(0,0,g.width,g.height);
+  if(fire){surface.globalCompositeOperation='multiply';surface.drawImage(fire.soot,0,0,g.width,g.height);surface.globalCompositeOperation='source-over';}
   if(effect==='frost'){facets(surface,g,time,[colors[0],'#d6f4ff','#8fc7e6'],true);sheen(surface,g,time,['#bbebff','#ffffff','#c8edff'],10,.5);}
-  if(effect==='arcane'){energy(surface,g,time,colors,false);sheen(surface,g,time,colors,9,.38);}
-  if(effect==='lightning')energy(surface,g,time,colors,true);
+  if(effect==='arcane'){energy(surface,g,time,colors);sheen(surface,g,time,colors,9,.38);}
   if(effect==='prism'){facets(surface,g,time,colors);sheen(surface,g,time,[colors[1],'#ffffff',colors[2]],10,.8);}
   if(effect==='shimmer')sheen(surface,g,time,colors,6.5,.95);
   surface.globalCompositeOperation='destination-in';surface.drawImage(g.mask,0,0);surface.globalCompositeOperation='source-over';
-  context.save();if(effect==='ghost')context.globalAlpha*=.7+.12*breath;if(effect==='frost')context.globalAlpha*=.9;
+  context.save();if(effect==='frost')context.globalAlpha*=.9;
   if(effect==='wave'){
     if(layer.outline){surface.globalCompositeOperation='destination-over';surface.drawImage(tintMask(g,g.edge,outline),0,0);surface.globalCompositeOperation='source-over';}
     const strip=Math.max(2,Math.ceil(size*.08));
@@ -212,7 +333,11 @@ export function paintShowcaseText(destination,layer,width,height,milliseconds=0,
     const tubeColor=mix(colors[0],'#ffffff',.8);
     drawTint(context,g,g.tube,tubeColor,.85+.12*breath,size*.065);
   }
-  if(effect==='lightning')electricTrace(context,g,time,colors);
+  if(fire)fireRim(context,g,fire);
+  if(effect==='lightning'){
+    drawTint(context,g,g.tube,mix(colors[0],colors[2],.35),.2+.06*breath);
+    lightningArcs(context,g,time,colors);
+  }
   if(effect==='prism'){drawTint(context,g,g.tube,colors[1],.48,0,-size*.025,-size*.012);drawTint(context,g,g.tube,colors[2],.48,0,size*.025,size*.012);}
   if(effect==='frost')drawTint(context,g,g.tube,mix(colors[0],'#dcf8ff',.75),.4);
   if(effect==='arcane')drawTint(context,g,g.tube,flowing(context,g,[colors[1],mix(colors[0],'#ffffff',.65),colors[2]],time,11),.6);
