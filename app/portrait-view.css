@@ -52,3 +52,5 @@
 .portrait-camera-vector{grid-template-columns:repeat(3,minmax(0,1fr))}.portrait-camera-vector>span{grid-column:1/-1}
 :root[data-theme=dark] .portrait-toolbar,:root[data-theme=dark] .portrait-camera{background:var(--ui-panel);color:var(--ui-text);border-color:var(--ui-border)}
 :root[data-theme=dark] .portrait-camera-empty{background:#393a31;color:#e4dcb3;border-color:#626249}
+
+.classic-app>.classic-toolbar .compact-input-strength{flex:0 0 auto;margin-left:auto}

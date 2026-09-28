@@ -40,7 +40,7 @@ test('quick display follows team picker, strengths replace hints, capture is Ani
   assert.equal((app.match(/<QuickDisplay/g)||[]).length,1);
   assert.doesNotMatch(app,/className="module-hint"/);
   assert.match(app,/animationPanel === 'animations' && <AnimationPreviewTools/);
-  assert.match(app,/<\/>\}\s*\{inputStrength\}\s*<\/div>/);
+  assert.match(toolbar,/\{inputStrength\}\s*<LanguageSwitch/);
   assert.match(css,/team-picker select\{width:auto;min-width:0;max-width:none\}/);
 });
 
