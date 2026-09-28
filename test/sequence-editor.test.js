@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGlobalSequence, createSequence, deleteGlobalSequence, deleteSequence,
+  createGlobalSequence, createSequence, createSequenceFromCurrent, deleteGlobalSequence, deleteSequence,
   setGlobalSequenceDuration, setSequenceInterval, setSequenceMoveSpeed, setSequenceName,
 } from '../src/sequence-editor.js';
 import { createDemoDocument, openDocument } from '../src/editor-document.js';
@@ -10,6 +10,38 @@ const key = (Frame, values) => ({ Frame, Vector: new Float32Array(values) });
 const track = (...keys) => ({ LineType: 1, GlobalSeqId: null, Keys: keys });
 const extent = () => ({ MinimumExtent: new Float32Array([-1, -2, -3]), MaximumExtent: new Float32Array([4, 5, 6]), BoundsRadius: 8 });
 const geoset = () => ({ Vertices: new Float32Array([0, 0, 0, 2, 4, 6]), Groups: [[0]], Anims: [extent(), extent()], ...extent() });
+
+test('Create from current copies metadata, local keys, tangents and events independently', () => {
+  const motion = track({ ...key(100, [1, 2, 3]), InTan: new Float32Array([4, 5, 6]), OutTan: new Float32Array([7, 8, 9]) }, key(1100, [3, 2, 1]), key(4000, [9, 9, 9]));
+  const global = { ...track(key(100, [1])), GlobalSeqId: 0 };
+  const model = {
+    Sequences: [{ Name: 'Walk', Interval: new Uint32Array([100, 1100]), NonLooping: true, MoveSpeed: 200, Rarity: 3, ...extent() }],
+    Geosets: [{ Anims: [extent()] }], Bones: [{ Translation: motion }], Nodes: [],
+    GeosetAnims: [{ Alpha: track(key(100, [1]), key(1100, [0])) }],
+    Materials: [{ Layers: [{ Alpha: global }] }],
+    Cameras: [{ Translation: track(key(500, [1, 0, 0])) }],
+    EventObjects: [{ EventTrack: new Uint32Array([100, 600, 1100]) }, { GlobalSeqId: 0, EventTrack: [100] }],
+  };
+  model.Nodes = model.Bones;
+  const before = structuredClone(model);
+  assert.equal(createSequenceFromCurrent(model, 0), 1);
+  assert.equal(model.Sequences[1].Name, 'Walk - copy');
+  assert.deepEqual(Array.from(model.Sequences[1].Interval), [2100, 3100]);
+  assert.deepEqual(model.Sequences[1], { ...before.Sequences[0], Name: 'Walk - copy', Interval: new Uint32Array([2100, 3100]) });
+  assert.deepEqual(model.Sequences[0], before.Sequences[0]);
+  assert.deepEqual(motion.Keys.map(item => item.Frame), [100, 1100, 2100, 3100, 4000]);
+  assert.deepEqual(motion.Keys[2].InTan, before.Bones[0].Translation.Keys[0].InTan);
+  motion.Keys[2].Vector[0] = 99;
+  assert.equal(motion.Keys[0].Vector[0], 1);
+  assert.deepEqual(global, before.Materials[0].Layers[0].Alpha);
+  assert.deepEqual(model.EventObjects[1], before.EventObjects[1]);
+  assert.deepEqual(Array.from(model.EventObjects[0].EventTrack), [100, 600, 1100, 2100, 2600, 3100]);
+  assert.deepEqual(model.Cameras[0].Translation.Keys.map(item => item.Frame), [500, 2500]);
+  assert.deepEqual(model.GeosetAnims[0].Alpha.Keys.map(item => item.Frame), [100, 1100, 2100, 3100]);
+  assert.deepEqual(model.Geosets[0].Anims[1], before.Geosets[0].Anims[0]);
+  assert.notEqual(model.Geosets[0].Anims[1], model.Geosets[0].Anims[0]);
+  assert.throws(() => createSequenceFromCurrent(model, -1), /Select an animation/);
+});
 
 test('frame intervals enforce valid ordered whole frames for model and global sequences', () => {
   const model = { Sequences: [{ Interval: new Uint32Array([100, 200]) }], GlobalSequences: [500] };
