@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
 (async()=>{
- const out=path.resolve('out/optimizexl-inspection-proof');fs.mkdirSync(out,{recursive:true});
+ const out=path.resolve(process.env.MDLXL_OPTIMIZEXL_PROOF_ROOT||'out','optimizexl-inspection-proof');fs.mkdirSync(out,{recursive:true});
  const model=process.env.MDLXL_OPTIMIZEXL_MODEL||'C:/Users/PC/Documents/ChatGPT/MDLxL/out/Khorne_Optimized_Review/WH_WOC_KnightKhorneFlail01_HIVE_OPTIMIZED.mdx';
  const source=fs.readFileSync(model),packaged=process.env.MDLXL_OPTIMIZEXL_EXE,errors=[];
  const app=await _electron.launch({executablePath:packaged||path.resolve('node_modules/electron/dist/electron.exe'),args:packaged?[model]:[process.cwd(),model],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:path.join(out,'profile-'+Date.now())},timeout:60000});
@@ -22,7 +22,10 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
   const restored=async()=>{
    assert.equal(await animation.inputValue(),'1','Leaving a finding must restore the previous whole-model animation');assert.equal(await frame.inputValue(),'2000','Restore the previous frame, not the sequence start');
    await p.waitForFunction(()=>inspectState().every(s=>s?.sequence===1&&s.frame===2000));
-   for(const state of await p.evaluate(()=>inspectState()))for(const key of ['position','target','zoom'])assert.deepEqual(state[key],camera[key],'Keep the paired camera while leaving inspection');
+   for(const state of await p.evaluate(()=>inspectState()))for(const key of ['position','target','zoom']){
+    const actual=[state[key]].flat(),expected=[camera[key]].flat();assert.equal(actual.length,expected.length);
+    actual.forEach((value,i)=>assert.ok(Math.abs(value-expected[i])<1e-8,'Keep the paired camera while leaving inspection'));
+   }
    assert.equal(await p.getByLabel('Playback speed',{exact:true}).inputValue(),'0.5');assert.equal(await p.getByRole('checkbox',{name:'Loop',exact:true}).isChecked(),false);
   };
   await ready();await p.screenshot({path:path.join(out,'01-normal.png')});

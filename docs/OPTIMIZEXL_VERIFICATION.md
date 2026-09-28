@@ -8,13 +8,12 @@ The initial camera test proved that the two camera states matched but did not pr
 
 The strengthened Electron regression failed against the original build with `Left drag must actually rotate the camera`. It passes after the correction and explicitly verifies changed camera positions from a drag on either viewport, changed zoom, matching paired states, camera preservation through candidate updates, and the main editor's persisted wheel setting remaining unchanged. This correction does not alter models, reduction algorithms, repair visibility, sphere rendering or saving behavior.
 
-The user accepted the viewport, Nuclear and inspection-restoration corrections and authorized the next visible correction. Remaining review work is recorded here so it is not lost:
+The user accepted viewport navigation, Nuclear, inspection restoration and Optimize New Copy, then requested geoset exclusions and the next addition together. Remaining review work is recorded here so it is not lost:
 
-- The top-right Optimize New Copy action below is ready for visual review; it is not yet user-accepted.
+- Geoset exclusions and green stage stars are ready for the next user visual check.
 - Inspect the supplied Magos installation and modernize its familiar collision-sphere display. The shortcut resolves to `D:\WarcraftStuff\War3 Model Editor\War3ModelEditor\War3ModelEditor.exe`; Windows computer-use initialization currently fails with `failed to write kernel assets: The system cannot find the path specified. (os error 3)`, including after a reset. No visual reference inspection is claimed.
 - Show which records Duplicate data and Unused data propose deleting.
 - Add a clickable **I** explanation next to every Advanced option.
-- Put a green star inside each unused optimizer button, clearing it after approval or when no changes are possible/needed.
 
 ## Second review correction: Nuclear surface and texture preservation
 
@@ -40,13 +39,29 @@ The only save button is now **Optimize New Copy** in the top-right header. It is
 
 The save-specific Electron check passes against both the rebuilt source bundle and packaged EXE. It verifies the button in all seven stages and saves through the real IPC/writer: no approvals, approved spheres with unapproved Nuclear visible, approved Nuclear, repeated saves, and a save after Back undoes Nuclear approval. Saved bytes match only the accepted state, and the NUCLEAR filename suffix appears only while Nuclear is approved. Each of five saves creates exactly two new files (ten total), preserving two pre-existing output files and every earlier new pair. Cancellation creates no files, and saving neither approves the visible proposal nor advances the stage. The source remains byte-identical; no page errors occurred.
 
-The full packaged workflow and inspection-restoration regression also pass in this package. Header placement and the single save action were visually inspected in both an active stage and the final state. This correction is ready for the next user visual check.
+The full packaged workflow and inspection-restoration regression also passed in that package. Header placement and the single save action were visually inspected in both an active stage and the final state. The user accepted this correction.
+
+## Fifth review addition: geoset exclusions and green stars
+
+The reduction stages now share an exclusion set using the Vertices editor's existing selection helper, checkbox grid styles and column order. Single checks, Shift ranges, All, Clear and Invert work without changing preview visibility. Hover uses the existing posed-geoset picker and highlight renderer, with the Appearance color, type and hover-source settings. Both previews receive the same hovered geoset. The box is compact and scrolls its own rows; it is absent from repairs, spheres and the completed state.
+
+Duplicate and unused vertex cleanup and Nuclear skip excluded geometry. Equivalent-bone merging retains its rig dependencies. Animation reduction also retains the excluded geoset's bones/ancestors, GEOA, material and texture-animation tracks, including shared dependencies. Exact resource cleanup can still renumber references without changing their targets. Exclusions persist across reduction stages; Back restores those captured by an undone approval. Nuclear does not increase reduction pressure on other geosets to compensate for exclusions.
+
+Green stage stars clear after approval or a verified no-change result at reviewed settings. Zero Nuclear strength and disabling all unused-data options are not treated as completed work. Skip keeps pending work marked. Changed exclusions or accepted bytes invalidate stale no-change results, and undo reopens pending work.
+
+Five regressions verify excluded geometry, protected equivalent bones, shared animation dependencies, unchanged Nuclear pressure on eligible geometry, and approval/no-op/skip/undo star state. The Electron interaction test uses the actual flail in both native previews: checkbox/range selection, All/Clear/Invert, preserved excluded records, remaining reductions elsewhere, persistent selection, stage-only visibility, approval/skip/Back and stars. It projects native animated matrices through the existing picker and checks real pointer hits from both views. A custom magenta fill Appearance produced matching colored overlay pixels in both previews. Source bytes stayed unchanged. Screenshots were inspected with the compact picker and ordinary controls visible.
+
+### Standalone save validation
+
+C: ran out of space while packaging, so the review was built on D: without deleting earlier builds. That exposed an existing OptimizeXL save dependency bug: Electron main dynamically imported the source codec, which could find `war3-model` only through the development checkout's ancestor `node_modules`. The D: copy reproduced `ERR_MODULE_NOT_FOUND` during saving. The unchanged validation is now bundled with its codec dependencies by the production build; package verification loads that bundle. It still reopens both files and rejects malformed/unsupported data. Two bundle tests check this directly, and the complete workflow's real two-file save passes outside the development tree. The exclusive paired writer and save behavior were not changed.
+
+The UI test originally read stale React fiber props and could see a previous completed candidate. It now reads the preview's current props reference and waits for the excluded geometry to reach the renderer. An inspection assertion also encountered approximately 1e-12 camera-coordinate rounding; its tolerance now matches the existing camera-motion test (1e-8). These were test-observation issues, not model or camera adjustments.
 
 ## Automated checks
 
-- 95/95 focused tests passed: OptimizeXL operations, Nuclear quality/target regressions and paired-save failures/races, existing model optimizer, preview presentation/compositing/capture, and the 56-case codec compatibility suite.
+- 102/102 focused tests passed: OptimizeXL operations, geoset exclusions, stage state, bundled validation, Nuclear quality/target regressions and paired-save failures/races, existing model optimizer, preview presentation/compositing/capture, and the 56-case codec compatibility suite.
 - The production Vite bundle built successfully. Its existing large-chunk advisory remains.
-- Packaging verified 563 runtime/asset files and 55 Electron locale files, including the unmodified local Hive checker, meshoptimizer module and their licenses.
+- Packaging verified 566 runtime/asset files and 55 Electron locale files, including the portable save validator, unmodified local Hive checker, meshoptimizer module and their licenses.
 - The packaged EXE passed the isolated Playwright/Electron workflow: launch popup, switch Simple/Advanced, synchronized camera orbit/zoom and preservation across candidate rebuilds, matching playback frames, actual Hive check, selected visibility repair and approval, wheel cycling of collision presets, sphere overlays present only during Sphereomancer, real nuclear reduction, and final two-file save. No page errors were recorded and the source file remained byte-identical.
 - Source-path `git diff --check` passed. Generated bundles retain upstream shader text and are not hand-edited.
 
@@ -72,7 +87,7 @@ The flail irregularity scan found the original Stand-3 portrait/corpse visibilit
 ## Reproducing
 
 ```powershell
-node --test test/optimizexl-nuclear.test.js test/optimizexl.test.js test/model-optimizer.test.js test/preview-presentation.test.js test/preview-blend-order.test.js test/game-preview-capture.test.js tests/*.test.js
+node --test test/optimizexl-exclusions.test.js test/optimizexl-validation.test.js test/optimizexl-nuclear.test.js test/optimizexl.test.js test/model-optimizer.test.js test/preview-presentation.test.js test/preview-blend-order.test.js test/game-preview-capture.test.js tests/*.test.js
 node test/optimizexl-models.mjs path/to/flail.mdx path/to/axe.mdx
 node node_modules/vite/bin/vite.js build
 node scripts/package.mjs --out out/optimizexl-save-review
@@ -82,7 +97,11 @@ Set `MDLXL_PLAYWRIGHT_MODULE` to an installed Playwright module path, `MDLXL_OPT
 
 Run `node test/optimizexl-inspection.electron.cjs` with the same environment for the inspection-exit regression. It also expects the flail review fixture. Its screenshots and result are in `out/optimizexl-inspection-proof/`; `regression-before.png` captures the previous EXE's stuck decay view. That iteration's review package is `out/optimizexl-inspection-review/MDLxL-win32-x64/`.
 
-Run `node test/optimizexl-save.electron.cjs` with the same environment for approved-only, any-stage saving. Its screenshots, output pairs and result are under `out/optimizexl-save-proof/`. The current review package is `out/optimizexl-save-review/MDLxL-win32-x64/`.
+Run `node test/optimizexl-save.electron.cjs` with the same environment for approved-only, any-stage saving. Its screenshots, output pairs and result are under `out/optimizexl-save-proof/` by default.
+
+Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. All four desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
+
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-geosets-20260928\portable-review\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `portable-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 

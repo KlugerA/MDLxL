@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
 const nearVector=(actual,expected)=>{assert.equal(actual.length,expected.length);actual.forEach((value,index)=>assert.ok(Math.abs(value-expected[index])<1e-8,`Camera component ${index} differs: ${value} / ${expected[index]}`));};
 (async()=>{
- const out=path.resolve('out/optimizexl-proof');fs.mkdirSync(out,{recursive:true});
+ const out=path.resolve(process.env.MDLXL_OPTIMIZEXL_PROOF_ROOT||'out','optimizexl-proof');fs.mkdirSync(out,{recursive:true});
  const previousFiles=new Set(fs.readdirSync(out));
  const model=process.env.MDLXL_OPTIMIZEXL_MODEL||'C:/Users/PC/Documents/ChatGPT/MDLxL/out/Khorne_Optimized_Review/WH_WOC_KnightKhorneFlail01_HIVE_OPTIMIZED.mdx';
  const source=fs.readFileSync(model);
@@ -74,7 +74,7 @@ const nearVector=(actual,expected)=>{assert.equal(actual.length,expected.length)
   await popup.screenshot({path:path.join(out,'04-nuclear.png')});
   await popup.getByRole('button',{name:'Approve',exact:true}).click();await popup.getByRole('button',{name:'Optimize New Copy',exact:true}).waitFor();
   await app.evaluate(({dialog},directory)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[directory]});},out);
-  await popup.getByRole('button',{name:'Optimize New Copy',exact:true}).click();await popup.getByText('Saved both copies:',{exact:false}).waitFor();
+  await popup.getByRole('button',{name:'Optimize New Copy',exact:true}).click();await popup.waitForFunction(()=>document.querySelector('.ox-error')||Array.from(document.querySelectorAll('[role=status]')).some(el=>el.textContent.includes('Saved both copies:')));assert.deepEqual(await popup.locator('.ox-error').allTextContents(),[]);
   assert.equal(fs.readdirSync(out).filter(n=>/\.mdx$/i.test(n)&&!previousFiles.has(n)).length,2);assert.deepEqual(fs.readFileSync(model),source);
   assert.equal(JSON.parse(fs.readFileSync(path.join(profile,'settings.json'),'utf8')).preferences.wheelMode,'scroll','OptimizeXL must not change the main editor wheel preference');
   await popup.screenshot({path:path.join(out,'05-saved.png')});

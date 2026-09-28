@@ -4,7 +4,7 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
  const {openDocument}=await import('../src/editor-document.js');
  const {runOptimizeStage,simpleSettings,SPHERE_PRESETS}=await import('../src/optimizexl.js');
  const {prepareNuclearReduction}=await import('../src/optimizexl-geometry.js');await prepareNuclearReduction();
- const out=path.resolve('out/optimizexl-save-proof'),run=path.join(out,'run-'+Date.now()),copies=path.join(run,'copies');fs.mkdirSync(copies,{recursive:true});
+ const out=path.resolve(process.env.MDLXL_OPTIMIZEXL_PROOF_ROOT||'out','optimizexl-save-proof'),run=path.join(out,'run-'+Date.now()),copies=path.join(run,'copies');fs.mkdirSync(copies,{recursive:true});
  const model=process.env.MDLXL_OPTIMIZEXL_MODEL||'C:/Users/PC/Documents/ChatGPT/MDLxL/out/Khorne_Optimized_Review/WH_WOC_KnightKhorneFlail01_HIVE_OPTIMIZED.mdx';
  const source=fs.readFileSync(model),packaged=process.env.MDLXL_OPTIMIZEXL_EXE,errors=[],savedFiles=new Map();
  const stem=path.basename(model,'.mdx');for(const suffix of ['Before','After']){const file=path.join(copies,`${stem}_${suffix}.mdx`),bytes=Buffer.from('Existing review copy, do not replace');fs.writeFileSync(file,bytes);savedFiles.set(file,bytes);}

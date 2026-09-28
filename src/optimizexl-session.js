@@ -7,6 +7,15 @@ export class OptimizeXLSession {
     this.steps = [];
     this.revision = 0;
     this.candidate = null;
+    this.reviews = new Map();
+  }
+  recordReview(stage, noChanges, exclusions = '') {
+    this.reviews.set(stage, { before: this.accepted, noChanges, exclusions });
+  }
+  needsReview(stage, exclusions = '') {
+    if (this.steps.some(step => step.stage === stage && !step.skipped)) return false;
+    const review = this.reviews.get(stage);
+    return !(review?.before === this.accepted && review.exclusions === exclusions && review.noChanges);
   }
   propose(result, revision) {
     if (revision !== this.revision) return false;
@@ -29,6 +38,7 @@ export class OptimizeXLSession {
     const step = this.steps.pop();
     if (!step) return null;
     this.accepted = step.before;
+    this.reviews.delete(step.stage);
     this.candidate = null;
     this.revision++;
     return step;

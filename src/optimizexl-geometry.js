@@ -1,4 +1,5 @@
 import { MeshoptSimplifier } from './vendor/meshoptimizer-1.3.0/meshopt_simplifier.js';
+import { excludedGeosets } from './optimizexl-exclusions.js';
 
 let nuclearSimplifier = null;
 export async function prepareNuclearReduction() {
@@ -24,7 +25,9 @@ export function compactVertices(g, representatives, faces) {
 
 export function mergeDuplicateVertices(model, settings) {
   let removed = 0, groups = 0;
-  for (const g of model.Geosets) {
+  const excluded = excludedGeosets(model, settings);
+  for (const [index, g] of model.Geosets.entries()) {
+    if (excluded.has(index)) continue;
     const count = g.Vertices.length / 3, map = [], kept = [], adjacent = Array.from({ length: count }, () => new Set());
     for (let f = 0; f < g.Faces.length; f += 3) for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) adjacent[g.Faces[f + i]].add(g.Faces[f + j]);
     const members = new Map();
@@ -50,9 +53,11 @@ export function mergeDuplicateVertices(model, settings) {
   return { duplicateVertices: removed, duplicateGroups: groups };
 }
 
-export function removeUnusedVertices(model) {
+export function removeUnusedVertices(model, settings = {}) {
   let removed = 0;
-  for (const g of model.Geosets) {
+  const excluded = excludedGeosets(model, settings);
+  for (const [index, g] of model.Geosets.entries()) {
+    if (excluded.has(index)) continue;
     if (!g.Faces.length) continue;
     const kept = [...new Set(g.Faces)].sort((a, b) => a - b);
     removed += g.Vertices.length / 3 - kept.length;
@@ -101,13 +106,15 @@ function nuclearAttributes(g) {
 /** Attribute-aware quadric simplification. Only triangle connectivity changes;
  * retained positions, normals, UVs and bindings remain authored records. */
 export function reducePolygons(model, settings) {
+  const excluded = excludedGeosets(model, settings);
   const original = model.Geosets.reduce((n, g) => n + g.Faces.length / 3, 0);
   const target = Math.max(model.Geosets.filter(g => g.Faces.length).length, Math.min(original, Math.round(settings.target)));
   let total = original, removedVertices = 0, maxAppearanceError = 0;
   if (target >= total) return { trianglesBefore: original, trianglesAfter: total, removedVertices, maxAppearanceError };
   if (!nuclearSimplifier) throw Error('Wait for the Nuclear simplifier to initialize.');
   if (!Number.isFinite(settings.error) || settings.error < 0) throw Error('The appearance error must be a non-negative number.');
-  for (const g of model.Geosets) {
+  for (const [index, g] of model.Geosets.entries()) {
+    if (excluded.has(index)) continue;
     const initial = g.Faces.length / 3;
     if (initial <= 1) continue;
     const goal = Math.max(1, Math.ceil(initial * target / original)), attributes = nuclearAttributes(g);

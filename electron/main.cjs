@@ -158,8 +158,8 @@ ipcMain.handle('model:save',(_,payload)=>{const operation=saveQueue.catch(()=>{}
 ipcMain.handle('optimizexl:save',(event,payload)=>{
   if(event.sender!==win?.webContents)throw Error('OptimizeXL saves are only available from the editor.');
   const operation=saveQueue.catch(()=>{}).then(async()=>{
-    const {openDocument}=await import('../src/editor-document.js');
-    for(const bytes of [payload.before,payload.after]){const doc=openDocument(new Uint8Array(bytes),'copy.mdx');if(doc.readOnly||doc.model.Version!==800)throw Error('An OptimizeXL copy could not be reopened.');}
+    const {validateOptimizeXLCopies}=require('../dist/optimizexl-validation.cjs');
+    validateOptimizeXLCopies(payload);
     const selected=await dialog.showOpenDialog(win,{title:'Save OptimizeXL Before and After copies',buttonLabel:'Save two new copies here',properties:['openDirectory','createDirectory']});
     if(selected.canceled)return null;
     return saveOptimizeXLPair(selected.filePaths[0],payload);
