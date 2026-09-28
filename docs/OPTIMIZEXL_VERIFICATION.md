@@ -221,6 +221,18 @@ The visible Portrait glow is an additive geoset, not the already-hidden fire emi
 
 Reproduce with `node --test test/optimizexl-cleanup-visibility.test.js`, `node test/optimizexl-cleanup-models.mjs <flail02> <flail02-after>` and `node test/optimizexl-cleanup.electron.cjs`. Set `MDLXL_FOOTMAN_REFERENCE` for the exact preset comparison. The Electron test uses the same environment overrides as the opening-track test.
 
+## Checker-driven classification and redundant keys
+
+The supplied Axe02 has five Hive unused rotation-key notices across three tracks. Their values differ by float rounding, but the existing approximate reducer rejects the entire track when other sequences contain non-unit quaternion keys. The adjustable reducer is unchanged. The additional checker cleanup evaluates individual affected spans, retains their first/last keys and compares each proposed removal against the original curve. One plan per track/domain avoids overlapping deletion plans; removal neighbors are reevaluated. Unsupported curves/domains remain inspectable.
+
+The new diagnostic classifier consumes actual flattened Hive output and assigns every finding a repair preview, owning-stage route or explicit manual-review explanation. Known unused families include exact/rough redundant keys, out-of-local/global-sequence keys and unused objects. Unknown diagnostics remain visible. Unused data now reports the actual checker's remaining unused count and links to Hive cleanup instead of treating an empty vertex/resource/node removal list as a clean model. Insanity Fixer's individual diagnostics link directly to their matching proposal. Classification uses data paths and diagnostic types, not fixture names.
+
+51 focused tests pass, including generated local/global translation, rotation and scale cases, a scalar material case and particle-emitter diagnostics checked against the bundled Hive implementation. Whole-track gravity replacement exclusively owns its track findings, preventing duplicate key-level corrections in a selected batch. Curve excursions, overlap, stale evidence and unsupported findings are covered. All five Axe02 notices map to four selectable plans, which remove five keys (100 bytes) and yield 0 errors / 0 severe / 0 warnings / 0 unused. Batch, forward and reverse individual approvals produce identical bytes. Across 431,445 native quaternion channel/frame samples the maximum component difference is 1.1920928955078125e-7; all other model data and input bytes remain identical. This is finite playback evidence, not a continuous world-space bound or Warcraft runtime acceptance.
+
+The supplied clean Flail05 yields no new proposals. All 52 previously accepted flail MDX outputs still match the immutable regression baseline. Source and packaged Electron tests verify the five notices in Unused data, direct per-notice repair links, combined preview/approval, zero findings afterwards, pinned Before and Back restoring the five notices. Evidence is under `D:\MDLxL-Reviews\OptimizeXL-diagnostics-20260929` and ignored `out/diagnostics-*.log` / `out/diagnostics-*.json`.
+
+Reproduce with `node --test test/optimizexl-diagnostics.test.js`, `node test/optimizexl-diagnostics-models.mjs <axe02> <clean-flail05>` and `node test/optimizexl-diagnostics.electron.cjs`. The Electron test accepts `MDLXL_DIAGNOSTICS_MODEL` and the usual Playwright, EXE and proof-root overrides.
+
 ## Reproducing
 
 ```powershell
@@ -238,7 +250,7 @@ Run `node test/optimizexl-save.electron.cjs` with the same environment for appro
 
 Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. Run `node test/optimizexl-playback.electron.cjs` with Flail03 for percentage speed and native global playback; its proofs go to `out/optimizexl-playback-proof/`. All six desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-cleanup-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-diagnostics-20260929\integrated-package\MDLxL-win32-x64\`. It includes current main `99a532b`; all 51 focused tests and both packaged Axe diagnostics and flail cleanup/glow/sphere workflows pass after integration. Packaging verifies 617 runtime/asset files and 55 locales. Current packaged screenshots/results are under that review root's `integrated-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 
