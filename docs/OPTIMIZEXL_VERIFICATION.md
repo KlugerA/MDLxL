@@ -123,6 +123,18 @@ Exact cleanup produced **zero coordinate difference** at nine native-renderer po
 
 The flail irregularity scan found the original Stand-3 portrait/corpse visibility leaks, the four face parts reappearing in Decay Bone, and the Death → Decay Flesh discontinuity. The desktop test approved one selected visibility fix; it did not silently approve every proposal.
 
+## Tenth review correction: missed repeated shaking
+
+Footman Unoptimized's Stand -1 root translation reverses vertical direction 14 times, versus once in the supplied Original. The prior animation reducer preserves that input curve; passing its size/tolerance tests and Hive checks does not establish smooth motion. OptimizeXL previously checked visibility/endpoints, while Motion Inspector's existing rules required large jumps and therefore missed these smaller repeated bounces.
+
+A shared read-only check now identifies at least three consecutive Hermite translation segments with copied position controls, two between-key reversals per segment, and significant excess travel. It samples with the existing interpolation evaluator. It excludes quaternion controls, global tracks, tiny changes, slow arcs and ordinary keyed movement; it does not infer that every oscillation is an error. This is a narrow additional detection rule, not a general solution for all damaged animation curves.
+
+The new check reports 13 animation/bone warnings across 11 animations in Unoptimized, including Stand -1 / Bone_Root. It reports none across all 13 Original animations. The Stand -1 warning remains after animation reduction at 0, 40 and 100 strength. Scanning and selecting warnings leave both models unchanged.
+
+OptimizeXL puts these findings in its existing selector. Selection moves both previews to the affected animation and interval; the message names the bone/channel, marks the result as review only, and disables Approve because no correction is proposed. Skip warning and leaving the stage restore inspection state. The existing Movement timeline also receives this warning through Motion Inspector, retaining its compact default indicators and manual editing workflow.
+
+The focused motion/OptimizeXL suite passes 52 tests. The rebuilt Electron UI test verifies warning selection, synchronized playback, disabled approval, skipping, stage restoration and unchanged source bytes. Its screenshot/result are under `D:\MDLxL-Reviews\OptimizeXL-motion-20260928\proofs\motion-ui`. The same interaction test passes against the separate packaged build; its evidence is under the review root's `packaged-proofs/motion-ui` folder. The previous Footman package predates this warning change.
+
 ## Reproducing
 
 ```powershell
@@ -140,7 +152,7 @@ Run `node test/optimizexl-save.electron.cjs` with the same environment for appro
 
 Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. Run `node test/optimizexl-playback.electron.cjs` with Flail03 for percentage speed and native global playback; its proofs go to `out/optimizexl-playback-proof/`. All six desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-footman-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-motion-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 

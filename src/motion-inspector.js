@@ -81,6 +81,57 @@ function modelSize(model, nodes) {
   return Math.max(1, model.Info?.BoundsRadius || extent);
 }
 
+/** Detect repeated between-key bounces with evidence of copied Hermite controls.
+ * A large jump is not required, but at least three consecutive short segments
+ * must reverse twice and travel materially farther than their endpoint change.
+ * Quaternion controls have different semantics and are deliberately excluded.
+ */
+export function scanCurveMotion(model, { sequenceIndex = 0, nodeIds = null } = {}) {
+  const interval = model.Sequences?.[sequenceIndex]?.Interval;
+  if (!interval) return [];
+  const nodes = allNodes(model), size = modelSize(model, nodes), scope = nodeIds && new Set(nodeIds), findings = [];
+  const vector = v => v?.length === 3 && Array.from(v).every(Number.isFinite);
+  const copied = (a, b) => vector(a) && vector(b) && a.every((v, i) => v === b[i]);
+  for (const node of nodes) {
+    const track = node.Translation;
+    if (scope && !scope.has(node.ObjectId) || track?.LineType !== 2 || !Array.isArray(track.Keys) || globalTrack(track)) continue;
+    const keys = track.Keys.filter(k => k.Frame >= interval[0] && k.Frame <= interval[1]);
+    let run = []; const runs = [];
+    const finish = () => { if (run.length >= 3) runs.push(run); run = []; };
+    for (let i = 1; i < keys.length; i++) {
+      const a = keys[i - 1], b = keys[i], duration = b.Frame - a.Frame;
+      if (!(duration > 0 && duration <= 500) || !copied(a.OutTan, a.Vector) || !copied(b.InTan, b.Vector)) { finish(); continue; }
+      // Sample only this segment with the existing evaluator, avoiding a scan
+      // of every key in a densely baked track for each probe.
+      const segment = { LineType: 2, Keys: [a, b] };
+      const poses = Array.from({ length: 33 }, (_, j) => sampleTrack(segment, a.Frame + duration * j / 32, { interval, fallback: defaults.Translation }));
+      const ranges = [0, 1, 2].map(axis => Math.max(...poses.map(p => p[axis])) - Math.min(...poses.map(p => p[axis])));
+      const axis = ranges.indexOf(Math.max(...ranges));
+      let travel = 0, reversals = 0, previousSign = 0;
+      for (let j = 1; j < poses.length; j++) {
+        travel += distance(poses[j - 1], poses[j], 'Translation');
+        const delta = poses[j][axis] - poses[j - 1][axis];
+        if (Math.abs(delta) <= size * 1e-7) continue;
+        const sign = Math.sign(delta);
+        if (previousSign && sign !== previousSign) reversals++;
+        previousSign = sign;
+      }
+      const change = distance(poses[0], poses.at(-1), 'Translation'), excess = travel - change;
+      if (reversals < 2 || excess < size * .003 || travel < Math.max(change * 1.5, size * .006)) { finish(); continue; }
+      run.push({ start: a.Frame, end: b.Frame, reversals, excess });
+    }
+    finish();
+    if (!runs.length) continue;
+    const segments = runs.flat(), first = segments[0], last = segments.at(-1);
+    findings.push({ nodeId: node.ObjectId, nodeName: label(node), property: 'Translation', kind: 'repeated-curve-reversals', space: 'local',
+      start: first.start, end: last.end, time: Math.round((first.start + first.end) / 2),
+      explanation: `${label(node)} repeatedly bounces between key poses. The Hermite curve controls repeat the position values. Inspect the curve controls and replay this section before changing it.`,
+      evidence: `${segments.length} short segments with repeated reversals; ${round(segments.reduce((sum, s) => sum + s.excess, 0))} model units of extra sampled travel.`,
+      keyTimes: [...new Set(segments.flatMap(s => [s.start, s.end]))], targets: [] });
+  }
+  return findings;
+}
+
 /** Heuristics report candidates, never repair data. All interpolation/hierarchy comes from animation.js. */
 export function scanMotion(model, { sequenceIndex = 0, nodeIds = null, maxWorldSamples = 24000, maxFindings = 500, onProgress = () => {} } = {}) {
   const interval = model.Sequences?.[sequenceIndex]?.Interval;
@@ -101,6 +152,8 @@ export function scanMotion(model, { sequenceIndex = 0, nodeIds = null, maxWorldS
     finding.state = motionEvidence(model, finding, sequenceIndex);
     findings.push(finding);
   };
+  for (const f of scanCurveMotion(model, { sequenceIndex, nodeIds: selected.map(n => n.ObjectId) }))
+    add(selected.find(n => n.ObjectId === f.nodeId), f.property, f.kind, f.space, f.start, f.end, f.time, f.explanation, f.evidence, f.keyTimes);
   for (const node of selected) for (const property of ['Rotation', 'Translation']) {
     const track = node[property];
     if (!track?.Keys) continue;

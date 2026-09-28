@@ -3,10 +3,17 @@
 import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
 import {ModelRenderer} from 'war3-model';import {Matrix4} from 'three';
 import {openDocument} from '../src/editor-document.js';import {runOptimizeStage,simpleSettings,sanityProposals} from '../src/optimizexl.js';import {allNodes,skinGeoset} from '../src/animation.js';
+import {scanCurveMotion} from '../src/motion-inspector.js';import {findIrregularities} from '../src/optimizexl.js';
 vm.runInThisContext(fs.readFileSync(new URL('../public/vendor/hive-viewer-5.12.0.js',import.meta.url),'utf8'));
 const files={'Unoptimized':process.argv[2],'Original':process.argv[3]};if(!files.Original)throw Error('Supply both Footman paths.');
 const read=name=>new Uint8Array(fs.readFileSync(files[name]));const source=read('Unoptimized'),model=openDocument(source,'a.mdx').model;
 const reports=[];
+for(const name of ['Unoptimized','Original']){
+ const bytes=read(name),doc=openDocument(bytes,'x.mdx'),before=doc.serialize('mdx');
+ const warnings=doc.model.Sequences.flatMap((s,sequenceIndex)=>scanCurveMotion(doc.model,{sequenceIndex}).map(f=>({animation:s.Name,bone:f.nodeName,start:f.start,end:f.end})));
+ if(name==='Original')assert.deepEqual(warnings,[]);else{assert.ok(warnings.some(f=>f.animation==='Stand - 1'&&f.bone==='Bone_Root'));assert.ok(findIrregularities(doc.model).some(f=>f.kind==='motion'&&f.sequence===0&&f.inspectionOnly));}
+ assert.deepEqual(doc.serialize('mdx'),before);reports.push({name,motionWarnings:warnings});
+}
 function pose(r,frame){r.setFrame(frame);r.updateNode(r.rendererData.rootNode);const matrices=new Map(r.rendererData.nodes.filter(Boolean).map(n=>[n.node.ObjectId,new Matrix4().fromArray(n.matrix)]));return r.rendererData.model.Geosets.flatMap(g=>Array.from(skinGeoset(g,matrices)));}
 for(const strength of [0,40,100]){
  const result=runOptimizeStage(source,'animation',simpleSettings('animation',strength,model)),next=openDocument(result.bytes,'b.mdx').model,a=new ModelRenderer(structuredClone(model)),b=new ModelRenderer(structuredClone(next));let maxVertexError=0,samples=0,maxRotation=0,maxTranslation=0,maxScale=0;
@@ -20,6 +27,7 @@ for(const strength of [0,40,100]){
   }
  }
  const tolerances=simpleSettings('animation',strength,model);assert.ok(maxRotation<=tolerances.rotation+1e-4);assert.ok(maxTranslation<=tolerances.position+1e-4);assert.ok(maxScale<=tolerances.scale+1e-4);if(!strength)assert.ok(maxVertexError<.001);
+ assert.ok(scanCurveMotion(next).some(f=>f.nodeName==='Bone_Root'),'Reducing file size must not conceal the remaining motion warning');
  reports.push({strength,bytes:result.afterBytes,keysRemoved:result.stats.keys,samples,maxVertexError,maxRotation,maxTranslation,maxScale});
 }
 for(const duplicateStrength of [0,100]){

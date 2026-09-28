@@ -7,6 +7,7 @@ import { commonEndpointProposals, applyCommonEndpointPose } from './optimizexl-e
 import { optimizationReview } from './optimizexl-review.js';
 import { reduceAnimationTrack } from './optimizexl-animation.js';
 import { boundsProposals, repairBounds } from './optimizexl-bounds.js';
+import { scanCurveMotion } from './motion-inspector.js';
 
 export const STAGES = [
   {id:'duplicates',name:'Duplicate data'}, {id:'animation',name:'Animation optimization'},
@@ -89,6 +90,7 @@ function alpha(m,gi,si,f){const a=m.GeosetAnims.find(a=>a.GeosetId===gi);return 
 function allVisible(m,gi,si){const s=m.Sequences[si];return [s.Interval[0],(s.Interval[0]+s.Interval[1])/2,s.Interval[1]].some(f=>alpha(m,gi,si,f)>.001);}
 const seqName=s=>s.Name.toLowerCase().replace(/[^a-z]+/g,' ').trim();
 export function findIrregularities(m){const findings=[],seq=m.Sequences,live=seq.map((s,i)=>({s,i})).filter(({s})=>/^(stand|walk|attack)( |$)/.test(seqName(s))),portraits=seq.map((s,i)=>({s,i})).filter(({s})=>/^portrait/.test(seqName(s))),bone=seq.findIndex(s=>seqName(s)==='decay bone'),flesh=seq.findIndex(s=>seqName(s)==='decay flesh'),death=seq.findIndex(s=>seqName(s)==='death');
+ for(let sequence=0;sequence<seq.length;sequence++)for(const warning of scanCurveMotion(m,{sequenceIndex:sequence}))findings.push({...warning,id:`motion:${sequence}:${warning.nodeId}`,kind:'motion',inspectionOnly:true,sequence,frame:warning.start,label:`${seq[sequence].Name}: irregular movement (${warning.nodeName})`,detail:`${warning.nodeName} · Translation · ${warning.start}–${warning.end} ms. Repeated bounces between keys. Review the animation and its curve controls in the Movement editor.`});
  for(let gi=0;gi<m.Geosets.length;gi++){
   const a=m.GeosetAnims.find(a=>a.GeosetId===gi),t=a?.Alpha;if(t?.Keys&&!local(t))continue;
   const visible=live.filter(({i})=>allVisible(m,gi,i));
@@ -114,6 +116,7 @@ function spheres(m,settings){const chosen=settings.spheres||SPHERE_PRESETS[setti
  const removed=new Set(m.CollisionShapes.slice(chosen.length).map(n=>n.ObjectId));if(removed.size)remapNodes(m,removed);rebuildNodes(m);
 }
 export function runOptimizeStage(bytes,stage,settings={},fix=null){const doc=openDocument(new Uint8Array(bytes),'working.mdx');supported(doc);const baseline=validateModel(doc.model).filter(d=>d.severity==='error').map(d=>d.code+':'+d.path),stats={},skipped=new Set(),changes=[],reviewBase=['duplicates','animation','unused'].includes(stage)?structuredClone(doc.model):null;
+ if(fix?.inspectionOnly)throw Error('This motion warning is for inspection; no automatic correction is proposed.');
  doc.apply('OptimizeXL '+stage,sections,m=>{switch(stage){case'duplicates':if(settings.bones)stats.duplicateBones=duplicateBones(m,settings,changes);Object.assign(stats,mergeDuplicateVertices(m,settings,change=>changes.push(change)));break;case'animation':stats.keys=animationReduction(m,settings,changes);break;case'unused':if(settings.vertices)stats.vertices=removeUnusedVertices(m,settings,change=>changes.push(change));if(settings.resources)unusedResources(m,stats,skipped,changes);if(settings.nodes)stats.nodes=unusedNodes(m,changes);if(settings.resources)stats.globalSequences=unusedGlobals(m,changes);break;case'sanity':case'irregularities':applyRepair(m,fix,settings);break;case'spheres':spheres(m,settings);stats.spheres=m.CollisionShapes.length;break;case'nuclear':Object.assign(stats,reducePolygons(m,settings));break;default:throw Error('Unknown OptimizeXL stage.');}});
  const after=doc.serialize('mdx'),reopened=openDocument(after,'after.mdx');if(reopened.readOnly)throw Error('The candidate could not be reopened.');const errors=validateModel(reopened.model).filter(d=>d.severity==='error'&&!baseline.includes(d.code+':'+d.path));if(errors.length)throw Error(errors[0].message);
  assertRoundTripFields(doc.model,reopened.model);
