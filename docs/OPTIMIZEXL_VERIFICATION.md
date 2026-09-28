@@ -135,6 +135,14 @@ OptimizeXL puts these findings in its existing selector. Selection moves both pr
 
 The focused motion/OptimizeXL suite passes 52 tests. The rebuilt Electron UI test verifies warning selection, synchronized playback, disabled approval, skipping, stage restoration and unchanged source bytes. Its screenshot/result are under `D:\MDLxL-Reviews\OptimizeXL-motion-20260928\proofs\motion-ui`. The same interaction test passes against the separate packaged build; its evidence is under the review root's `packaged-proofs/motion-ui` folder. The previous Footman package predates this warning change.
 
+## Eleventh review correction: preview and approve the curve repair
+
+The warning-only iteration did not fulfill the staged repair workflow. Selecting a repeated-curve finding now generates a real After candidate and enables Approve. The correction replaces the two facing Hermite translation tangents on each detected segment with that segment's endpoint delta. Warcraft evaluates this as a straight path between the existing key poses. Keys are not deleted, their vectors/times stay unchanged, and incoming/outgoing controls on neighboring unaffected segments remain intact. The scanner stays read-only; only the selected OptimizeXL candidate receives the correction, and only approval retains it.
+
+Stand -1's root translation changes vertical direction once after this correction, versus 14 times before. Native-renderer checks for all 13 Footman animation/bone proposals show zero mesh-coordinate change at every affected stored key pose. Between-key samples follow the intended endpoint line within 0.000002 model units. This removes the detected curve overshoot; it does not reconstruct unknown original curves or repair unrelated damaged key values. The supplied smaller Original remains free of this warning and both input files remain unchanged.
+
+The focused suite now passes 55 tests, including gap/other-sequence preservation and stale-proposal rejection. The Electron test verifies changed After controls with identical key poses, synchronized playback, enabled Approve, approval removing the finding, Back restoring the proposal, and unchanged original bytes. It also reproduces a clean Hive result after cleanup and bounds repair: the empty fix selector and misleading manual-repair message are replaced with a clear no-issues message pointing to Next stage. Proofs are under `D:\MDLxL-Reviews\OptimizeXL-curve-repair-20260928\proofs\motion-ui`.
+
 ## Reproducing
 
 ```powershell
@@ -152,7 +160,7 @@ Run `node test/optimizexl-save.electron.cjs` with the same environment for appro
 
 Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. Run `node test/optimizexl-playback.electron.cjs` with Flail03 for percentage speed and native global playback; its proofs go to `out/optimizexl-playback-proof/`. All six desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-motion-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-curve-repair-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `packaged-proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 

@@ -127,7 +127,7 @@ export function scanCurveMotion(model, { sequenceIndex = 0, nodeIds = null } = {
       start: first.start, end: last.end, time: Math.round((first.start + first.end) / 2),
       explanation: `${label(node)} repeatedly bounces between key poses. The Hermite curve controls repeat the position values. Inspect the curve controls and replay this section before changing it.`,
       evidence: `${segments.length} short segments with repeated reversals; ${round(segments.reduce((sum, s) => sum + s.excess, 0))} model units of extra sampled travel.`,
-      keyTimes: [...new Set(segments.flatMap(s => [s.start, s.end]))], targets: [] });
+      keyTimes: [...new Set(segments.flatMap(s => [s.start, s.end]))], segments: segments.map(({ start, end }) => ({ start, end })), targets: [] });
   }
   return findings;
 }
