@@ -642,6 +642,7 @@ export default function GamePreview(inputProps) {
     function render(now, delta, { captureOnly = false } = {}) {
       if (disposed) return;
       const p = latest.current;
+      const sharedGlobals = p.syncPlayback && Number.isFinite(p.playbackGlobalTime);
       const selected = p.restPose ? 0 : p.sequenceIndex < 0 && timelineSequenceIndex >= 0 ? timelineSequenceIndex : Math.max(0, Math.min(ownedModel.Sequences.length - 1, p.sequenceIndex ?? 0));
       const sequence = ownedModel.Sequences[selected];
       // Restrict playback only. Keep the authored sequence interval for evaluation,
@@ -659,26 +660,36 @@ export default function GamePreview(inputProps) {
         native.rendererData.animation = timelineSequenceIndex;
         native.rendererData.animationInfo = sequence;
       }
-      const userSeek = p.syncPlayback ? p.seekId !== externalSeek || p.time < externalFrame : p.time !== externalFrame && Math.abs((p.time || 0) - (reportedFrame ?? -Infinity)) > 1;
+      const userSeek = p.syncPlayback ? p.seekId !== externalSeek || (!sharedGlobals && p.time < externalFrame) : p.time !== externalFrame && Math.abs((p.time || 0) - (reportedFrame ?? -Infinity)) > 1;
       externalSeek = p.seekId;
       if (sequenceChanged || userSeek || p.playing && !lastPlaying) playbackStopped = false;
       if (sequenceChanged || userSeek) resetPreviewEffects(native);
-      const requestedSeek = p.syncPlayback ? sequenceChanged || userSeek || !p.playbackRunning : sequenceChanged || userSeek || !p.playing || !lastPlaying;
+      const requestedSeek = p.syncPlayback ? sequenceChanged || userSeek || (!sharedGlobals && !p.playbackRunning) : sequenceChanged || userSeek || !p.playing || !lastPlaying;
       if (nodeGesture || requestedSeek) {
         const frame = p.restPose ? start : nodeGesture?.frame ?? Math.min(end, Math.max(start, p.time ?? start));
-        setPreviewFrame(frame); globalClock = frame;
+        setPreviewFrame(frame); globalClock = sharedGlobals ? p.playbackGlobalTime : frame;
         // The pinned upstream renderer exposes no public global-sequence seek.
         // Synchronize its existing clock array so timeline scrubbing and the
         // editable skeleton agree on the same global pose.
         const clocks = native.rendererData?.globalSequencesFrames;
         if (clocks) for (let i = 0; i < (ownedModel.GlobalSequences?.length || 0); i++) {
-          const duration = ownedModel.GlobalSequences[i]; if (duration > 0) clocks[i] = ((frame % duration) + duration) % duration;
+          const duration = ownedModel.GlobalSequences[i]; if (duration > 0) clocks[i] = ((globalClock % duration) + duration) % duration;
         }
       }
       externalFrame = p.time; lastPlaying = p.playing;
-      const playback = p.syncPlayback ? { frame: Math.min(end, Math.max(start, p.time ?? start)), elapsed: requestedSeek ? 0 : Math.max(0, Math.min(end,p.time)-native.getFrame()), finished: false } : previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
+      const playback = p.syncPlayback ? { frame: Math.min(end, Math.max(start, p.time ?? start)), elapsed: requestedSeek ? 0 : sharedGlobals ? Math.max(0,p.playbackGlobalTime-globalClock) : Math.max(0, Math.min(end,p.time)-native.getFrame()), finished: false } : previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
       const dt = playback.elapsed;
-      globalClock += dt;
+      globalClock = sharedGlobals ? p.playbackGlobalTime : globalClock + dt;
+      const updateNative = (step, globalFrame = globalClock) => {
+        // OptimizeXL supplies one continuous clock for both views. Seed the
+        // clock before update, which advances it before evaluating nodes and
+        // effects. Preserve the wrap remainder the upstream increment drops.
+        if (sharedGlobals) for (let i = 0; i < (ownedModel.GlobalSequences?.length || 0); i++) {
+          const duration = ownedModel.GlobalSequences[i];
+          if (duration > 0) native.rendererData.globalSequencesFrames[i] = ((globalFrame % duration) + duration) % duration - step;
+        }
+        native.update(step);
+      };
       controls.update();
       let poseSequence = selected;
       try {
@@ -690,17 +701,17 @@ export default function GamePreview(inputProps) {
             if (native.getFrame() >= end) setPreviewFrame(start);
             const step = Math.min(particlesEnabled && dt > 33 ? 20 : remaining, remaining, end - native.getFrame());
             if (!(step > 0)) break;
-            native.update(step); remaining -= step;
+            updateNative(step, globalClock - remaining + step); remaining -= step;
           }
-        } else native.update(0);
+        } else updateNative(0);
         if (playback.finished) {
           playbackStopped = true; setPreviewFrame(start); globalClock = start; resetPreviewEffects(native);
           const clocks = native.rendererData?.globalSequencesFrames;
           if (clocks) for (let i = 0; i < (ownedModel.GlobalSequences?.length || 0); i++) { const duration = ownedModel.GlobalSequences[i]; if (duration > 0) clocks[i] = start % duration; }
-          native.update(0);
-        } else if (Math.abs(native.getFrame() - playback.frame) > 1e-5) { setPreviewFrame(playback.frame); native.update(0); }
+          updateNative(0);
+        } else if (Math.abs(native.getFrame() - playback.frame) > 1e-5) { setPreviewFrame(playback.frame); updateNative(0); }
         poseSequence = useAuthoredSequenceInterval(native.getFrame());
-        if (poseSequence !== selected) native.update(0);
+        if (poseSequence !== selected) updateNative(0);
         applyRestPoseMatrices(native.rendererData, p.restPose);
         if (p.portraitMode && !state.cameraEditing && !state.cameraDetached) {
           const evaluated = evaluateModelCamera(p.model, p.model?.Cameras?.[p.portraitCameraIndex], native.getFrame(), poseSequence, globalClock);
@@ -895,7 +906,7 @@ export default function GamePreview(inputProps) {
 
   useEffect(() => { runtime.current?.scheduler.sync(); }, [props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.rotateOnOwnAxis, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
 
-  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.showCollisionSpheres, props.seekId, props.playbackRunning]);
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.showCollisionSpheres, props.seekId, props.playbackRunning, props.playbackGlobalTime]);
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;
   const frame = portraitFrame.current, portrait = !!props.portraitMode, hasCamera = !!model?.Cameras?.[props.portraitCameraIndex];
   return <div ref={root} className={`game-preview-root${portrait ? ' portrait-preview-root' : ''}`} style={{ minHeight: props.presentation === 'preview' ? 0 : 180 }}>

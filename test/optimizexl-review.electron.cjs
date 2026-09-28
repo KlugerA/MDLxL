@@ -19,7 +19,7 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
   await p.getByLabel('Strength',{exact:true}).fill('40');await ready();
   await p.evaluate(()=>{window.reviewState=()=>Array.from(document.querySelectorAll('.ox-preview .game-preview-root'),root=>{
    let r,props;for(let f=root[Object.keys(root).find(k=>k.startsWith('__reactFiber'))];f;f=f.return)for(let h=f.memoizedState;h;h=h.next){const c=h.memoizedState?.current;if(c?.native&&c?.controls)r=c;if(c?.model?.Geosets&&c?.compareCamera)props=c;}
-   if(!r||!props)return null;return {frame:r.native.getFrame(),sequence:r.native.getSequence(),hovered:props.hoveredGeoset,matrices:r.native.rendererData.nodes.map(n=>n?.matrix?Array.from(n.matrix):null)};
+   if(!r||!props)return null;return {frame:r.native.getFrame(),sequence:r.native.getSequence(),globalTime:props.playbackGlobalTime,hovered:props.hoveredGeoset,matrices:r.native.rendererData.nodes.map(n=>n?.matrix?Array.from(n.matrix):null)};
   });});
   const details=p.locator('.ox-review');assert.equal(await details.getAttribute('open'),null,'Review details start collapsed');await details.locator('summary').click();
   const rows=details.locator('.ox-review-row');assert.equal(await rows.count(),10);assert.equal(await rows.first().textContent(),'Geoset 18');
@@ -40,16 +40,14 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
   const difference=(a,b)=>a.reduce((max,v,i)=>Math.max(max,Math.abs(v-b[i])),0);
   await p.getByRole('button',{name:'Start',exact:true}).click();await p.waitForFunction(()=>reviewState().every(s=>s?.sequence===9&&s.frame===170000));const start=await p.evaluate(()=>reviewState());await p.screenshot({path:path.join(out,'03-common-pose-first.png')});
   await p.getByRole('button',{name:'End',exact:true}).click();await p.waitForFunction(()=>reviewState().every(s=>s?.sequence===9&&s.frame===171437));const end=await p.evaluate(()=>reviewState());await p.screenshot({path:path.join(out,'04-common-pose-last.png')});
-  // Global sequences have their own clock: the animated shield legitimately
-  // differs at 170000 and 171437. Compare the full posed model against the
-  // common reference at each same global time, and compare local-only geometry
-  // directly between endpoints. Do not freeze or repair independent globals.
+  // Global sequences keep their independent clock during local seeks. Compare
+  // the full posed model against the reference at that same global time.
   const globalNodes=new Set(allNodes(model).filter(n=>['Translation','Rotation','Scaling'].some(k=>n[k]?.Keys&&n[k].GlobalSeqId!=null&&n[k].GlobalSeqId!==-1&&n[k].GlobalSeqId!==0xffffffff)).map(n=>n.ObjectId));
   const localGeosets=model.Geosets.filter((g,i)=>![...protectedGeosetData(model,{excludedGeosets:[i]}).nodes].some(n=>globalNodes.has(n)));
   const startAfter=positions(start[1]),endAfter=positions(end[1]),endpointDifference=difference(positions(start[1],localGeosets),positions(end[1],localGeosets));assert.ok(endpointDifference<1e-5,`Both corrected local endpoint poses must agree: ${endpointDifference}`);assert.ok(difference(positions(start[0]),startAfter)>1,'The wrong pose really changes');
   const reference=new ModelRenderer(structuredClone(model));reference.setSequence(3);reference.setFrame(21567);reference.updateNode(reference.rendererData.rootNode);
   const referencePose=frame=>{model.GlobalSequences.forEach((duration,i)=>reference.rendererData.globalSequencesFrames[i]=frame%duration);reference.updateNode(reference.rendererData.rootNode);return positions({matrices:reference.rendererData.nodes.map(n=>n?.matrix?Array.from(n.matrix):null)});};
-  const referenceDifference=Math.max(difference(startAfter,referencePose(170000)),difference(endAfter,referencePose(171437)));assert.ok(referenceDifference<1e-5,`Both full native poses must match the common reference with the same global clock: ${referenceDifference}`);
+  const referenceDifference=Math.max(difference(startAfter,referencePose(start[1].globalTime)),difference(endAfter,referencePose(end[1].globalTime)));assert.ok(referenceDifference<1e-5,`Both full native poses must match the common reference with the same global clock: ${referenceDifference}`);
   const fix=findIrregularities(model).find(f=>f.kind==='commonPose'&&f.sequence===9),after=openDocument(runOptimizeStage(new Uint8Array(source),'irregularities',{},fix).bytes,'after.mdx').model;
   for(let i=0;i<model.Bones.length;i++)for(const key of ['Translation','Rotation','Scaling'])if(model.Bones[i][key]?.Keys)assert.deepEqual(after.Bones[i][key].Keys.filter(k=>k.Frame!==170000&&k.Frame!==171437),model.Bones[i][key].Keys.filter(k=>k.Frame!==170000&&k.Frame!==171437));
   await p.getByRole('button',{name:'Approve',exact:true}).click();await p.waitForFunction(()=>!Array.from(document.querySelectorAll('[aria-label="Proposed fix"] option')).some(o=>o.value==='common-pose:9'));

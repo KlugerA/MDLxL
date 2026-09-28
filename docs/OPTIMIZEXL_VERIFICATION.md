@@ -10,7 +10,7 @@ The strengthened Electron regression failed against the original build with `Lef
 
 The user accepted viewport navigation, Nuclear, inspection restoration and Optimize New Copy, then requested geoset exclusions and the next addition together. Remaining review work is recorded here so it is not lost:
 
-- Common endpoint-pose correction was accepted by the user. Concise results and the unused-data removal list are ready for the next visual check.
+- Common endpoint-pose correction and concise results were accepted by the user. Percentage speed and independent global playback are ready for the next visual check.
 - Inspect the supplied Magos installation and modernize its familiar collision-sphere display. The shortcut resolves to `D:\WarcraftStuff\War3 Model Editor\War3ModelEditor\War3ModelEditor.exe`; Windows computer-use initialization currently fails with `failed to write kernel assets: The system cannot find the path specified. (os error 3)`, including after a reset. No visual reference inspection is claimed.
 - Add a clickable **I** explanation next to every Advanced option.
 
@@ -72,9 +72,17 @@ The user accepted Irregularities Fixer and requested less detail in reduction re
 
 The updated regression checks concise animation counts, geoset-only duplicate output, actual unused removals, exclusion/disabled-option filtering and the retained-resource ID remapping case. On Flail03 at 40% animation strength, 37 changes are grouped into six animation lines. Duplicate review at 40% lists ten geosets without animations or record counts. Unused cleanup identifies **Helper: Axe** and **Global sequence 2**. Empty results explicitly say there is nothing to remove. The packaged interaction check covers these lists, shared Appearance hover, animation seeking and return, and the unchanged accepted endpoint repair.
 
+## Eighth review correction: percentage speed and continuous global playback
+
+Speed is now a compact numeric **Speed (%)** control from 0 to 200, defaulting to 100. The shared controller advances local and global time together at that percentage. Zero holds both clocks; Pause freezes them; Loop off retains the existing final-frame stop. The existing playback-step utility owns local loop arithmetic. No authored model data or repair algorithm changed.
+
+The prior packaged build reproduced the global defect: during a 2.7-second Walk run at 2×, five sampled local wraps repeatedly reset global sequence 0. Its sampled clock stayed between about 335 and 874 ms, never reaching the later part of the authored 4000 ms animation. OptimizeXL now passes a continuous global clock shared by both native previews. Local wraps no longer count as seeks or reset effects. Each native update receives the matching global phase, including remainder across global wraps; seeking, switching sequences and replacing the preview model retain that shared phase. Other GamePreview callers retain their previous clock behavior, including the separate global-sequence editor.
+
+The new packaged Electron regression drives controller RAF timestamps deterministically while native rendering retains its actual timers/GPU updates. It checks exact percentage advancement at 0/50/100/200%, full 4000 ms and 500 ms global cycles during repeated Walk loops, both native clock arrays, and shield matrices against an independently sampled native reference across all 13 Flail03 animations. It also checks local seeks, candidate rebuilding, speed limits, pause, nonlooping final-frame stop and unchanged source bytes. Both views' shield poses match the expected global phase. Existing endpoint, review, camera, inspection, exclusion and save checks run against the same package.
+
 ## Automated checks
 
-- 109/109 focused tests passed: OptimizeXL operations and concise review/removal metadata, common endpoint poses, geoset exclusions, stage state, bundled validation, Nuclear quality/target regressions and paired-save failures/races, existing model optimizer, preview presentation/compositing/capture, and the 56-case codec compatibility suite.
+- 125/125 focused tests passed: OptimizeXL operations and concise review/removal metadata, common endpoint poses, geoset exclusions, stage state, bundled validation, Nuclear quality/target regressions and paired-save failures/races, existing model optimizer, preview presentation/compositing/capture, render scheduling, global-sequence isolation, and the 56-case codec compatibility suite.
 - The production Vite bundle built successfully. Its existing large-chunk advisory remains.
 - Packaging verified 568 runtime/asset files and 55 Electron locale files, including the portable save validator, unmodified local Hive checker, meshoptimizer module and their licenses.
 - The packaged EXE passed the isolated Playwright/Electron workflow: launch popup, switch Simple/Advanced, synchronized camera orbit/zoom and preservation across candidate rebuilds, matching playback frames, actual Hive check, selected visibility repair and approval, wheel cycling of collision presets, sphere overlays present only during Sphereomancer, real nuclear reduction, and final two-file save. No page errors were recorded and the source file remained byte-identical.
@@ -102,7 +110,7 @@ The flail irregularity scan found the original Stand-3 portrait/corpse visibilit
 ## Reproducing
 
 ```powershell
-node --test test/optimizexl-review.test.js test/optimizexl-exclusions.test.js test/optimizexl-validation.test.js test/optimizexl-nuclear.test.js test/optimizexl.test.js test/model-optimizer.test.js test/preview-presentation.test.js test/preview-blend-order.test.js test/game-preview-capture.test.js tests/*.test.js
+node --test test/optimizexl-review.test.js test/optimizexl-exclusions.test.js test/optimizexl-validation.test.js test/optimizexl-nuclear.test.js test/optimizexl.test.js test/model-optimizer.test.js test/preview-presentation.test.js test/preview-blend-order.test.js test/game-preview-capture.test.js test/global-sequence-preview.test.js test/viewport-performance.test.js tests/*.test.js
 node test/optimizexl-models.mjs path/to/flail.mdx path/to/axe.mdx
 node node_modules/vite/bin/vite.js build
 node scripts/package.mjs --out out/optimizexl-save-review
@@ -114,9 +122,9 @@ Run `node test/optimizexl-inspection.electron.cjs` with the same environment for
 
 Run `node test/optimizexl-save.electron.cjs` with the same environment for approved-only, any-stage saving. Its screenshots, output pairs and result are under `out/optimizexl-save-proof/` by default.
 
-Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. All five desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
+Run `node test/optimizexl-geosets.electron.cjs` for exclusions, shared Appearance hover and stage stars. Its default proof folder is `out/optimizexl-geosets-proof/`. Run `node test/optimizexl-review.electron.cjs` for changed-data guidance and common endpoint repair; it defaults to Desktop/Flail03 and accepts `MDLXL_OPTIMIZEXL_REVIEW_MODEL`. Its default proof folder is `out/optimizexl-guidance-proof/`. Run `node test/optimizexl-playback.electron.cjs` with Flail03 for percentage speed and native global playback; its proofs go to `out/optimizexl-playback-proof/`. All six desktop scripts accept `MDLXL_OPTIMIZEXL_PROOF_ROOT` to put isolated profiles and evidence on another drive.
 
-The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-concise-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
+The current standalone review package is `D:\MDLxL-Reviews\OptimizeXL-playback-20260928\package\MDLxL-win32-x64\`. Current packaged screenshots/results are under that review root's `proofs` folder. This location deliberately has no development dependency tree. Earlier generated outputs remain in place.
 
 Local packaged screenshots, the interaction result and paired output copies are under `out/optimizexl-proof/`. Additional Nuclear pose/view screenshots are under `out/nuclear-visual/`. The Nuclear review EXE is under `out/optimizexl-nuclear-review/MDLxL-win32-x64/`. These generated outputs and user models are excluded from Git.
 

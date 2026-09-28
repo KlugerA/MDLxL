@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import GamePreview from './GamePreview.jsx';
 import OptimizeXLGeosets from './OptimizeXLGeosets.jsx';
 import OptimizeXLReview from './OptimizeXLReview.jsx';
+import { previewPlaybackStep } from './game-preview-capture.js';
 import { GEOSET_REDUCTION_STAGES } from '../src/optimizexl-exclusions.js';
 import { viewportAppearanceOptions } from '../src/preferences.js';
 import { openDocument } from '../src/editor-document.js';
@@ -20,7 +21,8 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
   const session=initial.session, [revision,refresh]=useState(0), [stage,setStage]=useState('duplicates'),[advanced,setAdvanced]=useState(false),[strength,setStrength]=useState(0),[custom,setCustom]=useState(false);
   const [settings,setSettings]=useState(()=>session?freshSettings('duplicates',openDocument(session.accepted,'before.mdx').model):{});
   const [candidate,setCandidate]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(initial.error||''),[saved,setSaved]=useState(null),[saving,setSaving]=useState(false);
-  const [sequence,setSequence]=useState(0),[time,setTime]=useState(0),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1),[seekId,setSeekId]=useState(0),[loop,setLoop]=useState(true);
+  const [sequence,setSequence]=useState(0),[clock,setClock]=useState({time:0,globalTime:0}),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(100),[seekId,setSeekId]=useState(0),[loop,setLoop]=useState(true);
+  const {time,globalTime}=clock;
   const [selectedFix,setSelectedFix]=useState(null),[skippedFixes,setSkippedFixes]=useState(new Set()),[hive,setHive]=useState(null),[hiveBusy,setHiveBusy]=useState(false),[finished,setFinished]=useState(false);
   const [excluded,setExcluded]=useState(new Set()),[listHovered,setListHovered]=useState(null),[viewHovered,setViewHovered]=useState(null),[highlight,setHighlight]=useState(true),[,refreshReviews]=useState(0);
   const exclusionsKey=[...excluded].sort((a,b)=>a-b).join(','),showGeosets=GEOSET_REDUCTION_STAGES.has(stage)&&!finished;
@@ -35,7 +37,7 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
   const findings=useMemo(()=>!before?[]:stage==='irregularities'?findIrregularities(before):stage==='sanity'?sanityProposals(before):[],[before,stage]);
   const available=findings.filter(f=>!skippedFixes.has(f.id)),fix=available.find(f=>f.id===selectedFix)||null;
   const sequenceInfo=before?.Sequences[sequence],interval=sequenceInfo?.Interval||[0,1000];
-  const seek=(frame)=>{setTime(frame);setSeekId(v=>v+1);};
+  const seek=(frame)=>{setClock(current=>({...current,time:frame}));setSeekId(v=>v+1);};
   // A finding borrows the timeline. Keep the user's return point through
   // multiple findings, without overriding authored geoset visibility.
   function inspectFix(f,returnView){inspection.current??=returnView||{sequence,time};setSequence(f.sequence);seek(f.frame);setPlaying(false);}
@@ -50,7 +52,8 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
     return()=>select.removeEventListener('wheel',scroll);
   },[stage,finished]);
   useEffect(()=>{if(time<interval[0]||time>interval[1])seek(interval[0]);},[before,sequence]);
-  useEffect(()=>{if(!playing||!before)return;const owner=root.current?.ownerDocument.defaultView||window;let id,last;const tick=now=>{if(last!==undefined)setTime(frame=>{const next=frame+Math.min(100,now-last)*speed;if(next>interval[1]){if(loop)return interval[0]+(next-interval[0])%(interval[1]-interval[0]||1);setPlaying(false);return interval[1];}return next;});last=now;id=owner.requestAnimationFrame(tick);};id=owner.requestAnimationFrame(tick);return()=>owner.cancelAnimationFrame(id);},[playing,speed,sequence,loop,before]);
+  useEffect(()=>{if(!playing||!before||speed===0)return;const owner=root.current?.ownerDocument.defaultView||window;let id,last;const tick=now=>{if(last!==undefined){const elapsed=Math.min(100,now-last)*speed/100;setClock(current=>{const step=previewPlaybackStep(interval,current.time,elapsed,loop);return {time:step.finished?interval[1]:step.frame,globalTime:current.globalTime+step.elapsed};});}last=now;id=owner.requestAnimationFrame(tick);};id=owner.requestAnimationFrame(tick);return()=>owner.cancelAnimationFrame(id);},[playing,speed,sequence,loop,before]);
+  useEffect(()=>{if(playing&&!loop&&time>=interval[1])setPlaying(false);},[playing,loop,time,interval[1]]);
   useEffect(()=>{
     if(!session||finished||repairStages.has(stage)&&!fix){request.current++;setCandidate(null);setBusy(false);session&&(session.candidate=null);return;}
     const id=++request.current,sessionRevision=session.revision;setBusy(true);setError('');session.candidate=null;session.reviews.delete(stage);
@@ -78,7 +81,7 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
   function back(){const step=session.back();if(step){refresh(v=>v+1);enter(step.stage,step.settings);}else enter('duplicates');}
   async function save(){setSaving(true);setError('');try{if(!window.desktop?.saveOptimizeXL)throw Error('Saving two protected copies requires the desktop app.');const result=await window.desktop.saveOptimizeXL(session.savePayload());if(result)setSaved(result);}catch(e){setError(e.message);}finally{setSaving(false);}}
   if(!session)return <div className="ox-root"><header><h1>OptimizeXL</h1><button onClick={onClose}>Close</button></header><p role="alert">{error}</p></div>;
-  const previewProps={textureAssets,preferences:previewPreferences,teamColor,presentation:'preview',interactivePreview:showGeosets,hoveredGeoset,highlightSelection:showGeosets&&highlight&&highlightAppearance.viaView,onHoverGeoset:showGeosets?setViewHovered:undefined,overlays:{grid:false,axes:false,boneLines:false},showGrid:false,showAxes:false,playing:false,syncPlayback:true,playbackRunning:playing,seekId,sequenceIndex:sequence,time,compareCamera:camera.current,preserveCameraView:true,cameraMode:'rotate',showCollisionSpheres:stage==='spheres'&&!finished,loop};
+  const previewProps={textureAssets,preferences:previewPreferences,teamColor,presentation:'preview',interactivePreview:showGeosets,hoveredGeoset,highlightSelection:showGeosets&&highlight&&highlightAppearance.viaView,onHoverGeoset:showGeosets?setViewHovered:undefined,overlays:{grid:false,axes:false,boneLines:false},showGrid:false,showAxes:false,playing:false,syncPlayback:true,playbackRunning:playing,playbackGlobalTime:globalTime,seekId,sequenceIndex:sequence,time,compareCamera:camera.current,preserveCameraView:true,cameraMode:'rotate',showCollisionSpheres:stage==='spheres'&&!finished,loop};
   const updateSphere=(i,j,value)=>adjust('spheres',(settings.spheres||[]).map((s,k)=>k===i?s.map((v,l)=>l===j?value:v):s));
   return <div className="ox-root" ref={root} onKeyDown={event=>{event.stopPropagation();if(event.code==='Space'&&!['INPUT','SELECT','TEXTAREA','BUTTON'].includes(event.target.tagName)){event.preventDefault();setPlaying(v=>!v);}}}>
     <header><h1>OptimizeXL</h1><div className="ox-mode" role="group" aria-label="Controls"><button aria-pressed={!advanced} onClick={()=>setAdvanced(false)}>Simple</button><button aria-pressed={advanced} onClick={()=>setAdvanced(true)}>Advanced</button></div><span className="ox-file">{doc.name}</span><button disabled={saving} onClick={save}>{saving?'Saving…':'Optimize New Copy'}</button><button disabled={saving} onClick={onClose}>Close</button></header>
@@ -90,7 +93,7 @@ export default function OptimizeXL({doc,textureAssets,preferences,teamColor,onCl
         <label>Animation<select aria-label="Animation" value={sequence} onChange={e=>{const i=Number(e.target.value);setSequence(i);seek(before.Sequences[i].Interval[0]);setPlaying(false);}}>{before.Sequences.map((s,i)=><option value={i} key={i}>{s.Name}</option>)}</select></label>
         <div className="ox-play"><button aria-label={playing?'Pause':'Play'} disabled={!before.Sequences.length} onClick={()=>setPlaying(v=>!v)}>{playing?'Pause':'Play'}</button><button onClick={()=>{setPlaying(false);seek(interval[0]);}}>Start</button><button onClick={()=>{setPlaying(false);seek(interval[1]);}}>End</button></div>
         <input type="range" aria-label="Animation frame" min={interval[0]} max={interval[1]} step="1" value={time} onChange={e=>{setPlaying(false);seek(Number(e.target.value));}}/><output className="ox-frame">{Math.round(time)} / {interval[1]}</output>
-        <div className="ox-play"><label>Speed<select aria-label="Playback speed" value={speed} onChange={e=>setSpeed(Number(e.target.value))}>{[.1,.25,.5,1,2].map(v=><option key={v} value={v}>{v}×</option>)}</select></label><label><input type="checkbox" checked={loop} onChange={e=>setLoop(e.target.checked)}/>Loop</label></div>
+        <div className="ox-play"><label className="ox-speed">Speed (%)<input aria-label="Playback speed (%)" type="number" min="0" max="200" step="1" value={speed} onChange={e=>setSpeed(Math.max(0,Math.min(200,Number(e.target.value)||0)))}/></label><label><input type="checkbox" checked={loop} onChange={e=>setLoop(e.target.checked)}/>Loop</label></div>
         <hr/>
         {showGeosets&&<OptimizeXLGeosets count={before.Geosets.length} excluded={excluded} onChange={next=>{setExcluded(next);setSaved(null);}} hovered={hoveredGeoset} onHover={setListHovered} highlight={highlight} onHighlight={setHighlight} color={highlightAppearance.color}/>}
         {!finished&&['duplicates','animation','nuclear'].includes(stage)&&!advanced&&<label>Strength {custom?'(Custom)':`${strength.toFixed(2)}%`}<input aria-label="Strength" type="range" min="0" max="100" step="0.01" value={strength} onChange={e=>adjustStrength(Number(e.target.value))}/><span className="ox-range"><small>Conservative</small><small>Aggressive</small></span></label>}

@@ -10,7 +10,7 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
   const pending=app.waitForEvent('window');await main.getByTitle('OptimizeXL',{exact:true}).click();const p=await pending;p.setDefaultTimeout(15000);p.on('pageerror',e=>errors.push(e.message));
   await app.evaluate(({BrowserWindow})=>{for(const w of BrowserWindow.getAllWindows()){w.webContents.setBackgroundThrottling(false);w.setBounds({x:-3500,y:0,width:1440,height:900});w.showInactive();}});
   const animation=p.getByLabel('Animation',{exact:true}),frame=p.getByLabel('Animation frame',{exact:true});
-  await animation.selectOption({label:'Stand'});await frame.fill('2000');await p.getByLabel('Playback speed',{exact:true}).selectOption('0.5');
+  await animation.selectOption({label:'Stand'});await frame.fill('2000');await p.getByLabel('Playback speed (%)',{exact:true}).fill('50');
   await p.getByRole('checkbox',{name:'Loop',exact:true}).uncheck();
   await p.waitForFunction(()=>document.querySelectorAll('.ox-preview canvas:not([data-background])').length>=2);
   await p.evaluate(()=>{window.inspectState=()=>Array.from(document.querySelectorAll('.ox-preview .game-preview-root'),root=>{let fiber=root[Object.keys(root).find(k=>k.startsWith('__reactFiber'))];for(;fiber;fiber=fiber.return)for(let h=fiber.memoizedState;h;h=h.next){const r=h.memoizedState?.current;if(r?.native&&r?.controls)return {sequence:r.native.getSequence(),frame:r.native.getFrame(),position:r.controls.object.position.toArray(),target:r.controls.target.toArray(),zoom:r.controls.object.zoom};}return null;});});
@@ -26,7 +26,7 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'playwright');
     const actual=[state[key]].flat(),expected=[camera[key]].flat();assert.equal(actual.length,expected.length);
     actual.forEach((value,i)=>assert.ok(Math.abs(value-expected[i])<1e-8,'Keep the paired camera while leaving inspection'));
    }
-   assert.equal(await p.getByLabel('Playback speed',{exact:true}).inputValue(),'0.5');assert.equal(await p.getByRole('checkbox',{name:'Loop',exact:true}).isChecked(),false);
+   assert.equal(await p.getByLabel('Playback speed (%)',{exact:true}).inputValue(),'50');assert.equal(await p.getByRole('checkbox',{name:'Loop',exact:true}).isChecked(),false);
   };
   await ready();await p.screenshot({path:path.join(out,'01-normal.png')});
   for(const name of ['Duplicate data','Animation optimization','Unused data','Insanity FIxer','Sphereomancer','Nuclear Polygon Destroyer']){
