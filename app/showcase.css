@@ -25,6 +25,13 @@
 .showcase-list li.overflow.selected { outline:1px solid #bd3030; outline-offset:-1px; }
 .showcase-list-actions,.showcase-camera-actions { display:flex; gap:3px; }
 .showcase-list-actions { justify-content:flex-end; }
+.showcase-sequence-preview { margin-right:auto; }
+.showcase-emitters { margin-top:5px; }
+.showcase-emitters summary { cursor:pointer; }
+.showcase-emitters > div { max-height:140px; overflow:auto; margin-top:3px; }
+.showcase-dialog .showcase-emitters label { justify-content:flex-start; margin:2px 0; }
+.showcase-emitters input { flex:none; margin:0; }
+.showcase-emitters span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .showcase-list-actions button { min-height:19px; padding:0 5px; }
 .showcase-camera-actions button { flex:1; }
 .showcase-camera-list { min-height:60px; max-height:100px; }

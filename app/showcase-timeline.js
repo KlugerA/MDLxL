@@ -2,29 +2,39 @@ const positive = (value, fallback) => Number.isFinite(Number(value)) && Number(v
 const mix = (a, b, t) => a + (b - a) * t;
 const easing = (t, curve) => curve === 'smooth' ? t * t * (3 - 2 * t) : curve === 'ease-in' ? t * t : curve === 'ease-out' ? 1 - (1 - t) ** 2 : t;
 
+/** Pose and effect clock for one playlist entry, shared by rendering substeps. */
+export function showcaseRowPose(sequence, row, milliseconds) {
+  const [start, end] = sequence.Interval, duration = Math.max(0, end - start);
+  const speed = Number.isFinite(Number(row.speed)) ? Math.max(0, Math.min(2, Number(row.speed))) : 1;
+  const finishEffects = !!(row.useDuration && row.finishEffects);
+  const cycleSeconds = row.cycleSeconds || duration / (1000 * (speed || 1));
+  const effectCycle = finishEffects ? Math.min((row.durationLoops || 1) - 1, Math.floor(Math.max(0, milliseconds) / Math.max(.001, cycleSeconds * 1000))) : Math.floor(Math.max(0, milliseconds) * speed / Math.max(1, duration));
+  const cycleTime = finishEffects ? Math.max(0, milliseconds) - effectCycle * cycleSeconds * 1000 : milliseconds;
+  const amount = Math.max(0, cycleTime) * speed;
+  const looping = !finishEffects && row.loop !== false && (row.useDuration || !sequence.NonLooping);
+  const localTime = looping ? amount : Math.min(duration, amount);
+  return {frame: start + (looping && duration > 0 ? localTime % duration : localTime), localTime, looping,
+    effectCycle, cycleTime, effectTail: finishEffects && amount >= duration, speed};
+}
+
 /** Local sequence speed is independent of the always-running global clock. */
 export function showcaseAnimation(model, playlist, seconds, repeat = true) {
   const rows = playlist.filter(row => model.Sequences?.[row.sequence]);
-  if (!rows.length) return { sequenceIndex: -1, frame: 0, globalTime: Math.max(0,seconds)*1000, active: false, segment: -1 };
+  if (!rows.length) return {sequenceIndex: -1, frame: 0, globalTime: Math.max(0, seconds) * 1000, active: false, segment: -1};
   const length = row => positive(row.seconds, 3);
-  const activeTime = (row, elapsed) => {
-    const sequence = model.Sequences[row.sequence], duration = Math.max(0, sequence.Interval[1] - sequence.Interval[0]);
-    const amount = Math.min(elapsed,row.useDuration&&Number.isFinite(row.motionSeconds)?row.motionSeconds:Infinity) * 1000 * (Number.isFinite(Number(row.speed)) ? Math.max(0, Math.min(2, Number(row.speed))) : 1);
-    return row.loop === false || (sequence.NonLooping && !(row.useDuration && row.durationLoops===2)) ? Math.min(duration, amount) : duration > 0 ? amount : 0;
-  };
   const total = rows.reduce((sum, row) => sum + length(row), 0);
   const time = Math.max(0, seconds), cycles = repeat ? Math.floor(time / total) : 0;
-  let remaining = repeat ? time % total : Math.min(time, total);
+  let remaining = repeat ? time % total : time;
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index], span = length(row);
     if (remaining < span || index === rows.length - 1) {
-      const sequence = model.Sequences[row.sequence], [start, end] = sequence.Interval;
-      const elapsed = activeTime(row, remaining), duration = end - start;
-      const finishing=row.useDuration&&Number.isFinite(row.motionSeconds)&&remaining>=row.motionSeconds;
-      const looping = !finishing && row.loop !== false && (!sequence.NonLooping || (row.useDuration && row.durationLoops===2));
-      return { sequenceIndex: row.sequence, clipTime:remaining*1000, speed:Number(row.speed??1), durationLoops:row.durationLoops, motionSeconds:row.motionSeconds, emissionEnds:row.useDuration?row.emissionEnds:undefined, effectTail:finishing, frame: start + (looping && duration > 0 ? elapsed % duration : Math.min(duration, elapsed)), localTime: elapsed, globalTime: time*1000, looping,
-        active: duration > 0 && (looping || elapsed < duration) && (repeat || time < total), segment: cycles * rows.length + index,
-        portrait: /portrait/i.test(sequence.Name || '') };
+      const sequence = model.Sequences[row.sequence], pose = showcaseRowPose(sequence, row, remaining * 1000);
+      return {...pose, sequenceIndex: row.sequence, clipTime: remaining * 1000, animationRow: row,
+        durationLoops: row.durationLoops, motionSeconds: row.motionSeconds, cycleSeconds: row.cycleSeconds,
+        finishEffects: row.finishEffects, emissionEnds: row.useDuration ? row.emissionEnds : undefined,
+        cycleGlobalEmitters: row.cycleGlobalEmitters, disabledEmitters: row.disabledEmitters,
+        globalTime: time * 1000, active: (pose.looping || pose.frame < sequence.Interval[1]) && (repeat || time < total),
+        segment: cycles * rows.length + index, portrait: /portrait/i.test(sequence.Name || '')};
     }
     remaining -= span;
   }

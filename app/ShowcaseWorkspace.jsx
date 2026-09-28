@@ -8,7 +8,7 @@ import { flushSync } from 'react-dom';
 import { SHOWCASE_PRESETS, builtinSetup, listShowcasePresets, saveShowcasePreset, snapshotShowcase, hydrateShowcase } from './showcase-presets.js';
 import { validateShowcaseExport } from './showcase-export.js';
 import { moveDragPoint } from './classic-gestures.js';
-import { loopEffectTiming, timeShowcasePlaylist } from './showcase-effects.js';
+import { loopEffectTiming, timeShowcasePlaylist, showcaseEmitters } from './showcase-effects.js';
 import { remapShowcasePlaylist, remapShowcaseTake } from './showcase-model.js';
 import { alignShowcaseText } from './showcase-text.js';
 
@@ -47,25 +47,26 @@ function Dialog({ title, children, onClose, onSubmit, footer }) {
     </form>
   </dialog>;
 }
-function AnimationDialog({ model, initial, portrait, exportTarget, definitions, globalStart=0, onSave, onRemove, onClose }) {
-  const duration=(row,loops=row.durationLoops??1)=>loopEffectTiming(model,row.sequence,loops,row.speed>0?row.speed:1,globalStart*1000,definitions).seconds;
+function AnimationDialog({ model, initial, portrait, exportTarget, definitions, onSave, onRemove, onClose }) {
+  const duration=(row,loops=row.durationLoops??1)=>loopEffectTiming(model,row.sequence,loops,row.speed>0?row.speed:1,0,definitions,row.disabledEmitters).seconds;
   const [draft,setDraft]=useState(()=>({...initial,durationLoops:initial.durationLoops??1,extraTime:initial.extraTime??Math.max(0,(Number(initial.seconds)||0)-duration(initial))})),[error,setError]=useState('');
-  const sequence=model.Sequences[draft.sequence],base=duration(draft);
+  const sequence=model.Sequences[draft.sequence],base=duration(draft),emitters=showcaseEmitters(model),disabled=new Set(draft.disabledEmitters || []);
   const naturalSeconds=Math.max(0,(sequence?.Interval?.[1]||0)-(sequence?.Interval?.[0]||0))/1000;
   const change=patch=>setDraft(row=>({...row,...patch}));
   return <Dialog title={initial.editing ? 'Edit animation' : 'Add animation'} onClose={onClose} onSubmit={() => {
     const extraTime=Math.max(0,Number(draft.extraTime)||0),seconds=Math.round((base+extraTime)*100)/100;
     try{validateShowcaseExport(exportTarget,seconds);}catch(error){setError(error.message);return;}
-    onSave({sequence:draft.sequence,seconds,speed:draft.speed,loop:true,useDuration:true,durationLoops:draft.durationLoops,extraTime});
+    onSave({sequence:draft.sequence,seconds,speed:draft.speed,loop:true,useDuration:true,durationLoops:draft.durationLoops,extraTime,disabledEmitters:[...disabled]});
   }} footer={initial.editing && <button type="button" onClick={onRemove}>Remove</button>}>
     <label>Animation<select aria-label="Animation" value={draft.sequence} onChange={event => change({sequence:Number(event.target.value)})}>{model.Sequences.map((row,index)=>isPortrait(row)===portrait?<option key={index} value={index}>{row.Name}</option>:null)}</select></label>
     <ExtraTimeField label="Animation Extra Time" value={draft.extraTime} base={base} onChange={extraTime=>change({extraTime})}/><div className="showcase-crop-controls">{[1,2].map(loops=><button key={loops} type="button" disabled={draft.speed<=0||naturalSeconds<=0} aria-pressed={draft.durationLoops===loops} onClick={()=>change({durationLoops:loops})}>{loops} {loops===1?'loop':'loops'} · {duration(draft,loops)}s</button>)}</div>{!portrait&&<Slider label="Speed" value={Math.round(draft.speed*100)} onChange={value=>change({speed:value/100})}/>}
+    {emitters.length > 0 && <details className="showcase-emitters"><summary>Emitters{disabled.size ? ` · ${disabled.size} off` : ''}</summary><div>{emitters.map(emitter => <label key={emitter.id} title={emitter.name}><input type="checkbox" aria-label={emitter.name} checked={!disabled.has(emitter.id)} onChange={event => change({disabledEmitters: event.target.checked ? [...disabled].filter(id => id !== emitter.id) : [...disabled, emitter.id]})}/><span>{emitter.name}</span></label>)}</div></details>}
     {error&&<div className="showcase-error" role="alert">{error}</div>}
   </Dialog>;
 }
 
 export default function ShowcaseWorkspace({ model, modelName, modelPath, revision, textureAssets, preferences, teamColor, sessionId, background, backgroundLibrary, onBackground, onStatus, active=true, onLoadModel }) {
-  const [api,setAPI] = useState(null), [playing,setPlaying] = useState(false), [busy,setBusy] = useState(false);
+  const [api,setAPI] = useState(null), [playing,setPlaying] = useState(false), [previewOrbit,setPreviewOrbit] = useState(false), [busy,setBusy] = useState(false);
   const [crop,setCrop] = useState(null), [cropPreset,setCropPreset] = useState('free'), [cropEditing,setCropEditing] = useState(false), cropDrag = useRef(null);
   const previewRef = useRef(null), [previewSize,setPreviewSize] = useState({width:1,height:1});
   const [exportTarget,setExportTarget]=useState(null),[mainPicture,setMainPicture]=useState(false);
@@ -155,7 +156,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   }
   useEffect(() => () => { if (media?.url) URL.revokeObjectURL(media.url); }, [media?.url]);
   const current = useRef();
-  current.current = {model,playlist,length,orbitSpeed,orbitDirection,orbitTiming:exportTarget==='hive'||mainPicture?'speed':orbitTiming,playing,portrait,startAngle:orbitAngle};
+  current.current = {model,playlist,length,orbitSpeed,orbitDirection,orbitTiming:exportTarget==='hive'||mainPicture?'speed':orbitTiming,playing,previewOrbit,portrait,startAngle:orbitAngle};
   const director = useMemo(() => createShowcaseDirector(() => current.current), []);
   const overflow = overflowEntries(playlist,length);
   let exportError='';try{validateShowcaseExport(mainPicture?'hive-main':exportTarget,length,playlist);}catch(error){exportError=error.message;}
@@ -165,6 +166,12 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
   const center = () => api?.modelCenter() || [0,0,0];
   function restart() { director.reset(api?.cameraView(),center()); api?.invalidate(); }
   function updatePlaylist(rows) { const timed=timeShowcasePlaylist(model,rows,apiRef.current?.effectDefinitions());(portrait?setPortraitPlaylist:setSequencePlaylist)(timed); setPlaying(false); director.reset(api?.cameraView(),center()); api?.invalidate(); }
+  function togglePreview(orbit) {
+    const stop = playing && previewOrbit === orbit;
+    setPreviewOrbit(orbit);
+    if (!stop) restart();
+    setPlaying(!stop);
+  }
   function editAnimation(index) {
     setPlaying(false); setSelected(index >= 0 ? index : selected);
     setAnimationDialog({index,sequence:index >= 0 ? playlist[index].sequence : available[0],speed:1,...(index<0?{useDuration:true,durationLoops:1,extraTime:0}:playlist[index]),editing:index >= 0});
@@ -205,7 +212,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
         setOrbitTiming(setup.orbitTiming==='circle'?'circle':'speed');setOrbitSpeed(setup.orbitSpeed);setOrbitDirection(setup.orbitDirection===-1?-1:1);setOrbitRadius(setup.orbitRadius);setOrbitAngle(setup.orbitAngle||0);setLight(setup.light);setQuality(setup.quality);setFPS(setup.fps);
         setBackgroundMode(setup.backgroundMode);setColor(setup.color);setCrop(setup.crop);setCropPreset(setup.cropPreset);setMedia(setup.media);setBackgroundAsset(setup.backgroundAsset);onBackground(setup.background||'');setTrim(setup.trim);setVideoDuration(0);
         setPortraitZoom(setup.portraitZoom);setPortraitFrameEnabled(setup.portraitFrameEnabled);setGrid(!!setup.grid);setGridDensity(setup.gridDensity||5);setLayers(setup.layers);setActiveLayer(null);setLayersEditing(false);setSelected(0);
-        if(setup.sequencePlaylist)setSequencePlaylist(setup.sequencePlaylist);if(setup.portraitPlaylist)setPortraitPlaylist(setup.portraitPlaylist);
+        if(setup.sequencePlaylist)setSequencePlaylist(timeShowcasePlaylist(model,setup.sequencePlaylist,apiRef.current?.effectDefinitions()));if(setup.portraitPlaylist)setPortraitPlaylist(timeShowcasePlaylist(model,setup.portraitPlaylist,apiRef.current?.effectDefinitions()));
         setApplyVersion(value=>value+1);
       });
       director.reset();
@@ -275,7 +282,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
           </li>)}</ol>
           {overflow.some(Boolean)&&<div className="showcase-error" role="alert">Sequence too short</div>}
           {portrait&&cameraIndex<0&&<div className="showcase-error" role="alert">This model has no portrait camera.</div>}
-          <div className="showcase-list-actions"><button disabled={selected<=0 || !playlist[selected]} aria-label="Move animation up" onClick={()=>{const rows=[...playlist];[rows[selected-1],rows[selected]]=[rows[selected],rows[selected-1]];updatePlaylist(rows);setSelected(selected-1);}}>↑</button><button disabled={selected>=playlist.length-1 || !playlist[selected]} aria-label="Move animation down" onClick={()=>{const rows=[...playlist];[rows[selected+1],rows[selected]]=[rows[selected],rows[selected+1]];updatePlaylist(rows);setSelected(selected+1);}}>↓</button>
+          <div className="showcase-list-actions"><button className="showcase-sequence-preview" disabled={!api || !playlist.length} aria-pressed={playing&&!previewOrbit} onClick={()=>togglePreview(false)}>{playing&&!previewOrbit?'Stop':'Preview'}</button><button disabled={selected<=0 || !playlist[selected]} aria-label="Move animation up" onClick={()=>{const rows=[...playlist];[rows[selected-1],rows[selected]]=[rows[selected],rows[selected-1]];updatePlaylist(rows);setSelected(selected-1);}}>↑</button><button disabled={selected>=playlist.length-1 || !playlist[selected]} aria-label="Move animation down" onClick={()=>{const rows=[...playlist];[rows[selected+1],rows[selected]]=[rows[selected],rows[selected+1]];updatePlaylist(rows);setSelected(selected+1);}}>↓</button>
           </div>
         </section>
         <section className="showcase-section" aria-label="Camera Control" hidden={portrait}>
@@ -285,7 +292,7 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
           <div className="showcase-model-tools"><details className="showcase-align"><summary title="Align model within crop">Align model</summary><div className="showcase-align-menu"><div className="showcase-align-grid">{[0,1,2].flatMap(y=>[0,1,2].map(x=><button key={x+':'+y} title={['Top','Middle','Bottom'][y]+' '+['left','center','right'][x]} aria-label={'Place model '+['top','middle','bottom'][y]+' '+['left','center','right'][x]} disabled={!api} onClick={event=>{setPlaying(false);setCropEditing(false);api?.alignModel(selectedCrop,x,y);event.currentTarget.closest('details').open=false;}}>{[['↖','↑','↗'],['←','·','→'],['↙','↓','↘']][y][x]}</button>))}</div></div></details><button disabled={!api} title="Restore upright Z-axis rotation" onClick={()=>{setPlaying(false);api?.realignModel();}}>Realign</button></div>
           <Slider label="Radius" value={orbitRadius} max={100} onChange={setOrbitRadius}/>
           <div className="showcase-orbit-direction"><small>Z axis · 0% spins in place</small><button title="Reverse orbit direction" aria-label="Reverse orbit direction" aria-pressed={orbitDirection===-1} onClick={()=>setOrbitDirection(value=>-value)}>{orbitDirection===1?'↶':'↷'}</button></div>
-          <button className="showcase-wide" disabled={!api} onClick={()=>{if(!playing)restart();setPlaying(!playing);}}>{playing?'Pause preview':'Preview orbit'}</button>
+          <button className="showcase-wide" disabled={!api} onClick={()=>togglePreview(true)}>{playing&&previewOrbit?'Pause preview':'Preview orbit'}</button>
 
         </section>
         {portrait&&<section className="showcase-section" aria-label="Portrait zoom"><header><strong>Portrait</strong></header><label>Portrait frame<input type="checkbox" aria-label="Portrait frame" disabled={mainPicture} checked={portraitFrameEnabled&&!mainPicture} onChange={event=>{setPortraitFrameEnabled(event.target.checked);setCropEditing(false);}}/></label><label>Size<select aria-label="Portrait zoom preset" value={[75,100,125,150].includes(portraitZoom)?portraitZoom:"custom"} onChange={event=>setPortraitZoom(Number(event.target.value))}><option value="custom" disabled>Custom</option><option value="75">Small 75%</option><option value="100">Frame 100%</option><option value="125">Close 125%</option><option value="150">Detail 150%</option></select></label><Slider label="Zoom" min={50} max={200} value={portraitZoom} onChange={setPortraitZoom}/></section>}
@@ -314,6 +321,6 @@ export default function ShowcaseWorkspace({ model, modelName, modelPath, revisio
         {cropEditing&&<div className="showcase-crop-hint">Drag to select the GIF area</div>}
       </div>}
     </section>
-    {animationDialog&&<AnimationDialog definitions={api?.effectDefinitions()} globalStart={playlist.slice(0,animationDialog.index<0?playlist.length:animationDialog.index).reduce((sum,row)=>sum+Number(row.seconds),0)} exportTarget={mainPicture?'hive-main':exportTarget} model={model} initial={animationDialog} portrait={portrait} onClose={()=>setAnimationDialog(null)} onSave={row=>{updatePlaylist(animationDialog.index<0?[...playlist,row]:playlist.map((item,index)=>index===animationDialog.index?row:item));setSelected(animationDialog.index<0?playlist.length:animationDialog.index);setAnimationDialog(null);}} onRemove={()=>{updatePlaylist(playlist.filter((_,index)=>index!==animationDialog.index));setSelected(Math.max(0,animationDialog.index-1));setAnimationDialog(null);}}/>}
+    {animationDialog&&<AnimationDialog definitions={api?.effectDefinitions()} exportTarget={mainPicture?'hive-main':exportTarget} model={model} initial={animationDialog} portrait={portrait} onClose={()=>setAnimationDialog(null)} onSave={row=>{updatePlaylist(animationDialog.index<0?[...playlist,row]:playlist.map((item,index)=>index===animationDialog.index?row:item));setSelected(animationDialog.index<0?playlist.length:animationDialog.index);setAnimationDialog(null);}} onRemove={()=>{updatePlaylist(playlist.filter((_,index)=>index!==animationDialog.index));setSelected(Math.max(0,animationDialog.index-1));setAnimationDialog(null);}}/>}
   </div>;
 }

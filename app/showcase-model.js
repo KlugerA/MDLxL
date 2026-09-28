@@ -1,10 +1,18 @@
-import {timeShowcasePlaylist} from './showcase-effects.js';
+import {showcaseEmitters, timeShowcasePlaylist} from './showcase-effects.js';
 // Match authored animation names, never reuse a numeric index from another model.
 export function remapShowcasePlaylist(rows,previous,next){
   return (rows||[]).flatMap(row=>{
     const name=previous?.Sequences?.[row.sequence]?.Name;
     const sequence=next?.Sequences?.findIndex(item=>item.Name===name)??-1;
-    return sequence<0?[]:[{...row,sequence}];
+    const before = showcaseEmitters(previous || {}), after = showcaseEmitters(next);
+    const disabledEmitters = (row.disabledEmitters || []).flatMap(id => {
+      const emitter = before.find(item => item.id === id);
+      if (!emitter) return [];
+      const peers = before.filter(item => item.kind === emitter.kind && item.name === emitter.name);
+      const match = after.filter(item => item.kind === emitter.kind && item.name === emitter.name)[peers.indexOf(emitter)];
+      return match ? [match.id] : [];
+    });
+    return sequence<0?[]:[{...row,sequence,disabledEmitters}];
   });
 }
 export function remapShowcaseTake(take,previous,next){
