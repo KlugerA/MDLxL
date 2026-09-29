@@ -35,9 +35,9 @@
 :root[data-theme=dark] .warmkeys-sequence-cue{background:var(--ui-trim);color:var(--ui-text);border-color:var(--ui-border)}
 :root[data-theme=dark] .warmkeys-sequence-cue kbd{color:#9ddca6}
 .selection-box,.marquee{border-color:var(--visual-selection,#fff)}
-.classic-coordinates .field:nth-of-type(1)>span{color:var(--visual-axis-x,#c00)}
-.classic-coordinates .field:nth-of-type(2)>span{color:var(--visual-axis-y,#080)}
-.classic-coordinates .field:nth-of-type(3)>span{color:var(--visual-axis-z,#00c)}
+.classic-coordinates .field:nth-of-type(1)>span{color:var(--ui-channel-r,#b00000)}
+.classic-coordinates .field:nth-of-type(2)>span{color:var(--ui-channel-g,#006b00)}
+.classic-coordinates .field:nth-of-type(3)>span{color:var(--ui-channel-b,#0000b0)}
 /* The texture library participates in the same Light / Dark preference. */
 :root[data-theme] :is(.tl-dialog,.tl-toolbar,.tl-folders,.tl-details,.tl-tile){background:var(--ui-panel);color:var(--ui-text);border-color:var(--ui-border)}
 :root[data-theme] :is(.tl-toolbar>input,.tl-toolbar select,.tl-header>button,.tl-actions button,.tl-more,.tl-tags>button){background:var(--ui-field);color:var(--ui-text);border-color:var(--ui-border)}
@@ -83,3 +83,5 @@ html[lang=mordor] .language-switch,html[lang=mordor] .language-switch *{font-fam
 :root[data-palette] :is(.resource-editor .re-empty-list,.resource-editor .re-empty-properties){color:var(--ui-muted)}
 :root[data-palette] :is(.resource-editor .re-list button.re-selected,.resource-editor .re-list button.re-selected:hover){background:var(--ui-selected);color:var(--ui-selected-text)}
 :root[data-palette] :is(.resource-editor .re-list button.re-selected small,.paint-start-options button[aria-pressed=true] span){color:var(--ui-selected-text)}
+
+:root[data-palette]{--functional-axis-x:var(--ui-channel-r);--functional-axis-y:var(--ui-channel-g);--functional-axis-z:var(--ui-channel-b);--ui-disabled:var(--ui-muted)}

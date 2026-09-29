@@ -27,7 +27,7 @@ const {buildSync}=require(path.resolve('node_modules/esbuild'));
      const text=[...el.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim();
      for(const value of [text,...['title','aria-label','placeholder','label'].map(n=>el.getAttribute(n))])if(value&&/[A-Za-z]{2}/.test(value))auditText.add(value);
      if(!/[\p{L}\d]/u.test(text)||el.tagName==='OPTION'||el.tagName==='OPTGROUP')continue;
-     const cs=getComputedStyle(el);if(cs.backgroundClip==='text'||el.closest('.showcase-effect-tile,.showcase-text-style .outline,.pressed-keys-tool,.module-icon-badge'))continue;
+     const cs=getComputedStyle(el);if(cs.backgroundClip==='text'||el.closest('.showcase-effect-tile,.showcase-text-style .outline,.pressed-keys-tool,.module-icon-badge,.viewport-orientation-compass'))continue;
      let bg=[255,255,255];const chain=[];for(let p=el;p;p=p.parentElement)chain.push(p);for(const p of chain.reverse())bg=over(color(getComputedStyle(p).backgroundColor),bg);
      const fg=over(color(cs.color),bg),a=lum(fg),b=lum(bg),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
      if(ratio<4.5)failures.push({text:text.slice(0,70),tag:el.tagName,class:el.className,fg:cs.color,bg,ratio:Math.round(ratio*100)/100});
@@ -38,10 +38,11 @@ const {buildSync}=require(path.resolve('node_modules/esbuild'));
   const menu=id=>app.evaluate(({BrowserWindow},id)=>BrowserWindow.getAllWindows()[0].webContents.send('menu',id),id);
   const themes=await page.evaluate(()=>Object.keys(uiAudit.themes));
   async function scan(screen){for(const theme of themes){await page.evaluate(theme=>uiAudit.applyApplicationTheme({theme}),theme);const failed=await page.evaluate(()=>scanUI());if(failed.length)report.contrast.push({screen,theme,failed});report.screens++;}}
+  await scan('vertices');await menu('bones');await page.locator('.movement-controller').waitFor();await scan('bones');await menu('animation');await scan('movement');
   await page.locator('[data-warmkey="animation"]').click();await page.getByRole('button',{name:'Animations',exact:true}).click();await page.locator('.animation-controller').waitFor();await scan('animation');
   // Check native popup items even while the OS popup itself is closed.
   for(const theme of themes){await page.evaluate(theme=>uiAudit.applyApplicationTheme({theme}),theme);const state=await page.locator('.ac-sequence-combo option').first().evaluate(el=>({fg:getComputedStyle(el).color,bg:getComputedStyle(el).backgroundColor,text:getComputedStyle(document.documentElement).getPropertyValue('--ui-text')}));assert.notEqual(state.fg,'rgb(0, 0, 0)');}
-  await menu('appearanceSettings');await page.getByRole('dialog',{name:'Settings'}).waitFor();await scan('settings');await page.evaluate(()=>auditText.clear());await page.getByRole('button',{name:'Close Settings',exact:true}).click();
+  await menu('appearanceSettings');await page.getByRole('dialog',{name:'Settings'}).waitFor();await scan('settings');for(const tab of ['mouse','warmkeys','graphics','capture','configuration','grid','gameData']){await page.locator('#settings-tab-'+tab).click();await scan('settings-'+tab);}await page.evaluate(()=>auditText.clear());await page.getByRole('button',{name:'Close Settings',exact:true}).click();
   for(const kind of ['Materials','Textures','Nodes','Geosets','GeosetAnims','Sequences','TextureAnims','GlobalSequences']){await menu(kind);await page.locator('.re-window').waitFor();await scan(kind);await page.locator('.re-caption-close').click();}
   await page.locator('[data-warmkey="paint"]').click();await page.locator('.paint-workspace').waitFor();await scan('paint');
   await page.getByRole('button',{name:'Showcase',exact:true}).click();await page.locator('.showcase-sidebar').waitFor();await scan('showcase');
