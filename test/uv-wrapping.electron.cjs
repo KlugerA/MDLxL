@@ -22,11 +22,15 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await page.keyboard.press('Control+a');
     const opened = app.waitForEvent('window');
     await page.locator('[data-warmkey="uv"]').click(); uv = await opened; uv.setDefaultTimeout(15000);
+    await app.evaluate(({BrowserWindow}) => {for(const window of BrowserWindow.getAllWindows()){window.webContents.setBackgroundThrottling(false);window.setPosition(-3000,0);window.showInactive();}});
+    await uv.locator('.uv-grid-toolbar').waitFor();
+    if(await uv.getByRole('button', {name:'Disable Wrapping', exact:true}).isVisible())await uv.getByRole('button', {name:'Disable Wrapping', exact:true}).click();
     await uv.getByRole('button', {name:'Enable Wrapping', exact:true}).waitFor();
     await uv.evaluate(() => {
       window.uvState = () => {
         const root = document.querySelector('.uv-workspace');
         let fiber = root[Object.keys(root).find(key=>key.startsWith('__reactFiber'))];
+        let top=fiber;while(top.return)top=top.return;if(top.stateNode.current!==top)fiber=fiber.alternate||fiber;
         for (;fiber;fiber=fiber.return) if (fiber.memoizedProps?.onWrappingChange) return fiber.memoizedProps;
         throw Error('UV workspace props not found');
       };
@@ -59,7 +63,9 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await uv.waitForFunction(()=>sampling()?.every(v=>v===10497)); // REPEAT
     assert.ok(await uv.getByRole('button',{name:'Disable Wrapping',exact:true}).isEnabled());
     const after = await uv.evaluate(()=>JSON.stringify(uvState().model));
-    const expected = JSON.parse(shifted); expected.Textures[1].Flags |= 3;
+    const expected = JSON.parse(shifted);
+    const material=expected.Materials[expected.Geosets[0].MaterialID];
+    for(const layer of material.Layers)if(Number.isInteger(layer.TextureID)&&expected.Textures[layer.TextureID]?.Image&&!expected.Textures[layer.TextureID].ReplaceableId)expected.Textures[layer.TextureID].Flags|=3;
     assert.deepEqual(JSON.parse(after), expected);
     await uv.screenshot({path:path.join(out,'enabled.png')});
     // Both states stay clickable: exercise the actual button in each direction.
@@ -87,7 +93,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     assert.ok(fs.readFileSync(input).equals(original));
     console.log('PASS: button placement, out-of-tile edit, black unused texture space, repeated enable/disable clicks, native WebGL clamp -> repeat -> clamp -> repeat, preserved model data, undo/redo, original file unchanged');
   } catch (error) {
-    if (uv) { await uv.screenshot({path:path.join(out,'failure.png')}); console.error(await uv.evaluate(()=>({sampling:sampling(),flags:uvState().model.Textures.map(t=>t.Flags),nativeFlags:nativeState()?.model.Textures.map(t=>t.Flags),revision:uvState().revision}))); }
+    if (uv) { console.error(error); await uv.screenshot({path:path.join(out,'failure.png')}).catch(e=>console.error('Failure screenshot unavailable:',e.message)); }
     else console.error(await (await app.firstWindow()).locator('body').innerText());
     throw error;
   } finally { await app.evaluate(({app})=>app.exit(0)); }
