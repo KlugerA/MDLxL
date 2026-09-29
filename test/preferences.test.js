@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { normalizePreferences, normalizeChord, chordFromEvent, effectiveBindings, assignHotkey, canHandleHotkeyEvent, isTextEditingTarget } from '../src/preferences.js';
 
 test('preferences validate persisted data and preserve explicitly cleared bindings', () => {
-  assert.equal(normalizePreferences().scrollSensitivity, 2);
+  assert.equal(normalizePreferences().scrollSensitivity, 2.5);
   const prefs = normalizePreferences({ scrollSensitivity: 500, rightScrollAdjust: false, graphics: { maxFps: 999, textures: false, pixelRatio: 1 }, hotkeys: { move: [], open: ['control+o', 'Ctrl+O', 'Shift'] } });
   assert.equal(prefs.scrollSensitivity, 10); assert.equal(prefs.graphics.maxFps, 60); assert.equal(prefs.graphics.textures, false);
   assert.equal(prefs.rightScrollAdjust, false); assert.equal(prefs.graphics.pixelRatio, 1);
   assert.deepEqual(prefs.hotkeys, { move: [], open: ['Ctrl+O'] });
   assert.deepEqual(effectiveBindings([{ id: 'move', defaultKeys: ['M'] }], prefs.hotkeys).move, []);
-  assert.equal(normalizePreferences({ scrollSensitivity: 'oops' }).scrollSensitivity, 2);
+  assert.equal(normalizePreferences({ scrollSensitivity: 'oops' }).scrollSensitivity, 2.5);
 });
 test('WarmKeys normalizes combinations and ignores IME / modifiers', () => {
   assert.equal(normalizeChord('shift+control+z'), 'Ctrl+Shift+Z');

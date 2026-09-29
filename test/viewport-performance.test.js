@@ -108,7 +108,7 @@ test('opposite mouse-button clicks reset DPI and scroll strength immediately', (
   control.pointerUp(right); control.pointerUp(left);
   const heldRight = wheel(0, { button: 2, pointerId: 12 }), resetScroll = wheel(0, { button: 0, pointerId: 13 });
   control.pointerDown(heldRight); control.mouseDown(resetScroll);
-  assert.equal(scrollSaved, 2); assert.ok(resetScroll.prevented && resetScroll.stopped, 'right then left consumes the scroll reset chord');
+  assert.equal(scrollSaved, 2.5); assert.ok(resetScroll.prevented && resetScroll.stopped, 'right then left consumes the scroll reset chord');
   assert.equal(cancelled, 2, 'both reset chords cancel an active editor gesture');
 });
 

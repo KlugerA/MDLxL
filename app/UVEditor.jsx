@@ -11,10 +11,10 @@ import { normalizeUVGrid, snapUVCoordinates, visibleUVGridLines } from '../src/u
 const indicesOf = selection => Array.from(selection || []);
 
 /** Classic select/move/rotate/scale tools. UV V retains Warcraft's top-down convention. */
-export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, uvGrid, showTextureFrame = false, textureFrameColor = '#4cff59', snapTextureFrame = false, axis = null }) {
+export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, textureWrapping = true, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, uvGrid, showTextureFrame = false, textureFrameColor = '#4cff59', snapTextureFrame = false, axis = null }) {
   const host = useRef(null), canvas = useRef(null);
-  const state = useRef({ zoom: .55, panX: 0, panY: 0, uv: new Float32Array(), drag: null, image: null, draw: () => {} });
-  const current = useRef({}); current.current = { geoset, uvSet, textureSize, selectedVertices, eligibleVertices, hiddenVertices, onSelectVertices, onChange, onPreviewChange, transformMode, cameraMode, preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended, showWires, showVertices, uvGrid, showTextureFrame, textureFrameColor, snapTextureFrame, axis };
+  const state = useRef({ zoom: .55, panX: 0, panY: 0, centered: false, uv: new Float32Array(), drag: null, image: null, draw: () => {} });
+  const current = useRef({}); current.current = { geoset, uvSet, textureSize, textureWrapping, selectedVertices, eligibleVertices, hiddenVertices, onSelectVertices, onChange, onPreviewChange, transformMode, cameraMode, preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended, showWires, showVertices, uvGrid, showTextureFrame, textureFrameColor, snapTextureFrame, axis };
   const [imageError, setImageError] = useState(false), [adjustingSensitivity, setAdjustingSensitivity] = useState(null);
   const graphics = graphicsOptions(preferences);
   const count = (geoset?.TVertices?.[uvSet]?.length || 0) / 2;
@@ -22,7 +22,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
   // History can patch typed arrays in place; revision must invalidate this drawing copy.
   const eligibilityKey = eligibleVertices === undefined ? '*' : indicesOf(eligibleVertices).join(',');
   useLayoutEffect(() => { state.current.uv = new Float32Array(geoset?.TVertices?.[uvSet] || []); state.current.drag = null; current.current.onPreviewChange?.(null); state.current.draw(); }, [geoset, uvSet, geoset?.TVertices?.[uvSet], revision, textureUrl, eligibilityKey]);
-  useEffect(() => { state.current.draw(); }, [selectedVertices, hiddenVertices, eligibilityKey, showWires, showVertices, uvGrid?.enabled, uvGrid?.spacing, uvGrid?.thickness, uvGrid?.color, uvGrid?.opacity, showTextureFrame, textureFrameColor, textureSize?.[0], textureSize?.[1], preferences?.visuals, preferences?.theme]);
+  useEffect(() => { state.current.draw(); }, [selectedVertices, hiddenVertices, eligibilityKey, showWires, showVertices, uvGrid?.enabled, uvGrid?.spacing, uvGrid?.thickness, uvGrid?.color, uvGrid?.opacity, showTextureFrame, textureFrameColor, textureSize?.[0], textureSize?.[1], textureWrapping, preferences?.visuals, preferences?.theme]);
   useEffect(() => {
     let cancelled = false; state.current.image = null; setImageError(false);
     if (!textureUrl || !graphics.textures) { state.current.draw(); return; }
@@ -52,6 +52,13 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
       const allowed = new Set(eligible());
       return indicesOf(current.current.selectedVertices).filter(index => allowed.has(index));
     }
+    function centerInitialTextureFrame() {
+      if (s.centered || width <= 1 || height <= 1) return;
+      const p = current.current, allowed = eligible(), faces = eligibleUVFaces(p.geoset, allowed, p.uvSet);
+      const [frameU, frameV] = occupiedUVTextureFrames(s.uv, faces, allowed)[0] || [0, 0];
+      const { sizeX, sizeY } = mapping();
+      s.panX = -frameU * sizeX; s.panY = -frameV * sizeY; s.centered = true;
+    }
     function draw() {
       const p = current.current, { sizeX, sizeY, x, y } = mapping();
       element.style.cursor = s.drag?.cursor || viewportCursor(p.cameraMode, p.transformMode);
@@ -59,18 +66,20 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
       if (ownerDocument === document && ownerDocument.hidden && graphicsOptions(p.preferences).pauseWhenHidden) return;
       const visuals = visualOptions(p.preferences);
       context.setTransform(ratio, 0, 0, ratio, 0, 0); context.clearRect(0, 0, width, height);
-      context.fillStyle = visuals.background; context.fillRect(0, 0, width, height);
+      context.fillStyle = p.textureWrapping ? visuals.background : '#000'; context.fillRect(0, 0, width, height);
       if (s.image) {
-        // MDLVis presents one seamless infinite texture plane. Only the image
-        // repeats; UV coordinates stay unbounded and are never wrapped.
-        const pattern = context.createPattern(s.image, 'repeat');
-        if (pattern) {
-          const scaleX = sizeX / s.image.width, scaleY = sizeY / s.image.height;
-          context.save(); context.translate(x, y); context.scale(scaleX, scaleY);
-          context.fillStyle = pattern;
-          context.fillRect(-x / scaleX, -y / scaleY, width / scaleX, height / scaleY);
-          context.restore();
-        }
+        if (p.textureWrapping) {
+          // MDLVis presents one seamless infinite texture plane. Only the image
+          // repeats; UV coordinates stay unbounded and are never wrapped.
+          const pattern = context.createPattern(s.image, 'repeat');
+          if (pattern) {
+            const scaleX = sizeX / s.image.width, scaleY = sizeY / s.image.height;
+            context.save(); context.translate(x, y); context.scale(scaleX, scaleY);
+            context.fillStyle = pattern;
+            context.fillRect(-x / scaleX, -y / scaleY, width / scaleX, height / scaleY);
+            context.restore();
+          }
+        } else context.drawImage(s.image, x, y, sizeX, sizeY);
       }
       const grid = normalizeUVGrid(p.uvGrid);
       if (grid.enabled && grid.opacity > 0) {
@@ -113,7 +122,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
     s.draw = draw;
     function resize() {
       width = Math.max(1, container.clientWidth); height = Math.max(1, container.clientHeight); ratio = Math.min(graphicsOptions(current.current.preferences).pixelRatio, ownerWindow.devicePixelRatio || 1);
-      element.width = Math.round(width * ratio); element.height = Math.round(height * ratio); element.style.width = width + 'px'; element.style.height = height + 'px'; draw();
+      element.width = Math.round(width * ratio); element.height = Math.round(height * ratio); element.style.width = width + 'px'; element.style.height = height + 'px'; centerInitialTextureFrame(); draw();
     }
     s.resize = resize;
     const observer = new ownerWindow.ResizeObserver(resize); observer.observe(container); resize();
