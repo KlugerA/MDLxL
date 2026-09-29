@@ -8,7 +8,7 @@
 
 ## Validation
 
-Native Electron checks cover 189 marker combinations, 63 wire combinations, 12 background combinations, preset persistence and configuration import, plus 112 theme/screen contrast combinations. Focused source and compatibility checks pass (118 passed, one skipped); the separate UV lane passes 31 focused tests. Model bytes remain unchanged during appearance tests.
+Native Electron checks cover 189 marker combinations, 63 wire combinations, 12 background combinations, preset persistence and configuration import, plus 112 theme/screen contrast combinations. The combined focused source, UV and compatibility checks pass (149 passed, one skipped). Native UV wrapping verification also passes with undo/redo and black-space pixel checks. Model bytes remain unchanged during appearance tests.
 
 The broad historical suite is not green: its audit reported 1049 passed, 18 failed and two skipped, including an existing timeline test that hung and was terminated. These failures are separate from the focused change validation; the existing localization brand-list failure was corrected in this patch.
 
