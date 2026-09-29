@@ -8,6 +8,7 @@ export function localizedCreateElement(type, props, ...children) {
   const next={...props};for(const key of textProps)if(typeof next[key]==='string')next[key]=translate(next[key]);
   // An option's implicit value must not change when its visible label changes.
   if(type==='option' && next.value===undefined && children.length===1 && typeof children[0]==='string')next.value=children[0];
+  if(type==='optgroup' && typeof next.label==='string')next.label=translate(next.label);
   if(type==='input' && ['button','submit','reset'].includes(next.type))next.value=translate(next.value);
   if(next.children!==undefined)next.children=textChildren(next.children);
   return React.createElement(type,next,...(['textarea','script','style','code','pre'].includes(type)?children:children.map(textChildren)));

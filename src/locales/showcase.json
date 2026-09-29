@@ -1,0 +1,1472 @@
+{
+  "Showcase": [
+    "Витрина",
+    "Exhibición",
+    "展示"
+  ],
+  "Showcase controls": [
+    "Настройки витрины",
+    "Controles de exhibición",
+    "展示控制"
+  ],
+  "Showcase preview": [
+    "Предпросмотр витрины",
+    "Vista previa de exhibición",
+    "展示预览"
+  ],
+  "Showcase presets": [
+    "Пресеты витрины",
+    "Preajustes de exhibición",
+    "展示预设"
+  ],
+  "Showcase preset name": [
+    "Название пресета витрины",
+    "Nombre del preajuste de exhibición",
+    "展示预设名称"
+  ],
+  "Showcase setup": [
+    "Настройки витрины",
+    "Configuración de exhibición",
+    "展示设置"
+  ],
+  "Load model": [
+    "Загрузить модель",
+    "Cargar modelo",
+    "加载模型"
+  ],
+  "Save Preset": [
+    "Сохранить пресет",
+    "Guardar preajuste",
+    "保存预设"
+  ],
+  "Load Preset": [
+    "Загрузить пресет",
+    "Cargar preajuste",
+    "加载预设"
+  ],
+  "Save preset": [
+    "Сохранить пресет",
+    "Guardar preajuste",
+    "保存预设"
+  ],
+  "Delete preset": [
+    "Удалить пресет",
+    "Eliminar preajuste",
+    "删除预设"
+  ],
+  "Preset": [
+    "Пресет",
+    "Preajuste",
+    "预设"
+  ],
+  "Preset name": [
+    "Название пресета",
+    "Nombre del preajuste",
+    "预设名称"
+  ],
+  "Included": [
+    "Встроенные",
+    "Incluidos",
+    "内置"
+  ],
+  "Saved": [
+    "Сохранённые",
+    "Guardados",
+    "已保存"
+  ],
+  "Choose a preset.": [
+    "Выберите пресет.",
+    "Elige un preajuste.",
+    "请选择预设。"
+  ],
+  "Includes layout, media, text and camera settings. Animations stay as selected.": [
+    "Сохраняет компоновку, медиа, текст и камеру. Выбранные анимации не меняются.",
+    "Incluye composición, medios, texto y cámara. Conserva las animaciones seleccionadas.",
+    "包含布局、媒体、文字和相机设置。保留已选动画。"
+  ],
+  "Classic · title above": [
+    "Классический · заголовок сверху",
+    "Clásico · título arriba",
+    "经典 · 标题在上"
+  ],
+  "Square · release card": [
+    "Квадрат · карточка релиза",
+    "Cuadrado · tarjeta de lanzamiento",
+    "方形 · 发布卡片"
+  ],
+  "Wide · model left": [
+    "Широкий · модель слева",
+    "Panorámico · modelo a la izquierda",
+    "宽屏 · 模型在左"
+  ],
+  "Wide · model right": [
+    "Широкий · модель справа",
+    "Panorámico · modelo a la derecha",
+    "宽屏 · 模型在右"
+  ],
+  "Tall · hero showcase": [
+    "Вертикальный · герой",
+    "Vertical · presentación del héroe",
+    "竖屏 · 英雄展示"
+  ],
+  "Add to recording list": [
+    "Добавить в список записей",
+    "Añadir a la lista de grabación",
+    "添加到录制列表"
+  ],
+  "Recording list": [
+    "Список записей",
+    "Lista de grabación",
+    "录制列表"
+  ],
+  "Edit recording {0}": [
+    "Изменить запись {0}",
+    "Editar grabación {0}",
+    "编辑录制 {0}"
+  ],
+  "Remove recording {0}": [
+    "Удалить запись {0}",
+    "Eliminar grabación {0}",
+    "移除录制 {0}"
+  ],
+  "Save changes": [
+    "Сохранить изменения",
+    "Guardar cambios",
+    "保存更改"
+  ],
+  "Editing queued recording. Save changes or Cancel to return.": [
+    "Редактирование записи в очереди. Сохраните изменения или нажмите «Отмена», чтобы вернуться.",
+    "Editando una grabación en cola. Guarda los cambios o cancela para volver.",
+    "正在编辑队列中的录制。保存更改或取消以返回。"
+  ],
+  "Queued recording updated.": [
+    "Запись в очереди обновлена.",
+    "Grabación en cola actualizada.",
+    "队列中的录制已更新。"
+  ],
+  "Recording changes cancelled.": [
+    "Изменения записи отменены.",
+    "Cambios de la grabación cancelados.",
+    "已取消录制更改。"
+  ],
+  "Extra Time": [
+    "Доп. время",
+    "Tiempo extra",
+    "额外时间"
+  ],
+  "Animation Extra Time": [
+    "Доп. время анимации",
+    "Tiempo extra de animación",
+    "动画额外时间"
+  ],
+  "Sequence: {0}s, including effects. Total: {1}s.": [
+    "Анимация: {0} с, включая эффекты. Всего: {1} с.",
+    "Secuencia: {0} s, incluidos efectos. Total: {1} s.",
+    "序列：{0} 秒（含特效）。总计：{1} 秒。"
+  ],
+  "Background source": [
+    "Источник фона",
+    "Origen del fondo",
+    "背景来源"
+  ],
+  "Backgrounds": [
+    "Фоны",
+    "Fondos",
+    "背景库"
+  ],
+  "Image/Video": [
+    "Изображение/видео",
+    "Imagen/vídeo",
+    "图片/视频"
+  ],
+  "Choose image/video…": [
+    "Выбрать изображение/видео…",
+    "Elegir imagen/vídeo…",
+    "选择图片/视频…"
+  ],
+  "From (s)": [
+    "От (с)",
+    "Desde (s)",
+    "起点（秒）"
+  ],
+  "To (s)": [
+    "До (с)",
+    "Hasta (s)",
+    "终点（秒）"
+  ],
+  "Black": [
+    "Чёрный",
+    "Negro",
+    "黑色"
+  ],
+  "Charcoal": [
+    "Угольный",
+    "Carbón",
+    "炭灰"
+  ],
+  "Slate": [
+    "Сланцевый",
+    "Pizarra",
+    "石板灰"
+  ],
+  "Gray": [
+    "Серый",
+    "Gris",
+    "灰色"
+  ],
+  "Warm gray": [
+    "Тёплый серый",
+    "Gris cálido",
+    "暖灰"
+  ],
+  "Colors": [
+    "Цвета",
+    "Colores",
+    "颜色"
+  ],
+  "Click to save current color": [
+    "Нажмите, чтобы сохранить текущий цвет",
+    "Pulsa para guardar el color actual",
+    "点击保存当前颜色"
+  ],
+  "Background color": [
+    "Цвет фона",
+    "Color de fondo",
+    "背景颜色"
+  ],
+  "Sequences / Portrait": [
+    "Анимации / Портрет",
+    "Secuencias / Retrato",
+    "动画序列 / 肖像"
+  ],
+  "Sequences": [
+    "Анимации",
+    "Secuencias",
+    "动画序列"
+  ],
+  "Animation sequence": [
+    "Анимационная последовательность",
+    "Secuencia de animación",
+    "动画序列"
+  ],
+  "Add animation": [
+    "Добавить анимацию",
+    "Añadir animación",
+    "添加动画"
+  ],
+  "Edit animation": [
+    "Изменить анимацию",
+    "Editar animación",
+    "编辑动画"
+  ],
+  "Click to edit": [
+    "Нажмите для редактирования",
+    "Pulsa para editar",
+    "点击编辑"
+  ],
+  "Loops": [
+    "Повторы",
+    "Repeticiones",
+    "循环次数"
+  ],
+  "Enter a whole number of loops, at least 1.": [
+    "Введите целое число повторов, не менее 1.",
+    "Introduce un número entero de repeticiones, como mínimo 1.",
+    "请输入至少为 1 的整数循环次数。"
+  ],
+  "Emitters": [
+    "Источники частиц",
+    "Emisores",
+    "发射器"
+  ],
+  "· {0} off": [
+    "· отключено: {0}",
+    "· {0} desactivados",
+    "· 已关闭 {0} 个"
+  ],
+  "Sequence too short": [
+    "Анимация слишком короткая",
+    "Secuencia demasiado corta",
+    "动画序列过短"
+  ],
+  "This model has no portrait camera.": [
+    "У этой модели нет портретной камеры.",
+    "Este modelo no tiene cámara de retrato.",
+    "此模型没有肖像相机。"
+  ],
+  "Preview animation": [
+    "Просмотр анимации",
+    "Ver animación",
+    "预览动画"
+  ],
+  "Stop animation": [
+    "Остановить анимацию",
+    "Detener animación",
+    "停止动画"
+  ],
+  "Move animation up": [
+    "Поднять анимацию",
+    "Subir animación",
+    "上移动画"
+  ],
+  "Move animation down": [
+    "Опустить анимацию",
+    "Bajar animación",
+    "下移动画"
+  ],
+  "Camera Control": [
+    "Управление камерой",
+    "Control de cámara",
+    "相机控制"
+  ],
+  "Maximal Zoom": [
+    "Максимальный масштаб",
+    "Zoom máximo",
+    "最大缩放"
+  ],
+  "Fit the current pose through a complete orbit inside the crop": [
+    "Вписать текущую позу в область обрезки на всём обороте камеры",
+    "Encajar la pose actual en el recorte durante una órbita completa",
+    "使当前姿势在整圈环绕中始终位于裁剪区域内"
+  ],
+  "Timing": [
+    "Длительность",
+    "Temporización",
+    "时间控制"
+  ],
+  "Orbit timing": [
+    "Режим оборота",
+    "Temporización de órbita",
+    "环绕时间模式"
+  ],
+  "Complete Full Circle": [
+    "Полный оборот",
+    "Completar una vuelta",
+    "完整环绕一圈"
+  ],
+  "Orbit speed": [
+    "Скорость оборота",
+    "Velocidad de órbita",
+    "环绕速度"
+  ],
+  "Align model": [
+    "Выровнять модель",
+    "Alinear modelo",
+    "对齐模型"
+  ],
+  "Align model within crop": [
+    "Выровнять модель в области обрезки",
+    "Alinear modelo dentro del recorte",
+    "在裁剪区域内对齐模型"
+  ],
+  "Radius": [
+    "Радиус",
+    "Radio",
+    "半径"
+  ],
+  "Z axis · 0% spins in place": [
+    "Ось Z · 0% — вращение на месте",
+    "Eje Z · 0% gira sobre sí mismo",
+    "Z 轴 · 0% 为原地旋转"
+  ],
+  "Reverse orbit direction": [
+    "Обратить направление оборота",
+    "Invertir dirección de órbita",
+    "反转环绕方向"
+  ],
+  "Preview orbit": [
+    "Просмотр оборота",
+    "Ver órbita",
+    "预览环绕"
+  ],
+  "Stop orbit": [
+    "Остановить оборот",
+    "Detener órbita",
+    "停止环绕"
+  ],
+  "Portrait zoom": [
+    "Масштаб портрета",
+    "Zoom del retrato",
+    "肖像缩放"
+  ],
+  "Portrait color": [
+    "Цвет портрета",
+    "Color del retrato",
+    "肖像颜色"
+  ],
+  "Portrait frame": [
+    "Рамка портрета",
+    "Marco del retrato",
+    "肖像边框"
+  ],
+  "Portrait zoom preset": [
+    "Пресет масштаба портрета",
+    "Preajuste de zoom del retrato",
+    "肖像缩放预设"
+  ],
+  "Small 75%": [
+    "Малый 75%",
+    "Pequeño 75%",
+    "小型 75%"
+  ],
+  "Frame 100%": [
+    "В рамку 100%",
+    "Marco 100%",
+    "适合边框 100%"
+  ],
+  "Close 125%": [
+    "Крупный 125%",
+    "Cercano 125%",
+    "近景 125%"
+  ],
+  "Detail 150%": [
+    "Детальный 150%",
+    "Detalle 150%",
+    "细节 150%"
+  ],
+  "Crop": [
+    "Обрезка",
+    "Recortar",
+    "裁剪"
+  ],
+  "Crop size": [
+    "Размер обрезки",
+    "Tamaño del recorte",
+    "裁剪尺寸"
+  ],
+  "Crop area": [
+    "Область обрезки",
+    "Área de recorte",
+    "裁剪区域"
+  ],
+  "Free selection": [
+    "Произвольная область",
+    "Selección libre",
+    "自由选择"
+  ],
+  "Square · 1:1": [
+    "Квадрат · 1:1",
+    "Cuadrado · 1:1",
+    "方形 · 1:1"
+  ],
+  "Classic · 4:3": [
+    "Классический · 4:3",
+    "Clásico · 4:3",
+    "经典 · 4:3"
+  ],
+  "Wide · 16:9": [
+    "Широкий · 16:9",
+    "Panorámico · 16:9",
+    "宽屏 · 16:9"
+  ],
+  "Portrait · 3:4": [
+    "Вертикальный · 3:4",
+    "Vertical · 3:4",
+    "竖屏 · 3:4"
+  ],
+  "Center unit in crop; zoom out only if needed": [
+    "Центрировать модель в области обрезки; уменьшить только при необходимости",
+    "Centrar la unidad en el recorte; alejar solo si es necesario",
+    "将单位居中于裁剪区域；仅在必要时缩小"
+  ],
+  "Center unit in viewport; zoom out only if needed": [
+    "Центрировать модель в окне; уменьшить только при необходимости",
+    "Centrar la unidad en la vista; alejar solo si es necesario",
+    "将单位居中于视口；仅在必要时缩小"
+  ],
+  "Edit crop": [
+    "Изменить обрезку",
+    "Editar recorte",
+    "编辑裁剪"
+  ],
+  "Done": [
+    "Готово",
+    "Listo",
+    "完成"
+  ],
+  "Drag to select the GIF area": [
+    "Выделите область GIF перетаскиванием",
+    "Arrastra para seleccionar el área del GIF",
+    "拖动选择 GIF 区域"
+  ],
+  "Hive Main Picture": [
+    "Главное изображение Hive",
+    "Imagen principal de Hive",
+    "Hive 主图"
+  ],
+  "Signature": [
+    "Подпись",
+    "Firma",
+    "签名"
+  ],
+  "Signatures": [
+    "Подписи",
+    "Firmas",
+    "签名列表"
+  ],
+  "Signature presets": [
+    "Пресеты подписей",
+    "Preajustes de firmas",
+    "签名预设"
+  ],
+  "Signature opacity": [
+    "Непрозрачность подписи",
+    "Opacidad de la firma",
+    "签名不透明度"
+  ],
+  "Signature preset name": [
+    "Название пресета подписи",
+    "Nombre del preajuste de firma",
+    "签名预设名称"
+  ],
+  "Signature preset saved.": [
+    "Пресет подписи сохранён.",
+    "Preajuste de firma guardado.",
+    "签名预设已保存。"
+  ],
+  "Choose images or GIFs for signatures.": [
+    "Выберите изображения или GIF для подписей.",
+    "Elige imágenes o GIF para las firmas.",
+    "请选择图片或 GIF 作为签名。"
+  ],
+  "Add preset…": [
+    "Добавить пресет…",
+    "Añadir preajuste…",
+    "添加预设…"
+  ],
+  "Drag to place · corner to resize": [
+    "Перетаскивание — положение · угол — размер",
+    "Arrastra para colocar · esquina para redimensionar",
+    "拖动定位 · 拖动角点调整大小"
+  ],
+  "Drag to place · corner to resize · ↻ to rotate": [
+    "Перетаскивание — положение · угол — размер · ↻ — поворот",
+    "Arrastra para colocar · esquina para redimensionar · ↻ para girar",
+    "拖动定位 · 角点调整大小 · ↻ 旋转"
+  ],
+  "Send backward": [
+    "На слой назад",
+    "Enviar atrás",
+    "下移一层"
+  ],
+  "Send layer backward": [
+    "Переместить слой назад",
+    "Enviar capa atrás",
+    "将图层下移"
+  ],
+  "Bring forward": [
+    "На слой вперёд",
+    "Traer adelante",
+    "上移一层"
+  ],
+  "Bring layer forward": [
+    "Переместить слой вперёд",
+    "Traer capa adelante",
+    "将图层上移"
+  ],
+  "Text": [
+    "Текст",
+    "Texto",
+    "文字"
+  ],
+  "Text layers": [
+    "Текстовые слои",
+    "Capas de texto",
+    "文字图层"
+  ],
+  "Text content": [
+    "Содержимое текста",
+    "Contenido del texto",
+    "文字内容"
+  ],
+  "Empty text": [
+    "Пустой текст",
+    "Texto vacío",
+    "空文字"
+  ],
+  "Your text": [
+    "Ваш текст",
+    "Tu texto",
+    "你的文字"
+  ],
+  "Highlight text to format just that selection": [
+    "Выделите текст, чтобы изменить только его оформление",
+    "Selecciona texto para dar formato solo a esa selección",
+    "选中文字，仅设置所选部分的格式"
+  ],
+  "Choose font": [
+    "Выбрать шрифт",
+    "Elegir fuente",
+    "选择字体"
+  ],
+  "Text colors": [
+    "Цвета текста",
+    "Colores del texto",
+    "文字颜色"
+  ],
+  "Main color": [
+    "Основной цвет",
+    "Color principal",
+    "主颜色"
+  ],
+  "Gradient color 2": [
+    "Цвет градиента 2",
+    "Color del degradado 2",
+    "渐变颜色 2"
+  ],
+  "Gradient color 3": [
+    "Цвет градиента 3",
+    "Color del degradado 3",
+    "渐变颜色 3"
+  ],
+  "Text size": [
+    "Размер текста",
+    "Tamaño del texto",
+    "文字大小"
+  ],
+  "Bold": [
+    "Полужирный",
+    "Negrita",
+    "粗体"
+  ],
+  "Italic": [
+    "Курсив",
+    "Cursiva",
+    "斜体"
+  ],
+  "Underline": [
+    "Подчёркивание",
+    "Subrayado",
+    "下划线"
+  ],
+  "Outline": [
+    "Обводка",
+    "Contorno",
+    "描边"
+  ],
+  "Outline color": [
+    "Цвет обводки",
+    "Color del contorno",
+    "描边颜色"
+  ],
+  "Alignment grid": [
+    "Сетка выравнивания",
+    "Cuadrícula de alineación",
+    "对齐网格"
+  ],
+  "Grid density": [
+    "Плотность сетки",
+    "Densidad de cuadrícula",
+    "网格密度"
+  ],
+  "Grid density · 1–99": [
+    "Плотность сетки · 1–99",
+    "Densidad de cuadrícula · 1–99",
+    "网格密度 · 1–99"
+  ],
+  "Align": [
+    "Выровнять",
+    "Alinear",
+    "对齐"
+  ],
+  "Align text": [
+    "Выровнять текст",
+    "Alinear texto",
+    "对齐文字"
+  ],
+  "Align lines left": [
+    "Строки по левому краю",
+    "Alinear líneas a la izquierda",
+    "行左对齐"
+  ],
+  "Align lines center": [
+    "Строки по центру",
+    "Centrar líneas",
+    "行居中对齐"
+  ],
+  "Align lines right": [
+    "Строки по правому краю",
+    "Alinear líneas a la derecha",
+    "行右对齐"
+  ],
+  "Choose animated text effect": [
+    "Выбрать эффект текста",
+    "Elegir efecto de texto animado",
+    "选择文字动画效果"
+  ],
+  "Solid": [
+    "Однотонный",
+    "Uniforme",
+    "纯色"
+  ],
+  "Gradient": [
+    "Градиент",
+    "Degradado",
+    "渐变"
+  ],
+  "Neon": [
+    "Неон",
+    "Neón",
+    "霓虹"
+  ],
+  "Flame": [
+    "Пламя",
+    "Llama",
+    "火焰"
+  ],
+  "Frost": [
+    "Иней",
+    "Escarcha",
+    "冰霜"
+  ],
+  "Arcane": [
+    "Магия",
+    "Arcano",
+    "奥术"
+  ],
+  "Lightning": [
+    "Молния",
+    "Relámpago",
+    "闪电"
+  ],
+  "Prism": [
+    "Призма",
+    "Prisma",
+    "棱镜"
+  ],
+  "Wave": [
+    "Волна",
+    "Onda",
+    "波浪"
+  ],
+  "Shimmer": [
+    "Мерцание",
+    "Destello",
+    "微光"
+  ],
+  "Fades": [
+    "Появление и затухание",
+    "Fundidos",
+    "淡入淡出"
+  ],
+  "Start (s)": [
+    "Начало (с)",
+    "Inicio (s)",
+    "开始（秒）"
+  ],
+  "Length (s)": [
+    "Длительность (с)",
+    "Duración (s)",
+    "时长（秒）"
+  ],
+  "In": [
+    "Вход",
+    "Entrada",
+    "淡入"
+  ],
+  "Out": [
+    "Выход",
+    "Salida",
+    "淡出"
+  ],
+  "Fade in start": [
+    "Начало появления",
+    "Inicio del fundido de entrada",
+    "淡入开始"
+  ],
+  "Fade in length": [
+    "Длительность появления",
+    "Duración del fundido de entrada",
+    "淡入时长"
+  ],
+  "Fade out start": [
+    "Начало затухания",
+    "Inicio del fundido de salida",
+    "淡出开始"
+  ],
+  "Fade out length": [
+    "Длительность затухания",
+    "Duración del fundido de salida",
+    "淡出时长"
+  ],
+  "Length in seconds; 0 turns the fade off": [
+    "Длительность в секундах; 0 отключает эффект",
+    "Duración en segundos; 0 desactiva el fundido",
+    "时长以秒计；0 表示关闭淡入淡出"
+  ],
+  "Graphics quality": [
+    "Качество графики",
+    "Calidad gráfica",
+    "图形质量"
+  ],
+  "Recording FPS": [
+    "Частота кадров записи",
+    "FPS de grabación",
+    "录制帧率"
+  ],
+  "Highest": [
+    "Максимальное",
+    "Máxima",
+    "最高"
+  ],
+  "Ingame": [
+    "В игре",
+    "En el juego",
+    "游戏内"
+  ],
+  "1× · no AA · bilinear": [
+    "1× · без сглаживания · билинейная фильтрация",
+    "1× · sin suavizado · bilineal",
+    "1× · 无抗锯齿 · 双线性过滤"
+  ],
+  "1.5× · AA · 4× filtering": [
+    "1,5× · сглаживание · фильтрация 4×",
+    "1,5× · suavizado · filtrado 4×",
+    "1.5× · 抗锯齿 · 4× 过滤"
+  ],
+  "2× · AA · 16× filtering": [
+    "2× · сглаживание · фильтрация 16×",
+    "2× · suavizado · filtrado 16×",
+    "2× · 抗锯齿 · 16× 过滤"
+  ],
+  "RECORD": [
+    "ЗАПИСЬ",
+    "GRABAR",
+    "录制"
+  ],
+  "STOP": [
+    "СТОП",
+    "DETENER",
+    "停止"
+  ],
+  "RECORD & UPLOAD": [
+    "ЗАПИСАТЬ И ЗАГРУЗИТЬ",
+    "GRABAR Y SUBIR",
+    "录制并上传"
+  ],
+  "GIF destination": [
+    "Назначение GIF",
+    "Destino del GIF",
+    "GIF 目标"
+  ],
+  "Record saves locally, then uploads the exact GIF anonymously to Catbox": [
+    "Запись сохраняет GIF локально, затем анонимно загружает тот же файл на Catbox",
+    "La grabación se guarda localmente y después sube el mismo GIF de forma anónima a Catbox",
+    "录制先保存到本地，再将同一 GIF 匿名上传到 Catbox"
+  ],
+  "Hive Main Picture · 612 × 490 · 5s max · local GIF": [
+    "Главное изображение Hive · 612 × 490 · до 5 с · локальный GIF",
+    "Imagen principal de Hive · 612 × 490 · máx. 5 s · GIF local",
+    "Hive 主图 · 612 × 490 · 最长 5 秒 · 本地 GIF"
+  ],
+  "864 px max · 30 FPS · ≤20 MB · uploads after Record": [
+    "До 864 px · 30 FPS · ≤20 MB · загрузка после записи",
+    "Máx. 864 px · 30 FPS · ≤20 MB · se sube tras grabar",
+    "最大 864 px · 30 FPS · ≤20 MB · 录制后上传"
+  ],
+  "Hive · 5s max · 30 FPS": [
+    "Hive · до 5 с · 30 FPS",
+    "Hive · máx. 5 s · 30 FPS",
+    "Hive · 最长 5 秒 · 30 FPS"
+  ],
+  "Original quality · local GIF": [
+    "Исходное качество · локальный GIF",
+    "Calidad original · GIF local",
+    "原始画质 · 本地 GIF"
+  ],
+  "Catbox links": [
+    "Ссылки Catbox",
+    "Enlaces de Catbox",
+    "Catbox 链接"
+  ],
+  "Copy Link": [
+    "Копировать ссылку",
+    "Copiar enlace",
+    "复制链接"
+  ],
+  "Copy Hive BBCode": [
+    "Копировать BBCode для Hive",
+    "Copiar BBCode de Hive",
+    "复制 Hive BBCode"
+  ],
+  "Link {0}": [
+    "Ссылка {0}",
+    "Enlace {0}",
+    "链接 {0}"
+  ],
+  "Hive BBCode {0}": [
+    "BBCode для Hive {0}",
+    "BBCode de Hive {0}",
+    "Hive BBCode {0}"
+  ],
+  "Hive BBCode copied": [
+    "BBCode для Hive скопирован",
+    "BBCode de Hive copiado",
+    "已复制 Hive BBCode"
+  ],
+  "Link copied": [
+    "Ссылка скопирована",
+    "Enlace copiado",
+    "链接已复制"
+  ],
+  "Could not copy the link. Select and copy the text.": [
+    "Не удалось скопировать ссылку. Выделите и скопируйте текст.",
+    "No se pudo copiar el enlace. Selecciona y copia el texto.",
+    "无法复制链接。请选择并复制文本。"
+  ],
+  "Uploading...": [
+    "Загрузка…",
+    "Subiendo…",
+    "正在上传…"
+  ],
+  "Retry Upload": [
+    "Повторить загрузку",
+    "Reintentar subida",
+    "重试上传"
+  ],
+  "Upload to Catbox": [
+    "Загрузить на Catbox",
+    "Subir a Catbox",
+    "上传到 Catbox"
+  ],
+  "GIF saved locally": [
+    "GIF сохранён локально",
+    "GIF guardado localmente",
+    "GIF 已保存到本地"
+  ],
+  "Save needs retry": [
+    "Повторите сохранение",
+    "Hay que reintentar el guardado",
+    "需要重试保存"
+  ],
+  "Retry Save": [
+    "Повторить сохранение",
+    "Reintentar guardado",
+    "重试保存"
+  ],
+  "Making GIFs…": [
+    "Создание GIF…",
+    "Creando GIF…",
+    "正在生成 GIF…"
+  ],
+  "Creating GIF…": [
+    "Создание GIF…",
+    "Creando GIF…",
+    "正在生成 GIF…"
+  ],
+  "Capturing GIF frames… {0}": [
+    "Захват кадров GIF… {0}",
+    "Capturando fotogramas del GIF… {0}",
+    "正在捕获 GIF 帧… {0}"
+  ],
+  "Restoring setup…": [
+    "Восстановление настроек…",
+    "Restaurando configuración…",
+    "正在恢复设置…"
+  ],
+  "Take {0}": [
+    "Запись {0}",
+    "Toma {0}",
+    "录制 {0}"
+  ],
+  "Saved capture": [
+    "Снимок сохранён",
+    "Captura guardada",
+    "截图已保存"
+  ],
+  "Saved recording": [
+    "Запись сохранена",
+    "Grabación guardada",
+    "录制已保存"
+  ],
+  "Record length must be at least 0.02 seconds.": [
+    "Длительность записи должна быть не менее 0,02 секунды.",
+    "La grabación debe durar al menos 0,02 segundos.",
+    "录制时长必须至少为 0.02 秒。"
+  ],
+  "Choose a supported recording FPS.": [
+    "Выберите поддерживаемую частоту кадров записи.",
+    "Elige una frecuencia de grabación compatible.",
+    "请选择支持的录制帧率。"
+  ],
+  "Recording reached the storage limit.": [
+    "Достигнут предел размера записи.",
+    "La grabación alcanzó el límite de almacenamiento.",
+    "录制已达到存储上限。"
+  ],
+  "Hive does not support GIF previews longer than 5 seconds.": [
+    "Hive не поддерживает GIF-превью длительностью более 5 секунд.",
+    "Hive no admite vistas previas GIF de más de 5 segundos.",
+    "Hive 不支持超过 5 秒的 GIF 预览。"
+  ],
+  "The Showcase preview is still loading.": [
+    "Предпросмотр витрины ещё загружается.",
+    "La vista previa de exhibición aún se está cargando.",
+    "展示预览仍在加载中。"
+  ],
+  "Showcase closed while loading a setup.": [
+    "Витрина закрыта во время загрузки настроек.",
+    "Se cerró la exhibición mientras se cargaba una configuración.",
+    "加载设置时展示已关闭。"
+  ],
+  "Preset storage was interrupted.": [
+    "Сохранение пресета прервано.",
+    "Se interrumpió el almacenamiento del preajuste.",
+    "预设存储已中断。"
+  ],
+  "Could not preserve background media.": [
+    "Не удалось сохранить фоновое медиа.",
+    "No se pudo conservar el medio de fondo.",
+    "无法保留背景媒体。"
+  ],
+  "Capture could not be saved. Use Retry Save before closing.": [
+    "Не удалось сохранить снимок. Нажмите «Повторить сохранение» перед закрытием.",
+    "No se pudo guardar la captura. Reintenta guardarla antes de cerrar.",
+    "无法保存截图。关闭前请重试保存。"
+  ],
+  "A GIF could not be saved. Use Retry Save in Showcase before closing.": [
+    "Не удалось сохранить GIF. Нажмите «Повторить сохранение» в витрине перед закрытием.",
+    "No se pudo guardar un GIF. Usa Reintentar guardado en Exhibición antes de cerrar.",
+    "有 GIF 无法保存。关闭前请在展示中重试保存。"
+  ],
+  "Catbox upload failed. Your GIF is saved locally.": [
+    "Не удалось загрузить на Catbox. GIF сохранён локально.",
+    "Falló la subida a Catbox. El GIF está guardado localmente.",
+    "Catbox 上传失败。GIF 已保存到本地。"
+  ],
+  "Catbox upload requires the desktop app.": [
+    "Для загрузки на Catbox требуется настольное приложение.",
+    "La subida a Catbox requiere la aplicación de escritorio.",
+    "上传到 Catbox 需要桌面应用。"
+  ],
+  "GIF encoding failed.": [
+    "Не удалось закодировать GIF.",
+    "Falló la codificación del GIF.",
+    "GIF 编码失败。"
+  ],
+  "GIF encoding failed: {0}": [
+    "Ошибка кодирования GIF: {0}",
+    "Falló la codificación del GIF: {0}",
+    "GIF 编码失败：{0}"
+  ],
+  "GIF retained. Save failed: {0}": [
+    "GIF сохранён в памяти. Ошибка сохранения: {0}",
+    "GIF conservado. Falló el guardado: {0}",
+    "GIF 已保留。保存失败：{0}"
+  ],
+  "Capture retained. Save failed: {0}": [
+    "Снимок сохранён в памяти. Ошибка сохранения: {0}",
+    "Captura conservada. Falló el guardado: {0}",
+    "截图已保留。保存失败：{0}"
+  ],
+  "Saved preset: {0}": [
+    "Пресет сохранён: {0}",
+    "Preajuste guardado: {0}",
+    "已保存预设：{0}"
+  ],
+  "Loaded preset: {0}": [
+    "Пресет загружен: {0}",
+    "Preajuste cargado: {0}",
+    "已加载预设：{0}"
+  ],
+  "Could not load Showcase presets: {0}": [
+    "Не удалось загрузить пресеты витрины: {0}",
+    "No se pudieron cargar los preajustes de exhibición: {0}",
+    "无法加载展示预设：{0}"
+  ],
+  "Could not load preset: {0}": [
+    "Не удалось загрузить пресет: {0}",
+    "No se pudo cargar el preajuste: {0}",
+    "无法加载预设：{0}"
+  ],
+  "Could not save preset: {0}": [
+    "Не удалось сохранить пресет: {0}",
+    "No se pudo guardar el preajuste: {0}",
+    "无法保存预设：{0}"
+  ],
+  "Could not add recording: {0}": [
+    "Не удалось добавить запись: {0}",
+    "No se pudo añadir la grabación: {0}",
+    "无法添加录制：{0}"
+  ],
+  "Could not open recording: {0}": [
+    "Не удалось открыть запись: {0}",
+    "No se pudo abrir la grabación: {0}",
+    "无法打开录制：{0}"
+  ],
+  "Could not update recording: {0}": [
+    "Не удалось обновить запись: {0}",
+    "No se pudo actualizar la grabación: {0}",
+    "无法更新录制：{0}"
+  ],
+  "Could not return to your setup: {0}": [
+    "Не удалось вернуться к настройкам: {0}",
+    "No se pudo volver a tu configuración: {0}",
+    "无法返回原设置：{0}"
+  ],
+  "Could not restore setup: {0}": [
+    "Не удалось восстановить настройки: {0}",
+    "No se pudo restaurar la configuración: {0}",
+    "无法恢复设置：{0}"
+  ],
+  "Could not load signature presets: {0}": [
+    "Не удалось загрузить пресеты подписей: {0}",
+    "No se pudieron cargar los preajustes de firmas: {0}",
+    "无法加载签名预设：{0}"
+  ],
+  "Could not save signature preset: {0}": [
+    "Не удалось сохранить пресет подписи: {0}",
+    "No se pudo guardar el preajuste de firma: {0}",
+    "无法保存签名预设：{0}"
+  ],
+  "Could not remove signature preset: {0}": [
+    "Не удалось удалить пресет подписи: {0}",
+    "No se pudo eliminar el preajuste de firma: {0}",
+    "无法删除签名预设：{0}"
+  ],
+  "Could not preserve model texture: {0}": [
+    "Не удалось сохранить текстуру модели: {0}",
+    "No se pudo conservar la textura del modelo: {0}",
+    "无法保留模型纹理：{0}"
+  ],
+  "Top left": [
+    "Сверху слева",
+    "Arriba a la izquierda",
+    "上左"
+  ],
+  "Place model top left": [
+    "Поместить модель сверху слева",
+    "Colocar modelo arriba a la izquierda",
+    "将模型置于上左"
+  ],
+  "Place text top left": [
+    "Поместить текст сверху слева",
+    "Colocar texto arriba a la izquierda",
+    "将文字置于上左"
+  ],
+  "Top center": [
+    "Сверху по центру",
+    "Arriba centrado",
+    "上中"
+  ],
+  "Place model top center": [
+    "Поместить модель сверху по центру",
+    "Colocar modelo arriba centrado",
+    "将模型置于上中"
+  ],
+  "Place text top center": [
+    "Поместить текст сверху по центру",
+    "Colocar texto arriba centrado",
+    "将文字置于上中"
+  ],
+  "Top right": [
+    "Сверху справа",
+    "Arriba a la derecha",
+    "上右"
+  ],
+  "Place model top right": [
+    "Поместить модель сверху справа",
+    "Colocar modelo arriba a la derecha",
+    "将模型置于上右"
+  ],
+  "Place text top right": [
+    "Поместить текст сверху справа",
+    "Colocar texto arriba a la derecha",
+    "将文字置于上右"
+  ],
+  "Middle left": [
+    "Посередине слева",
+    "En medio a la izquierda",
+    "中左"
+  ],
+  "Place model middle left": [
+    "Поместить модель посередине слева",
+    "Colocar modelo en medio a la izquierda",
+    "将模型置于中左"
+  ],
+  "Place text middle left": [
+    "Поместить текст посередине слева",
+    "Colocar texto en medio a la izquierda",
+    "将文字置于中左"
+  ],
+  "Middle center": [
+    "Посередине по центру",
+    "En medio centrado",
+    "中中"
+  ],
+  "Place model middle center": [
+    "Поместить модель посередине по центру",
+    "Colocar modelo en medio centrado",
+    "将模型置于中中"
+  ],
+  "Place text middle center": [
+    "Поместить текст посередине по центру",
+    "Colocar texto en medio centrado",
+    "将文字置于中中"
+  ],
+  "Middle right": [
+    "Посередине справа",
+    "En medio a la derecha",
+    "中右"
+  ],
+  "Place model middle right": [
+    "Поместить модель посередине справа",
+    "Colocar modelo en medio a la derecha",
+    "将模型置于中右"
+  ],
+  "Place text middle right": [
+    "Поместить текст посередине справа",
+    "Colocar texto en medio a la derecha",
+    "将文字置于中右"
+  ],
+  "Bottom left": [
+    "Снизу слева",
+    "Abajo a la izquierda",
+    "下左"
+  ],
+  "Place model bottom left": [
+    "Поместить модель снизу слева",
+    "Colocar modelo abajo a la izquierda",
+    "将模型置于下左"
+  ],
+  "Place text bottom left": [
+    "Поместить текст снизу слева",
+    "Colocar texto abajo a la izquierda",
+    "将文字置于下左"
+  ],
+  "Bottom center": [
+    "Снизу по центру",
+    "Abajo centrado",
+    "下中"
+  ],
+  "Place model bottom center": [
+    "Поместить модель снизу по центру",
+    "Colocar modelo abajo centrado",
+    "将模型置于下中"
+  ],
+  "Place text bottom center": [
+    "Поместить текст снизу по центру",
+    "Colocar texto abajo centrado",
+    "将文字置于下中"
+  ],
+  "Bottom right": [
+    "Снизу справа",
+    "Abajo a la derecha",
+    "下右"
+  ],
+  "Place model bottom right": [
+    "Поместить модель снизу справа",
+    "Colocar modelo abajo a la derecha",
+    "将模型置于下右"
+  ],
+  "Place text bottom right": [
+    "Поместить текст снизу справа",
+    "Colocar texto abajo a la derecha",
+    "将文字置于下右"
+  ],
+  "{0} / {1} seconds": [
+    "{0} / {1} секунд",
+    "{0} / {1} segundos",
+    "{0} / {1} 秒"
+  ],
+  "Preparing…": [
+    "Подготовка…",
+    "Preparando…",
+    "正在准备…"
+  ],
+  "Loading setup…": [
+    "Загрузка настроек…",
+    "Cargando configuración…",
+    "正在加载设置…"
+  ],
+  "Wait for the background to finish loading.": [
+    "Дождитесь загрузки фона.",
+    "Espera a que termine de cargar el fondo.",
+    "请等待背景加载完成。"
+  ],
+  "Saved {0}": [
+    "Сохранено: {0}",
+    "Guardado: {0}",
+    "已保存：{0}"
+  ],
+  "Save current color {0}; right-click to clear": [
+    "Сохранить текущий цвет {0}; правая кнопка — очистить",
+    "Guardar color actual {0}; clic derecho para borrar",
+    "保存当前颜色 {0}；右键清除"
+  ],
+  "Collapse {0}": [
+    "Свернуть: {0}",
+    "Contraer {0}",
+    "折叠 {0}"
+  ],
+  "Expand {0}": [
+    "Развернуть: {0}",
+    "Expandir {0}",
+    "展开 {0}"
+  ],
+  "Light gray": [
+    "Светло-серый",
+    "Gris claro",
+    "浅灰"
+  ],
+  "Saved color {0}: {1}": [
+    "Сохранённый цвет {0}: {1}",
+    "Color guardado {0}: {1}",
+    "已保存颜色 {0}：{1}"
+  ],
+  "Save color {0}": [
+    "Сохранить цвет {0}",
+    "Guardar color {0}",
+    "保存颜色 {0}"
+  ],
+  "Click to use; right-click to clear": [
+    "Нажмите, чтобы применить; правая кнопка — очистить",
+    "Pulsa para usar; clic derecho para borrar",
+    "点击使用；右键清除"
+  ],
+  "Load Showcase model": [
+    "Загрузить модель для витрины",
+    "Cargar modelo para exhibición",
+    "加载展示模型"
+  ],
+  "Showcase · Classic SD": [
+    "Витрина · Классический SD",
+    "Exhibición · SD clásico",
+    "展示 · 经典 SD"
+  ],
+  "WAV contains audio only. Choose an image or a video with a picture track.": [
+    "WAV содержит только звук. Выберите изображение или видео с видеодорожкой.",
+    "WAV solo contiene audio. Elige una imagen o un vídeo con imagen.",
+    "WAV 仅包含音频。请选择图片或包含视频轨道的视频。"
+  ],
+  "Portrait": [
+    "Портрет",
+    "Retrato",
+    "肖像"
+  ],
+  "Quality": [
+    "Качество",
+    "Calidad",
+    "质量"
+  ],
+  "Add": [
+    "Добавить",
+    "Añadir",
+    "添加"
+  ],
+  "Center": [
+    "По центру",
+    "Centrar",
+    "居中"
+  ],
+  "Light": [
+    "Освещение",
+    "Iluminación",
+    "光照"
+  ],
+  "Size": [
+    "Размер",
+    "Tamaño",
+    "大小"
+  ],
+  "Remove": [
+    "Удалить",
+    "Eliminar",
+    "移除"
+  ],
+  "Close dialog": [
+    "Закрыть диалог",
+    "Cerrar diálogo",
+    "关闭对话框"
+  ],
+  "OK": [
+    "ОК",
+    "Aceptar",
+    "确定"
+  ],
+  "Animation": [
+    "Анимация",
+    "Animación",
+    "动画"
+  ],
+  "Speed": [
+    "Скорость",
+    "Velocidad",
+    "速度"
+  ],
+  "Drag to rotate text": [
+    "Перетащите, чтобы повернуть текст",
+    "Arrastra para girar el texto",
+    "拖动旋转文字"
+  ],
+  "Rotate text": [
+    "Повернуть текст",
+    "Girar texto",
+    "旋转文字"
+  ],
+  "Create or select a camera to view the portrait": [
+    "Создайте или выберите камеру для просмотра портрета",
+    "Crea o selecciona una cámara para ver el retrato",
+    "创建或选择相机以查看肖像"
+  ],
+  "Background": [
+    "Фон",
+    "Fondo",
+    "背景"
+  ],
+  "Color": [
+    "Цвет",
+    "Color",
+    "颜色"
+  ],
+  "Graphics": [
+    "Графика",
+    "Gráficos",
+    "图形"
+  ],
+  "Low": [
+    "Низкое",
+    "Baja",
+    "低"
+  ],
+  "Medium": [
+    "Среднее",
+    "Media",
+    "中"
+  ],
+  "Custom": [
+    "Свой",
+    "Personalizado",
+    "自定义"
+  ],
+  "Zoom": [
+    "Масштаб",
+    "Zoom",
+    "缩放"
+  ],
+  "Reset": [
+    "Сброс",
+    "Restablecer",
+    "重置"
+  ],
+  "Opacity": [
+    "Непрозрачность",
+    "Opacidad",
+    "不透明度"
+  ],
+  "Name": [
+    "Название",
+    "Nombre",
+    "名称"
+  ],
+  "Cancel": [
+    "Отмена",
+    "Cancelar",
+    "取消"
+  ],
+  "None": [
+    "Нет",
+    "Ninguno",
+    "无"
+  ]
+}

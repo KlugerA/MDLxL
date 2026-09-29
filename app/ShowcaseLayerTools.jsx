@@ -1,3 +1,4 @@
+import { translate } from '../src/localization.js';
 import React, { useEffect, useRef, useState } from 'react';
 import { listSignaturePresets, saveSignaturePreset, deleteSignaturePreset } from './showcase-signature.js';
 import { SHOWCASE_FONTS, TEXT_EFFECTS } from './showcase-text.js';
@@ -31,7 +32,7 @@ export default function ShowcaseLayerTools({layers,onLayers,activeId,onActive,on
     if(added.length<files.length)onStatus?.('Choose images or GIFs for signatures.',true);
   }
   function addText(){
-    const layer={id:crypto.randomUUID(),kind:'text',text:'Your text',font:'cinzeldecorative',size:48,color:'#ffffff',color2:'#c6a46c',color3:'#7895b2',outlineColor:'#111111',rotation:0,fadeInStart:0,fadeInLength:0,fadeOutStart:Math.max(0,length-1),fadeOutLength:0,effect:'solid',bold:false,italic:false,underline:false,outline:false,opacity:1,rect:{x:.1,y:.12,width:.8,height:.18}};
+    const layer={id:crypto.randomUUID(),kind:'text',text:translate('Your text'),font:'cinzeldecorative',size:48,color:'#ffffff',color2:'#c6a46c',color3:'#7895b2',outlineColor:'#111111',rotation:0,fadeInStart:0,fadeInLength:0,fadeOutStart:Math.max(0,length-1),fadeOutLength:0,effect:'solid',bold:false,italic:false,underline:false,outline:false,opacity:1,rect:{x:.1,y:.12,width:.8,height:.18}};
     onLayers([...layers,layer]);onActive(layer.id);setTextOpen(true);setSignaturesOpen(false);
   }
   function remove(){
@@ -52,7 +53,7 @@ export default function ShowcaseLayerTools({layers,onLayers,activeId,onActive,on
   async function deletePreset(){
     try{await deleteSignaturePreset(active.presetId);update({presetId:null});setPresets(await listSignaturePresets());}catch(error){onStatus?.('Could not remove signature preset: '+error.message,true);}
   }
-  function layerList(rows,kind){return rows.length>0&&<ol className="showcase-layer-list" aria-label={kind==='image'?'Signatures':'Text layers'}>{rows.map((layer,index)=><li key={layer.id}><button aria-pressed={activeId===layer.id} onClick={()=>select(layer.id,kind)}>{kind==='image'&&<img src={layer.url} alt=""/>}<span>{kind==='text'?layer.text||'Empty text':layer.name}</span><small>{index+1}</small></button></li>)}</ol>;}
+  function layerList(rows,kind){return rows.length>0&&<ol className="showcase-layer-list" aria-label={kind==='image'?'Signatures':'Text layers'}>{rows.map((layer,index)=><li key={layer.id}><button aria-pressed={activeId===layer.id} onClick={()=>select(layer.id,kind)}>{kind==='image'&&<img src={layer.url} alt=""/>}<span translate="no">{kind==='text'?layer.text||translate('Empty text'):layer.name}</span><small>{index+1}</small></button></li>)}</ol>;}
   function actions(){return <div className="showcase-layer-actions"><button title="Send backward" aria-label="Send layer backward" disabled={layers[0]?.id===activeId} onClick={()=>reorder(-1)}>↓</button><button title="Bring forward" aria-label="Bring layer forward" disabled={layers.at(-1)?.id===activeId} onClick={()=>reorder(1)}>↑</button><button onClick={remove}>Remove</button></div>;}
   return <>
     <section className="showcase-section showcase-layer-tools" aria-label="Signature">
@@ -60,7 +61,7 @@ export default function ShowcaseLayerTools({layers,onLayers,activeId,onActive,on
       <input ref={input} hidden multiple type="file" accept="image/*,.gif" onChange={choose}/>
       {signaturesOpen&&<>
         {layerList(images,'image')}
-        <select className="showcase-wide" aria-label="Signature presets" value="" onChange={event=>{const preset=presets.find(row=>row.id===event.target.value);if(preset){const layer=addImage(preset.blob,preset.name,preset.type,preset.id,preset.rect);layer.opacity=preset.opacity??1;onLayers([...layers,layer]);onActive(layer.id);}}}><option value="">Add preset…</option>{presets.map(preset=><option key={preset.id} value={preset.id}>{preset.name}</option>)}</select>
+        <select className="showcase-wide" aria-label="Signature presets" value="" onChange={event=>{const preset=presets.find(row=>row.id===event.target.value);if(preset){const layer=addImage(preset.blob,preset.name,preset.type,preset.id,preset.rect);layer.opacity=preset.opacity??1;onLayers([...layers,layer]);onActive(layer.id);}}}><option value="">Add preset…</option>{presets.map(preset=><option translate="no" key={preset.id} value={preset.id}>{preset.name}</option>)}</select>
         {active?.kind==='image'&&<><small>Drag to place · corner to resize</small><label>Opacity<input aria-label="Signature opacity" type="range" min="0" max="100" value={Math.round(active.opacity*100)} onChange={event=>update({opacity:Number(event.target.value)/100})}/></label>
           <input className="showcase-wide" aria-label="Signature preset name" value={presetName} onChange={event=>setPresetName(event.target.value)} placeholder="Preset name"/>
           <div className="showcase-layer-actions"><button onClick={savePreset}>Save preset</button>{active.presetId&&<button onClick={deletePreset}>Delete preset</button>}</div>{actions()}</>}
@@ -72,7 +73,7 @@ export default function ShowcaseLayerTools({layers,onLayers,activeId,onActive,on
         <textarea key={active.id} className="showcase-wide" aria-label="Text content" title="Highlight text to format just that selection" rows="2" value={active.text} onSelect={selectText} onBeforeInput={event=>{beforeEdit.current={start:event.currentTarget.selectionStart,end:event.currentTarget.selectionEnd};}} onChange={event=>{update(replaceRichText(active,event.target.value,beforeEdit.current));beforeEdit.current=null;selectText(event);}} onKeyDown={event=>event.stopPropagation()}/>
 
         <div className="showcase-font-palette" onMouseDown={keepHighlight}>
-          <div className="showcase-font-grid" role="group" aria-label="Choose font">{SHOWCASE_FONTS.map(font=><button title={font.name} aria-label={font.name} key={font.id} aria-pressed={format.font===font.id} onClick={()=>updateFormat({font:font.id})}><span style={{fontFamily:'"'+font.family+'"'}}>Aa</span></button>)}</div>
+          <div className="showcase-font-grid" role="group" aria-label="Choose font">{SHOWCASE_FONTS.map(font=><button translate="no" title={font.name} aria-label={font.name} key={font.id} aria-pressed={format.font===font.id} onClick={()=>updateFormat({font:font.id})}><span style={{fontFamily:'"'+font.family+'"'}}>Aa</span></button>)}</div>
           <div className="showcase-text-colors" role="group" aria-label="Text colors">{[['color','1','Main color','#ffffff'],['color2','2','Gradient color 2','#c6a46c'],['color3','3','Gradient color 3','#7895b2']].map(([key,label,title,fallback])=><label key={key} title={title}><span>{label}</span><input type="color" aria-label={title} value={format[key]||fallback} onChange={event=>updateFormat({[key]:event.target.value})}/></label>)}</div>
         </div>
         <div className="showcase-text-format" onMouseDown={keepHighlight}>
