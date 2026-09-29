@@ -1,3 +1,5 @@
+import showcase from './locales/showcase.json' with { type: 'json' };
+const showcaseLocale = index => Object.fromEntries(Object.entries(showcase).map(([key, values]) => [key, values[index]]));
 import core from './locales/ru-core.json' with { type: 'json' };
 import editor from './locales/ru-editor.json' with { type: 'json' };
 import engine from './locales/ru-engine.json' with { type: 'json' };
@@ -12,7 +14,7 @@ import reviewedSpanish from './locales/es-reviewed.json' with { type: 'json' };
 import { chinese, mordor, spanish } from './locales/short-ui-locales.js';
 import { broadChinese, broadMordor, broadSpanish } from './locales/broad-ui-locales.js';
 
-export const russian = Object.freeze({ ...core, ...editor, ...engine, ...additions, ...forge, ...descriptors, ...materials, ...previewCache, ...optimizer, ...reviewedRussian });
+export const russian = Object.freeze({ ...showcaseLocale(0), ...core, ...editor, ...engine, ...additions, ...forge, ...descriptors, ...materials, ...previewCache, ...optimizer, ...reviewedRussian });
 export const LANGUAGES = Object.freeze([
   Object.freeze({ id: 'en', label: 'English', nativeLabel: 'English' }),
   Object.freeze({ id: 'ru', label: 'Russian', nativeLabel: 'Русский' }),
@@ -37,11 +39,11 @@ function blackSpeechCipher(text) {
   });
 }
 const mordorKeys = Object.freeze({ ...russian, ...reviewedSpanish, ...mordor, ...broadMordor });
-const blackSpeech = Object.freeze(Object.fromEntries(Object.keys(mordorKeys).map(key => [key, blackSpeechCipher(key)])));
+const blackSpeech = Object.freeze({ ...Object.fromEntries(Object.keys(mordorKeys).map(key => [key, blackSpeechCipher(key)])), 'Image/Video': blackSpeechCipher('Image') + '/' + blackSpeechCipher('Video') });
 const dictionaries = Object.freeze({
   ru: russian,
-  es: Object.freeze({ ...spanish, ...broadSpanish, ...reviewedSpanish }),
-  zh: Object.freeze({ ...chinese, ...broadChinese }),
+  es: Object.freeze({ ...showcaseLocale(1), ...spanish, ...broadSpanish, ...reviewedSpanish }),
+  zh: Object.freeze({ ...showcaseLocale(2), ...chinese, ...broadChinese }),
   mordor: blackSpeech,
 });
 let language = 'en';

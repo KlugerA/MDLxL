@@ -34,7 +34,7 @@ export const visibleMovementPoints = (points, options) => points.filter(point =>
 
 function markerPath(context, point, appearance) {
   const half = appearance.size / 2, x = Math.round(point.x), y = Math.round(point.y);
-  if (appearance.style === 'circle') context.arc(x, y, half, 0, Math.PI * 2);
+  if (appearance.style === 'circle') { context.moveTo(x + half, y); context.arc(x, y, half, 0, Math.PI * 2); }
   else if (appearance.style === 'diamond') { context.moveTo(x, y - half); context.lineTo(x + half, y); context.lineTo(x, y + half); context.lineTo(x - half, y); context.closePath(); }
   else context.rect(Math.round(point.x - half), Math.round(point.y - half), appearance.size, appearance.size);
 }

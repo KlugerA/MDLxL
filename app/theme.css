@@ -70,3 +70,16 @@ html[lang=mordor] .classic-app,html[lang=mordor] .classic-app :is(button,input,s
 html[lang=mordor] .language-switch,html[lang=mordor] .language-switch *{font-family:system-ui,sans-serif;letter-spacing:normal}
 
 .camera-angle-panel{margin:6px;padding:8px;min-width:0}.camera-angle-panel .field{display:grid;grid-template-columns:68px minmax(0,1fr);gap:4px;margin:5px 0}.camera-angle-panel input{min-width:0;width:100%;box-sizing:border-box}.camera-angle-panel small{display:block;color:var(--ui-muted)}.binding-inspection{padding:7px;border-top:1px solid var(--ui-border);overflow-wrap:anywhere}.binding-inspection p{font-size:11px;margin:5px 0}
+
+/* Native popups and semantic text must follow the selected palette too. */
+:root[data-theme=light]{color-scheme:light;--ui-danger:#a31515;--ui-channel-r:#b00000;--ui-channel-g:#006b00;--ui-channel-b:#0000b0}
+:root[data-theme=dark]{--ui-danger:#ffb3a5;--ui-channel-r:#ff9797;--ui-channel-g:#83dc83;--ui-channel-b:#a6b6ff}
+:root[data-palette] :is(option,optgroup){background:var(--ui-field);color:var(--ui-text)}
+:root[data-palette] :is(option:disabled,optgroup:disabled){color:var(--ui-muted)}
+:root[data-palette] ::placeholder{color:var(--ui-muted);opacity:1}
+:root[data-palette] :is(.showcase-error,.showcase-sidebar .capture-error){color:var(--ui-danger)}
+
+:root[data-palette] :is(.resource-editor .re-window,.resource-editor .re-properties){background:var(--ui-panel);color:var(--ui-text);border-color:var(--ui-border)}
+:root[data-palette] :is(.resource-editor .re-empty-list,.resource-editor .re-empty-properties){color:var(--ui-muted)}
+:root[data-palette] :is(.resource-editor .re-list button.re-selected,.resource-editor .re-list button.re-selected:hover){background:var(--ui-selected);color:var(--ui-selected-text)}
+:root[data-palette] :is(.resource-editor .re-list button.re-selected small,.paint-start-options button[aria-pressed=true] span){color:var(--ui-selected-text)}
