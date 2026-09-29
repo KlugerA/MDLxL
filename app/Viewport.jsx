@@ -925,7 +925,10 @@ export default function Viewport(inputProps) {
         if (layerIndex) { layerGeometry.setAttribute('position', geometry.attributes.position); layerGeometry.setAttribute('normal', geometry.attributes.normal); layerGeometry.setIndex(geometry.index); }
         const uv = geoset.TVertices?.[layer.CoordId || 0] || geoset.TVertices?.[0];
         layerGeometry.setAttribute('uv', new THREE.BufferAttribute(uv?.length ? new Float32Array(uv) : new Float32Array(geoset.Vertices.length / 3 * 2), 2));
-        const material = layerMaterial(layer, shaded && graphics.lighting); material.polygonOffset = false; material.alphaToCoverage = graphics.antialias;
+        const material = layerMaterial(layer, shaded && graphics.lighting); material.polygonOffset = false;
+        // Match the animation renderer: coverage requires a multisampled canvas.
+        // On a single-sample canvas it leaks fractional alpha as white cutout edges.
+        material.alphaToCoverage = layer.FilterMode === 1 && !!state.renderer.getContext().getContextAttributes()?.antialias;
         const mesh = new THREE.Mesh(layerGeometry, material); mesh.userData.geosetIndex = index; mesh.userData.baseUV = new Float32Array(layerGeometry.attributes.uv.array); mesh.renderOrder = index * 16 + layerIndex; mesh.frustumCulled = false; group.add(mesh); meshes.push(mesh);
       }
       const depth = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })); depth.renderOrder = -1; depth.frustumCulled = false; group.add(depth);
