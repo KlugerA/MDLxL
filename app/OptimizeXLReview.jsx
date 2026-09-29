@@ -3,7 +3,7 @@ import React from 'react';
 export default function OptimizeXLReview({review,model,onInspect,onHover,onClose}) {
   const {stage,geosets,animations,removed}=review;
   const count=stage==='animation'?animations.length:stage==='unused'?removed.length:geosets.length;
-  if(!count)return <p className="ox-review-empty">{stage==='animation'?'No animations changed.':stage==='unused'?'No unused data to remove.':'No geosets affected.'}</p>;
+  if(!count)return <p className="ox-review-empty">{stage==='animation'?'No animations changed.':stage==='unused'?'No removable vertices, resources or rig nodes.':'No geosets affected.'}</p>;
   const hover=index=>({onMouseEnter:()=>onHover(index),onMouseLeave:()=>onHover(null),onFocus:()=>onHover(index),onBlur:()=>onHover(null)});
   return <details className="ox-review" onToggle={event=>{if(!event.currentTarget.open){onHover(null);onClose();}}}>
     <summary>{stage==='animation'?'Changed animations':stage==='unused'?'Data to remove':'Geosets to review'} ({count})</summary>

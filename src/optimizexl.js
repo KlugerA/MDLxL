@@ -13,6 +13,7 @@ import { repairContextMotion, scanModelMotionContext } from './optimizexl-motion
 import { openingTrackProposals, applyOpeningTrack } from './optimizexl-opening-tracks.js';
 import { unusedTrackProposals, applyUnusedTrack } from './optimizexl-unused-tracks.js';
 import { effectVisibilityProposals } from './optimizexl-effect-visibility.js';
+import { redundantTrackProposals, applyRedundantTrack } from './optimizexl-redundant-tracks.js';
 
 export const STAGES = [
   {id:'duplicates',name:'Duplicate data'}, {id:'animation',name:'Animation optimization'},
@@ -115,7 +116,10 @@ export function findIrregularities(m){const findings=[],seq=m.Sequences,live=seq
 }
 export function sanityProposals(m){const findings=boundsProposals(m);for(const [i,e]of m.ParticleEmitters2.entries())if(e.Gravity?.Keys)findings.push({id:`gravity:${i}`,kind:'gravity',emitter:i,value:e.Gravity.Keys[0]?.Vector[0]||0,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${e.Name}: animated gravity`,detail:'Hive flags animated gravity. Choose a static value and review its particle motion.'});
  for(const {track:t,path}of tracks(m)){if(t.GlobalSeqId>=0&&m.GlobalSequences[t.GlobalSeqId]>0&&t.Keys.some(k=>k.Frame>m.GlobalSequences[t.GlobalSeqId])&&t.Keys.some(k=>k.Frame<=m.GlobalSequences[t.GlobalSeqId]))findings.push({id:`outside:${path.join('.')}`,kind:'globalKeys',path,sequence:0,frame:m.Sequences[0]?.Interval[0]||0,label:`${path.join('.')}: keys beyond global duration`,detail:'Remove keys outside the declared global sequence. Review effects and animation before approval.'});}
- return [...findings,...openingTrackProposals(m,tracks(m)),...unusedTrackProposals(m,tracks(m))];}
+ const proposals=[...findings,...openingTrackProposals(m,tracks(m)),...unusedTrackProposals(m,tracks(m)),...redundantTrackProposals(m,tracks(m))];
+ // Static gravity replaces its entire track. It owns that track's diagnostics;
+ // do not also queue key-level corrections against data it removes.
+ return proposals.filter(p=>!p.path||!findings.some(owner=>owner.kind==='gravity'&&p.path.join('.')===`ParticleEmitters2.${owner.emitter}.Gravity`));}
 function applyRepair(m,fix,settings,evidenceModel=m){
  if(!fix)return;
  if(fix.kind==='batch'){
@@ -140,6 +144,11 @@ function applyRepair(m,fix,settings,evidenceModel=m){
   const current=unusedTrackProposals(evidenceModel,tracks(evidenceModel)).find(f=>f.id===fix.id);
   if(!current||!same(current,fix))throw Error('This unused-key finding changed. Select it again.');
   applyUnusedTrack(m,current);return;
+ }
+ if(fix.kind==='redundantTracks'){
+  const current=redundantTrackProposals(evidenceModel,tracks(evidenceModel)).find(f=>f.id===fix.id);
+  if(!current||current.inspectionOnly||!same(current,fix))throw Error('This redundant-key finding changed or needs manual review. Select it again.');
+  applyRedundantTrack(m,current);return;
  }
  if(fix.kind==='effectVisibility'){
   const current=effectVisibilityProposals(evidenceModel).find(f=>f.id===fix.id);

@@ -26,8 +26,11 @@ The user supplies newly encountered defects, screenshots/video, damaged models a
 | Rule or operation | Evidence and correction boundary |
 | --- | --- |
 | Duplicate, animation and unused-data optimization | Preserve established reduction behavior and geoset exclusions. Adjustable reduction is a separate operation from defect repair. |
+| Small-motion preservation during reduction | A whole-model tolerance must not erase a component's authored movement. After the established animation reducer, restore original spans that exceed 10% of that sequence's own component range or turning excursion (angular distance for quaternion rotation). Every previously retained key stays. This is preservation, not an irregularity diagnosis or repair; speech, recoil and machinery need no name-based exemptions. Zero/exact cleanup and separately approved repairs retain their ownership. |
 | Missing local opening key | Hive's interpolated-channel finding. Add a constant lead-in matching native playback; adjust only the previously unused incoming cubic control. Preserve the outgoing curve, other keys and other animations. |
 | Unused local keys | Nonzero keys outside every sequence, with active keys remaining in the track. Remove only those records; retain frame-zero setup keys and globals. Wholly unassigned tracks need a separate base-value decision. |
+| Checker diagnostic coverage | Classify the actual checker findings independently of whether a proposal exists. Every finding needs a repair, owning-stage route or explicit unsupported explanation. An optimizer's empty removal list is never evidence that Hive has no unused notices. Test each known diagnostic family with generated examples against the bundled checker. |
+| Redundant-key cleanup | One plan per track/domain removes Hive-similar interior keys only after checking the affected curve against its original. Other sequences cannot veto a supported local span. Re-evaluate neighbors, preserve boundary keys, validate combined/individual approval orders and rescan after approval. Do not change existing adjustable animation reduction to hide a diagnostic gap. |
 | Bounds, gravity and global-duration repairs | Use their existing supported Hive findings and previewable plans. Do not convert unrelated notices into these repair types. |
 | Motion, snaps and contextual motion | Evaluate local curve evidence together with geometry influence and other animations. Repeating localized machinery or recoil is not automatically a defect. Flag suspicious body-wide patterns for inspection; correct only supported abnormal spans, preserving intended poses and surrounding motion. |
 | Shared endpoints and death/decay continuity | Use supported pose agreement and transition evidence. Preserve animation interiors, Death's final pose where only its start is targeted, and independent global/effect motion. |
@@ -36,6 +39,10 @@ The user supplies newly encountered defects, screenshots/video, damaged models a
 | Sphere presets | Preset data is an explicit user choice, not a detector. Standard unit uses the two authored Footman spheres; Mounted rider retains the reviewed three-sphere arrangement. |
 
 An empty Hive result means **zero errors, severe findings, warnings and unused notices**. Do not call a model fully checker-clean while unused notices remain. Supported fixes clear the demonstrated cases; new unsupported findings become future teaching cases rather than being hidden or reported as fixed.
+
+### Approved correction to the historical animation baseline
+
+The 06/07 teaching pair exposed four authored jaw keys removed by maximum animation reduction, not by an irregularity proposal. The same loss exists in the earlier accepted flail outputs. The user's instruction to upgrade authorizes preserving those motions instead of reproducing the destructive reduction. The original golden hashes remain unchanged. The regression reconstructs them by removing only newly retained, input-identical transform keys, using recorded pre-upgrade removed frames. All other records and previously retained keys must still match. This explicit exception does not authorize unrelated behavior changes or recapturing the baseline.
 
 ## Permanent review and delivery contracts
 
