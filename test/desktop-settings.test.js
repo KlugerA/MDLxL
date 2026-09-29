@@ -34,7 +34,7 @@ test('desktop settings persist mouse, graphics and cleared WarmKeys across resta
   await fs.writeFile(file, JSON.stringify({ gameData: 'C:\\Warcraft', historyBudgetBytes: 512 * 1048576, historyMaxSteps: 12000 }));
   const store = new SettingsStore(file, normalizePreferences);
   await store.load();
-  assert.equal(store.settings.preferences.scrollSensitivity, 2);
+  assert.equal(store.settings.preferences.scrollSensitivity, 2.5);
   await store.configure({ preferences: { scrollSensitivity: 3.2, graphics: { maxFps: 30 }, hotkeys: { open: ['Alt+O'], save: [] } } });
   const reopened = new SettingsStore(file, normalizePreferences);
   await reopened.load();
