@@ -4,7 +4,7 @@ import { DataTexture, LinearFilter, LinearMipmapLinearFilter, PerspectiveCamera,
 import { EditorCameraControls, zoomEditorCamera } from '../app/editor-camera-controls.js';
 import { configureEditorTexture, cameraLeftLight, captureDimensions, improveNativeTexture } from '../app/viewport-quality.js';
 import { modelCameraGizmos } from '../app/model-camera-overlay.js';
-import { patchWarcraftMeshVertexShader, patchWarcraftMeshFragmentShader } from '../app/warcraft-preview-adapter.js';
+import { applyReplaceableTextureColor, patchWarcraftMeshVertexShader, patchWarcraftMeshFragmentShader } from '../app/warcraft-preview-adapter.js';
 
 test('perspective zoom changes projected size while retaining camera position, target and depth proportions', () => {
   const camera = new PerspectiveCamera(42, 1, 100, 1000); camera.position.set(0, 0, 320); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
@@ -79,4 +79,24 @@ test('Showcase Low and Highest change actual GPU texture filtering',()=>{
   assert.ok(calls.some(call=>call[1]===4&&call[2]===7));assert.ok(calls.some(call=>call[1]===8&&call[2]===1));
   calls.length=0;improveNativeTexture(gl,native,'skin',{textureFiltering:'trilinear',anisotropy:16});
   assert.ok(calls.some(call=>call[1]===4&&call[2]===6));assert.ok(calls.some(call=>call[1]===8&&call[2]===16));
+});
+
+test('path-backed team colours still use the live preview team colour', () => {
+  const calls = [];
+  const native = {
+    model: { Textures: [{ Image: 'ReplaceableTextures\\TeamColor\\TeamColor00.blp', ReplaceableId: 1 }, { Image: 'skin.blp', ReplaceableId: 0 }] },
+    rendererData: { teamColor: new Float32Array([.129, .749, 0]) },
+    shaderProgramLocations: { replaceableColorUniform: 'replaceableColor', replaceableTypeUniform: 'replaceableType' },
+  };
+  const gl = {
+    uniform3fv(location, value) { calls.push(['uniform3fv', location, Array.from(value)]); },
+    uniform1f(location, value) { calls.push(['uniform1f', location, value]); },
+  };
+
+  assert.equal(applyReplaceableTextureColor(native, gl, 0), true);
+  assert.deepEqual(calls, [
+    ['uniform3fv', 'replaceableColor', [0.1289999932050705, 0.7490000128746033, 0]],
+    ['uniform1f', 'replaceableType', 1],
+  ]);
+  assert.equal(applyReplaceableTextureColor(native, gl, 1), false);
 });

@@ -62,6 +62,20 @@ export function resetPreviewEffects(native) {
   for (const emitter of native.ribbonsController?.emitters || []) { emitter.creationTimes.length = 0; emitter.emission = 0; }
 }
 
+/**
+ * war3-model gives a nonempty Image path precedence over ReplaceableId. Warcraft
+ * team textures commonly have both, so restore the ReplaceableId after its
+ * standard-layer setup has bound that stale image path.
+ */
+export function applyReplaceableTextureColor(native, gl, textureID) {
+  const texture = native?.model?.Textures?.[textureID];
+  const replaceableId = Number(texture?.ReplaceableId);
+  if (replaceableId !== 1 && replaceableId !== 2) return false;
+  gl.uniform3fv(native.shaderProgramLocations.replaceableColorUniform, native.rendererData.teamColor);
+  gl.uniform1f(native.shaderProgramLocations.replaceableTypeUniform, replaceableId);
+  return true;
+}
+
 /** All hooks belong to this preview's private WebGL context, not global GL. */
 export function installWarcraftPreviewAdapter(gl, model, getClock) {
   const original = { shaderSource: gl.shaderSource, bindBuffer: gl.bindBuffer, useProgram: gl.useProgram, drawElements: gl.drawElements };
@@ -84,6 +98,7 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
       native.setLayerProps = function (layer, textureID) {
         activeLayer = layer;
         const result = setLayerProps.call(this, layer, textureID);
+        applyReplaceableTextureColor(this, gl, textureID);
         // Additive is ONE + ONE, as in the vertex editor. SRC_COLOR squares
         // the texture/tint and suppresses the soft edges of glow textures.
         if (layer.FilterMode === 3) gl.blendFunc(gl.ONE, gl.ONE);
