@@ -66,6 +66,12 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await uv.getByRole('button',{name:'Disable Wrapping',exact:true}).click();
     await uv.waitForFunction(()=>sampling()?.every(v=>v===33071));
     assert.equal(await uv.evaluate(()=>JSON.stringify(uvState().model)), shifted);
+    const unusedTextureSpaceIsBlack = await uv.evaluate(() => {
+      const canvas = document.querySelector('[aria-label="UV coordinate editor"]'), context = canvas?.getContext('2d');
+      return context && [[1, 1], [canvas.width - 2, 1], [1, canvas.height - 2], [canvas.width - 2, canvas.height - 2]]
+        .every(([x, y]) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3).every(value => value === 0));
+    });
+    assert.ok(unusedTextureSpaceIsBlack, 'clamped UV space outside the base tile is black');
     await uv.screenshot({path:path.join(out,'disabled.png')});
     await uv.getByRole('button',{name:'Enable Wrapping',exact:true}).click();
     await uv.waitForFunction(()=>sampling()?.every(v=>v===10497));
@@ -79,7 +85,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     for (let i=0;i<4;i++) await uv.keyboard.press('Control+z');
     await uv.waitForFunction(value=>JSON.stringify(uvState().model)===value,before);
     assert.ok(fs.readFileSync(input).equals(original));
-    console.log('PASS: button placement, out-of-tile edit, repeated enable/disable clicks, native WebGL clamp -> repeat -> clamp -> repeat, preserved model data, undo/redo, original file unchanged');
+    console.log('PASS: button placement, out-of-tile edit, black unused texture space, repeated enable/disable clicks, native WebGL clamp -> repeat -> clamp -> repeat, preserved model data, undo/redo, original file unchanged');
   } catch (error) {
     if (uv) { await uv.screenshot({path:path.join(out,'failure.png')}); console.error(await uv.evaluate(()=>({sampling:sampling(),flags:uvState().model.Textures.map(t=>t.Flags),nativeFlags:nativeState()?.model.Textures.map(t=>t.Flags),revision:uvState().revision}))); }
     else console.error(await (await app.firstWindow()).locator('body').innerText());

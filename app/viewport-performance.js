@@ -1,4 +1,4 @@
-export const sensitivityValue = value => Math.max(.1, Math.min(10, Number.isFinite(Number(value)) ? Number(value) : 2));
+export const sensitivityValue = value => Math.max(.1, Math.min(10, Number.isFinite(Number(value)) ? Number(value) : 2.5));
 export const pointerSensitivityValue = value => Math.max(.01, Math.min(4, Number.isFinite(Number(value)) ? Number(value) : 1));
 export const graphicsOptions = preferences => ({ pixelRatio: 1.5, antialias: false, maxFps: 60, textures: true, lighting: true, particles: true, pauseWhenHidden: true, ...preferences?.graphics });
 export const wheelPixels = event => event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 800 : 1);
@@ -11,7 +11,7 @@ export const sensitivityIndicatorText = indicator => `${indicator.kind === 'poin
 
 /** Keeps the last wheel adjustment immediately available, before React commits it. */
 export function createScrollSensitivity({ getPreferences, onChange, onPointerChange, onPointerAdjustment, onCameraModeToggle, onIndicator = () => {} }) {
-  let rightDown = false, leftPointer = null, pointerAdjustmentPointer = null, middlePointer = null, dpiResetLatched = false, scrollResetLatched = false, external, externalPointer, value = 2, pointerValue = 1;
+  let rightDown = false, leftPointer = null, pointerAdjustmentPointer = null, middlePointer = null, dpiResetLatched = false, scrollResetLatched = false, external, externalPointer, value = 2.5, pointerValue = 1;
   function sync() {
     const preferences = getPreferences(), next = preferences?.scrollSensitivity, nextPointer = preferences?.pointerSensitivity;
     if (next !== external) { external = next; value = sensitivityValue(next); }
@@ -24,7 +24,7 @@ export function createScrollSensitivity({ getPreferences, onChange, onPointerCha
         if (rightDown && !scrollResetLatched) {
           // Right held, then left clicked: reset the live zoom/scroll speed
           // without starting a selection or transform gesture.
-          scrollResetLatched = true; value = 2; pointerAdjustmentPointer = null; onChange?.(value); onPointerAdjustment?.(event);
+          scrollResetLatched = true; value = 2.5; pointerAdjustmentPointer = null; onChange?.(value); onPointerAdjustment?.(event);
           event.preventDefault?.(); event.stopImmediatePropagation?.(); onIndicator({ kind: 'scroll', value, shortcut: true, reset: true }); return;
         }
       }
@@ -47,7 +47,7 @@ export function createScrollSensitivity({ getPreferences, onChange, onPointerCha
     // pressed. mousedown is required to see the second button in a chord.
     mouseDown(event) {
       if (event.button === 0 && rightDown && !scrollResetLatched) {
-        scrollResetLatched = true; value = 2; pointerAdjustmentPointer = null; onChange?.(value); onPointerAdjustment?.(event);
+        scrollResetLatched = true; value = 2.5; pointerAdjustmentPointer = null; onChange?.(value); onPointerAdjustment?.(event);
         event.preventDefault?.(); event.stopImmediatePropagation?.(); onIndicator({ kind: 'scroll', value, shortcut: true, reset: true });
       }
       if (event.button === 2) {

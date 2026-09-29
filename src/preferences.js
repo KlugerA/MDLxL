@@ -24,7 +24,7 @@ export const GRID_PRESETS = Object.freeze({
   xyz: Object.freeze({ ...DEFAULT_GRID, followWorkplane: false, planes: Object.freeze({ xy: true, xz: true, yz: true }) }),
 });
 export const CAMERA_PRESETS = Object.freeze({
-  classic: Object.freeze({ cameraBindings: Object.freeze({ right: 'pan', middle: 'toggle' }), pointerSensitivity: 1, scrollSensitivity: 2, fineSensitivity: 0.2, wheelMode: 'rotate', rightScrollAdjust: true }),
+  classic: Object.freeze({ cameraBindings: Object.freeze({ right: 'pan', middle: 'toggle' }), pointerSensitivity: 1, scrollSensitivity: 2.5, fineSensitivity: 0.2, wheelMode: 'rotate', rightScrollAdjust: true }),
   orbit: Object.freeze({ cameraBindings: Object.freeze({ right: 'rotate', middle: 'pan' }), pointerSensitivity: 1, scrollSensitivity: 1, fineSensitivity: 0.2, wheelMode: 'rotate', rightScrollAdjust: false }),
 });
 export const DEFAULT_PREFERENCES = Object.freeze({
@@ -33,7 +33,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   uvPreviewDisplay: DEFAULT_UV_PREVIEW_DISPLAY,
   uvGrid: DEFAULT_UV_GRID,
   language: 'en', showPressedKeys: false, capture: DEFAULT_CAPTURE,
-  scrollSensitivity: 2,
+  scrollSensitivity: 2.5,
   wheelMode: 'rotate',
   pointerSensitivity: 1,
   rightScrollAdjust: true,
