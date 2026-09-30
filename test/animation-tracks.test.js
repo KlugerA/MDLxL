@@ -137,6 +137,34 @@ test('global tracks keep their timing for frame edits and reject ambiguous seque
   assert.deepEqual(model, before);
 });
 
+test('RGB and visibility keys can be authored on the selected global sequence', () => {
+  const model = fixture();
+  model.GeosetAnims = [];
+  setAnimationKey(model, [geo(0)], 250, 0, -1, 0);
+  setAnimationKey(model, [geo(0, 'Color')], 250, [1, 0, 0], -1, 0);
+  setAnimationKey(model, [geo(0, 'Color')], 500, [0, 0, 1], -1, 0);
+  const animation = model.GeosetAnims[0];
+  assert.equal(animation.Alpha.GlobalSeqId, 0);
+  assert.equal(animation.Color.GlobalSeqId, 0);
+  assert.deepEqual(frames(animation.Alpha), [0, 250]);
+  assert.deepEqual(frames(animation.Color), [0, 250, 500]);
+  assert.equal(sampleAnimationProperty(model, geo(0), 0, -1, 0), 1);
+  assert.equal(sampleAnimationProperty(model, geo(0), 400, -1, 0), 0);
+  close(sampleAnimationProperty(model, geo(0, 'Color'), 125, -1, 0), [1, 0.5, 0.5]);
+});
+
+test('global RGB and visibility editing preserves tracks owned by another timeline', () => {
+  const model = fixture(), before = structuredClone(model.GeosetAnims);
+  assert.throws(() => setAnimationKey(model, [geo(1)], 100, 0, -1, 0), /model sequences/);
+  assert.deepEqual(model.GeosetAnims, before);
+  model.GlobalSequences.push(700);
+  model.GeosetAnims[1].Color = { LineType: 1, GlobalSeqId: 1, Keys: [key(0, 1, 1, 1)] };
+  model.GeosetAnims[1].Flags |= 2;
+  const next = structuredClone(model.GeosetAnims);
+  assert.throws(() => setAnimationKey(model, [geo(1, 'Color')], 100, [1, 0, 0], -1, 0), /global sequence 2/);
+  assert.deepEqual(model.GeosetAnims, next);
+});
+
 test('supported node channels exclude bone visibility and Particle2 lifecycle color', () => {
   const model = fixture(), targets = animationTargets(model, { nodeIds: [0, 1, 2, 3, 4], geosetIds: [0] });
   assert.equal(targets.some(t => t.kind === 'node' && t.id === 0), false);
