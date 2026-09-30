@@ -79,6 +79,9 @@ test('malformed portable data rejects traversal, constructors, invalid arrays an
   assert.throws(()=>parseParticleData('{"$array":"Function","values":[]}'));
   assert.throws(()=>parseParticleData('{"$array":"Uint8Array","values":[300]}'));
   assert.throws(()=>parseParticleData('{"x":1e400}'));
+  assert.throws(()=>parseParticleData('{"$array":"Float32Array","values":[1e39]}'));
+  assert.throws(()=>parseParticleData('['.repeat(10000)+'0'+']'.repeat(10000)),/nested too deeply/);
+  assert.deepEqual(parseParticleData(JSON.stringify({text:'[\\\"{'.repeat(100)})),{text:'[\\\"{'.repeat(100)});
   assert.equal(safeParticlePath('../bad.blp'),false);assert.equal(safeParticlePath('C:\\bad.blp'),false);
   assert.equal(safeParticlePath('war3.w3mod:Textures\\Spark.blp'),true);
 });
@@ -86,4 +89,31 @@ test('mode state and metadata do not modify canonical data',()=>{
   const {model,p}=fixture(),recipe=extractParticleRecipe(model,[p.ObjectId]),before=stringifyParticleData(recipe.native);
   recipe.ui={mode:'Classic'};recipe.ui.mode='Clueless';recipe.name='Blue sparks';recipe.tags=['blue'];
   assert.equal(stringifyParticleData(recipe.native),before);
+});
+
+test('source-version-independent PE2 placement keeps the target version and survives save/reopen',()=>{
+  const {model,p}=fixture();model.Version=1800;
+  const recipe=extractParticleRecipe(model,[p.ObjectId]);
+  const target=particleRecipeDocument(extractParticleRecipe(fixture().model,[1]));
+  target.model.Version=800;
+  let result;target.apply('Place cross-version effect',['Nodes','Textures'],m=>{result=placeParticleRecipe(m,recipe);});
+  assert.equal(target.model.Version,800);
+  const reopened=openDocument(target.serialize('mdx'),'placed.mdx');
+  assert.equal(reopened.model.Version,800);assert.equal(reopened.readOnly,false);
+  const placed=reopened.model.Nodes[result.ids[0]];
+  assert.deepEqual(placed.ParticleScaling,p.ParticleScaling);
+  assert.deepEqual(placed.TailDecayUVAnim,p.TailDecayUVAnim);
+  assert.deepEqual(placed.EmissionRate.Keys,p.EmissionRate.Keys);
+});
+test('saving a Lab draft marks its baseline without losing its independent undo history',()=>{
+  const {model,p}=fixture(),doc=particleRecipeDocument(extractParticleRecipe(model,[p.ObjectId]));
+  assert.equal(doc.dirty,false);
+  const initial=stringifyParticleData(doc.model);
+  const gesture=createParticleGesture({doc,id:doc.model.ParticleEmitters2[0].ObjectId,field:'ParticleScaling'});
+  gesture.update(20);gesture.finish();
+  const edited=stringifyParticleData(doc.model);
+  doc.markSaved(doc.serialize('mdx'));
+  assert.equal(doc.dirty,false);assert.equal(doc.canUndo,true);
+  doc.undo();assert.equal(stringifyParticleData(doc.model),initial);
+  doc.redo();assert.equal(stringifyParticleData(doc.model),edited);
 });

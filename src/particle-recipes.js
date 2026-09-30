@@ -141,11 +141,20 @@ export function particleRecipeDocument(recipe) { validateParticleRecipe(recipe);
 export function placeParticleRecipe(target, recipe, options = {}) {
   validateParticleRecipe(recipe);
   if (recipe.compatibility?.unsupported?.length) throw Error('This effect has unsupported ingredients; placement is not yet available.');
+  let source=recipe.native;
+  if(source.Version!==target.Version){
+    // Prove this dependency graph can retain every authored field at the target
+    // version before touching the target; never upgrade the model version.
+    const candidate=clone(source);candidate.Version=target.Version;
+    const proof=particleModelDocument(candidate);
+    proof.serialize('mdx');
+    source=candidate;
+  }
   const wrapper = createNode(target, 'Helper');
   wrapper.Name = recipe.name; wrapper.Parent = options.parent ?? null;
   const position = options.position || [0,0,0];
   if (position.length !== 3 || position.some(n => !Number.isFinite(n))) throw Error('Invalid effect anchor.');
   if (position.some(n => n !== 0)) wrapper.Translation = { LineType: 0, Keys: [{ Frame: options.targetInterval?.[0] || 0, Vector: new Float32Array(position) }] };
-  const result = copyEffectGraph(target, recipe.native, recipe.ingredients.map(item => item.objectId), { ...options, parent: wrapper.ObjectId });
+  const result = copyEffectGraph(target, source, recipe.ingredients.map(item => item.objectId), { ...options, parent: wrapper.ObjectId });
   return { ...result, anchorId: wrapper.ObjectId };
 }

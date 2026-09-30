@@ -12,7 +12,7 @@ export function activeParticleSample(model) {
       const time=start+(end-start)*i/9;
       let score=0;
       for(const emitter of model.ParticleEmitters2){
-        const at=field=>sampleTrack(emitter[field],time,{interval:clip.Interval,globalSequences:model.GlobalSequences,globalTime:time,fallback:[field==='Visibility'?1:0]})[0];
+        const at=field=>{const value=sampleTrack(emitter[field],time,{interval:clip.Interval,globalSequences:model.GlobalSequences,globalTime:time,fallback:[field==='Visibility'?1:0]});return typeof value==='number'?value:value[0];};
         score+=Math.max(0,at('EmissionRate'))*(at('Visibility')>0?1:0);
       }
       score+=model.RibbonEmitters.length;

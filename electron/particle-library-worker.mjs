@@ -36,9 +36,9 @@ export async function scanParticleLibrary({ folder, directory, maxAssets = Infin
     const namespaces = Object.fromEntries([...new Set(inventory.names.map(n => n.split(':').slice(0,-1).join(':')))].map(ns => [ns, inventory.names.filter(n => n.startsWith(ns + ':') && n.split(':').length === ns.split(':').length+1).length]));
     try {
       const previous = JSON.parse(await fs.readFile(path.join(cache,'manifest.json'),'utf8'));
-      if (previous.schema === 1 && previous.sourceKey === sourceKey) { manifest = previous; entries = JSON.parse(await fs.readFile(path.join(cache,'catalog.json'),'utf8')); completed = new Set(manifest.processed); }
+      if (previous.schema === 2 && previous.sourceKey === sourceKey) { manifest = previous; entries = JSON.parse(await fs.readFile(path.join(cache,'catalog.json'),'utf8')); completed = new Set(manifest.processed); }
     } catch(error) { if (error.code !== 'ENOENT') throw error; }
-    manifest ||= { schema:1, sourceKey, source:{installation:folder, buildInfo:build}, startedAt, totalEnumerated:inventory.names.length, namespaces, candidateAssets:candidates.length, parsedAssets:0, emitterCounts:{ParticleEmitters2:0,RibbonEmitters:0,ParticleEmitters:0,ParticleEmitterPopcorns:0}, processed:[], assets:[], failures:[], missingDependencies:[], unsupported:[], duplicates:[], extractionComplete:false, fullyPreviewableRecipes:0, insertableRecipes:0, reviewedNames:0, reviewNeededNames:0 };
+    manifest ||= { schema:2, sourceKey, source:{installation:folder, buildInfo:build}, startedAt, totalEnumerated:inventory.names.length, namespaces, candidateAssets:candidates.length, parsedAssets:0, emitterCounts:{ParticleEmitters2:0,RibbonEmitters:0,ParticleEmitters:0,ParticleEmitterPopcorns:0}, processed:[], assets:[], failures:[], missingDependencies:[], unsupported:[], duplicates:[], extractionComplete:false, fullyPreviewableRecipes:0, insertableRecipes:0, reviewedNames:0, reviewNeededNames:0 };
     const byHash = new Map(entries.map(item => [item.recipeHash,item]));
     async function checkpoint() {
       manifest.processed = [...completed]; manifest.updatedAt = new Date().toISOString();

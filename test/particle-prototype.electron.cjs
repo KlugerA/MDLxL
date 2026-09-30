@@ -2,26 +2,52 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
 const path=require('node:path'),fs=require('node:fs'),assert=require('node:assert/strict');
 (async()=>{
   const root=process.cwd(),out=path.join(root,'out','particle-prototype');fs.mkdirSync(out,{recursive:true});
-  const app=await _electron.launch({executablePath:path.resolve('node_modules/electron/dist/electron.exe'),args:['--disable-backgrounding-occluded-windows',root],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:path.join(root,'profile')},timeout:60000});
+  const testProfile=path.join(out,'profile-'+Date.now());fs.mkdirSync(testProfile,{recursive:true});fs.symlinkSync(path.join(root,'profile','particles'),path.join(testProfile,'particles'),'junction');
+  const {createDemoDocument}=await import('../src/editor-document.js');const fixture=path.join(out,'target.mdx');fs.writeFileSync(fixture,Buffer.from(createDemoDocument().serialize('mdx')));
+  const app=await _electron.launch({executablePath:path.resolve('node_modules/electron/dist/electron.exe'),args:['--disable-backgrounding-occluded-windows',root,fixture],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:testProfile},timeout:60000});
   const errors=[];
   try{
     const page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
     await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.webContents.setBackgroundThrottling(false);w.setSize(1400,920);w.setPosition(-3000,0);w.showInactive();});
     await page.waitForFunction(()=>window.desktop&&document.querySelector('.classic-toolbar'));
     await page.evaluate(async()=>{const settings=await window.desktop.getSettings();await window.desktop.configure({preferences:{...settings.preferences,graphics:{...settings.preferences.graphics,pauseWhenHidden:false}}});});
+    await page.getByText('Opened target.mdx',{exact:true}).waitFor();
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('menu','particles'));
     await page.getByRole('dialog',{name:'Particle Editor',exact:true}).waitFor();
     console.log('opened');
     if(await page.getByRole('button',{name:'Close Particle Library',exact:true}).count())await page.getByRole('button',{name:'Close Particle Library',exact:true}).click();
+    await page.locator('.pe-window').getByRole('button',{name:'New',exact:true}).click();
+    if(await page.getByRole('button',{name:'Discard and open',exact:true}).count())await page.getByRole('button',{name:'Discard and open',exact:true}).click();
     await page.waitForTimeout(2200);
+    console.log('snapshot',await page.evaluate(()=>{const el=document.querySelector('.pe-window');let fiber=el[Object.keys(el).find(k=>k.startsWith('__reactFiber'))];for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){const v=hook.memoizedState;if(v?.samples&&v?.guide)return {samples:v.samples.length,guide:v.guide,first:v.samples[0]};}return null;}));
     console.log('UI',await page.locator('.pe-window').innerText());
     await page.screenshot({path:path.join(out,'starter.png')});
     const state=await page.evaluate(()=>{
       const el=document.querySelector('.pe-preview .game-preview-root');let fiber=el[Object.keys(el).find(k=>k.startsWith('__reactFiber'))];
-      for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){const value=hook.memoizedState?.current;if(value?.native&&value?.controls)return {particles:value.native.particlesController.emitters.reduce((n,e)=>n+e.particles.length,0),frame:value.native.getFrame(),emitters:value.native.model.ParticleEmitters2.length};}
+      for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){const value=hook.memoizedState?.current;if(value?.native&&value?.controls)return {particles:value.native.particlesController.emitters.reduce((n,e)=>n+e.particles.length,0),frame:value.native.getFrame(),emitters:value.native.model.ParticleEmitters2.length,type:value.native.particlesController.emitters[0]?.type,firstVertices:Array.from(value.native.particlesController.emitters[0]?.headVertices?.slice(0,12)||[])};}
       return null;
     });
     console.log('runtime',state);console.log('stage',await page.locator('.pe-stage-tools').getAttribute('viewBox'));assert.ok(state?.particles>0,'Starter must have visible simulated particles');
+    const handle=page.getByRole('slider',{name:'Resize particle',exact:true});
+    await handle.waitFor();
+    const beforeSize=await page.getByRole('slider',{name:'Size',exact:true}).inputValue();
+    await page.locator('.pe-window').getByRole('button',{name:'Pause',exact:true}).click();
+    const point=await handle.locator('circle').boundingBox();
+    await page.mouse.move(point.x+point.width/2,point.y+point.height/2);await page.mouse.down();
+    await page.waitForTimeout(160);
+    assert.equal(await page.locator('.pe-size-proxy text').textContent(),'Pinned sample');
+    await page.mouse.move(point.x+point.width/2+40,point.y+point.height/2-20,{steps:4});await page.mouse.up();
+    assert.ok(Number(await page.getByRole('slider',{name:'Size',exact:true}).inputValue())>Number(beforeSize));
+    await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).click();
+    assert.equal(await page.getByRole('slider',{name:'Size',exact:true}).inputValue(),beforeSize,'One undo restores whole stage gesture');
+    const cancelPoint=await handle.locator('circle').boundingBox();
+    await page.mouse.move(cancelPoint.x+cancelPoint.width/2,cancelPoint.y+cancelPoint.height/2);await page.mouse.down();
+    await page.mouse.move(cancelPoint.x+cancelPoint.width/2+50,cancelPoint.y+cancelPoint.height/2-20);
+    await page.keyboard.press('Escape');await page.mouse.up();
+    assert.equal(await page.getByRole('slider',{name:'Size',exact:true}).inputValue(),beforeSize,'Escape restores value');
+    assert.equal(await page.getByRole('dialog',{name:'Particle Editor',exact:true}).isVisible(),true,'Escape cancels gesture without closing editor');
+    await page.locator('.pe-window').getByRole('button',{name:'Play',exact:true}).click();
+    console.log('Stage gesture: pinned, committed in one undo, cancelled without document change');
     const slider=page.getByRole('slider',{name:'Size',exact:true});const bounds=await slider.boundingBox();
     await page.mouse.move(bounds.x+bounds.width*.3,bounds.y+bounds.height/2);await page.mouse.down();await page.mouse.move(bounds.x+bounds.width*.65,bounds.y+bounds.height/2,{steps:8});await page.mouse.up();
     await page.waitForTimeout(200);
@@ -30,8 +56,24 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     await page.getByLabel('Preset name',{exact:true}).fill('Prototype test sparks');
     await page.getByRole('button',{name:'Save to My presets',exact:true}).click();
     await page.waitForTimeout(250);
-    console.log('after save',await page.locator('.pe-window [role=status]').innerText());
+    console.log('after save',await page.locator('.pe-window .re-status').innerText());
+    assert.equal(await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).isEnabled(),true,'Saving preserves Lab undo');
     await page.screenshot({path:path.join(out,'edited.png')});
+    await page.locator('.pe-window').getByRole('button',{name:'Library',exact:true}).click();
+    await page.waitForTimeout(5000);await page.screenshot({path:path.join(out,'library.png')});
+    await page.getByLabel('Find an effect',{exact:true}).fill('flamestrikeembers');
+    await page.locator('.pe-effect-card').first().click();
+    if(await page.getByRole('button',{name:'Discard and open',exact:true}).count())await page.getByRole('button',{name:'Discard and open',exact:true}).click();
+    await page.waitForTimeout(1200);
+    console.log('real recipe',await page.locator('.pe-window .re-status').innerText());
+    await page.screenshot({path:path.join(out,'casc-effect.png')});
+    await page.getByRole('button',{name:'Add to model',exact:true}).click();
+    await page.getByRole('checkbox',{name:'Fit timing to this animation',exact:true}).check();
+    await page.getByRole('button',{name:'Confirm placement',exact:true}).click();
+    await page.waitForTimeout(200);
+    console.log('placement',await page.locator('.pe-window .re-status').innerText());
+    assert.equal(await page.getByLabel('Particle context',{exact:true}).inputValue(),'On model');
+    await page.waitForTimeout(1200);await page.screenshot({path:path.join(out,'placed-effect.png')});
     console.log('errors',errors);assert.deepEqual(errors,[]);
     fs.writeFileSync(path.join(out,'runtime.json'),JSON.stringify({state,errors},null,2));
   } finally {await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}

@@ -13,6 +13,14 @@ export function stringifyParticleData(value) {
 }
 export function parseParticleData(text) {
   if (typeof text !== 'string' || text.length > PARTICLE_DATA_LIMIT) throw Error('Preset exceeds 16 MiB.');
+  // Check nesting before JSON.parse invokes its recursive reviver. Quoted braces are data.
+  let depth=0,quoted=false,escaped=false;
+  for(const character of text){
+    if(quoted){if(escaped)escaped=false;else if(character==='\\')escaped=true;else if(character==='"')quoted=false;}
+    else if(character==='"')quoted=true;
+    else if(character==='{'||character==='['){if(++depth>40)throw Error('Preset is nested too deeply.');}
+    else if(character==='}'||character===']')depth--;
+  }
   let count = 0;
   const value = JSON.parse(text, (key, item) => {
     if (++count > 1000000) throw Error('Preset exceeds its data limit.');
@@ -23,6 +31,7 @@ export function parseParticleData(text) {
       if (!Object.hasOwn(types, item.$array) || !Array.isArray(item.values) || item.values.length > 300000 ||
           item.values.some(n => typeof n !== 'number' || !Number.isFinite(n))) throw Error('Invalid preset array.');
       const out = new Type(item.values);
+      if(out.some(n=>!Number.isFinite(n)))throw Error('Preset array exceeds finite native values.');
       if (!item.$array.startsWith('Float') && out.some((n, i) => n !== item.values[i])) throw Error('Integer array is outside its native domain.');
       return out;
     }

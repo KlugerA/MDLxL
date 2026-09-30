@@ -33,3 +33,66 @@ Usage checkpoint: 96% used (about 3 points since start).
 NOT complete: gallery thumbnail batch and naming review, alpha-aware owner picking/double-click, full direct aim/axis-aware gestures, preview placement ghost, matching-version-only insertion, event-exact deterministic clocks/replay, independent FX clock, bounded ribbon editing/sweep, full native-field binding coverage, portability for custom picture bytes, malformed input depth precheck, source-family compatibility, measured latency/FPS, Warcraft validation.
 Initial scan: 3,486 candidates; 3,485 parsed; 3,830 recipes; 342 recipe/parse exceptions, 57 dependency misses. Source PE2 3,777; ribbons 357; PE1 67; Popcorn 88. All are inventoried, but failures need recovery and unsupported identities need gallery treatment. Zero-duration global rejection was corrected after this scan; rescan required.
 Do not interpret extractionComplete as preview or insertion completion. No user model fixture or primary checkout was modified.
+
+## Checkpoint 2 — 2026-09-30, before user reset
+
+PR: https://github.com/KlugerA/MDLxL/pull/60 (draft, unmerged). Online main does not contain this prototype. Version remains 0.14.1 because this is unreleased work.
+Usage counter reached 100% from 93%; approximately 7 of the allocated 40 percentage points have been consumed. After the user applies the reset, at most approximately 33 points remain. The counter is rounded and shared by the account.
+
+Implemented and exercised:
+- Real effect thumbnails rendered through the pinned native renderer and cached locally. Friendly generated names remain explicitly unreviewed.
+- CASC Flame Strike embers opened in Lab and placed on a visible synthetic target model. Target format is retained after cross-version compatibility serialization.
+- Linked preview speed corrected to the existing percent-based playback API: 0.5x passes 50.
+- Visible SVG size proxy (shared resource-editor CSS had hidden it). Actual mouse resize pins a sample, one undo restores its original size, and Escape cancels without closing the editor.
+- Preset saving retains the independent Lab undo history. Read-only New disabled.
+- Typed input rejects float overflow and checks excessive nesting before JSON reviver recursion.
+- Starter picture uses the existing MDLxL_Forge generated-asset sidecar path convention.
+
+Verification:
+- 66/66 targeted and current compatibility tests pass (10 particle prototype + 56 compatibility).
+- Vite production build passes; tracked dist rebuilt. No package, desktop installation, or release claim.
+- Off-screen Electron smoke test: native starter particles visible; scalar and stage resize; save personal preset; actual thumbnail gallery; load local CASC effect; place on loaded synthetic model. No JS page errors. Evidence: out/particle-prototype/{starter,edited,library,casc-effect,placed-effect}.png, runtime.json and runtime.log.
+- Historical source suite: 1067 tests reported, 1048 pass, 17 fail, 2 skipped. Sixteen completed assertion failures reproduced against an untouched archive of base c62faa4 (111 focused baseline tests: 95 pass, 16 fail). The remaining keyframe-timeline test hung and its exact test process was stopped; this is not a passing full-suite claim.
+- Schema-2 CASC rescan completed: 3486 classic candidate assets, 3485 parsed, 3830 recipes, 342 explicit exceptions, 57 missing dependencies, 65 unsupported recipe entries, 118 exact duplicate mappings. Zero-duration globals are retained by graph extraction but still rejected by native model validation; they are not silently repaired. Bind-pose graph cases, PE1 external simulation and Popcorn remain compatibility limitations.
+- Source bytes remain in ignored local cache. Only coverage metadata is checked in.
+
+Next work, still required by contract:
+1. Complete stable axis-aware spawn/spread and direct aim, alpha-aware visible sample ownership/double-click, life controls as one gesture, actual placement ghost and cancel proof.
+2. Deterministic fixed-step linked playback including global event boundaries, marked independent FX clock, coherent authoring resimulation, bounded ribbon sweep fitting. Current seeded seek is a starting point only.
+3. Full native binding metadata and Picture grid/range controls; unsupported source identities visible in gallery without dropped data; corpus compatibility and dependency resolution.
+4. Personal preset import/export/duplicate/tags and portable custom picture bytes; stale thumbnail invalidation; deterministic appearance/name review and useful categories.
+5. Actual model-file save/reopen UI path, recovery/restart test, smaller viewport captures, measured latency/FPS and hardware record, targeted fixtures listed by contract. Warcraft in-game validation remains unverified.
+
+Do not declare the goal or contract complete from this checkpoint. All A01-A29 remain subject to the evidence table below.
+
+| Gate | Current evidence / remaining requirement |
+|---|---|
+| A01 | Starter editable and saved; no-model/restart/reopen end-to-end still needs proof. |
+| A02 | Lab is independent; source untouched by copy and scalar unit tests. Full UI canonical comparison pending. |
+| A03 | Canonical typed preservation unit tests pass; actual mode-switch deep comparison pending. |
+| A04 | Populated 1400x920 capture has six primary controls and approximately 74% stage width. Smaller reference check pending. |
+| A05 | Slider interaction and transaction unit test pass; continuous feedback latency unmeasured. |
+| A06 | Real mouse pinned resize, single undo and Escape pass. Moving/dead sample and alpha picking pending. |
+| A07 | Initial guides/handles present; parent, axis and broad-angle matrix incomplete. |
+| A08 | Drag displacement is latched; animated-parent stationary-pointer runtime proof pending. |
+| A09 | Native life samples present; stage gesture/color/opacity and endpoint cases incomplete. |
+| A10 | Key scope latching and spline tangent unit tests pass; complete live runtime proof pending. |
+| A11 | Percent playback fixed; matched-time deterministic tolerance not yet established. |
+| A12 | Independent clocks not implemented. |
+| A13 | Seeded seek exists; event-exact loops and global boundaries incomplete. |
+| A14 | Ribbon data extraction exists; sweep fitting tools not implemented. |
+| A15 | Existing selected emitter/list opens; alpha-aware double-click/overlap picker missing. |
+| A16 | Confirmation visible and model undo unit proof pass; visual ghost and UI cancel proof pending. |
+| A17 | Sparse dependency and global remapping unit tests pass; broad mixed fixture matrix pending. |
+| A18 | PE2 MDX round-trip unit test passes; complete MDL/MDX fixture and UI save/reopen matrix pending. |
+| A19 | Unsupported ingredients explicitly recorded; complete mixed recipes and gallery behavior incomplete. |
+| A20 | Actual bulk inventory and coverage metadata produced; extraction failures remain explicit. |
+| A21 | Preset disk save and Lab undo preservation pass; restart/copy/stale-thumbnail proof incomplete. |
+| A22 | Missing-source/dependency counts exist; actionable UI/build-change matrix incomplete. |
+| A23 | Traversal, unsafe keys, typed domains, overflow, depth tests pass; full oversized recipe schema audit pending. |
+| A24 | No latency/FPS claim. Measurements not run. |
+| A25 | Draft persistence and read-only guard exist; complete keyboard/recovery/read-only exercise pending. |
+| A26 | Warcraft in-game testing not run. |
+| A27 | Native effect thumbnail gallery and appearance search present; names/categories not reviewed. |
+| A28 | Actual local extraction/rescan and bad-asset continuation demonstrated; automated cancellation/restart proof pending. |
+| A29 | Exact duplicate mappings and metadata overlays exist; observed-preview name review/rescan override proof pending. |

@@ -1,6 +1,6 @@
 import { createNode } from './editor-document.js';
 import { emptyParticleModel, extractParticleRecipe } from './particle-recipes.js';
-export const STARTER_TEXTURE = 'Textures\\MDLxLSoftParticle.tga';
+export const STARTER_TEXTURE = 'MDLxL_Forge\\Particle_SoftDisc_v1.tga';
 /** Original mathematical soft disc, generated locally. No game assets are bundled. */
 export function starterTextureAsset() {
   const size=64,bytes=new Uint8Array(18+size*size*4);

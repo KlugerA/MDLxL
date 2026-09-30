@@ -2,7 +2,7 @@
   "build": "3.0.0.24268",
   "buildKey": "3a9d8f26806936764d2d9ad526a65e04",
   "sourceKey": "6d608eb1d5ea6a375afbb253c7679d4fcd82d545712358382cbe01cb8534ea60",
-  "run": "2026-09-30T17:34:00.235Z",
+  "run": "2026-09-30T17:59:53.890Z",
   "totalEnumerated": 14984,
   "namespaces": {
     "war3.w3mod:_de.w3mod:_teen.w3mod": 1,
@@ -30,5 +30,6 @@
   "fullyPreviewableRecipes": 0,
   "insertableRecipes": 0,
   "reviewedNames": 0,
-  "note": "Initial extraction checkpoint. Global-duration and bind-pose cases remain; no full-library claim. Native asset bytes and detailed cache remain local."
+  "note": "Bulk schema-2 extraction completed. Zero-duration globals and bind-pose cases remain explicit failures. A small native-preview and placement subset has been exercised; aggregate preview/insertion/name counts remain unverified. No full-library claim.",
+  "cacheSchema": 2
 }
