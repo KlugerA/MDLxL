@@ -58,6 +58,13 @@ export function prepareTextureLibrary(items) {
   // appearance inference pass. Never infer an HD surface from its SD counterpart.
   return prepare(items.map(item=>item.searchIndex?item:{...item,searchIndex:{version:4,traits:[]}}));
 }
+/** The empty search has the same order before the full search index is prepared. */
+export function initialTextureLibraryResults(items,{query='',folder='',variant='all',kind='all',format='all',limit=120}={}) {
+  if(query.trim())return null;
+  const matches=items.filter(item=>(variant==='all'||item.variant===variant)&&(kind==='all'||item.kinds.includes(kind))&&textureFormatMatches(item,format)&&(item.source==='custom'?(!folder||folder==='Model folder'):folderContains(item.sourcePath,folder)));
+  matches.sort((a,b)=>(b.priority||0)-(a.priority||0)||a.name.localeCompare(b.name));
+  return {items:matches.slice(0,limit),total:matches.length,meanings:[],unknown:[],notice:'',hasMore:matches.length>limit};
+}
 function inspirationFor(query) {
   const q=norm(query).replaceAll('-',' ');
   for(const definition of inspirations)for(const phrase of [...definition.words].sort((a,b)=>b.length-a.length)) {

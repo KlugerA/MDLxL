@@ -10,7 +10,7 @@ const {GameDataDiscovery,selectedGameDataSources}=require('./game-data.cjs');
 const {TextureResolver,IMAGE_EXTENSIONS}=require('./texture-resolver.cjs');
 const {CascTextures}=require('./casc.cjs');
 const {HUMAN_PORTRAIT_RESOURCES,validateHumanPortraitResources}=require('./human-portrait-frame.cjs');
-const {TextureLibrary}=require('./texture-library.cjs');
+const {TextureLibrary,previewCatalog}=require('./texture-library.cjs');
 const {TexturePreviewCache}=require('./texture-preview-cache.cjs');
 const {SessionJournal}=require('./session.cjs');
 const {savePreviewCapture}=require('./preview-capture.cjs');
@@ -234,6 +234,10 @@ async function textureLibraryContext(payload){
 }
 ipcMain.handle('texture:library',(_,payload)=>{
   const operation=textureLibraryContext(payload).then(context=>context.catalog);
+  textureOperations.add(operation);operation.finally(()=>textureOperations.delete(operation)).catch(()=>{});return operation;
+});
+ipcMain.handle('texture:libraryPreview',(_,payload)=>{
+  const operation=textureLibraryContext(payload).then(context=>previewCatalog(context.catalog,payload?.format==='blp'?'blp':'all'));
   textureOperations.add(operation);operation.finally(()=>textureOperations.delete(operation)).catch(()=>{});return operation;
 });
 ipcMain.handle('texture:copyPath',(_,value)=>{
