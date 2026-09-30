@@ -12,7 +12,7 @@ export function previewOverlayOptions(overlays, showNodes = false) {
   return {
     bones: overlays?.bones ?? markers, nodes: overlays?.nodes ?? markers,
     attachments: overlays?.attachments ?? markers, particles: overlays?.particles ?? markers,
-    boneLines: focusedBoneLines || (overlays?.skeleton ?? overlays?.boneLines ?? true), focusedBoneLines,
+    boneLines: focusedBoneLines || (overlays?.skeleton ?? overlays?.boneLines ?? true), focusedBoneLines, focusedBoneMarkers: focusedBoneLines,
     wires: overlays?.wires ?? false, vertices: overlays?.vertices ?? false, grid: overlays?.grid ?? false,
     normals: overlays?.normals ?? false, selectedVerticesOnly: overlays?.selectedVerticesOnly ?? false,
   };

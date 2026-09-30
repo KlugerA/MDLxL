@@ -46,12 +46,17 @@ export function markerStyle(point, byId, preferences, highlightColors = new Map(
   return { shape: TETRA, color: highlighted || point.displayColor || visual.node };
 }
 
+export function rigMarkerVisible(point, options, highlights) {
+  const kind = point.overlayKind || 'nodes';
+  return !!options[kind] || kind === 'bones' && !!options.focusedBoneMarkers && !!highlights.get(point.node.ObjectId);
+}
+
 /** Actual world-space polyhedra, shared by the editor and Warcraft GL contexts. */
 export function rigMarkerGeometry(nodes, selectedIds, options = {}) {
   const byId = new Map(nodes.map(point => [point.node.ObjectId, point])), highlights = boneHighlightColors(nodes, selectedIds);
   const triangles = [], edges = [], emphasizedEdges = [], size = visualOptions(options.preferences).helperSize * 3 / 2;
   for (const point of nodes) {
-    if (!point.visible || !options[point.overlayKind || 'nodes']) continue;
+    if (!point.visible || !rigMarkerVisible(point, options, highlights)) continue;
     const { shape, color } = markerStyle(point, byId, options.preferences, highlights), baseColor = new Color(color);
     const edgeRgb = baseColor.clone().convertLinearToSRGB().toArray();
     const points = shape.vertices.map(vertex => new Vector3(...vertex).multiplyScalar(point.unitsPerPixel * size).applyQuaternion(point.rotation).add(point.world));

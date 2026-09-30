@@ -43,8 +43,8 @@ test('Focused Skeleton uses only highlighted connectors and is exclusive with Sk
   assert.equal(focused.movement.skeleton, false);
   assert.equal(focused.movement.focusedSkeleton, true);
   assert.deepEqual(
-    [previewOverlayOptions(focused.movement).boneLines, previewOverlayOptions(focused.movement).focusedBoneLines],
-    [true, true],
+    [previewOverlayOptions(focused.movement).boneLines, previewOverlayOptions(focused.movement).focusedBoneLines, previewOverlayOptions(focused.movement).bones, previewOverlayOptions(focused.movement).focusedBoneMarkers],
+    [true, true, false, true],
   );
   const whole = setEditorDisplay(focused, 'movement', 'skeleton', true);
   assert.equal(whole.movement.skeleton, true);

@@ -5,10 +5,27 @@ import { previewLighting, configurePreviewLights, applyPreviewMaterialLighting }
 import { cameraLeftLight } from './viewport-quality.js';
 import { visualOptions } from '../src/preferences.js';
 
-export default function ForgePreview({ geosets = [], image = null, wire = false, checker = false, trimColor = '#cca64d', shapeHandle = null, preferences }) {
+export default function ForgePreview({ geosets = [], image = null, wire = false, checker = false, trimColor = '#cca64d', shapeHandle = null, initialView = 'front', preferences }) {
   const host = useRef(), state = useRef(), drag = useRef();
   const latest = useRef(preferences); latest.current = preferences;
-  const fit = (view = 'front') => { const s = state.current; if (!s || !s.group.children.length) return; const box = new THREE.Box3().setFromObject(s.group), center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length() || 100; s.controls.target.copy(center); const direction = view === 'side' ? new THREE.Vector3(1, 0, 0) : view === 'oblique' ? new THREE.Vector3(.7, .45, 1).normalize() : new THREE.Vector3(0, 0, 1); s.camera.position.copy(center).addScaledVector(direction, size * 1.7); s.controls.update(); s.render(); };
+  const viewFor = (view, box) => {
+    if (view === 'largest') {
+      const size = box.getSize(new THREE.Vector3());
+      const axis = [[size.y * size.z, 'x'], [size.x * size.z, 'y'], [size.x * size.y, 'z']].sort((a, b) => b[0] - a[0])[0][1];
+      if (axis === 'x') return { direction: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, size.y >= size.z ? 0 : 1, size.y >= size.z ? 1 : 0), fitted: true };
+      if (axis === 'y') return { direction: new THREE.Vector3(0, 1, 0), up: new THREE.Vector3(size.x >= size.z ? 0 : 1, 0, size.x >= size.z ? 1 : 0), fitted: true };
+      return { direction: new THREE.Vector3(0, 0, 1), up: new THREE.Vector3(size.x >= size.y ? 0 : 1, size.x >= size.y ? 1 : 0, 0), fitted: true };
+    }
+    return { direction: view === 'side' ? new THREE.Vector3(1, 0, 0) : view === 'oblique' ? new THREE.Vector3(.7, .45, 1).normalize() : new THREE.Vector3(0, 0, 1), up: new THREE.Vector3(0, 1, 0) };
+  };
+  const distanceFor = (viewState, box, fallback) => {
+    if (!viewState.fitted) return fallback * 1.7;
+    const size = box.getSize(new THREE.Vector3()), rect = host.current?.getBoundingClientRect(), aspect = Math.max(.1, rect?.width / Math.max(1, rect?.height) || 1), tangent = Math.tan(THREE.MathUtils.degToRad(38 / 2));
+    const span = axis => Math.abs(axis.x) * size.x + Math.abs(axis.y) * size.y + Math.abs(axis.z) * size.z;
+    const right = new THREE.Vector3().crossVectors(viewState.direction, viewState.up).normalize();
+    return span(viewState.direction) / 2 + Math.max(span(right) / (2 * tangent * aspect), span(viewState.up) / (2 * tangent)) * 1.15;
+  };
+  const fit = (view = 'front') => { const s = state.current; if (!s || !s.group.children.length) return; const box = new THREE.Box3().setFromObject(s.group), center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length() || 100, viewState = viewFor(view, box); s.controls.target.copy(center); s.camera.up.copy(viewState.up); s.camera.position.copy(center).addScaledVector(viewState.direction, distanceFor(viewState, box, size)); s.controls.update(); s.render(); };
   useEffect(() => {
     const scene = new THREE.Scene(); scene.background = new THREE.Color('#182028');
     let renderer;
@@ -43,10 +60,10 @@ export default function ForgePreview({ geosets = [], image = null, wire = false,
     if (geosets.length) {
       const box = new THREE.Box3().setFromObject(s.group), center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length() || 100;
       s.camera.near = Math.max(.001, size / 1000); s.camera.far = size * 100; s.camera.updateProjectionMatrix();
-      if (!s.fit) { s.controls.target.copy(center); s.camera.position.copy(center).add(new THREE.Vector3(0, 0, size * 1.7)); s.controls.update(); s.fit = true; }
+      if (!s.fit) { const viewState = viewFor(initialView, box); s.controls.target.copy(center); s.camera.up.copy(viewState.up); s.camera.position.copy(center).addScaledVector(viewState.direction, distanceFor(viewState, box, size)); s.controls.update(); s.fit = true; }
     }
     s.render();
-  }, [geosets, image, wire, checker, trimColor]);
+  }, [geosets, image, wire, checker, trimColor, initialView]);
   useEffect(() => { state.current?.render(); }, [preferences]);
   return <div ref={host} className="forge-preview-canvas" aria-label="3D mesh preview"><div className="forge-preview-views"><button onClick={() => fit('front')}>Front / fit</button><button onClick={() => fit('side')}>Side</button><button onClick={() => fit('oblique')}>Oblique</button></div>{shapeHandle && <button className="forge-shape-handle" title="Drag to shape" aria-label="Drag to shape" onPointerDown={e => { e.stopPropagation(); e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); drag.current = { y: e.clientY, amount: shapeHandle.amount }; }} onPointerMove={e => { if (drag.current) { e.stopPropagation(); shapeHandle.onChange(drag.current.amount + drag.current.y - e.clientY); } }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onKeyDown={e => { if (['ArrowUp', 'ArrowDown'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); shapeHandle.onChange(shapeHandle.amount + (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1)); } }}>↕</button>}</div>;
 }
