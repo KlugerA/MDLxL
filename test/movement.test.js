@@ -4,7 +4,7 @@ import { Matrix4, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { applyMovementTransform, deleteMovementControllers, deleteMovementKeys, insertMovementKeys, movementControllerType, movementKeyframes, sampleMovement, setMovementBezierHandles, setMovementControllerType, setMovementHermiteCurve, updateMovementKey } from '../src/movement.js';
 import { sampleNodeMatrices, skinGeoset } from '../src/animation.js';
 import { createDemoDocument, openDocument } from '../src/editor-document.js';
-import { MOVEMENT_GIZMO_SCALE, boneConnectionAppearance, boneConnectionEndpoints, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementMarkerRadius, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from '../app/movement-overlay.js';
+import { MOVEMENT_GIZMO_SCALE, boneConnectionAppearance, boneConnectionEndpoints, boneConnectionVisible, movementAxisHandles, movementDragAmount, movementFreeScaleValues, movementMarkerRadius, movementNodeSelection, movementWorkplaneHandle, movementWorkplanePointer, pickMovementHandle, pickMovementNode, projectMovementNodes } from '../app/movement-overlay.js';
 import { applyRestPoseMatrices, isUVOnlyPreviewChange, portraitBlankDragRotatesCamera } from '../app/game-preview-data.js';
 import { patchWarcraftMeshFragmentShader, previewGeosetTint } from '../app/warcraft-preview-adapter.js';
 import { projectedPlaneTranslation } from '../app/viewport-math.js';
@@ -258,6 +258,10 @@ test('selected bone connector colors distinguish its parent and every child', ()
   assert.equal(boneConnectionAppearance(point(0), point(2), highlights), '#ff0000');
   assert.equal(boneConnectionAppearance(point(2), point(3), highlights), '#ffff00');
   assert.equal(boneConnectionAppearance(point(0), point(5), highlights), null);
+  assert.equal(boneConnectionVisible(point(0), point(2), highlights, true), true);
+  assert.equal(boneConnectionVisible(point(2), point(3), highlights, true), true);
+  assert.equal(boneConnectionVisible(point(0), point(5), highlights, true), false);
+  assert.equal(boneConnectionVisible(point(0), point(5), highlights, false), true);
 });
 
 test('movement workplanes retain both screen drag components for the world-plane solver', () => {

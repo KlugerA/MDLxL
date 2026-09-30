@@ -8,10 +8,11 @@ import { createPixelLineBatch, drawPixelLine } from './pixel-lines.js';
 
 export function previewOverlayOptions(overlays, showNodes = false) {
   const markers = !!showNodes;
+  const focusedBoneLines = !!overlays?.focusedSkeleton;
   return {
     bones: overlays?.bones ?? markers, nodes: overlays?.nodes ?? markers,
     attachments: overlays?.attachments ?? markers, particles: overlays?.particles ?? markers,
-    boneLines: overlays?.skeleton ?? overlays?.boneLines ?? true,
+    boneLines: focusedBoneLines || (overlays?.skeleton ?? overlays?.boneLines ?? true), focusedBoneLines,
     wires: overlays?.wires ?? false, vertices: overlays?.vertices ?? false, grid: overlays?.grid ?? false,
     normals: overlays?.normals ?? false, selectedVerticesOnly: overlays?.selectedVerticesOnly ?? false,
   };

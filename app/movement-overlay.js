@@ -58,6 +58,7 @@ export function drawMovementOverlay(context, nodes, selectedIds, handles, width,
     const line = boneConnectionEndpoints(parent, point, visual.helperSize);
     if (!line) continue;
     const appearance = boneConnectionAppearance(parent, point, highlights);
+    if (!boneConnectionVisible(parent, point, highlights, options.focusedBoneLines)) continue;
     drawPixelLine(context, line.from, line.to, {
       color: appearance || (progress => { const shade = Math.round(progress * 255); return `rgb(${shade},${shade},${shade})`; }),
       width: appearance ? 6 : 3, ratio,
@@ -112,6 +113,7 @@ export function drawBoneConnectors(context, nodes, selectedIds, camera, width, h
     const line = boneConnectionEndpoints(parent, point);
     if (!line) continue;
     const appearance = boneConnectionAppearance(parent, point, highlights);
+    if (!boneConnectionVisible(parent, point, highlights, options.focusedBoneLines)) continue;
     drawPixelLine(context, line.from, line.to, {
       color: appearance || (progress => { const shade = Math.round(progress * 255); return `rgb(${shade},${shade},${shade})`; }),
       width: appearance ? 6 : 3, ratio,
@@ -208,6 +210,10 @@ export function boneConnectionAppearance(parent, child, highlights) {
   if (to === '#ff0000' && from === '#000000') return '#ff0000';
   if (to === '#ffff00' && (from === '#ff0000' || from === '#ffff00')) return '#ffff00';
   return null;
+}
+
+export function boneConnectionVisible(parent, child, highlights, focused = false) {
+  return !focused || !!boneConnectionAppearance(parent, child, highlights);
 }
 
 export function movementWorkplaneHandle(workplane = 'xy', unitsPerPixel = 1) {

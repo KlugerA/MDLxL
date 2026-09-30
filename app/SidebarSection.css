@@ -1,0 +1,7 @@
+.sidebar-section{margin:2px 0;border:1px solid var(--ui-border,#888);background:var(--ui-panel,#d4d0c8);min-width:0}
+.sidebar-section>summary{display:flex;align-items:center;min-height:18px;padding:1px 3px;cursor:pointer;list-style:none;font:11px Tahoma,Arial,sans-serif;background:color-mix(in srgb,var(--ui-panel,#d4d0c8) 82%,var(--ui-field,#fff));user-select:none}
+.sidebar-section>summary::-webkit-details-marker{display:none}
+.sidebar-section>summary::before{content:'▾';width:11px;flex:0 0 11px}
+.sidebar-section:not([open])>summary::before{content:'▸'}
+.sidebar-section>.sidebar-section-body{padding:3px;min-width:0}
+.sidebar-section:not([open])>.sidebar-section-body{display:none}

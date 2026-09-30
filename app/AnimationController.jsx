@@ -6,6 +6,7 @@ import {
 import { setSequenceOptions } from '../src/animation.js';
 import { clampAlphaPercentText } from '../src/animation-controller-inputs.js';
 import { wheelOptionIndex } from '../src/dropdown-wheel.js';
+import SidebarSection from './SidebarSection.jsx';
 import {
   createGlobalSequence, createSequence, createSequenceFromCurrent, deleteGlobalSequence, deleteSequence,
   setGlobalSequenceDuration, setSequenceInterval, setSequenceMoveSpeed, setSequenceName,
@@ -239,11 +240,12 @@ export default function AnimationController({
   const mixedOrPartial = alpha === '' || Number.isFinite(alphaNumber) && alphaNumber !== 0 && alphaNumber !== 100;
   const currentValue = globalDomain ? `global:${globalSeqId}` : sequenceIndex;
   return <section className="animation-controller" aria-label="Animations toolbox">
-    <label className="ac-current">Current sequence:<span className="ac-sequence-combo"><input ref={sequenceNameInput} aria-label="Animation sequence name" className={globalDomain ? 'global-sequence-value' : ''} value={sequenceNameText} disabled={!sequence} readOnly={globalDomain || !sequence} onWheel={wheelSequence} onChange={event => setSequenceNameText(event.target.value)} onBlur={commitSequenceName} onKeyDown={enterBlurs}/><select ref={sequenceSelect} data-warmkey="animationSequence" aria-label="Choose animation sequence" value={currentValue} onChange={event => onTimelineChange?.(event.target.value)} title="Choose animation sequence">
+    <SidebarSection title="Current Sequence"><label className="ac-current"><span className="ac-sequence-combo"><input ref={sequenceNameInput} aria-label="Animation sequence name" className={globalDomain ? 'global-sequence-value' : ''} value={sequenceNameText} disabled={!sequence} readOnly={globalDomain || !sequence} onWheel={wheelSequence} onChange={event => setSequenceNameText(event.target.value)} onBlur={commitSequenceName} onKeyDown={enterBlurs}/><select ref={sequenceSelect} data-warmkey="animationSequence" aria-label="Choose animation sequence" value={currentValue} onChange={event => onTimelineChange?.(event.target.value)} title="Choose animation sequence">
       <option value={-1}>All line</option>
       {(model.Sequences || []).map((item, index) => <option key={index} value={index} translate="no">{item.Name}</option>)}
       {(model.GlobalSequences || []).map((duration, index) => <option className="global-sequence-value" style={{ color: '#d00000' }} key={`global:${index}`} value={`global:${index}`}>{duration}</option>)}
-    </select></span></label>
+    </select></span></label></SidebarSection>
+    <SidebarSection title="Sequence Properties">
     <div className="ac-caption">Sequence properties:</div>
     <div className="ac-properties">
       <label><input type="checkbox" checked={!!sequence && !sequence.NonLooping} disabled={noLocalSequence} onChange={event => changeSequence({ nonLooping: !event.target.checked })}/>Loop</label>
@@ -258,6 +260,8 @@ export default function AnimationController({
       <input aria-label="Sequence last frame" type="number" min={globalDomain ? 1 : Math.max(0, Number(startText) || 0)} step="1" disabled={disabled || !sequence && !globalDomain} value={endText} onChange={event => setEndText(event.target.value)} onBlur={commitInterval} onKeyDown={enterBlurs}/>
     </div>
     <div className="ac-sequence-actions"><button disabled={disabled} onClick={addSequence}>Create</button><button disabled={noLocalSequence} onClick={copyCurrentSequence}>Create from current</button><button disabled={disabled} onClick={addGlobal}>Global</button><button disabled={disabled || !sequence && !globalDomain} onClick={removeCurrent}>Delete</button></div>
+    </SidebarSection>
+    <SidebarSection title="Visibility & Color">
     <div className="ac-geoset-animation">
       <div className="ac-visibility"><span>Visibility:</span>{missingGeosets.length ? <button className="ac-create-visibility" disabled={disabled || !geosetIds.length} onClick={createVisibility}>Create Visibility</button> : <label><input type="checkbox" aria-label="Visible at current frame" checked={visibleChecked} ref={input => { if (input) input.indeterminate = mixedOrPartial; }} disabled={colorBlocked} onChange={event => setVisibility(event.target.checked)}/>On</label>}
         <label className="ac-alpha">Alpha:<input aria-label="Visibility alpha percent" type="number" min="0" max="100" step="1" placeholder={geosetIds.length ? 'Mixed' : ''} disabled={colorBlocked} value={alpha} onChange={event => setAlpha(clampAlphaPercentText(event.target.value))} onBlur={commitAlpha} onKeyDown={enterBlurs}/></label>
@@ -266,6 +270,7 @@ export default function AnimationController({
     </div>
     <button disabled={colorBlocked} onClick={() => bakeRgb(false)}>Bake Sequence RGB</button>
     <button disabled={disabled || globalDomain || !model.Sequences?.length || !geosetIds.length} onClick={() => bakeRgb(true)}>Bake All RGB</button>
+    </SidebarSection>
     {error && <p className="ac-error" role="alert">{error}</p>}{notice && <p className="ac-notice" role="status">{notice}</p>}
   </section>;
 }
