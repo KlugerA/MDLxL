@@ -1,0 +1,10 @@
+import path from 'node:path';
+import { GameDataDiscovery } from '../electron/game-data.cjs';
+import { scanParticleLibrary } from '../electron/particle-library-worker.mjs';
+const args = process.argv.slice(2), option = key => args.includes(key) ? args[args.indexOf(key)+1] : undefined;
+const discovery = await new GameDataDiscovery().discover({explicitFolder:option('--source')});
+const folder = option('--source') || discovery.cascFolders?.[0];
+if (!folder) throw Error('Connect the Warcraft III CASC installation first.');
+let cancel = false; process.on('SIGINT',()=>{cancel=true;});
+const result = await scanParticleLibrary({folder,directory:path.resolve(option('--output') || 'profile/particles'),maxAssets:option('--limit') ? Number(option('--limit')) : Infinity,shouldCancel:()=>cancel,onProgress:status=>console.log(JSON.stringify(status))});
+console.log(JSON.stringify({manifest:path.join(result.directory,'manifest.json'),candidates:result.manifest.candidateAssets,parsed:result.manifest.parsedAssets,recipes:result.entries.length,emitters:result.manifest.emitterCounts,failures:result.manifest.failures.length,missing:result.manifest.missingDependencies.length,complete:result.manifest.extractionComplete}));

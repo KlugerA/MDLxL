@@ -1,3 +1,4 @@
+import { updateParticlePreview, particleStageSnapshot, seededParticleRandom, withParticleRandom, replayParticlePreview } from './particle-preview-adapter.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { EditorCameraControls, editorCameraAngles, preserveShiftCameraAction, setEditorCameraAngles, zoomEditorCamera } from './editor-camera-controls.js';
@@ -276,6 +277,7 @@ export default function GamePreview(inputProps) {
       gl.depthFunc(gl.LEQUAL);
     }
     catch (cause) { setError(`Warcraft preview could not load this model: ${cause.message}`); previewAdapter.dispose(); releasePreviewGraphics(native, gl, canvas); backgroundCanvas.remove(); return; }
+    let particleRandom=seededParticleRandom(),particleReportAt=0;
     const nativeBackground = createGLPreviewBackground(gl);
     const presentation = createPreviewSceneGL(gl, invalidate);
     const rigMarkers = createRigMarkersGL(gl);
@@ -548,7 +550,7 @@ export default function GamePreview(inputProps) {
     const center = bounds.getCenter(new THREE.Vector3()), boundsSize = bounds.getSize(new THREE.Vector3()), radius = Math.max(1, boundsSize.length() / 2);
     const fitRadius = () => {
       const p = latest.current, gridVisible = p.overlays?.grid ?? !!p.showGrid;
-      if (p.previewSelectionMode) return radius;
+      if (p.previewSelectionMode || p.particleAuthoring) return radius;
       return gridVisible ? Math.max(radius, gridFrameRadius(center, gridOptions(p.preferences).extent)) : radius;
     };
     function drawBackground() {
@@ -706,7 +708,7 @@ export default function GamePreview(inputProps) {
       state.cameraEditing = false; reportProjectionView(); invalidate();
     };
     controls.addEventListener('start', cameraStarted); controls.addEventListener('end', cameraEnded);
-    const state = { native, controls, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = cursorFor(latest.current); }, setCameraAngles: values => { if (state.portraitActive || latest.current.suspended) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); cameraChanged(); } } }; runtime.current = state;
+    const state = { native, controls, updateParticles: source=>{updateParticlePreview(native,source);invalidate();}, setView, setCameraPreset, fit, resize, updateUV, drawBackground, enterPortrait, exitPortrait, portraitActive: false, cameraEditing: false, cameraDetached: false, cameraView: () => editorCameraSnapshot(camera, controls.target, perspective), refreshCursor: () => { canvas.style.cursor = cursorFor(latest.current); }, setCameraAngles: values => { if (state.portraitActive || latest.current.suspended) return; if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); cameraChanged(); } } }; runtime.current = state;
     observer = new ownerWindow.ResizeObserver(resize); observer.observe(host.current);
     const saved = cameraMemory.current || latest.current.cameraHandoff?.current;
     // UV edits may rebuild geometry/materials, but never own the user's view.
@@ -835,7 +837,7 @@ export default function GamePreview(inputProps) {
           const duration = ownedModel.GlobalSequences[i];
           if (duration > 0) native.rendererData.globalSequencesFrames[i] = ((globalFrame % duration) + duration) % duration - step;
         }
-        native.update(step);
+        if(latest.current.particleAuthoring)withParticleRandom(particleRandom,()=>native.update(step));else native.update(step);
       };
       controls.update();
       displayCamera = camera;
@@ -852,6 +854,8 @@ export default function GamePreview(inputProps) {
         if (p.showcase) {
           showcaseSample = advanceShowcaseModel(native, ownedModel, showcaseNext, showcaseSample);
           activeSequence = selected; globalClock = showcaseSample.globalTime;
+        } else if(p.particleAuthoring && (sequenceChanged || userSeek)) {
+          particleRandom=replayParticlePreview(native,p.time,selected);globalClock=p.time;
         } else if (dt > 0) {
           let remaining = dt;
           while (remaining > 1e-7) {
@@ -900,7 +904,7 @@ export default function GamePreview(inputProps) {
         if (!captureOnly) presentation.draw(camera, p.preferences, p.workplane, p.overlays?.grid ?? !!p.showGrid, center, radius, bounds.min.z, { gridOnly: true, showAxes: p.showAxes ?? p.overlays?.axes ?? !!p.showGrid });
         const wireframe = !captureOnly && (p.mode === 'wireframe' || p.mode === 'vertices');
         if (wireframe) gl.colorMask(false, false, false, false);
-        try { native.render(displayCamera.matrixWorldInverse.elements, displayCamera.projectionMatrix.elements, { wireframe: false, useEnvironmentMap: p.shaded !== false && graphics.lighting }); }
+        try { native.render(displayCamera.matrixWorldInverse.elements, displayCamera.projectionMatrix.elements, { wireframe: false, useEnvironmentMap: p.shaded !== false && graphics.lighting }); if(p.onParticleStage && now-particleReportAt>60){particleReportAt=now;p.onParticleStage(particleStageSnapshot(native,displayCamera,canvas.clientWidth,canvas.clientHeight,p.particleSelectedId));} }
         finally { gl.colorMask(true, true, true, true); }
         if (!wireframe) eventPreview.render({ frame:native.getFrame(), sequenceIndex:poseSequence, globalTime:globalClock, playback:p.showcase?showcaseSample:undefined, camera:displayCamera, teamColor:p.teamColor });
         if (!captureOnly && !p.portraitMode) presentation.draw(camera, p.preferences, p.workplane, false, center, radius, bounds.min.z, { platformOnly: true });
@@ -1140,6 +1144,7 @@ export default function GamePreview(inputProps) {
     const evaluated = evaluateModelCamera(model, model?.Cameras?.[props.portraitCameraIndex], props.time, sequenceIndex, props.time);
     current.enterPortrait(evaluated);
   }, [props.portraitMode, props.portraitCameraIndex, props.portraitSnapRevision, model, rendererRevision]);
+  useLayoutEffect(()=>{if(props.particleLiveModel)runtime.current?.updateParticles(props.particleLiveModel);},[props.particleLiveModel,props.particleLiveRevision]);
   useEffect(() => { if(runtime.current && runtime.current.appliedView !== view) runtime.current.setView(view); }, [view]);
   useEffect(() => { if (props.cameraPresetRequest?.name) runtime.current?.setCameraPreset(props.cameraPresetRequest.name); }, [props.cameraPresetRequest?.revision]);
   useEffect(() => { runtime.current?.refreshCursor(); }, [props.cameraMode, props.transformMode, props.showcaseCrop]);

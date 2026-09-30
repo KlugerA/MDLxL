@@ -1,0 +1,23 @@
+import ParticleThumbnailQueue from './ParticleThumbnailQueue.jsx';
+import React,{useEffect,useMemo,useState} from 'react';
+import {parseParticleData} from '../src/particle-data.js';
+export default function ParticleLibrary({onChoose,onClose,onError,preferences}) {
+  const [catalog,setCatalog]=useState({items:[]}),[collection,setCollection]=useState('Warcraft'),[category,setCategory]=useState('All'),[search,setSearch]=useState(''),[limit,setLimit]=useState(36),[details,setDetails]=useState(null);
+  const load=()=>window.desktop?.particleCatalog?.().then(setCatalog).catch(error=>onError(error.message));
+  useEffect(()=>{load();const off=window.desktop?.onParticleProgress?.(()=>load());return()=>off?.();},[]);
+  const items=useMemo(()=>{
+    const terms=search.toLowerCase().split(/\s+/).filter(Boolean);
+    return catalog.items.filter(item=>(collection==='Favorites'?item.favorite:item.collection===collection)&&(category==='All'||item.categories?.includes(category))&&terms.every(term=>[item.name,...item.tags||[],...item.aliases||[]].join(' ').toLowerCase().includes(term)));
+  },[catalog,collection,category,search]);
+  const choose=async item=>{try{const recipe=parseParticleData(await window.desktop.particleRead(item.id));recipe.name=item.name;onChoose(recipe);}catch(error){onError(error.message);}};
+  const favorite=async item=>{try{await window.desktop.particleAnnotate({id:item.id,favorite:!item.favorite});await load();}catch(error){onError(error.message);}};
+  return <div className="pe-library" aria-label="Particle Library">
+    <ParticleThumbnailQueue items={items.slice(0,limit)} preferences={preferences} onThumbnail={(id,url)=>setCatalog(old=>({...old,items:old.items.map(item=>item.id===id?{...item,thumbnail:url}:item)}))}/><header><strong>Particle Library</strong><button onClick={onClose} aria-label="Close Particle Library">×</button></header>
+    <div className="pe-collections">{['Warcraft','My presets','Favorites'].map(name=><button key={name} aria-pressed={collection===name} onClick={()=>{setCollection(name);setLimit(36);}}>{name}</button>)}</div>
+    <div className="pe-library-search"><input aria-label="Find an effect" placeholder="Find an effect…" value={search} onChange={e=>{setSearch(e.target.value);setLimit(36);}}/><select aria-label="Effect appearance" value={category} onChange={e=>setCategory(e.target.value)}>{['All','Fire','Smoke','Sparks','Magic','Glows','Trails','Bursts','Other'].map(name=><option key={name}>{name}</option>)}</select></div>
+    <div className="pe-library-grid">{items.slice(0,limit).map(item=><article key={item.id}><button className="pe-effect-card" onClick={()=>choose(item)}><span className="pe-effect-thumb">{item.thumbnail?<img src={item.thumbnail} alt=""/>:<span aria-hidden="true" className="pe-thumbnail-pending">◇</span>}</span><span>{item.name}</span>{item.unsupported?.length>0&&<small>Incomplete preview</small>}</button><div><button aria-label={'Favorite '+item.name} aria-pressed={item.favorite} onClick={()=>favorite(item)}>{item.favorite?'★':'☆'}</button><button onClick={()=>setDetails(details===item.id?null:item.id)} aria-label={'Details for '+item.name}>Details</button></div>{details===item.id&&<div className="pe-effect-details"><p translate="no">{item.sources?.[0]?.logicalPath}</p><label>Name<input aria-label="Effect display name" defaultValue={item.name} onBlur={async event=>{if(event.target.value.trim()){await window.desktop.particleAnnotate({id:item.id,name:event.target.value});load();}}}/></label>{item.collection==='My presets'&&<button onClick={async()=>{await window.desktop.particleRemove(item.id);load();}}>Delete</button>}</div>}</article>)}</div>
+    {!items.length&&<p>{collection==='Warcraft'?'Index your Warcraft assets to discover effects.':'No matching presets.'}</p>}
+    {items.length>limit&&<button onClick={()=>setLimit(value=>value+36)}>Show more</button>}
+    <footer>{catalog.status?.running?<><span>Indexing {catalog.status.processed} / {catalog.status.total}</span><button onClick={()=>window.desktop.particleCancel()}>Cancel scan</button></>:<button onClick={()=>window.desktop?.particleScan?.().then(load).catch(error=>onError(error.message))}>Index Warcraft assets</button>}{catalog.coverage&&<details><summary>Coverage · {catalog.coverage.recipes} recipes</summary><p>{catalog.coverage.parsedAssets} parsed / {catalog.coverage.candidateAssets} candidates · {catalog.coverage.failures} extraction exceptions. Preview and placement validation are incomplete.</p></details>}</footer>
+  </div>;
+}

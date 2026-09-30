@@ -1,5 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  particleThumbnail: payload=>ipcRenderer.invoke('particles:thumbnail',payload),
+  particleCatalog: () => ipcRenderer.invoke('particles:catalog'),
+  particleRead: id => ipcRenderer.invoke('particles:read',id),
+  particleSave: payload => ipcRenderer.invoke('particles:save',payload),
+  particleAnnotate: payload => ipcRenderer.invoke('particles:annotate',payload),
+  particleRemove: id => ipcRenderer.invoke('particles:remove',id),
+  particleDraft: payload => ipcRenderer.invoke('particles:draft',payload),
+  particleScan: () => ipcRenderer.invoke('particles:scan'),
+  particleCancel: () => ipcRenderer.invoke('particles:cancel'),
+  onParticleProgress: callback => {const listener=(_,data)=>callback(data);ipcRenderer.on('particles:progress',listener);return ()=>ipcRenderer.removeListener('particles:progress',listener);},
   initial: () => ipcRenderer.invoke('app:initial'),
   configure: payload => ipcRenderer.invoke('settings:configure',payload),
   getSettings: () => ipcRenderer.invoke('settings:get'),

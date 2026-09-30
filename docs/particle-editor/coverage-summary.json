@@ -1,0 +1,34 @@
+{
+  "build": "3.0.0.24268",
+  "buildKey": "3a9d8f26806936764d2d9ad526a65e04",
+  "sourceKey": "6d608eb1d5ea6a375afbb253c7679d4fcd82d545712358382cbe01cb8534ea60",
+  "run": "2026-09-30T17:34:00.235Z",
+  "totalEnumerated": 14984,
+  "namespaces": {
+    "war3.w3mod:_de.w3mod:_teen.w3mod": 1,
+    "war3.w3mod:_de.w3mod": 5965,
+    "war3.w3mod:_hd.w3mod:_teen.w3mod": 498,
+    "war3.w3mod:_hd.w3mod": 5034,
+    "war3.w3mod:_teen.w3mod": 22,
+    "war3.w3mod:_tilesets\\g.w3mod": 6,
+    "war3.w3mod": 3458
+  },
+  "candidateAssets": 3486,
+  "parsedAssets": 3485,
+  "emitterCounts": {
+    "ParticleEmitters2": 3777,
+    "RibbonEmitters": 357,
+    "ParticleEmitters": 67,
+    "ParticleEmitterPopcorns": 88
+  },
+  "recipes": 3830,
+  "extractionComplete": true,
+  "recipeExceptions": 342,
+  "missingDependencies": 57,
+  "unsupported": 65,
+  "exactDuplicateMappings": 118,
+  "fullyPreviewableRecipes": 0,
+  "insertableRecipes": 0,
+  "reviewedNames": 0,
+  "note": "Initial extraction checkpoint. Global-duration and bind-pose cases remain; no full-library claim. Native asset bytes and detailed cache remain local."
+}

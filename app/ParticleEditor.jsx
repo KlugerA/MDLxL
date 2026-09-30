@@ -1,73 +1,136 @@
-import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { Section, TextField, NumberField, SelectField, Check, TrackEditor } from './Fields.jsx';
-import { createNode, deleteNode } from '../src/editor-document.js';
-import { particleAnimatedParameters, particleUVGroups, particleFlags, particleRotationDegrees, setParticleRotationDegrees, particlePreviewModel } from '../src/particle-editing.js';
+import React,{Suspense,lazy,useEffect,useMemo,useRef,useState} from 'react';
+import {EditorDocument,createNode,deleteNode} from '../src/editor-document.js';
+import {particleRecipeDocument,extractParticleRecipe,placeParticleRecipe,effectNodes} from '../src/particle-recipes.js';
+import {createStarterRecipe,starterTextureAsset,STARTER_TEXTURE} from '../src/particle-starters.js';
+import {parseParticleData,stringifyParticleData} from '../src/particle-data.js';
+import {createParticleGesture} from '../src/particle-bindings.js';
+import {setParticleRotationDegrees,particleRotationDegrees} from '../src/particle-editing.js';
+import ParticleClassicControls from './ParticleClassicControls.jsx';
+import ParticleCluelessControls from './ParticleCluelessControls.jsx';
+import ParticleStageTools from './ParticleStageTools.jsx';
+import ParticleLibrary from './ParticleLibrary.jsx';
 import './resource-editors.css';
 import './particle-editor.css';
-
-const GamePreview = lazy(() => import('./GamePreview.jsx'));
-const emptyAssets = new Map();
-const labelFor = property => property.replace(/([a-z])([A-Z])/g, '$1 $2');
-const colorHex = color => `#${Array.from(color || [1, 1, 1], value => Math.round(Math.min(1, Math.max(0, value)) * 255).toString(16).padStart(2, '0')).join('')}`;
-
-/** Dedicated PE2 editor: committed edits share document history and live preview. */
-export default function ParticleEditor({ doc, revision = doc?.revision || 0, edit, refresh, modelPath, textureAssets = emptyAssets, preferences, teamColor = 0, selectedNodeId, sequenceIndex = 0, previewFrame = 0, onClose, onNodeChange, onImportTexture }) {
-  const model = doc.model;
-  const [emitterId, setEmitterId] = useState(() => model.ParticleEmitters2.find(node => node.ObjectId === selectedNodeId)?.ObjectId ?? model.ParticleEmitters2[0]?.ObjectId ?? null);
-  const [sequence, setSequence] = useState(model.Sequences?.[sequenceIndex] ? sequenceIndex : model.Sequences?.length ? 0 : -1);
-  const [time, setTime] = useState(previewFrame), [playing, setPlaying] = useState(true), [isolate, setIsolate] = useState(false), [message, setMessage] = useState('');
-  const [editRevision, setEditRevision] = useState(0), [restart, setRestart] = useState(0);
-  const dialog = useRef(null);
-  const emitter = model.ParticleEmitters2.find(node => node.ObjectId === emitterId) || null;
-  const interval = model.Sequences?.[sequence]?.Interval || [0, 5000], start = interval[0], end = interval[1];
-  const frame = Math.max(start, Math.min(end, Math.round(time))), angles = emitter ? particleRotationDegrees(model, emitter, frame, sequence) : [0, 0, 0];
-  const preview = useMemo(() => particlePreviewModel(model, emitterId, isolate), [model, revision, editRevision, emitterId, isolate]);
-  useEffect(() => { const previous = document.activeElement; dialog.current?.focus(); return () => previous?.focus?.(); }, []);
-  useEffect(() => { setTime(value => Math.max(start, Math.min(end, value))); }, [start, end]);
-  const choose = id => { setEmitterId(id); onNodeChange?.(id); setMessage(''); };
-  const apply = (label, mutate, sections = ['Nodes']) => {
-    if (doc.readOnly) return false;
-    try {
-      let failure;
-      const operation = current => { try { return mutate(current || doc.model); } catch (cause) { failure = cause; throw cause; } };
-      const result = edit ? edit(label, sections, operation) : doc.apply(label, sections, operation);
-      if (failure) throw failure;
-      setMessage(result === false ? 'No change applied.' : ''); setEditRevision(value => value + 1); refresh?.(); return result;
-    } catch (cause) { setMessage(cause.message); return false; }
-  };
-  const update = (property, value) => apply(`Set particle ${labelFor(property)}`, current => { const node = current.ParticleEmitters2.find(item => item.ObjectId === emitterId); if (!node) throw new Error('The emitter was removed.'); node[property] = value; });
-  const arrayValue = (property, index, value, Type, fallback) => { const values = Array.from(emitter[property] || fallback); values[index] = value; update(property, new Type(values)); };
-  const add = () => { const id = apply('Create Particle Emitter 2', current => createNode(current, 'ParticleEmitter2').ObjectId, ['Nodes', 'PivotPoints', 'Info']); if (id !== false) choose(id); };
-  const remove = () => { const result = apply('Delete Particle Emitter 2', current => deleteNode(current, emitterId), ['Nodes', 'PivotPoints', 'Info']); if (result !== false) choose(doc.model.ParticleEmitters2[0]?.ObjectId ?? null); };
-  return <div className="resource-editor particle-editor" onKeyDown={event => {
-    event.stopPropagation();
-    if (event.key === 'Escape' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) onClose?.();
-    if (event.key === 'Tab') {
-      const controls = [...dialog.current.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]')].filter(element => element.getClientRects().length);
-      if (event.shiftKey && [controls[0], dialog.current].includes(document.activeElement)) { event.preventDefault(); controls.at(-1)?.focus(); }
-      else if (!event.shiftKey && document.activeElement === controls.at(-1)) { event.preventDefault(); controls[0]?.focus(); }
+const GamePreview=lazy(()=>import('./GamePreview.jsx'));
+const pathKey=value=>String(value||'').replaceAll('/','\\').toLowerCase();
+const emptyAssets=new Map();
+function starterLab(){const recipe=createStarterRecipe();return {doc:particleRecipeDocument(recipe),recipe,assets:new Map([[pathKey(STARTER_TEXTURE),starterTextureAsset()]])};}
+async function assetsFor(recipe){
+  const assets=new Map(),names=recipe.native.Textures.filter(t=>t.Image&&t.Image!==STARTER_TEXTURE).map(t=>t.Image);
+  if(recipe.native.Textures.some(t=>t.Image===STARTER_TEXTURE))assets.set(pathKey(STARTER_TEXTURE),starterTextureAsset());
+  if(names.length&&window.desktop?.resolveTextures){const records=await window.desktop.resolveTextures({names});for(const record of records||[])if(record.bytes)assets.set(pathKey(record.name),record);}
+  return assets;
+}
+export default function ParticleEditor({doc,revision=doc?.revision||0,edit,refresh,modelPath,textureAssets=emptyAssets,preferences,teamColor=0,selectedNodeId,sequenceIndex=0,previewFrame=0,onClose,onNodeChange,onPlacedAssets}) {
+  const [lab,setLab]=useState(starterLab),[context,setContext]=useState(Number.isInteger(selectedNodeId)?'On model':'Lab');
+  const [mode,setMode]=useState(()=>localStorage.getItem('mdlxl-particle-mode')||'Clueless');
+  const [library,setLibrary]=useState(!Number.isInteger(selectedNodeId)),[tool,setTool]=useState('Basics'),[scope,setScope]=useState('key');
+  const [emitterId,setEmitterId]=useState(selectedNodeId??0),[sequence,setSequence]=useState(Number.isInteger(selectedNodeId)?sequenceIndex:0);
+  const [time,setTime]=useState(Number.isInteger(selectedNodeId)?previewFrame:800),[playing,setPlaying]=useState(true),[speed,setSpeed]=useState(.5),[loop,setLoop]=useState(true),[solo,setSolo]=useState(false);
+  const [tick,setTick]=useState(0),[structure,setStructure]=useState(0),[message,setMessage]=useState(''),[snapshot,setSnapshot]=useState(null),[saveOpen,setSaveOpen]=useState(false),[name,setName]=useState('My effect'),[placement,setPlacement]=useState(null),[pending,setPending]=useState(null);
+  const activeDoc=context==='Lab'?lab.doc:doc;
+  const model=activeDoc.model,assets=context==='Lab'?lab.assets:textureAssets;
+  const working=useMemo(()=>structuredClone(model),[activeDoc,context,structure]);
+  const preview=useMemo(()=>{
+    const next=structuredClone(working);
+    if(solo){for(const family of ['ParticleEmitters2','RibbonEmitters','ParticleEmitters','ParticleEmitterPopcorns'])next[family]=next[family].filter(node=>node.ObjectId===emitterId);}
+    return next;
+  },[working,solo,emitterId]);
+  const emitter=working.ParticleEmitters2.find(node=>node.ObjectId===emitterId),selectedEffect=effectNodes(working).find(item=>item.node.ObjectId===emitterId);
+  const interval=model.Sequences[sequence]?.Interval||[0,5000],start=interval[0],end=interval[1],frame=Math.max(start,Math.min(end,time));
+  const [dark,setDark]=useState(true);
+  const previewPreferences=useMemo(()=>({...preferences,viewportAppearance:{...preferences.viewportAppearance,background:{type:'color',color:dark?'#24282c':'#d0d0d0'}}}),[preferences,dark]);
+  const dialog=useRef(null),gesture=useRef(null),capture=useRef(null),loaded=useRef(false),latest=useRef(null);
+  latest.current={lab,mode,context,activeDoc,working,emitterId,frame,sequence};
+  const sync=()=>{
+    for(const family of ['ParticleEmitters2','RibbonEmitters','ParticleEmitters','Helpers']){
+      for(const node of working[family]){const source=model[family].find(n=>n.ObjectId===node.ObjectId);if(source){for(const key of Object.keys(node))delete node[key];Object.assign(node,structuredClone(source));}}
     }
+    setTick(value=>value+1);refresh?.();
+  };
+  const apply=(label,mutate,sections=['Nodes'])=>{
+    if(activeDoc.readOnly)return false;
+    try{const result=context==='On model'&&edit?edit(label,sections,mutate):activeDoc.apply(label,sections,mutate);sync();setMessage('');return result;}
+    catch(error){setMessage(error.message);sync();return false;}
+  };
+  const cancel=()=>{if(gesture.current){const {field,transaction}=gesture.current;const value=transaction.cancel();if(emitter)emitter[field]=value;gesture.current=null;setTick(v=>v+1);}};
+  const begin=(field,stage)=>{
+    cancel();if(!emitter||activeDoc.readOnly)return;
+    try{const transaction=createParticleGesture({doc:activeDoc,id:emitterId,field,options:{frame,interval:Array.from(interval),globalSequences:model.GlobalSequences,scope,stage},commit:(label,sections,mutate)=>context==='On model'&&edit?edit(label,sections,mutate):activeDoc.apply(label,sections,mutate)});gesture.current={field,transaction};}
+    catch(error){setMessage(error.message);}
+  };
+  const change=value=>{if(gesture.current){try{emitter[gesture.current.field]=gesture.current.transaction.update(value);setTick(v=>v+1);}catch(error){setMessage(error.message);cancel();}}};
+  const finish=()=>{if(gesture.current){const current=gesture.current;gesture.current=null;try{current.transaction.finish();sync();}catch(error){setMessage(error.message);sync();}}};
+  const update=(field,value)=>{cancel();const result=apply('Set particle '+field,m=>{m.ParticleEmitters2.find(n=>n.ObjectId===emitterId)[field]=value;});if(['FrameFlags','TextureID','Rows','Columns'].includes(field)&&result!==false)setStructure(v=>v+1);};
+  const close=async()=>{cancel();try{await window.desktop?.particleDraft?.(stringifyParticleData({schema:'mdlxl-particle-draft',version:1,state:lab.doc.captureRecoveryState(),recipe:lab.recipe,mode}));onClose?.();}catch(error){setMessage('Draft could not be saved: '+error.message);}};
+  useEffect(()=>{const previous=document.activeElement;dialog.current?.focus();return()=>previous?.focus?.();},[]);
+  useEffect(()=>{
+    let live=true;
+    window.desktop?.particleDraft?.().then(async text=>{
+      if(!text||!live||loaded.current)return;const draft=parseParticleData(text);
+      if(draft.schema!=='mdlxl-particle-draft'||draft.version!==1)throw Error('Unsupported particle draft.');
+      const restored=EditorDocument.restoreRecoveryState(draft.state),recipe=draft.recipe,resolved=await assetsFor({...recipe,native:restored.model});
+      if(live&&!loaded.current){setLab({doc:restored,recipe,assets:resolved});if(!Number.isInteger(selectedNodeId))setEmitterId(effectNodes(restored.model)[0]?.node.ObjectId??null);}
+    }).catch(error=>setMessage(error.message));
+    return()=>{live=false;};
+  },[]);
+  useEffect(()=>{localStorage.setItem('mdlxl-particle-mode',mode);},[mode]);
+  useEffect(()=>{
+    const timer=setTimeout(()=>{window.desktop?.particleDraft?.(stringifyParticleData({schema:'mdlxl-particle-draft',version:1,state:lab.doc.captureRecoveryState(),recipe:lab.recipe,mode})).catch(error=>setMessage(error.message));},800);
+    return()=>clearTimeout(timer);
+  },[lab,lab.doc.revision,mode,tick]);
+  useEffect(()=>{if(context==='On model')sync();},[revision]);
+  const loadRecipe=async recipe=>{
+    cancel();loaded.current=true;
+    try{const next={doc:particleRecipeDocument(recipe),recipe,assets:await assetsFor(recipe)};setLab(next);setContext('Lab');setEmitterId(effectNodes(next.doc.model)[0]?.node.ObjectId??null);setSequence(recipe.defaultSequence||0);const range=next.doc.model.Sequences[recipe.defaultSequence||0]?.Interval||[0,5000];setTime(Math.min(range[1],range[0]+800));setPlaying(true);setLibrary(false);setPlacement(null);setMessage('');setStructure(v=>v+1);}
+    catch(error){setMessage(error.message);}
+  };
+  const chooseRecipe=recipe=>{if(lab.doc.dirty){setPending(recipe);return;}loadRecipe(recipe);};
+  const recipeNow=()=>extractParticleRecipe(activeDoc.model,effectNodes(activeDoc.model).filter(item=>context==='Lab'||item.node.ObjectId===emitterId).map(item=>item.node.ObjectId),{...lab.recipe,name,defaultSequence:sequence});
+  const save=async()=>{
+    try{const recipe=recipeNow();recipe.name=name;const saved=await window.desktop.particleSave({data:stringifyParticleData(recipe),name});setMessage('Saved '+saved.name);setSaveOpen(false);if(context==='Lab'){const nativeRecipe={...recipe,id:saved.id};setLab({...lab,doc:particleRecipeDocument(nativeRecipe),recipe:nativeRecipe});}if(pending){const next=pending;setPending(null);await loadRecipe(next);}}
+    catch(error){setMessage(error.message);}
+  };
+  const chooseContext=value=>{cancel();setContext(value);setEmitterId(effectNodes(value==='Lab'?lab.doc.model:doc.model)[0]?.node.ObjectId??null);setSequence(0);setTime(800);setPlacement(null);setStructure(v=>v+1);};
+  const undo=redo=>{cancel();try{activeDoc[redo?'redo':'undo']();setStructure(v=>v+1);setTick(v=>v+1);refresh?.();}catch(error){setMessage(error.message);}};
+  const add=()=>{cancel();if(context==='Lab'){chooseRecipe(createStarterRecipe());return;}const id=apply('Create Particle Emitter 2',m=>createNode(m,'ParticleEmitter2').ObjectId,['Nodes','PivotPoints']);setEmitterId(id);setStructure(v=>v+1);};
+  const place=()=>{
+    try{
+      const recipe=recipeNow(),position=placement.position,parent=placement.parent===''?null:Number(placement.parent),sourceInterval=Array.from(model.Sequences[sequence]?.Interval||[0,5000]),targetInterval=Array.from(doc.model.Sequences[placement.sequence]?.Interval||sourceInterval);
+      let result;const mutate=target=>{result=placeParticleRecipe(target,recipe,{parent,position,sourceInterval,targetInterval,fit:placement.fit});};
+      const accepted=edit?edit('Add particle effect',['Nodes','Textures','Materials','TextureAnims','GlobalSequences','PivotPoints'],mutate):doc.apply('Add particle effect',['Nodes','Textures','Materials','TextureAnims','GlobalSequences','PivotPoints'],mutate);
+      if(accepted===false)return;
+      onPlacedAssets?.(assets);setContext('On model');setEmitterId(result.ids[0]);onNodeChange?.(result.ids[0]);setSequence(placement.sequence);setTime(targetInterval[0]);setPlacement(null);setStructure(v=>v+1);refresh?.();setMessage('Effect added. Undo restores the model.');
+    }catch(error){setMessage(error.message);}
+  };
+  const asset=assets.get(pathKey(working.Textures[emitter?.TextureID]?.Image));
+  return <div className="resource-editor particle-editor" onKeyDown={event=>{
+    event.stopPropagation();
+    if(event.key==='Escape'){event.preventDefault();if(gesture.current)cancel();else if(placement)setPlacement(null);else if(library)setLibrary(false);else close();}
+    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();undo(event.shiftKey);}
+    if(event.key===' '&&!['INPUT','TEXTAREA','SELECT','BUTTON'].includes(event.target.tagName)){event.preventDefault();setPlaying(v=>!v);}
+    if(event.key==='Tab'){const controls=[...dialog.current.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]')].filter(e=>e.getClientRects().length);if(event.shiftKey&&document.activeElement===controls[0]){event.preventDefault();controls.at(-1)?.focus();}else if(!event.shiftKey&&document.activeElement===controls.at(-1)){event.preventDefault();controls[0]?.focus();}}
   }}>
-    <section className="re-window pe-window" role="dialog" aria-modal="true" aria-label="Particle Editor" tabIndex={-1} ref={dialog} data-warmkey-scope="dialog" data-warmkey-prefix="particles">
-      <header className="re-caption"><span>Particle Editor · Particle Emitter 2</span><button aria-label="Close Particle Editor" className="re-caption-close" onClick={onClose}>×</button></header>
-      <div className="pe-toolbar"><label>Emitter<select aria-label="Particle emitter" value={emitterId ?? ''} onChange={event => choose(Number(event.target.value))}>{!emitter && <option value="">Choose or create an emitter</option>}{model.ParticleEmitters2.map(node => <option key={node.ObjectId} value={node.ObjectId} translate="no">{node.Name} · {node.ObjectId}</option>)}</select></label><button onClick={add} disabled={doc.readOnly}>New emitter</button><button onClick={remove} disabled={doc.readOnly || !emitter}>Remove</button></div>
-      <div className="pe-body"><div className="pe-preview-pane">
-        <div className="pe-preview"><Suspense fallback={<p>Loading particle preview…</p>}><GamePreview presentation="preview" key={restart} model={preview} revision={revision + editRevision} modelPath={modelPath} textureAssets={textureAssets} preferences={preferences} teamColor={teamColor} sequenceIndex={sequence} timelineInterval={[start, end]} time={frame} playing={playing} loop={true} onTimeChange={setTime} onPlayingChange={setPlaying} mode="textured" view="perspective" cameraMode="rotate" showParticles={true} showGrid={true} overlays={{ bones: false, nodes: false, attachments: false, particles: false }} /></Suspense></div>
-        <div className="pe-preview-options"><Check label="Isolate emitter" value={isolate} onChange={setIsolate}/><button onClick={() => { setTime(start); setRestart(value => value + 1); }}>Restart preview</button></div>
-        <label className="pe-sequence">Animation<select aria-label="Particle preview animation" value={sequence} onChange={event => { setPlaying(false); setSequence(Number(event.target.value)); setTime(model.Sequences[Number(event.target.value)]?.Interval[0] || 0); }}>{!model.Sequences.length && <option value="-1">Preview · 0–5000 ms</option>}{model.Sequences.map((item, index) => <option key={index} value={index} translate="no">{item.Name}</option>)}</select></label>
-        <div className="pe-transport"><button onClick={() => setPlaying(value => !value)} disabled={!emitter}>{playing ? 'Pause' : 'Play'}</button><input aria-label="Particle preview playhead" type="range" min={start} max={end} step="1" value={frame} onChange={event => { setPlaying(false); setTime(Number(event.target.value)); }}/><label>Frame:<input aria-label="Particle preview frame" type="number" min={start} max={end} step="1" value={frame} onChange={event => { if (event.target.value !== '') { setPlaying(false); setTime(Number(event.target.value)); } }}/></label></div>
-        <p className="pe-help">Edit a value, then press Enter or leave the field to see the change. Animate uses this playhead. XYZ rotation is local, in degrees.</p>
-      </div><fieldset className="pe-controls inspector-fields" disabled={doc.readOnly} onFocusCapture={event => { if (event.target.closest('.track-editor') || event.target.closest('[data-particle-rotation]')) setPlaying(false); }}>
-        {!emitter ? <p>Create or choose a Particle Emitter 2 to edit its appearance, animation and rotation.</p> : <>
-          <Section title="Emitter"><TextField label="Name" value={emitter.Name} onChange={value => update('Name', value)}/><div className="pe-axis-fields" data-particle-rotation>{['X', 'Y', 'Z'].map((axis, index) => <NumberField key={axis} label={`Rotate ${axis} (degrees)`} value={Number(angles[index].toFixed(3))} onChange={value => { const next = [...angles]; next[index] = value; apply(`Rotate particle ${axis}`, current => setParticleRotationDegrees(current, emitterId, frame, sequence, next)); }}/>)}</div><div className="pe-axis-fields">{['X', 'Y', 'Z'].map((axis, index) => <NumberField key={axis} label={`Position ${axis}`} value={emitter.PivotPoint?.[index] || 0} onChange={value => apply(`Move particle ${axis}`, current => { const node = current.ParticleEmitters2.find(item => item.ObjectId === emitterId), next = new Float32Array(node.PivotPoint || [0, 0, 0]); next[index] = value; node.PivotPoint = next; current.PivotPoints[node.ObjectId] = next; }, ['Nodes', 'PivotPoints'])}/>)}</div></Section>
-          <Section title="Animated parameters"><div className="pe-parameters">{particleAnimatedParameters.map(property => <TrackEditor key={`${emitterId}:${property}`} label={labelFor(property)} value={emitter[property]} defaultValue={property === 'Visibility' ? 1 : 0} frame={frame} globalSequences={model.GlobalSequences} onChange={value => update(property, value)}/>)}</div></Section>
-          <Section title="Rendering"><SelectField label="Texture ID" value={emitter.TextureID ?? ''} options={[{ label: 'No texture', value: '' }, ...model.Textures.map((texture, value) => ({ value, label: `${value} · ${texture.Image || `Replaceable ${texture.ReplaceableId}`}` }))]} onChange={value => update('TextureID', value === '' ? null : Number(value))}/>{onImportTexture && <button onClick={onImportTexture}>Load texture…</button>}<SelectField label="Filter Mode" value={emitter.FilterMode ?? 0} options={['Blend', 'Additive', 'Modulate', 'Modulate 2×', 'Alpha Key'].map((label, value) => ({ label, value }))} onChange={value => update('FilterMode', Number(value))}/></Section>
-          <Section title="Segments"><div className="pe-segments">{[0, 1, 2].map(index => <fieldset key={index}><legend>Segment {index + 1}</legend><label className="field"><span>Color</span><input aria-label={`Segment ${index + 1} color`} type="color" value={colorHex(emitter.SegmentColor?.[index])} onChange={event => { const colors = (emitter.SegmentColor || [[1, 1, 1], [1, 1, 1], [1, 1, 1]]).map(value => new Float32Array(value)); colors[index] = new Float32Array([1, 3, 5].map(start => parseInt(event.target.value.slice(start, start + 2), 16) / 255)); update('SegmentColor', colors); }}/></label><NumberField label={`Alpha ${index + 1} (0–255)`} min={0} max={255} step={1} value={emitter.Alpha?.[index] ?? 255} onChange={value => arrayValue('Alpha', index, value, Uint8Array, [255, 255, 0])}/><NumberField label={`Scaling ${index + 1}`} min={0} value={emitter.ParticleScaling?.[index] ?? 1} onChange={value => arrayValue('ParticleScaling', index, value, Float32Array, [1, 1, 1])}/></fieldset>)}</div></Section>
-          <Section title="Head and tail animation"><div className="pe-uv-groups">{particleUVGroups.map(([label, property]) => <fieldset key={property}><legend>{label}</legend>{['Start', 'End', 'Repeat'].map((field, index) => <NumberField key={field} label={`${label} ${field}`} min={0} step={1} value={emitter[property]?.[index] ?? (index === 2 ? 1 : 0)} onChange={value => arrayValue(property, index, value, Uint32Array, [0, 0, 1])}/>)}</fieldset>)}</div></Section>
-          <Section title="Flags"><div className="checks">{particleFlags.map(([label, bit]) => <Check key={bit} label={label} value={(emitter.Flags || 0) & bit} onChange={value => update('Flags', value ? (emitter.Flags || 0) | bit : (emitter.Flags || 0) & ~bit)}/>)}<span title="Alpha Key is the particle filter mode in MDX; this checkbox and Filter Mode edit the same setting."><Check label="Alpha Key" value={emitter.FilterMode === 4} onChange={value => update('FilterMode', value ? 4 : 0)}/></span><Check label="Squirt" value={emitter.Squirt} onChange={value => update('Squirt', value)}/>{[['Head', 1], ['Tail', 2]].map(([label, bit]) => <Check key={bit} label={label} value={(emitter.FrameFlags || 0) & bit} onChange={value => update('FrameFlags', value ? (emitter.FrameFlags || 0) | bit : (emitter.FrameFlags || 0) & ~bit)}/>)}</div></Section>
-          <Section title="Miscellaneous">{['Rows', 'Columns', 'LifeSpan', 'TailLength', 'PriorityPlane', 'ReplaceableId', 'Time'].map(property => <NumberField key={property} label={property === 'ReplaceableId' ? 'Replaceable ID' : labelFor(property)} step={['Rows', 'Columns', 'PriorityPlane', 'ReplaceableId'].includes(property) ? 1 : 'any'} min={['Rows', 'Columns'].includes(property) ? 1 : property === 'PriorityPlane' ? undefined : 0} max={property === 'Time' ? 1 : undefined} value={emitter[property] ?? 0} onChange={value => update(property, value)}/>)}<p className="hint">Time is the fraction of each particle's lifespan spent in the first segment. The preview Frame control chooses animation time.</p></Section>
-        </>}
-      </fieldset></div><footer className="re-footer"><span className="re-status" role="status">{message || (doc.readOnly ? 'Read-only model.' : 'Edits apply immediately, can be undone, and are saved with the model.')}</span><button onClick={onClose}>Close</button></footer>
+    <section ref={dialog} tabIndex={-1} className="re-window pe-window" role="dialog" aria-modal="true" aria-label="Particle Editor" data-warmkey-scope="dialog" data-warmkey-prefix="particles">
+      <header className="re-caption"><span>Particle Editor <small>· {context}</small></span><button className="re-caption-close" aria-label="Close Particle Editor" onClick={close}>×</button></header>
+      <div className="pe-toolbar"><button aria-pressed={library} onClick={()=>setLibrary(v=>!v)}>Library</button><button onClick={add}>New</button><select aria-label="Particle editor mode" value={mode} onChange={e=>{cancel();setMode(e.target.value);}}><option>Clueless</option><option>Classic</option></select><select aria-label="Particle context" value={context} onChange={e=>chooseContext(e.target.value)}><option>Lab</option><option disabled={!doc}>On model</option></select><span className="pe-spacer"/><button onClick={()=>undo(false)} disabled={!activeDoc.canUndo}>Undo</button><button onClick={()=>undo(true)} disabled={!activeDoc.canRedo}>Redo</button><button onClick={()=>{setName(context==='Lab'?lab.recipe.name:'My effect');setSaveOpen(v=>!v);}}>Save preset</button>{context==='Lab'&&<button disabled={!doc||doc.readOnly} onClick={()=>{cancel();setLibrary(false);setPlacement({parent:'',position:[0,0,0],sequence:sequenceIndex,fit:false});}}>Add to model</button>}</div>
+      {saveOpen&&<div className="pe-action-strip"><label>Preset name<input aria-label="Preset name" value={name} maxLength={120} onChange={e=>setName(e.target.value)}/></label><button onClick={save}>Save to My presets</button><button onClick={()=>setSaveOpen(false)}>Cancel</button></div>}
+      {pending&&<div className="pe-action-strip"><span>Keep the edited Lab effect?</span><button onClick={()=>{setName(lab.recipe.name);setSaveOpen(true);}}>Save preset</button><button onClick={()=>{const next=pending;setPending(null);loadRecipe(next);}}>Discard and open</button><button onClick={()=>setPending(null)}>Cancel</button></div>}
+      <div className={'pe-body '+(mode==='Classic'?'pe-classic':'pe-clueless')}>
+        <div className="pe-preview-pane">
+          <div className="pe-preview"><Suspense fallback={<span>Loading preview…</span>}><GamePreview presentation="preview" model={preview} revision={0} particleAuthoring particleLiveModel={working} particleLiveRevision={tick} particleSelectedId={emitterId} onParticleStage={setSnapshot} textureAssets={assets} modelPath={context==='On model'?modelPath:undefined} preferences={previewPreferences} teamColor={teamColor} sequenceIndex={sequence} time={frame} playing={playing} playbackSpeed={speed} loop={loop} onTimeChange={setTime} onPlayingChange={setPlaying} mode="textured" view="perspective" showParticles={true} showGrid={true} preserveCameraView onCaptureReady={api=>{capture.current=api;}} overlays={{bones:false,nodes:false,attachments:false,particles:false}}/></Suspense>{mode==='Clueless'&&!activeDoc.readOnly&&<ParticleStageTools {...{snapshot,tool,emitter,begin,change,finish,cancel}}/>}
+          {library&&<ParticleLibrary preferences={preferences} onClose={()=>setLibrary(false)} onChoose={chooseRecipe} onError={setMessage}/>}
+          </div>
+          <div className="pe-stage-options"><select aria-label="Effect ingredient" value={emitterId??''} onChange={e=>{cancel();setEmitterId(Number(e.target.value));onNodeChange?.(context==='On model'?Number(e.target.value):undefined);}}>{!selectedEffect&&<option value="">Choose an effect</option>}{effectNodes(model).map(({node,family},i)=><option key={node.ObjectId} value={node.ObjectId}>{mode==='Classic'?node.Name:(family==='RibbonEmitters'?'Ribbon ':'Particle ')+(i+1)}</option>)}</select><button aria-pressed={solo} onClick={()=>{cancel();setSolo(v=>!v);}}>Solo</button><button onClick={()=>capture.current?.fit()}>Fit view</button><button onClick={()=>setDark(v=>!v)}>{dark?"Light":"Dark"}</button></div>
+          <div className="pe-transport"><button onClick={()=>setPlaying(v=>!v)}>{playing?'Pause':'Play'}</button><button aria-label="Step particle preview" onClick={()=>{setPlaying(false);setTime(v=>Math.min(end,v+10));}}>Step</button><input aria-label="Particle preview playhead" type="range" min={start} max={end} step="1" value={frame} onChange={e=>{cancel();setPlaying(false);setTime(Number(e.target.value));}}/><select aria-label="Preview speed" value={speed} onChange={e=>setSpeed(Number(e.target.value))}>{[.1,.25,.5,1].map(value=><option key={value} value={value}>{value}×</option>)}</select><button aria-pressed={loop} onClick={()=>setLoop(v=>!v)}>Loop</button></div>
+          <select aria-label="Particle preview animation" value={sequence} onChange={e=>{cancel();const next=Number(e.target.value);setSequence(next);setTime(model.Sequences[next].Interval[0]);}}>{model.Sequences.map((clip,index)=><option key={index} value={index}>{clip.Name}</option>)}</select>
+        </div>
+        <fieldset className="pe-controls inspector-fields" disabled={activeDoc.readOnly}>
+          {placement?<div className="pe-placement"><strong>Place effect</strong><label>Attach to<select aria-label="Attach effect to" value={placement.parent} onChange={e=>setPlacement(p=>({...p,parent:e.target.value}))}><option value="">Model origin</option>{[...doc.model.Bones,...doc.model.Helpers].map(node=><option key={node.ObjectId} value={node.ObjectId}>{node.Name}</option>)}</select></label><label>Animation<select value={placement.sequence} onChange={e=>setPlacement(p=>({...p,sequence:Number(e.target.value)}))}>{doc.model.Sequences.map((clip,index)=><option key={index} value={index}>{clip.Name}</option>)}</select></label><label><input type="checkbox" checked={placement.fit} onChange={e=>setPlacement(p=>({...p,fit:e.target.checked}))}/>Fit timing to this animation</label>{['X','Y','Z'].map((axis,i)=><label key={axis}>{axis}<input aria-label={'Effect anchor '+axis} type="range" min="-250" max="250" value={placement.position[i]} onChange={e=>setPlacement(p=>({...p,position:p.position.map((n,k)=>k===i?Number(e.target.value):n)}))}/></label>)}<button onClick={place}>Confirm placement</button><button onClick={()=>setPlacement(null)}>Cancel placement</button></div>:
+          emitter?<>{mode==='Classic'?<ParticleClassicControls {...{emitter,frame,sequence,update}} model={working} apply={(label,mutate,sections)=>apply(label,mutate,sections)}/>:<><div className="pe-tool-tabs">{['Basics','Shape','Life','Picture','Timing'].map(item=><button key={item} aria-pressed={tool===item} onClick={()=>{cancel();setTool(item);}}>{item}</button>)}</div><ParticleCluelessControls {...{emitter,frame,sequence,tool,scope,setScope,asset,update,begin,change,finish,cancel}} model={working} rotate={angle=>apply('Aim particle',m=>{const degrees=particleRotationDegrees(m,m.Nodes[emitterId],frame,sequence);degrees[1]=angle;setParticleRotationDegrees(m,emitterId,frame,sequence,degrees);})}/></>}</>:<p>{selectedEffect?'This ingredient is preserved; its editing controls are not implemented yet.':'Choose an effect in the library.'}</p>}
+        </fieldset>
+      </div>
+      <footer className="re-footer"><span className="re-status" role="status">{message||(activeDoc.readOnly?'Read-only model.':'')}</span><button onClick={close}>Close</button></footer>
     </section>
   </div>;
 }
