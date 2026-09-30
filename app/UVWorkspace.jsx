@@ -90,6 +90,7 @@ export default function UVWorkspace({ model: sourceModel, materialModel: supplie
   const [materialID, setMaterialID] = useState(null), [uvTool, setUVTool] = useState('select'), [axis, setAxis] = useState(null), [foldDirection, setFoldDirection] = useState('right-to-left');
   const [showOnlySelected, setShowOnlySelected] = useState(false), [hideRGB, setHideRGB] = useState(false), [showVerticles, setShowVerticles] = useState(false);
   const [projectionPreset, setProjectionPreset] = useState({ name: '', revision: 0 });
+  const [scrollSensitivity, setScrollSensitivity] = useState(1.0);
   const [materialPreview, setMaterialPreview] = useState(null), [materialError, setMaterialError] = useState('');
   const [sidePercent, setSidePercent] = useState(() => storedLayout(LAYOUT_KEYS.side, UV_SIDE_DEFAULT, clampUVSidePercent));
   const [previewPercent, setPreviewPercent] = useState(() => storedLayout(LAYOUT_KEYS.preview, UV_PREVIEW_DEFAULT, clampUVPreviewPercent));
@@ -160,7 +161,8 @@ export default function UVWorkspace({ model: sourceModel, materialModel: supplie
   const hiddenPreviewGeosets = hiddenUVPreviewGeosets(model, eligibleSelection, showOnlySelected);
   // UV-grid preferences belong only to the 2D texture canvas. Keep the 3D
   // renderer's preference object stable while a grid control is adjusted.
-  const previewPreferencesInput = { ...(preferences || {}) }; delete previewPreferencesInput.uvGrid;
+  const uvPreferences = { ...(preferences || {}), scrollSensitivity };
+  const previewPreferencesInput = { ...uvPreferences }; delete previewPreferencesInput.uvGrid;
   const previewPreferencesKey = JSON.stringify(previewPreferencesInput);
   const previewPreferences = useMemo(() => previewPreferencesInput, [previewPreferencesKey]);
   const liveOverlay = showVerticles
@@ -248,7 +250,7 @@ export default function UVWorkspace({ model: sourceModel, materialModel: supplie
       <section className="uv-map-pane" aria-label="UV texture map">
         {densityOpen && <div className="uv-density-popup" role="dialog" aria-modal="false" aria-label="Triangle density"><strong>Geoset {densityIndex + 1} triangle density</strong><MeshDensitySlider compact geoset={sourceModel.Geosets[densityIndex]} value={densityValue} onChange={value => { setDensityValue(value); setDensityResult(null); }} onResult={setDensityResult}/><div><button onClick={() => { setDensityOpen(false); setDensityValue(0); setDensityResult(null); }}>Cancel</button><button className="primary" disabled={!densityValue || !densityResult || densityResult.trianglesAfter === densityResult.trianglesBefore} onClick={() => { const next = densityResult.geoset; setDensityOpen(false); setDensityValue(0); setDensityResult(null); onDensityApply(densityIndex, next); }}>Apply</button></div></div>}
         {combined?.eligibleVertices.length ? <UVEditor key="selected-geosets" geoset={combined.geoset} uvSet={0} revision={revision} textureUrl={materialPreview?.url} textureSize={materialPreview ? [materialPreview.width, materialPreview.height] : undefined} textureWrapping={!imageLayers.length || wrappingEnabled} viewTileLimit={viewTileLimit}
-          eligibleVertices={combined.eligibleVertices} selectedVertices={combined.selectedVertices} transformMode={uvTool} cameraMode="work" preferences={preferences} suspended={editingLocked} axis={axis}
+          eligibleVertices={combined.eligibleVertices} selectedVertices={combined.selectedVertices} transformMode={uvTool} cameraMode="work" preferences={uvPreferences} onSensitivityChange={setScrollSensitivity} suspended={editingLocked} axis={axis}
           uvGrid={uvGrid} snapTextureFrame={display.snapTextureFrame} showTextureFrame={display.textureFrame} textureFrameColor={preferences?.visuals?.uvSelection}
           onSelectVertices={selectCombined} onChange={values => applyCombined(values)} onPreviewChange={values => values ? applyCombined(values, true) : onPreviewChanges?.(null)} />
           : <div className="classic-empty-view">Select textured vertices before opening the UV wrapper.</div>}
@@ -266,7 +268,7 @@ export default function UVWorkspace({ model: sourceModel, materialModel: supplie
         </section>
         <section className="uv-live-preview" aria-label="Live model preview">
           <div className="uv-panel-title"><strong>Live Model Preview</strong></div>
-          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} revision={previewWrappingRevision} uvRevision={revision} presentation="preview" preserveCameraView={true} interactivePreview={!densityOpen && !!current} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
+          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} onSensitivityChange={setScrollSensitivity} revision={previewWrappingRevision} uvRevision={revision} presentation="preview" preserveCameraView={true} interactivePreview={!densityOpen && !!current} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
             uvOnlySelected={showOnlySelected} hiddenGeosets={hiddenPreviewGeosets} hideRgbGeoset={hideRGB && rgbTarget >= 0 ? rgbTarget : null}
             selectionByGeoset={selectionByGeoset} selectableGeosets={Object.keys(eligibleSelection).map(Number)}
             previewSelectionMode={showVerticles ? 'vertices' : 'polygons'} previewEligibleByGeoset={allEligible}
