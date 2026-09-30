@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {backgroundThumbnail} from './asset-preload-client.js';
 import {createTextureAssetCache,createTextureLibrarySessions,createThumbnailQueue,createThumbnailLookup,warmTextureLibrarySession} from '../src/texture-library-session.js';
-import {textureFolderTree,textureFormatMatches} from '../src/texture-library-search.js';
+import {initialTextureLibraryResults,textureFolderTree,textureFormatMatches} from '../src/texture-library-search.js';
 import {cachedThumbnail,saveThumbnail,peekThumbnail} from '../src/texture-library-cache.js';
 import {getUVPreviewSelection} from '../src/uv-preview.js';
 import './texture-library.css';
@@ -77,28 +77,40 @@ function FolderBranch({node,selected,onSelect,depth=0}){
 export default function TextureLibrary({model,modelPath,onClose,onAddTexture,onPreviewTexture,previewEnabled=false,previewReason='',selectedGeosets,onOpenMaterials,onSelectTexture,selectLabel='Use in Forge'}){
   const initialCatalog=librarySessions.peek(modelPath);
   const [catalog,setCatalog]=useState(initialCatalog),[loading,setLoading]=useState(!initialCatalog),[error,setError]=useState(''),[query,setQuery]=useState(''),[vibe,setVibe]=useState(preferredVibe),[format,setFormat]=useState(preferredFormat),[folder,setFolder]=useState(''),[variant,setVariant]=useState('classic'),[kind,setKind]=useState('all'),[limit,setLimit]=useState(120),[result,setResult]=useState(()=>librarySessions.result(modelPath,initialCatalog?.signature,{query:'',vibe:preferredVibe(),folder:'',variant:'classic',kind:'all',format:preferredFormat(),limit:120})||{items:[],total:0}),[ready,setReady]=useState(false),[searching,setSearching]=useState(false),[selected,setSelected]=useState(null),[selectedAsset,setSelectedAsset]=useState(null),[selectedImage,setSelectedImage]=useState(null),[selectionError,setSelectionError]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[cacheEpoch,setCacheEpoch]=useState(0);
-  const worker=useRef(),requestId=useRef(0),requestOptions=useRef(null),expectedCatalog=useRef(null),dialog=useRef(),input=useRef();
+  const worker=useRef(),requestId=useRef(0),requestOptions=useRef(null),expectedCatalog=useRef(null),previewFilters=useRef(null),dialog=useRef(),input=useRef();
+  const currentFilters=useRef();currentFilters.current={query,format,folder,variant,kind};
   const [catalogFresh,setCatalogFresh]=useState(false);
   useEffect(()=>{
     const previous=document.activeElement;input.current?.focus();return()=>previous?.focus?.();
   },[]);
   useEffect(()=>{
-    let active=true;expectedCatalog.current=null;setCatalogFresh(false);setLoading(!librarySessions.peek(modelPath));setReady(false);setError('');
+    let active=true,initTimer,fullCatalogTimer;expectedCatalog.current=null;setCatalogFresh(false);setLoading(!librarySessions.peek(modelPath));setReady(false);setError('');
     if(!window.desktop?.textureLibraryCatalog){setLoading(false);setError('The native texture library is available in the desktop app.');return;}
     const w=libraryWorker();worker.current=w;libraryConsumers++;
     const onMessage=({data})=>{if(!active)return;if(data.type==='ready'&&expectedCatalog.current!==null&&data.signature===expectedCatalog.current){setReady(true);setLoading(false);}else if(data.type==='result'&&data.id===requestId.current){librarySessions.remember(modelPath,expectedCatalog.current,requestOptions.current,data.result);setResult(data.result);setSearching(false);}else if(data.type==='error'&&(data.id===requestId.current||data.id==null&&expectedCatalog.current!==null&&data.signature===expectedCatalog.current)){setError(data.message);setLoading(false);setSearching(false);}};
     const onError=event=>{if(sharedWorker===w){w.terminate();sharedWorker=null;}if(active){setError(event.message||'Texture search could not start.');setLoading(false);}};
     w.addEventListener('message',onMessage);w.addEventListener('error',onError);
-    const useCatalog=data=>{if(!active)return;if(expectedCatalog.current!==data.signature){requestId.current=++searchSerial;setSearching(false);}expectedCatalog.current=data.signature;setCatalog(data);setSelected(previous=>previous&&data.items.some(item=>item.cacheKey===previous.cacheKey)?previous:null);if(!data.items.some(item=>item.variant==='classic'))setVariant('all');if(data.signature&&w.warmSignature===data.signature){setReady(true);setLoading(false);}else{setReady(false);w.postMessage({type:'init',items:data.items,signature:data.signature});}};
+    const useCatalog=data=>{if(!active)return;clearTimeout(initTimer);if(expectedCatalog.current!==data.signature){requestId.current=++searchSerial;setSearching(false);}expectedCatalog.current=data.signature;setCatalog(data);setSelected(previous=>previous&&data.items.some(item=>item.cacheKey===previous.cacheKey)?previous:null);if(!data.items.some(item=>item.variant==='classic'))setVariant('all');if(data.signature&&w.warmSignature===data.signature){setReady(true);setLoading(false);}else{setReady(false);initTimer=setTimeout(()=>{if(active)w.postMessage({type:'init',items:data.items,signature:data.signature});},50);}};
     const refreshCatalog=()=>librarySessions.load(modelPath,()=>window.desktop.textureLibraryCatalog({modelPath})).then(data=>{useCatalog(data);if(active)setCatalogFresh(true);}).catch(error=>{if(active){setError(error.message);setLoading(false);}});
-    const warm=librarySessions.peek(modelPath);if(warm)useCatalog(warm);
-    refreshCatalog();
+    const warm=librarySessions.peek(modelPath);
+    if(warm){useCatalog(warm);refreshCatalog();}
+    else if(window.desktop.textureLibraryPreview){
+      const previewFormat=currentFilters.current.format;
+      window.desktop.textureLibraryPreview({modelPath,format:previewFormat}).then(preview=>{
+        if(!active)return;
+        const filters=currentFilters.current;
+        if(filters.query.trim()||filters.folder||filters.kind!=='all'||filters.variant!=='classic'||filters.format!==previewFormat)return;
+        previewFilters.current={format:previewFormat,variant:preview.variant};setVariant(preview.variant);setResult(preview.result);setLoading(false);
+      }).catch(error=>{if(active)console.warn('Texture library first page:',error);}).finally(()=>{if(active)fullCatalogTimer=setTimeout(()=>{if(active)refreshCatalog();},75);});
+    }else refreshCatalog();
     const unsubscribe=window.desktop.onTextureLibraryPreloadProgress?.(status=>{if(['complete','cancelled'].includes(status.state)){setCacheEpoch(value=>value+1);refreshCatalog();}});
-    return()=>{active=false;libraryConsumers--;unsubscribe?.();w.removeEventListener('message',onMessage);w.removeEventListener('error',onError);worker.current=null;};
+    return()=>{active=false;clearTimeout(initTimer);clearTimeout(fullCatalogTimer);libraryConsumers--;unsubscribe?.();w.removeEventListener('message',onMessage);w.removeEventListener('error',onError);worker.current=null;};
   },[modelPath]);
   useEffect(()=>{setLimit(120);},[query,vibe,folder,variant,kind,format]);
   useEffect(()=>{
-    if(!ready)return;const options={query,vibe,folder,variant,kind,format,limit},id=++searchSerial;requestId.current=id;requestOptions.current=options;
+    const options={query,vibe,folder,variant,kind,format,limit};
+    if(!ready){if(catalog){const first=initialTextureLibraryResults(catalog.items,options);if(first){setResult(first);setLoading(false);setSearching(false);}else{setResult({items:[],total:0});setSearching(true);}}else if(previewFilters.current&&(query.trim()||folder||kind!=='all'||variant!==previewFilters.current.variant||format!==previewFilters.current.format)){setResult({items:[],total:0});setSearching(true);}return;}
+    const id=++searchSerial;requestId.current=id;requestOptions.current=options;
     const cached=librarySessions.result(modelPath,catalog?.signature,options);if(cached){setResult(cached);setSearching(false);return;}
     setSearching(true);const timer=setTimeout(()=>worker.current?.postMessage({type:'search',id,signature:catalog?.signature,options}),query?100:0);return()=>clearTimeout(timer);
   },[ready,catalog?.signature,modelPath,query,vibe,folder,variant,kind,format,limit]);

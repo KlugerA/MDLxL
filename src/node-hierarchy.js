@@ -32,6 +32,30 @@ export function visibleNodeRows(rows, collapsed = new Set()) {
   return rows.filter(row => !row.ancestors.some(id => collapsed.has(id)));
 }
 
+/** Selected bones/helpers plus only their downstream bone/helper descendants. */
+export function downstreamBoneIds(model, selectedNodeIds = []) {
+  const boneIds = new Set([...(model.Bones || []), ...(model.Helpers || [])].map(node => node.ObjectId));
+  const selected = new Set(selectedNodeIds.filter(id => boneIds.has(id)));
+  if (!selected.size) return [];
+  const children = new Map();
+  for (const node of allNodes(model)) {
+    if (node.Parent == null || node.Parent === node.ObjectId) continue;
+    const branch = children.get(node.Parent) || [];
+    branch.push(node.ObjectId); children.set(node.Parent, branch);
+  }
+  const result = new Set(selected), visited = new Set(selected), pending = [...selected];
+  while (pending.length) {
+    const parent = pending.pop();
+    for (const child of children.get(parent) || []) {
+      if (visited.has(child)) continue;
+      visited.add(child);
+      if (boneIds.has(child)) result.add(child);
+      pending.push(child);
+    }
+  }
+  return [...result];
+}
+
 export function relatedResourceIndices(model, geosetIndex, kind) {
   const geoset = model?.Geosets?.[geosetIndex];
   if (!geoset) return [];

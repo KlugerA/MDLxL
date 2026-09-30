@@ -6,6 +6,7 @@ import {
 import { setSequenceOptions } from '../src/animation.js';
 import { clampAlphaPercentText } from '../src/animation-controller-inputs.js';
 import { wheelOptionIndex } from '../src/dropdown-wheel.js';
+import SidebarSection from './SidebarSection.jsx';
 import {
   createGlobalSequence, createSequence, createSequenceFromCurrent, deleteGlobalSequence, deleteSequence,
   setGlobalSequenceDuration, setSequenceInterval, setSequenceMoveSpeed, setSequenceName,
@@ -15,9 +16,9 @@ import './AnimationController.css';
 const valuesEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const valueArray = value => typeof value === 'number' ? [value] : Array.from(value || []);
 
-function commonValue(model, targets, time, sequenceIndex) {
+function commonValue(model, targets, time, sequenceIndex, globalSeqId = null) {
   try {
-    const values = targets.map(target => valueArray(sampleAnimationProperty(model, target, time, sequenceIndex)));
+    const values = targets.map(target => valueArray(sampleAnimationProperty(model, target, time, sequenceIndex, globalSeqId)));
     if (!values.length) return null;
     return values.every(value => valuesEqual(value, values[0])) ? values[0] : null;
   } catch { return null; }
@@ -50,8 +51,8 @@ export default function AnimationController({
   const colorTargets = targets.filter(target => target.property === 'Color');
   const inlineColorTargets = colorTargets.filter(target => !readAnimationTrack(model, target)?.Keys);
   const keyedColorTargets = colorTargets.filter(target => !inlineColorTargets.includes(target));
-  const sampledAlpha = geosetIds.length ? commonValue(model, alphaTargets, frame, sequenceIndex) : null;
-  const sampledColor = geosetIds.length ? commonValue(model, colorTargets, frame, sequenceIndex) : null;
+  const sampledAlpha = geosetIds.length ? commonValue(model, alphaTargets, frame, sequenceIndex, globalDomain ? globalSeqId : null) : null;
+  const sampledColor = geosetIds.length ? commonValue(model, colorTargets, frame, sequenceIndex, globalDomain ? globalSeqId : null) : null;
   // "All line" is the authored static-property view.  It must show the
   // inline Color value itself, not a sampled keyframe from a local sequence.
   const inlineColor = geosetIds.length && !sequence && !globalDomain
@@ -155,16 +156,16 @@ export default function AnimationController({
   function setVisibility(visible) {
     const value = visible ? 1 : 0;
     setAlpha(visible ? '100' : '0');
-    commit('Set geoset visibility keyframe', ['GeosetAnims', 'Info'], current => setAnimationKey(current, alphaTargets, frame, value, sequenceIndex), visible ? 'Selected geosets shown.' : 'Selected geosets hidden.');
+    commit('Set geoset visibility keyframe', ['GeosetAnims', 'Info'], current => setAnimationKey(current, alphaTargets, frame, value, sequenceIndex, globalDomain ? globalSeqId : null), visible ? 'Selected geosets shown.' : 'Selected geosets hidden.');
   }
 
   function commitAlpha() {
-    if (!sequence || !geosetIds.length || alpha === '') return;
+    if ((!sequence && !globalDomain) || !geosetIds.length || alpha === '') return;
     const numeric = Number(alpha);
     if (!Number.isFinite(numeric)) { setError('Alpha must be a number from 0 to 100.'); setNotice(''); return; }
     const value = Math.max(0, Math.min(100, numeric));
     setAlpha(String(value));
-    commit('Set geoset alpha keyframe', ['GeosetAnims', 'Info'], current => setAnimationKey(current, alphaTargets, frame, value / 100, sequenceIndex), `Alpha set to ${value}%.`);
+    commit('Set geoset alpha keyframe', ['GeosetAnims', 'Info'], current => setAnimationKey(current, alphaTargets, frame, value / 100, sequenceIndex, globalDomain ? globalSeqId : null), `Alpha set to ${value}%.`);
   }
 
   function rgbValue() {
@@ -176,6 +177,10 @@ export default function AnimationController({
     if (!geosetIds.length) return;
     let value;
     try { value = rgbValue(); } catch (failure) { setError(failure.message); setNotice(''); return; }
+    if (globalDomain) {
+      commit('Set global sequence geoset RGB', ['GeosetAnims', 'Info'], current => setAnimationKey(current, colorTargets, frame, value, sequenceIndex, globalSeqId), 'Global sequence color tint keyframe updated.');
+      return;
+    }
     if (!sequence) {
       if (inlineColorTargets.length !== colorTargets.length) return;
       commit('Set inline geoset RGB', ['GeosetAnims', 'Info'], current => setAnimationInlineValues(current, colorTargets, value), 'Inline color tint updated.');
@@ -231,19 +236,20 @@ export default function AnimationController({
   // setAnimationKey/setAnimationSequences create a missing geoset animation
   // and convert inline RGB to keys. Do not make that capability depend on a
   // pre-existing animation record.
-  const colorBlocked = noLocalSequence || !geosetIds.length;
+  const colorBlocked = disabled || !geosetIds.length || !sequence && !globalDomain;
   const inlineRgbEditable = !sequence && !globalDomain && inlineColorTargets.length === colorTargets.length;
-  const rgbBlocked = disabled || !geosetIds.length || globalDomain || (!sequence && !inlineRgbEditable);
+  const rgbBlocked = disabled || !geosetIds.length || (!sequence && !globalDomain && !inlineRgbEditable);
   const alphaNumber = alpha === '' ? NaN : Number(alpha);
   const visibleChecked = Number.isFinite(alphaNumber) && alphaNumber > 0;
   const mixedOrPartial = alpha === '' || Number.isFinite(alphaNumber) && alphaNumber !== 0 && alphaNumber !== 100;
   const currentValue = globalDomain ? `global:${globalSeqId}` : sequenceIndex;
   return <section className="animation-controller" aria-label="Animations toolbox">
-    <label className="ac-current">Current sequence:<span className="ac-sequence-combo"><input ref={sequenceNameInput} aria-label="Animation sequence name" className={globalDomain ? 'global-sequence-value' : ''} value={sequenceNameText} disabled={!sequence} readOnly={globalDomain || !sequence} onWheel={wheelSequence} onChange={event => setSequenceNameText(event.target.value)} onBlur={commitSequenceName} onKeyDown={enterBlurs}/><select ref={sequenceSelect} data-warmkey="animationSequence" aria-label="Choose animation sequence" value={currentValue} onChange={event => onTimelineChange?.(event.target.value)} title="Choose animation sequence">
+    <SidebarSection title="Current Sequence"><label className="ac-current"><span className="ac-sequence-combo"><input ref={sequenceNameInput} aria-label="Animation sequence name" className={globalDomain ? 'global-sequence-value' : ''} value={sequenceNameText} disabled={!sequence} readOnly={globalDomain || !sequence} onWheel={wheelSequence} onChange={event => setSequenceNameText(event.target.value)} onBlur={commitSequenceName} onKeyDown={enterBlurs}/><select ref={sequenceSelect} data-warmkey="animationSequence" aria-label="Choose animation sequence" value={currentValue} onChange={event => onTimelineChange?.(event.target.value)} title="Choose animation sequence">
       <option value={-1}>All line</option>
       {(model.Sequences || []).map((item, index) => <option key={index} value={index} translate="no">{item.Name}</option>)}
       {(model.GlobalSequences || []).map((duration, index) => <option className="global-sequence-value" style={{ color: '#d00000' }} key={`global:${index}`} value={`global:${index}`}>{duration}</option>)}
-    </select></span></label>
+    </select></span></label></SidebarSection>
+    <SidebarSection title="Sequence Properties">
     <div className="ac-caption">Sequence properties:</div>
     <div className="ac-properties">
       <label><input type="checkbox" checked={!!sequence && !sequence.NonLooping} disabled={noLocalSequence} onChange={event => changeSequence({ nonLooping: !event.target.checked })}/>Loop</label>
@@ -258,14 +264,17 @@ export default function AnimationController({
       <input aria-label="Sequence last frame" type="number" min={globalDomain ? 1 : Math.max(0, Number(startText) || 0)} step="1" disabled={disabled || !sequence && !globalDomain} value={endText} onChange={event => setEndText(event.target.value)} onBlur={commitInterval} onKeyDown={enterBlurs}/>
     </div>
     <div className="ac-sequence-actions"><button disabled={disabled} onClick={addSequence}>Create</button><button disabled={noLocalSequence} onClick={copyCurrentSequence}>Create from current</button><button disabled={disabled} onClick={addGlobal}>Global</button><button disabled={disabled || !sequence && !globalDomain} onClick={removeCurrent}>Delete</button></div>
+    </SidebarSection>
+    <SidebarSection title="Visibility & Color">
     <div className="ac-geoset-animation">
       <div className="ac-visibility"><span>Visibility:</span>{missingGeosets.length ? <button className="ac-create-visibility" disabled={disabled || !geosetIds.length} onClick={createVisibility}>Create Visibility</button> : <label><input type="checkbox" aria-label="Visible at current frame" checked={visibleChecked} ref={input => { if (input) input.indeterminate = mixedOrPartial; }} disabled={colorBlocked} onChange={event => setVisibility(event.target.checked)}/>On</label>}
         <label className="ac-alpha">Alpha:<input aria-label="Visibility alpha percent" type="number" min="0" max="100" step="1" placeholder={geosetIds.length ? 'Mixed' : ''} disabled={colorBlocked} value={alpha} onChange={event => setAlpha(clampAlphaPercentText(event.target.value))} onBlur={commitAlpha} onKeyDown={enterBlurs}/></label>
       </div>
       <div className="ac-color"><span>Color Tint:</span><div className="ac-rgb">{['R', 'G', 'B'].map((label, index) => <label className={`channel-${label.toLowerCase()}`} key={label}>{label}<input aria-label={`Animation ${label}`} type="number" min="0" max="255" step="1" placeholder={geosetIds.length ? 'Mixed' : ''} disabled={rgbBlocked} value={rgb[index]} onChange={event => setRgb(previous => previous.map((value, i) => i === index ? event.target.value : value))} onBlur={commitRgb} onKeyDown={enterBlurs}/></label>)}</div></div>
     </div>
-    <button disabled={colorBlocked} onClick={() => bakeRgb(false)}>Bake Sequence RGB</button>
+    <button disabled={noLocalSequence || !geosetIds.length} onClick={() => bakeRgb(false)}>Bake Sequence RGB</button>
     <button disabled={disabled || globalDomain || !model.Sequences?.length || !geosetIds.length} onClick={() => bakeRgb(true)}>Bake All RGB</button>
+    </SidebarSection>
     {error && <p className="ac-error" role="alert">{error}</p>}{notice && <p className="ac-notice" role="status">{notice}</p>}
   </section>;
 }

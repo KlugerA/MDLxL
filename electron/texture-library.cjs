@@ -64,4 +64,11 @@ class TextureLibrary {
     return {version:2,signature:hash('2|'+listing.sources.map(s=>s.key).join('|')+'|'+custom.map(item=>item.cacheKey).join('|')),items,roots:listing.sources.map(s=>({folder:s.folder,fromCache:s.fromCache})),errors:listing.errors,customCount:custom.length,nativeCount:items.length-custom.length};
   }
 }
-module.exports = {TextureLibrary,imageKey};
+/** Return only the initial visible page while the full catalog loads separately. */
+function previewCatalog(catalog,format='all') {
+  const variant=catalog.items.some(item=>item.variant==='classic')?'classic':'all';
+  const matches=catalog.items.filter(item=>(variant==='all'||item.variant===variant)&&(format!=='blp'||/\.blp$/i.test(item.path)));
+  matches.sort((a,b)=>(b.priority||0)-(a.priority||0)||a.name.localeCompare(b.name));
+  return {signature:catalog.signature,variant,result:{items:matches.slice(0,120),total:matches.length,meanings:[],unknown:[],notice:'',hasMore:matches.length>120}};
+}
+module.exports = {TextureLibrary,imageKey,previewCatalog};

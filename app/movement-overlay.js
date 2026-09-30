@@ -3,7 +3,7 @@ import { allNodes, sampleNodeMatrices, sampleTrack } from '../src/animation.js';
 import { movementNodeCategories } from './preview-overlays.js';
 import { samplePreviewMatrices } from './preview-pose.js';
 import { visualOptions } from '../src/preferences.js';
-import { boneHighlightColors, markerStyle } from './rig-markers-gl.js';
+import { boneHighlightColors, markerStyle, rigMarkerVisible } from './rig-markers-gl.js';
 import { drawPixelLine } from './pixel-lines.js';
 
 const COLORS = { X: '#fa4343', Y: '#34cf59', Z: '#3588ff' };
@@ -58,12 +58,13 @@ export function drawMovementOverlay(context, nodes, selectedIds, handles, width,
     const line = boneConnectionEndpoints(parent, point, visual.helperSize);
     if (!line) continue;
     const appearance = boneConnectionAppearance(parent, point, highlights);
+    if (!boneConnectionVisible(parent, point, highlights, options.focusedBoneLines)) continue;
     drawPixelLine(context, line.from, line.to, {
       color: appearance || (progress => { const shade = Math.round(progress * 255); return `rgb(${shade},${shade},${shade})`; }),
       width: appearance ? 6 : 3, ratio,
     });
   }
-  for (const point of nodes) if (point.visible && options[point.overlayKind || 'nodes']) {
+  for (const point of nodes) if (point.visible && rigMarkerVisible(point, options, highlights)) {
     const isSelected = selected.has(point.node.ObjectId), emitter = (point.node.Flags & 4096) !== 0;
     const bone = point.overlayKind === 'bones';
     context.fillStyle = point.displayColor || (bone ? highlights.get(point.node.ObjectId) || (byId.get(point.node.Parent)?.overlayKind === 'bones' ? '#4cff59' : '#4cb259') : emitter || point.overlayKind === 'particles' ? visual.particle : point.eventNode ? visual.event : visual.node);
@@ -112,6 +113,7 @@ export function drawBoneConnectors(context, nodes, selectedIds, camera, width, h
     const line = boneConnectionEndpoints(parent, point);
     if (!line) continue;
     const appearance = boneConnectionAppearance(parent, point, highlights);
+    if (!boneConnectionVisible(parent, point, highlights, options.focusedBoneLines)) continue;
     drawPixelLine(context, line.from, line.to, {
       color: appearance || (progress => { const shade = Math.round(progress * 255); return `rgb(${shade},${shade},${shade})`; }),
       width: appearance ? 6 : 3, ratio,
@@ -120,7 +122,7 @@ export function drawBoneConnectors(context, nodes, selectedIds, camera, width, h
   const size = visualOptions(options.preferences).helperSize * 1.5;
   context.save(); context.setTransform(1, 0, 0, 1, 0, 0); context.globalCompositeOperation = 'destination-out';
   for (const point of nodes) {
-    if (!point.visible || !options[point.overlayKind || 'nodes']) continue;
+    if (!point.visible || !rigMarkerVisible(point, options, highlights)) continue;
     const shape = markerStyle(point, byId, options.preferences, highlights).shape;
     const hull = convexHull(shape.vertices.map(vertex => {
       const p = new Vector3(...vertex).multiplyScalar(point.unitsPerPixel * size).applyQuaternion(point.rotation).add(point.world).project(camera);
@@ -208,6 +210,10 @@ export function boneConnectionAppearance(parent, child, highlights) {
   if (to === '#ff0000' && from === '#000000') return '#ff0000';
   if (to === '#ffff00' && (from === '#ff0000' || from === '#ffff00')) return '#ffff00';
   return null;
+}
+
+export function boneConnectionVisible(parent, child, highlights, focused = false) {
+  return !focused || !!boneConnectionAppearance(parent, child, highlights);
 }
 
 export function movementWorkplaneHandle(workplane = 'xy', unitsPerPixel = 1) {

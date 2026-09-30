@@ -36,6 +36,21 @@ test('Bones and Skeleton independently control markers and connecting lines', ()
   );
 });
 
+test('Focused Skeleton uses only highlighted connectors and is exclusive with Skeleton', () => {
+  const initial = defaultEditorDisplay();
+  const skeleton = setEditorDisplay(initial, 'movement', 'skeleton', true);
+  const focused = setEditorDisplay(skeleton, 'movement', 'focusedSkeleton', true);
+  assert.equal(focused.movement.skeleton, false);
+  assert.equal(focused.movement.focusedSkeleton, true);
+  assert.deepEqual(
+    [previewOverlayOptions(focused.movement).boneLines, previewOverlayOptions(focused.movement).focusedBoneLines, previewOverlayOptions(focused.movement).bones, previewOverlayOptions(focused.movement).focusedBoneMarkers],
+    [true, true, false, true],
+  );
+  const whole = setEditorDisplay(focused, 'movement', 'skeleton', true);
+  assert.equal(whole.movement.skeleton, true);
+  assert.equal(whole.movement.focusedSkeleton, false);
+});
+
 test('Clear turns off only the active editor options', () => {
   const state = setEditorDisplay(defaultEditorDisplay(), 'bones', 'skeleton', true);
   const cleared = clearQuickDisplay(state, 'bones');

@@ -17,6 +17,7 @@ import { createViewportGrid } from '../app/viewport-grid.js';
 import { ModelRenderer } from 'war3-model';
 import { createDemoDocument } from '../src/editor-document.js';
 import { skinGeosetNormals } from '../src/animation.js';
+import { rigMarkerGeometry } from '../app/rig-markers-gl.js';
 
 const near = (a, b, epsilon = 1e-6) => assert.ok(Math.abs(a - b) < epsilon, `${a} ≈ ${b}`);
 const camera = () => { const c = new OrthographicCamera(-10, 10, 10, -10, .1, 1000); c.position.set(0, 0, 30); c.lookAt(0, 0, 0); c.updateMatrixWorld(); return c; };
@@ -87,6 +88,19 @@ test('Skeleton lines render without Bones markers, and Bones markers render with
   assert.equal(skeleton.boxes.length, 0);
   assert.equal(bones.pixels.length, 0);
   assert.equal(bones.boxes.length, 2);
+});
+
+test('Focused Skeleton keeps only its highlighted bone markers visible when Bones is off', () => {
+  const model = { Bones: [
+    { ObjectId: 0, PivotPoint: [0, 0, 0] },
+    { ObjectId: 1, Parent: 0, PivotPoint: [4, 0, 0] },
+    { ObjectId: 2, PivotPoint: [0, 4, 0] },
+  ] };
+  const points = projectMovementNodes(model, 0, -1, camera(), 400, 400);
+  const focused = rigMarkerGeometry(points, [1], { bones: false, focusedBoneMarkers: true });
+  const all = rigMarkerGeometry(points, [1], { bones: true, focusedBoneMarkers: true });
+  assert.ok(focused.triangles.length > 0, 'selected bone and its focused relation stay visible');
+  assert.ok(focused.triangles.length < all.triangles.length, 'unfocused bones remain hidden while Bones is off');
 });
 
 test('normal indicators preserve split stored directions, normalize display length and leave data intact', () => {

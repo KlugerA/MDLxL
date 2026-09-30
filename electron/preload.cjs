@@ -13,10 +13,19 @@ contextBridge.exposeInMainWorld('desktop', {
     ipcRenderer.on('app:beforeClose', listener);
     return () => ipcRenderer.removeListener('app:beforeClose', listener);
   },
+  onSaveBeforeClose: callback => {
+    const listener = async (_, requestId) => {
+      try { const saved = await callback(); ipcRenderer.send('app:saveBeforeCloseReady', { requestId, saved: saved === true }); }
+      catch (error) { ipcRenderer.send('app:saveBeforeCloseReady', { requestId, error: error?.message || String(error) }); }
+    };
+    ipcRenderer.on('app:saveBeforeClose', listener);
+    return () => ipcRenderer.removeListener('app:saveBeforeClose', listener);
+  },
   resolveTextures: payload => ipcRenderer.invoke('texture:resolve',payload),
   resolveEventResources: payload => ipcRenderer.invoke('preview:eventResources',payload),
   loadHumanPortraitFrame: () => ipcRenderer.invoke('preview:humanPortraitFrame'),
   textureLibraryCatalog: payload => ipcRenderer.invoke('texture:library',payload),
+  textureLibraryPreview: payload => ipcRenderer.invoke('texture:libraryPreview',payload),
   copyTexturePath: value => ipcRenderer.invoke('texture:copyPath',value),
   textureLibraryPreloadStatus: () => ipcRenderer.invoke('texture:preloadStatus'),
   textureLibraryPreloadStart: payload => ipcRenderer.invoke('texture:preloadStart',payload),
@@ -73,6 +82,6 @@ contextBridge.exposeInMainWorld('desktop', {
   recent: () => ipcRenderer.invoke('model:recent'),
   clearRecent: () => ipcRenderer.invoke('model:clearRecent'),
   openRecent: (path,showcase=false) => ipcRenderer.invoke('model:openRecent', path,showcase),
-  setDirty: (dirty) => ipcRenderer.send('model:dirty', !!dirty),
+  setDirty: (value) => ipcRenderer.send('model:dirty', value && typeof value === 'object' ? { dirty: value.dirty === true, saved: value.saved === true, name: value.name } : !!value),
   onMenu: (callback) => { const listener=(_,action)=>callback(action); ipcRenderer.on('menu',listener); return ()=>ipcRenderer.removeListener('menu',listener); },
 });
