@@ -139,7 +139,7 @@ export default function App() {
   const timelineCommands = useRef({});
   const registerTimelineCommands = useCallback(value=>{timelineCommands.current=value;},[]);
   const preferencesRef = useRef(preferences); preferencesRef.current = preferences;
-  const savedPreferences = useRef(null), preferencesTimer = useRef();
+  const savedPreferences = useRef(null), preferencesTimer = useRef(), saveBeforeCloseRef = useRef(async () => false);
   function changePreferences(next) { const value = normalizePreferences(typeof next === 'function' ? next(preferencesRef.current) : next); preferencesRef.current = value; setPreferences(value); }
   const changeSensitivity = value => changePreferences({ ...preferencesRef.current, scrollSensitivity: value });
   const changePointerSensitivity = value => changePreferences({ ...preferencesRef.current, pointerSensitivity: value });
@@ -954,7 +954,15 @@ export default function App() {
   useEffect(()=>{window.desktop?.setMenuState?.({readOnly:doc.readOnly,saving,viewMode:displayMode,checks:menuChecks,uvEnabled:commandEnabled('uv')});},[doc.readOnly,saving,displayMode,JSON.stringify(menuChecks),selectionCount,activeGeoset]);
   useEffect(() => window.desktop?.onMenu(action => { if (action?.action === 'openRecent') { if (!latest.current.dialog && !latest.current.settingsTab) commands.current.openRecent(action.path); return; } if(['exit',...settingsCommands].includes(action) || (!latest.current.dialog && !latest.current.settingsTab)) runLatest.current(action); }), []);
   useEffect(() => { const boot = session.id; window.desktop?.initial?.().then(async initial => { settings.current = initial.settings || {}; setGameDataPath(settings.current.gameData || ''); const persisted=normalizePreferences(settings.current.preferences || preferencesRef.current); savedPreferences.current=JSON.stringify(persisted); changePreferences(persisted); const current = latest.current.session; current.doc.configureHistory({ budgetBytes: settings.current.historyBudgetBytes ?? 512 * 1048576, maxSteps: settings.current.historyMaxSteps ?? 10000 }); setRecoveries(initial.recovery || []); if (initial.model && current.id === boot && !current.doc.dirty) await loadFile(initial.model); else refresh(); setPreferencesReady(true); if(initial.recoveryPrompt && initial.recovery?.length)setDialog({type:'recovery'}); }).catch(error => { setPreferencesReady(true); say(error.message, true); }); }, []);
-  useEffect(() => { window.desktop?.setDirty(doc.dirty || hasUVPreview || hasTrackDrafts || hasPaintChanges); document.title = `${doc.dirty || hasUVPreview || hasTrackDrafts || hasPaintChanges ? '* ' : ''}${session.path || doc.name} — MDLxL`; }, [doc, tick, session.path, hasUVPreview, hasTrackDrafts, hasPaintChanges]);
+  const hasUnsavedWork=doc.dirty||hasUVPreview||hasTrackDrafts||hasPaintChanges;
+  saveBeforeCloseRef.current=async()=>{
+    window.dispatchEvent(new CustomEvent('mdlxl-paint-flush'));
+    const current=latest.current,hasModelWork=current.doc.dirty||Object.keys(current.session.uvPreviews).length>0||Object.keys(current.session.animationDrafts).length>0;
+    let saved=!current.session.paintProject?.dirty||await savePaintProject();
+    if(saved&&(hasModelWork||!current.session.path))saved=await save();
+    return saved;
+  };
+  useEffect(() => { window.desktop?.setDirty({dirty:hasUnsavedWork,saved:!!session.path,name:doc.name}); document.title = `${hasUnsavedWork ? '* ' : ''}${session.path || doc.name} — MDLxL`; }, [doc, tick, session.path, hasUVPreview, hasTrackDrafts, hasPaintChanges]);
   useEffect(() => { applyApplicationTheme(preferences); }, [preferences]);
   useEffect(() => { const handler = event => { if (latest.current.doc.dirty || Object.keys(latest.current.session.uvPreviews).length || Object.keys(latest.current.session.animationDrafts).length || latest.current.session.paintProject?.dirty) { event.preventDefault(); event.returnValue = ''; } }; window.addEventListener('beforeunload', handler); return () => window.removeEventListener('beforeunload', handler); }, []);
   useEffect(() => {
@@ -971,6 +979,7 @@ export default function App() {
     return () => clearTimeout(timer);
   },[preferences,preferencesReady]);
   useEffect(() => window.desktop?.onBeforeClose?.(async () => { const captures=[]; window.dispatchEvent(new CustomEvent('mdlvis-flush-captures',{detail:captures})); await Promise.all(captures); await flushRecordingQueue(); clearTimeout(preferencesTimer.current); if(!latest.current.preferencesReady)return; const current=preferencesRef.current, encoded=JSON.stringify(current); if(savedPreferences.current!==encoded) {await window.desktop.configure({preferences:current});savedPreferences.current=encoded;} }),[]);
+  useEffect(() => window.desktop?.onSaveBeforeClose?.(() => saveBeforeCloseRef.current()),[]);
   useEffect(() => { if(preferencesReady) resolveTextures(); },[preferencesReady, JSON.stringify(model.Textures.map(texture => texture.Image))]);
 
 
