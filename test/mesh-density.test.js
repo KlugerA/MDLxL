@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { changeGeosetDensity, densifyGeoset, prepareMeshDensity } from '../src/mesh-density.js';
+import { changeGeosetDensity, densifyGeoset, maximumDensityAmount, prepareMeshDensity } from '../src/mesh-density.js';
 import { createDemoDocument, openDocument } from '../src/editor-document.js';
 
 await prepareMeshDensity();
@@ -72,21 +72,23 @@ test('square-grid coverage works on a surface with no world-axis alignment', asy
   }
 });
 
-test('the slider builds simple square-like coverage and reaches the supplied flexible 60 to 124 maximum', async () => {
-  const source = sparseBlade(), expected = [[25, 76], [50, 92], [75, 108], [100, 124]];
+test('the slider stops when the useful grid reaches six cells instead of scrolling into excess density', async () => {
+  const source = sparseBlade(), expected = [[25, 76], [50, 92], [75, 108], [100, 108]];
   for (const [amount, triangles] of expected) assert.equal((await changeGeosetDensity(source, amount)).trianglesAfter, triangles);
-  const maximum = (await changeGeosetDensity(source, 100)).geoset;
-  assert.equal(maximum.Vertices.length / 3, 372, 'triangle-corner UV topology stays independently wrappable');
+  assert.equal(maximumDensityAmount(source), 75, 'the control stops at the first saturated six-cell grid');
+  const maximum = (await changeGeosetDensity(source, maximumDensityAmount(source))).geoset;
+  assert.equal(maximum.Vertices.length / 3, 324, 'triangle-corner UV topology stays independently wrappable');
+  assert.equal(maximumDensityAmount(maximum), 0, 'an applied six-cell grid cannot be densified again by reopening the control');
   let bladeTriangles = 0;
   for (let offset = 0; offset < maximum.Faces.length; offset += 3) {
     const positions = Array.from(maximum.Faces.slice(offset, offset + 3), index => [...maximum.Vertices.slice(index * 3, index * 3 + 3)]);
     if (positions.every(value => value[0] < 2)) {
       bladeTriangles++;
-      assert.ok(Math.max(...positions.map(value => value[1])) - Math.min(...positions.map(value => value[1])) <= 1.00001, 'a triangle crosses more than one grid column');
+      assert.ok(Math.max(...positions.map(value => value[1])) - Math.min(...positions.map(value => value[1])) <= 8 / 6 + 1e-5, 'a triangle crosses more than one of the six grid columns');
       assert.ok(Math.max(...positions.map(value => value[2])) - Math.min(...positions.map(value => value[2])) <= 1.00001, 'a triangle crosses more than one grid row');
     }
   }
-  assert.equal(bladeTriangles, 72);
+  assert.equal(bladeTriangles, 56);
 });
 
 test('new vertices preserve classic and HD binding formats', async () => {

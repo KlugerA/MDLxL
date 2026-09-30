@@ -89,12 +89,14 @@ function adaptiveTriangleSet(geoset) {
   const stats = Array.from({ length: geoset.Faces.length / 3 }, (_, triangle) => ({ triangle, length: triangleLongestEdge(geoset, triangle * 3) }));
   const ordered = stats.filter(entry => entry.length > 1e-10).sort((a, b) => b.length - a.length || a.triangle - b.triangle);
   if (!ordered.length) return new Set();
-  let selectedCount = ordered.length, bestGap = 1.75;
+  let selectedCount = ordered.length, bestGap = 1.75, separated = false;
   for (let index = 1; index <= Math.floor(ordered.length / 2); index++) {
     const ratio = ordered[index - 1].length / Math.max(ordered[index].length, 1e-10);
-    if (ratio > bestGap) { bestGap = ratio; selectedCount = index; }
+    if (ratio > bestGap) { bestGap = ratio; selectedCount = index; separated = true; }
   }
-  return new Set((selectedCount < ordered.length ? ordered.slice(0, selectedCount) : ordered).map(entry => entry.triangle));
+  const selected = new Set((selectedCount < ordered.length ? ordered.slice(0, selectedCount) : ordered).map(entry => entry.triangle));
+  if (!separated && triangleComponents(geoset, selected).some(component => componentReachedGridLimit(geoset, component))) return new Set();
+  return selected;
 }
 
 function triangleComponents(geoset, active) {
@@ -201,13 +203,29 @@ function componentProjection(geoset, component, boundary) {
   return { polygon, lower, upper, innerLower, innerUpper, section, epsilon, tolerance, project };
 }
 
+function componentReachedGridLimit(geoset, component) {
+  const boundary = componentBoundary(geoset, component), projection = componentProjection(geoset, component, boundary), records = new Map();
+  for (const triangle of component) for (const index of geoset.Faces.slice(triangle * 3, triangle * 3 + 3)) records.set(positionKey(geoset, index), projection.project(index));
+  const clusters = values => {
+    const sorted = [...values].sort((a, b) => a - b), grouped = [];
+    for (const value of sorted) {
+      const last = grouped.at(-1);
+      if (!last || Math.abs(value - last.at(-1)) > projection.tolerance) grouped.push([value]);
+      else last.push(value);
+    }
+    return grouped.length;
+  };
+  const points = [...records.values()], x = points.filter(value => value[0] >= projection.innerLower - projection.tolerance && value[0] <= projection.innerUpper + projection.tolerance).map(value => value[0]);
+  return clusters(x) >= 7 || clusters(points.map(value => value[1])) >= 7;
+}
+
 function gridDimensions(component, level, projection) {
   const { lower, upper, innerLower, innerUpper, section, tolerance } = projection, hasLeft = innerLower - lower > tolerance, hasRight = upper - innerUpper > tolerance;
   const leftWidth = section(lower), rightWidth = section(upper), midpoint = section((innerLower + innerUpper) / 2);
   const width = Math.max(midpoint[1] - midpoint[0], tolerance), length = Math.max(innerUpper - innerLower, tolerance), desired = component.length * (level * 2 + 1);
   const collapsed = values => values[1] - values[0] <= width * .05;
   let best = null;
-  for (let rows = 1; rows <= 24; rows++) for (let columns = 1; columns <= 64; columns++) {
+  for (let rows = 1; rows <= 6; rows++) for (let columns = 1; columns <= 6; columns++) {
     const triangles = 2 * rows * columns + (hasLeft ? (collapsed(leftWidth) ? rows : rows * 2) : 0) + (hasRight ? (collapsed(rightWidth) ? rows : rows * 2) : 0);
     const aspect = (length / columns) / (width / rows), score = Math.abs(triangles - desired) / desired * 2 + Math.abs(Math.log(Math.max(aspect, 1e-8)));
     if (!best || score < best.score - 1e-10 || Math.abs(score - best.score) <= 1e-10 && triangles < best.triangles) best = { rows, columns, triangles, score };
@@ -335,6 +353,17 @@ export function densifyGeoset(source, level) {
   geoset.Faces = new geoset.Faces.constructor(faces);
   updatePrimitiveCounts(geoset);
   return geoset;
+}
+
+export function maximumDensityAmount(source) {
+  validateGeoset(source);
+  let maximum = 0, previous = source.Faces.length;
+  for (let level = 1; level <= 4; level++) {
+    const faces = densifyGeoset(source, level).Faces.length;
+    if (faces !== previous) maximum = level * 25;
+    previous = faces;
+  }
+  return maximum;
 }
 
 function bindingKey(geoset, index) {
