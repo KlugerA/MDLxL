@@ -2,6 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { Worker } = require('node:worker_threads');
+const THUMBNAIL_VERSION = 'native-4.0.1-authoring-2';
 const ID = /^(?:wc3-[a-f0-9]{24}|my-[a-f0-9-]{36})$/;
 const atomic = async(file,data) => {
   await fs.mkdir(path.dirname(file),{recursive:true});
@@ -31,10 +32,10 @@ class ParticleLibrary {
         items.push({id:recipe.id,name:recipe.name,tags:recipe.tags,categories:recipe.categories,naming:{state:'personal'},collection:'My presets',unsupported:recipe.compatibility?.unsupported||[]});
       }
     }catch(error){if(error.code!=='ENOENT')throw error;}
-    for(const item of items)try{item.thumbnail=await fs.readFile(path.join(this.directory,'thumbnails',item.id+'.txt'),'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
+    for(const item of items)try{item.thumbnail=await fs.readFile(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,item.id+'.txt'),'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
     return {items:items.map(item=>({...item,...meta[item.id],favorite:!!meta[item.id]?.favorite})),coverage,status:this.status};
   }
-  async thumbnail({id,url}) { if(!ID.test(id)||typeof url!=='string'||!/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(url)||url.length>1024*1024)throw Error('Invalid effect thumbnail.');return this.enqueue(()=>atomic(path.join(this.directory,'thumbnails',id+'.txt'),url)); }
+  async thumbnail({id,url}) { if(!ID.test(id)||typeof url!=='string'||!/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(url)||url.length>1024*1024)throw Error('Invalid effect thumbnail.');return this.enqueue(()=>atomic(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,id+'.txt'),url)); }
   async read(id) {
     if(!ID.test(id))throw Error('Invalid effect identity.');
     const current=await this.current();

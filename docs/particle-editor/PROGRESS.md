@@ -96,3 +96,24 @@ Do not declare the goal or contract complete from this checkpoint. All A01-A29 r
 | A27 | Native effect thumbnail gallery and appearance search present; names/categories not reviewed. |
 | A28 | Actual local extraction/rescan and bad-asset continuation demonstrated; automated cancellation/restart proof pending. |
 | A29 | Exact duplicate mappings and metadata overlays exist; observed-preview name review/rescan override proof pending. |
+
+## Checkpoint 3 — reset continuation, native gestures and clocks
+
+The user reset the allowance and explicitly allocated the remaining 33 percentage points. The account counter read 4% during this checkpoint (rounded, account-wide); approximately 29 points of this continuation remain. The branch remains isolated and the PR remains draft/unmerged.
+
+Implemented and exercised:
+- Latched projected spawn axes, native-angle spread guides, direct emitter aim, and Young/Middle/End opacity/color/size transactions. Aim writes the selected emitter rotation, never its parent.
+- Representative size proxy stays pinned while playing beyond the sampled particle's lifespan. A stationary pointer does not alter values. One release is one undo and Escape cancels.
+- Actual sprite/streak triangle and texture coverage picking, with overlapping owner cycling. Unit coverage tests pass; main-editor double-click acceptance still needs runtime proof.
+- Deterministic native CPU replay (the pinned war3-model controller, no replacement particle engine), 10 ms integration grid split at authored local/global events, exact Squirt events, ribbon history and RNG checkpoints, and coalesced authoring replay retaining the last valid GL frame.
+- Secondary independent model/FX clocks, visible unlinked indicator, FX pause without queued bursts, and coherent relinking. Preview settings leave the canonical model unchanged.
+- Capture readiness now waits for authoring reconstruction. Thumbnail cache version advanced because older captures could precede reconstructed FX.
+
+Verification:
+- 78/78 focused + compatibility tests pass: 14 prototype, 8 native simulation, 56 compatibility.
+- Native tests prove display-rate independence at identical model/global time (exact particle-state equality on the fixed integration grid), one-millisecond emission windows, repeated global events, frozen model with advancing FX, FX pause/resume, ribbon history restoration and partial-step checkpoint replay.
+- Electron actual mouse tests pass: pinned size held for more than 2 s during playback, width, aim, single-stage opacity, one-step undo, cancellation, mode-switch canonical equality, independent clock behavior, relink preservation, and stage width at 1400x920 and 960x720.
+- Screenshot review found the initial smoke test raced the Lab discard prompt; it had placed the starter. The test now waits for the prompt and asserts LowFire/LowSmoke source emitter identity before placement. The corrected run displays real orange Flame Strike embers, places that effect, and reports zero JavaScript page errors.
+- Vite production build passed and tracked dist rebuilt. Offscreen screenshots are automated evidence, not user visual acceptance.
+
+Still required: global-period endpoint/loop seam tests, bounded preview overload behavior, ribbon controls/sweep path, placement ghost and surface/pivot handling, full Picture tools, personal preset portability/management, complete corpus compatibility/naming review, visible owner-picking runtime tests, MDL/MDX UI save/reopen, recovery/read-only proof, and measured performance. Native ModelSpace and atlas-frame rendering require source-level compatibility review. Warcraft testing remains unverified. The earlier acceptance table is historical checkpoint-2 status; this checkpoint updates only the evidence described above. This is not contract completion.

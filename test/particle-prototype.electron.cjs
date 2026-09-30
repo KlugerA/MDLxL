@@ -2,7 +2,10 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
 const path=require('node:path'),fs=require('node:fs'),assert=require('node:assert/strict');
 (async()=>{
   const root=process.cwd(),out=path.join(root,'out','particle-prototype');fs.mkdirSync(out,{recursive:true});
-  const testProfile=path.join(out,'profile-'+Date.now());fs.mkdirSync(testProfile,{recursive:true});fs.symlinkSync(path.join(root,'profile','particles'),path.join(testProfile,'particles'),'junction');
+  const testProfile=path.join(out,'profile-'+Date.now());fs.mkdirSync(testProfile,{recursive:true});const sourceLibrary=path.join(root,'profile','particles'),testLibrary=path.join(testProfile,'particles');fs.mkdirSync(testLibrary);
+  for(const name of ['current.json','source-inventory.json','metadata.json'])if(fs.existsSync(path.join(sourceLibrary,name)))fs.copyFileSync(path.join(sourceLibrary,name),path.join(testLibrary,name));
+  const sourceKey=JSON.parse(fs.readFileSync(path.join(sourceLibrary,'current.json'),'utf8')).sourceKey;
+  for(const name of [sourceKey,'thumbnails']){fs.mkdirSync(path.join(sourceLibrary,name),{recursive:true});fs.symlinkSync(path.join(sourceLibrary,name),path.join(testLibrary,name),'junction');}
   const {createDemoDocument}=await import('../src/editor-document.js');const fixture=path.join(out,'target.mdx');fs.writeFileSync(fixture,Buffer.from(createDemoDocument().serialize('mdx')));
   const app=await _electron.launch({executablePath:path.resolve('node_modules/electron/dist/electron.exe'),args:['--disable-backgrounding-occluded-windows',root,fixture],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:testProfile},timeout:60000});
   const errors=[];
@@ -34,12 +37,22 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     await page.locator('.pe-window').getByRole('button',{name:'Pause',exact:true}).click();
     const point=await handle.locator('circle').boundingBox();
     await page.mouse.move(point.x+point.width/2,point.y+point.height/2);await page.mouse.down();
-    await page.waitForTimeout(160);
+    await page.getByLabel('Preview speed',{exact:true}).selectOption('1');
+    await page.keyboard.press('Space');
+    assert.equal(await page.locator('.pe-window').getByRole('button',{name:'Pause',exact:true}).isVisible(),true);
+    const heldTime=Number(await page.getByLabel('Particle preview playhead',{exact:true}).inputValue());
+    const pinnedPoints=await page.locator('.pe-size-proxy polygon').getAttribute('points');
+    await page.waitForTimeout(2200);
+    const heldElapsed=(Number(await page.getByLabel('Particle preview playhead',{exact:true}).inputValue())-heldTime+5000)%5000;
+    assert.ok(heldElapsed>=2000,'Playback advances beyond the sample lifetime during its held gesture');
+    assert.equal(await page.locator('.pe-size-proxy polygon').getAttribute('points'),pinnedPoints,'Proxy remains pinned while its source particle ages and dies');
+    assert.equal(await page.getByRole('slider',{name:'Size',exact:true}).inputValue(),beforeSize,'Stationary pointer does not change data during playback');
     assert.equal(await page.locator('.pe-size-proxy text').textContent(),'Pinned sample');
     await page.mouse.move(point.x+point.width/2+40,point.y+point.height/2-20,{steps:4});await page.mouse.up();
     assert.ok(Number(await page.getByRole('slider',{name:'Size',exact:true}).inputValue())>Number(beforeSize));
     await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).click();
     assert.equal(await page.getByRole('slider',{name:'Size',exact:true}).inputValue(),beforeSize,'One undo restores whole stage gesture');
+    if(await page.getByRole('button',{name:'Pause',exact:true}).count())await page.getByRole('button',{name:'Pause',exact:true}).click();
     const cancelPoint=await handle.locator('circle').boundingBox();
     await page.mouse.move(cancelPoint.x+cancelPoint.width/2,cancelPoint.y+cancelPoint.height/2);await page.mouse.down();
     await page.mouse.move(cancelPoint.x+cancelPoint.width/2+50,cancelPoint.y+cancelPoint.height/2-20);
@@ -59,6 +72,74 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     console.log('after save',await page.locator('.pe-window .re-status').innerText());
     assert.equal(await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).isEnabled(),true,'Saving preserves Lab undo');
     await page.screenshot({path:path.join(out,'edited.png')});
+
+    const readLab=()=>page.evaluate(()=>{
+      let fiber=document.querySelector('.pe-window')[Object.keys(document.querySelector('.pe-window')).find(k=>k.startsWith('__reactFiber'))];
+      for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){const value=hook.memoizedState;if(value?.doc?.model&&value?.recipe)return {model:JSON.parse(JSON.stringify(value.doc.model)),undo:value.doc.historyStats.undoSteps,dirty:value.doc.dirty};}
+      throw Error('Lab document not found');
+    });
+    const beforeMode=await readLab();
+    await page.getByLabel('Particle editor mode',{exact:true}).selectOption('Classic');
+    await page.getByLabel('Particle editor mode',{exact:true}).selectOption('Clueless');
+    assert.deepEqual((await readLab()).model,beforeMode.model,'UI mode changes preserve the canonical model');
+    const layout=await page.locator('.pe-body').evaluate(body=>({body:body.getBoundingClientRect().width,stage:body.querySelector('.pe-preview-pane').getBoundingClientRect().width,controls:body.querySelectorAll('.pe-clueless-controls input[type=range]').length}));
+    assert.ok(layout.stage/layout.body>=2/3);assert.equal(layout.controls,6);
+    await page.getByRole('button',{name:'Shape',exact:true}).click();
+    await page.getByRole('slider',{name:'Spawn width handle',exact:true}).waitFor();
+    const beforeWidth=await readLab(),widthPoint=await page.getByRole('slider',{name:'Spawn width handle',exact:true}).locator('circle').boundingBox();
+    await page.mouse.move(widthPoint.x+7,widthPoint.y+7);await page.mouse.down();await page.mouse.move(widthPoint.x+47,widthPoint.y+22,{steps:8});await page.mouse.up();
+    const afterWidth=await readLab();
+    assert.notEqual(afterWidth.model.ParticleEmitters2[0].Width,beforeWidth.model.ParticleEmitters2[0].Width);
+    assert.equal(afterWidth.model.ParticleEmitters2[0].Length,beforeWidth.model.ParticleEmitters2[0].Length);
+    assert.equal(afterWidth.undo,beforeWidth.undo+1);
+    const aimPoint=await page.getByRole('slider',{name:'Aim emitter',exact:true}).locator('circle').boundingBox();
+    await page.mouse.move(aimPoint.x+7,aimPoint.y+7);await page.mouse.down();await page.mouse.move(aimPoint.x+37,aimPoint.y-13,{steps:8});await page.mouse.up();
+    const afterAim=await readLab();assert.ok(afterAim.model.ParticleEmitters2[0].Rotation?.Keys?.length===1);
+    assert.deepEqual(afterAim.model.Helpers,afterWidth.model.Helpers);
+    assert.equal(afterAim.undo,afterWidth.undo+1);
+    await page.screenshot({path:path.join(out,'shape-handles.png')});
+    await page.getByRole('button',{name:'Life',exact:true}).click();
+    const opacity=page.getByRole('slider',{name:'Young opacity',exact:true}),opacityBox=await opacity.boundingBox(),beforeOpacity=await readLab();
+    await page.mouse.move(opacityBox.x+opacityBox.width*.5,opacityBox.y+opacityBox.height/2);await page.mouse.down();await page.mouse.move(opacityBox.x+opacityBox.width*.2,opacityBox.y+opacityBox.height/2,{steps:6});await page.mouse.up();
+    const afterOpacity=await readLab();
+    assert.notEqual(afterOpacity.model.ParticleEmitters2[0].Alpha[0],beforeOpacity.model.ParticleEmitters2[0].Alpha[0]);
+    assert.equal(afterOpacity.model.ParticleEmitters2[0].Alpha[1],beforeOpacity.model.ParticleEmitters2[0].Alpha[1]);
+    assert.equal(afterOpacity.undo,beforeOpacity.undo+1);
+    await page.screenshot({path:path.join(out,'life-stage.png')});
+    await page.getByRole('button',{name:'Basics',exact:true}).click();
+    console.log('Mode preservation, stage ratio, width/aim ownership and single-step life opacity passed');
+
+    const readParticles=()=>page.evaluate(()=>{
+      const element=document.querySelector('.pe-preview .game-preview-root');
+      let fiber=element[Object.keys(element).find(k=>k.startsWith('__reactFiber'))];
+      for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){
+        const value=hook.memoizedState?.current;
+        if(value?.native&&value?.controls)return {frame:value.native.getFrame(),particles:value.native.particlesController.emitters.flatMap(e=>e.particles.map(p=>({life:p.lifeSpan,pos:Array.from(p.pos),speed:Array.from(p.speed)})))};
+      }throw Error('Preview not found');
+    });
+    const beforeClocks=await readLab();
+    await page.getByText('Clock options',{exact:true}).click();
+    await page.getByRole('checkbox',{name:'Link animation and FX clocks',exact:true}).uncheck();
+    assert.equal(await page.getByText('Unlinked · inspection',{exact:true}).isVisible(),true);
+    await page.getByLabel('FX speed',{exact:true}).selectOption('0');await page.waitForTimeout(100);
+    const frozenFX=await readParticles();await page.waitForTimeout(300);const laterFX=await readParticles();
+    assert.deepEqual(laterFX.particles,frozenFX.particles,'FX pause freezes particle aging and births while the animation clock advances');
+    assert.notEqual(laterFX.frame,frozenFX.frame);
+    await page.getByLabel('Preview speed',{exact:true}).selectOption('0');
+    await page.getByLabel('FX speed',{exact:true}).selectOption('1');await page.waitForTimeout(100);
+    const frozenModel=await readParticles();await page.waitForTimeout(300);const laterModel=await readParticles();
+    assert.equal(laterModel.frame,frozenModel.frame,'Animation pause holds pose while FX advance');
+    assert.notDeepEqual(laterModel.particles,frozenModel.particles);
+    await page.getByRole('checkbox',{name:'Link animation and FX clocks',exact:true}).check();
+    await page.getByText('Clock options',{exact:true}).click();
+    assert.deepEqual((await readLab()).model,beforeClocks.model,'Inspection clocks never modify authored values');
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(960,720));
+    await page.waitForTimeout(100);await page.screenshot({path:path.join(out,'small-default.png')});
+    const small=await page.locator('.pe-body').evaluate(body=>({body:body.getBoundingClientRect().width,stage:body.querySelector('.pe-preview-pane').getBoundingClientRect().width}));
+    assert.ok(small.stage/small.body>=2/3);
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1400,920));
+    console.log('Independent clocks, FX pause, relink, model preservation and compact layout passed');
+
     await page.locator('.pe-window').getByRole('button',{name:'Library',exact:true}).click();
     await page.waitForTimeout(5000);await page.screenshot({path:path.join(out,'library.png')});
     await page.getByLabel('Find an effect',{exact:true}).fill('flamestrikeembers');

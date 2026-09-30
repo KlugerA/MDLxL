@@ -117,3 +117,47 @@ test('saving a Lab draft marks its baseline without losing its independent undo 
   doc.undo();assert.equal(stringifyParticleData(doc.model),initial);
   doc.redo();assert.equal(stringifyParticleData(doc.model),edited);
 });
+
+test('life-stage gestures change only the chosen native array entry and retain zero stages',()=>{
+  const {p}=fixture();p.Alpha=new Uint8Array([0,128,255]);p.SegmentColor=[v(.1,.2,.3),v(.4,.5,.6),v(.7,.8,.9)];
+  const alpha=beginParticleParameter(p,'Alpha',{stage:0});assert.deepEqual(alpha.change(73.4),new Uint8Array([73,128,255]));assert.equal(p.Alpha[0],0);
+  const color=beginParticleParameter(p,'SegmentColor',{stage:2});const changed=color.change([.9,.1,.5]);
+  assert.deepEqual(changed[0],p.SegmentColor[0]);assert.deepEqual(changed[1],p.SegmentColor[1]);assert.deepEqual(changed[2],v(.9,.1,.5));
+  const size=beginParticleParameter(p,'ParticleScaling',{stage:2});assert.equal(size.sampled,2);assert.deepEqual(size.change(4),v(0,9,4));
+});
+test('aim latches one native key and never rotates the parent or adds per-frame keys',()=>{
+  const {model,p}=fixture();p.Rotation={LineType:1,Keys:[{Frame:100,Vector:v(0,0,0,1)},{Frame:1000,Vector:v(0,0,0,1)},{Frame:3000,Vector:v(0,0,0,1)}]};
+  const doc=particleRecipeDocument(extractParticleRecipe(model,[p.ObjectId])),node=doc.model.ParticleEmitters2[0],parentBefore=stringifyParticleData(doc.model.Helpers),rotationBefore=structuredClone(node.Rotation);
+  const aim=createParticleGesture({doc,id:node.ObjectId,field:'Rotation',options:{frame:400,interval:[100,2100],axis:1}});
+  aim.update(10);aim.update(20);aim.update([15,45,0]);aim.finish();
+  assert.equal(doc.historyStats.undoSteps,1);assert.equal(node.Rotation.Keys.length,3);
+  assert.deepEqual(doc.model.ParticleEmitters2[0].Rotation.Keys.map(k=>k.Frame),[100,1000,3000]);
+  assert.equal(stringifyParticleData(doc.model.Helpers),parentBefore);
+  doc.undo();assert.deepEqual(doc.model.ParticleEmitters2[0].Rotation,rotationBefore);
+  const whole=beginParticleParameter(p,'Rotation',{frame:100,interval:[100,2100],scope:'track',axis:1}).change(90);
+  assert.deepEqual(whole.Keys[2],p.Rotation.Keys[2]);assert.notDeepEqual(whole.Keys[0].Vector,p.Rotation.Keys[0].Vector);
+});
+test('particle hit-testing rejects transparent corners and cycles independent owners by depth',async()=>{
+  const {particleSampleHit,pickParticleSamples}=await import('../src/particle-handles.js');
+  const sample={owner:3,textureId:0,filterMode:0,opacity:1,color:[1,1,1],points:[[0,0,.1],[0,20,.1],[20,0,.1],[20,20,.1]],uv:[0,0,0,1,1,0,1,1]};
+  const data=new Uint8Array(4*4*4);for(const i of [5,6,9,10])data.set([255,255,255,255],i*4);
+  const picture={width:4,height:4,data};
+  assert.equal(particleSampleHit(sample,1,1,picture),false);
+  assert.equal(particleSampleHit(sample,10,10,picture),true);
+  assert.equal(particleSampleHit(sample,25,10,picture),false);
+  const back={...sample,owner:7,points:sample.points.map(p=>[p[0],p[1],.5])};
+  assert.deepEqual(pickParticleSamples([back,sample,sample],10,10,new Map([[0,picture]])).map(s=>s.owner),[3,7]);
+  assert.equal(particleSampleHit({...sample,opacity:0},10,10,picture),false);
+});
+test('projected native axes and broad spread remain finite and stationary input produces no drift',async()=>{
+  const {particleAxisMapping,particleSpreadAtPointer}=await import('../src/particle-handles.js');
+  const {movementDragAmount}=await import('../app/movement-overlay.js');
+  const basis=particleAxisMapping([30,40],[27,44]);
+  assert.equal(movementDragAmount(basis,-6,8,'move'),2);
+  assert.equal(movementDragAmount(basis,0,0,'move'),0);
+  assert.equal(particleAxisMapping([0,0],[0,0]),null);
+  const arc=Array.from({length:181},(_,angle)=>({angle,point:[100*Math.sin(angle*Math.PI/180),100*Math.cos(angle*Math.PI/180)]}));
+  assert.equal(particleSpreadAtPointer(arc,[100,0],0,0,90),90);
+  assert.equal(particleSpreadAtPointer(arc,[100,0],-100,-100,90),180);
+  assert.equal(particleSpreadAtPointer(arc,[0,100],100,-100,0),90);
+});
