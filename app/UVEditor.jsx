@@ -7,14 +7,15 @@ import { eligibleUVVertices, eligibleUVFaces, restrictUVChange } from '../src/uv
 import { collapseUVCoordinates, foldUVCoordinates } from '../src/uv-tools.js';
 import { occupiedUVTextureFrames } from '../src/uv-preview-display.js';
 import { normalizeUVGrid, snapUVCoordinates, visibleUVGridLines } from '../src/uv-grid.js';
+import { minimumUVZoom, normalizeUVViewTileLimit } from '../src/uv-view-limit.js';
 
 const indicesOf = selection => Array.from(selection || []);
 
 /** Classic select/move/rotate/scale tools. UV V retains Warcraft's top-down convention. */
-export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, textureWrapping = true, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, uvGrid, showTextureFrame = false, textureFrameColor = '#4cff59', snapTextureFrame = false, axis = null }) {
+export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, textureSize, textureWrapping = true, viewTileLimit = 7, selectedVertices = [], eligibleVertices, hiddenVertices = [], onSelectVertices, onChange, onPreviewChange, transformMode = 'select', cameraMode = 'work', preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended = false, showWires = true, showVertices = true, uvGrid, showTextureFrame = false, textureFrameColor = '#4cff59', snapTextureFrame = false, axis = null }) {
   const host = useRef(null), canvas = useRef(null);
   const state = useRef({ zoom: .55, panX: 0, panY: 0, centered: false, uv: new Float32Array(), drag: null, image: null, draw: () => {} });
-  const current = useRef({}); current.current = { geoset, uvSet, textureSize, textureWrapping, selectedVertices, eligibleVertices, hiddenVertices, onSelectVertices, onChange, onPreviewChange, transformMode, cameraMode, preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended, showWires, showVertices, uvGrid, showTextureFrame, textureFrameColor, snapTextureFrame, axis };
+  const current = useRef({}); current.current = { geoset, uvSet, textureSize, textureWrapping, viewTileLimit: normalizeUVViewTileLimit(viewTileLimit), selectedVertices, eligibleVertices, hiddenVertices, onSelectVertices, onChange, onPreviewChange, transformMode, cameraMode, preferences, onSensitivityChange, onPointerSensitivityChange, onWheelModeChange, onCameraModeToggle, suspended, showWires, showVertices, uvGrid, showTextureFrame, textureFrameColor, snapTextureFrame, axis };
   const [imageError, setImageError] = useState(false), [adjustingSensitivity, setAdjustingSensitivity] = useState(null);
   const graphics = graphicsOptions(preferences);
   const count = (geoset?.TVertices?.[uvSet]?.length || 0) / 2;
@@ -37,10 +38,18 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
     const element = canvas.current, container = host.current, context = element.getContext('2d'), s = state.current;
     const ownerDocument = element.ownerDocument, ownerWindow = ownerDocument.defaultView || window;
     let width = 1, height = 1, ratio = 1;
+    function constrainZoom(value) {
+      const sourceWidth = s.image?.naturalWidth || s.image?.width || Number(current.current.textureSize?.[0]) || 1;
+      const sourceHeight = s.image?.naturalHeight || s.image?.height || Number(current.current.textureSize?.[1]) || 1;
+      const aspect = Math.max(.01, sourceWidth / sourceHeight), base = Math.max(20, Math.min((width - 40) / 2.7, (height - 40) / 2.3));
+      const unitWidth = base * (aspect >= 1 ? aspect : 1), unitHeight = base * (aspect >= 1 ? 1 : 1 / aspect);
+      return Math.max(minimumUVZoom(width, height, unitWidth, unitHeight, current.current.viewTileLimit), Math.min(40, value));
+    }
     function mapping() {
       const sourceWidth = s.image?.naturalWidth || s.image?.width || Number(current.current.textureSize?.[0]) || 1;
       const sourceHeight = s.image?.naturalHeight || s.image?.height || Number(current.current.textureSize?.[1]) || 1;
       const aspect = Math.max(.01, sourceWidth / sourceHeight), base = Math.max(20, Math.min((width - 40) / 2.7, (height - 40) / 2.3));
+      s.zoom = constrainZoom(s.zoom);
       const sizeX = base * (aspect >= 1 ? aspect : 1) * s.zoom, sizeY = base * (aspect >= 1 ? 1 : 1 / aspect) * s.zoom;
       return { sizeX, sizeY, x: (width - sizeX) / 2 + s.panX, y: (height - sizeY) / 2 + s.panY };
     }
@@ -150,7 +159,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
       const rawEnd = point(event), { x, y } = drag.type === 'select' ? rawEnd : pointerDragPoint(drag, rawEnd, drag.pointerSensitivity);
       const dx = x - drag.x, dy = y - drag.y; drag.endX = x; drag.endY = y; drag.moved = Math.hypot(dx, dy) > 1;
       if (drag.type === 'pan') { s.panX = drag.panX + dx; s.panY = drag.panY + dy; }
-      if (drag.type === 'zoom') s.zoom = Math.max(.05, Math.min(40, drag.zoom * Math.exp(-dy * .01)));
+      if (drag.type === 'zoom') s.zoom = constrainZoom(drag.zoom * Math.exp(-dy * .01));
       if (['translate', 'move', 'rotate', 'scale'].includes(drag.type)) {
         s.uv.set(drag.original);
         const a = [drag.x - drag.pivotScreen[0], drag.y - drag.pivotScreen[1]], b = [x - drag.pivotScreen[0], y - drag.pivotScreen[1]];
@@ -227,7 +236,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
       if (event?.detail?.selection === true && indices.length) {
         let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
         for (const i of indices) { minU = Math.min(minU, s.uv[i * 2]); maxU = Math.max(maxU, s.uv[i * 2]); minV = Math.min(minV, s.uv[i * 2 + 1]); maxV = Math.max(maxV, s.uv[i * 2 + 1]); }
-        s.zoom = Math.max(.05, Math.min(40, .9 / Math.max(.02, maxU - minU, maxV - minV)));
+        s.zoom = constrainZoom(.9 / Math.max(.02, maxU - minU, maxV - minV));
         const { sizeX, sizeY } = mapping(); s.panX = (.5 - (minU + maxU) / 2) * sizeX; s.panY = (.5 - (minV + maxV) / 2) * sizeY;
       }
       draw();
@@ -260,7 +269,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
     }
     function wheel(event, sensitivity) {
       event.preventDefault(); if (s.drag) return;
-      const { x, y } = point(event), before = mapping(); s.zoom = Math.max(.05, Math.min(40, s.zoom * Math.exp(-wheelPixels(event) * .0015 * sensitivity))); const after = mapping();
+      const { x, y } = point(event), before = mapping(); s.zoom = constrainZoom(s.zoom * Math.exp(-wheelPixels(event) * .0015 * sensitivity)); const after = mapping();
       s.panX += x - (after.x + (x - before.x) / before.sizeX * after.sizeX); s.panY += y - (after.y + (y - before.y) / before.sizeY * after.sizeY); draw();
     }
     const contextMenu = event => event.preventDefault();
@@ -286,6 +295,7 @@ export default function UVEditor({ geoset, revision = 0, uvSet = 0, textureUrl, 
     };
   }, []);
   useEffect(() => { state.current.resize?.(); }, [graphics.pixelRatio, suspended, graphics.pauseWhenHidden]);
+  useEffect(() => { state.current.resize?.(); }, [viewTileLimit]);
   useEffect(() => { setAdjustingSensitivity(null); }, [preferences?.wheelMode]);
 
   return <div className="uv-editor" ref={host} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 180, overflow: 'hidden', background: visualOptions(preferences).background }}>
