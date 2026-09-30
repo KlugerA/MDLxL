@@ -50,7 +50,7 @@ function Dialog({ title, children, onClose, onSubmit, footer }) {
 }
 function AnimationDialog({ model, initial, portrait, exportTarget, definitions, onSave, onRemove, onClose }) {
   const duration=(row,loops=row.durationLoops??1)=>loopEffectTiming(model,row.sequence,loops,row.speed>0?row.speed:1,0,definitions,row.disabledEmitters).seconds;
-  const [draft,setDraft]=useState(()=>({...initial,durationLoops:initial.durationLoops??1,extraTime:initial.extraTime??Math.max(0,(Number(initial.seconds)||0)-duration(initial))})),[error,setError]=useState('');
+  const [draft,setDraft]=useState(()=>({...initial,durationLoops:initial.durationLoops??1,extraTime:Math.max(0,Number(initial.extraTime)||0)})),[error,setError]=useState('');
   const sequence=model.Sequences[draft.sequence],base=duration(draft),emitters=showcaseEmitters(model),disabled=new Set(draft.disabledEmitters || []);
   const naturalSeconds=Math.max(0,(sequence?.Interval?.[1]||0)-(sequence?.Interval?.[0]||0))/1000;
   const change=patch=>setDraft(row=>({...row,...patch}));
