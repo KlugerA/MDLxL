@@ -1,3 +1,5 @@
+import {embeddedParticleAssets} from '../src/particle-assets.js';
+import {STARTER_TEXTURE,starterTextureAsset} from '../src/particle-starters.js';
 import React,{Suspense,lazy,useEffect,useRef,useState} from 'react';
 import {parseParticleData} from '../src/particle-data.js';
 import {particleRecipeDocument} from '../src/particle-recipes.js';
@@ -21,7 +23,7 @@ export function activeParticleSample(model) {
   }
   return chosen;
 }
-export default function ParticleThumbnailQueue({items,preferences,onThumbnail}) {
+export default function ParticleThumbnailQueue({items,preferences,onThumbnail,onFailure}) {
   const [current,setCurrent]=useState(null),pending=useRef(new Set()),mounted=useRef(true);
   useEffect(()=>()=>{mounted.current=false;},[]);
   useEffect(()=>{
@@ -30,11 +32,13 @@ export default function ParticleThumbnailQueue({items,preferences,onThumbnail}) 
     if(!item)return;
     pending.current.add(item.id);
     (async()=>{
-      const recipe=parseParticleData(await window.desktop.particleRead(item.id)),doc=particleRecipeDocument(recipe),assets=new Map();
-      const records=await window.desktop.resolveTextures({names:doc.model.Textures.filter(t=>t.Image).map(t=>t.Image)});
+      const cached=await window.desktop.particleThumbnails([item.id]);if(cached[item.id]){if(mounted.current)onThumbnail(item.id,cached[item.id]);return;}
+      const recipe=parseParticleData(await window.desktop.particleRead(item.id)),doc=particleRecipeDocument(recipe),assets=embeddedParticleAssets(recipe);
+      if(doc.model.Textures.some(t=>t.Image===STARTER_TEXTURE))assets.set(normalize(STARTER_TEXTURE),starterTextureAsset());
+      const records=await window.desktop.resolveTextures({names:doc.model.Textures.filter(t=>t.Image&&!assets.has(normalize(t.Image))).map(t=>t.Image)});
       for(const record of records||[])if(record.bytes)assets.set(normalize(record.name),record);
       if(mounted.current)setCurrent({id:item.id,model:doc.model,assets,...activeParticleSample(doc.model)});
-    })().catch(()=>{if(mounted.current)setCurrent({failed:true,id:item.id});});
+    })().catch(error=>{if(mounted.current){onFailure?.(item.id,error.message);setCurrent({failed:true,id:item.id});}});
   },[items,current]);
   useEffect(()=>{if(current?.failed)setCurrent(null);},[current]);
   const capture=useRef(false);
@@ -45,7 +49,7 @@ export default function ParticleThumbnailQueue({items,preferences,onThumbnail}) 
       const url=api.captureFrame({maxDimension:256}).toDataURL('image/png');
       await window.desktop.particleThumbnail({id:current.id,url});
       if(mounted.current)onThumbnail(current.id,url);
-    }catch(error){/* The catalogue retains its explicit missing-preview state. */}
+    }catch(error){if(mounted.current)onFailure?.(current.id,error.message);}
     finally{capture.current=false;if(mounted.current)setCurrent(null);}
   }
   if(!current||current.failed)return null;

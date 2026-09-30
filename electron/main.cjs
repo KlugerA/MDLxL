@@ -44,6 +44,19 @@ let nativeEditorState={readOnly:true,saving:false};
 let translateText=value=>value;
 let gameDataDiscovery,recoveryPrompt=false,crashedWithEdits=false;
 const particleLibrary=new ParticleLibrary({directory:path.join(profile,'particles'),discover:()=>gameDataDiscovery.discover({explicitFolder:settings.gameData}),onProgress:status=>{if(win&&!win.isDestroyed())win.webContents.send('particles:progress',status);}});
+
+ipcMain.handle('particles:thumbnails',(_,ids)=>particleLibrary.thumbnails(ids));
+ipcMain.handle('particles:duplicate',(_,id)=>particleLibrary.duplicate(id));
+ipcMain.handle('particles:import',async()=>{
+ const result=await dialog.showOpenDialog(win,{title:'Import particle preset',filters:[{name:'MDLxL particle preset',extensions:['mdlxl-particle','json']}],properties:['openFile']});
+ if(result.canceled)return null;const file=result.filePaths[0],info=await fs.stat(file);if(info.size>16*1024*1024)throw Error('Preset exceeds 16 MiB.');
+ return particleLibrary.save({data:await fs.readFile(file,'utf8')});
+});
+ipcMain.handle('particles:export',async(_,id)=>{
+ const data=await particleLibrary.exportData(id),{parseParticleData}=await import('../src/particle-data.js'),recipe=parseParticleData(data);
+ const result=await dialog.showSaveDialog(win,{title:'Export particle preset',defaultPath:recipe.name.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_')+'.mdlxl-particle',filters:[{name:'MDLxL particle preset',extensions:['mdlxl-particle']}]});
+ if(result.canceled)return null;await fs.writeFile(result.filePath,data,'utf8');return {path:result.filePath};
+});
 ipcMain.handle('particles:thumbnail',(_,data)=>particleLibrary.thumbnail(data));
 ipcMain.handle('particles:catalog',()=>particleLibrary.catalog());
 ipcMain.handle('particles:read',(_,id)=>particleLibrary.read(id));

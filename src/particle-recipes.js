@@ -1,3 +1,5 @@
+import {validateParticleAssets} from './particle-assets.js';
+import {generateCompatibleMdx} from './mdx-compatibility.js';
 import { createNode, NODE_TYPES, validateModel, openDocument } from './editor-document.js';
 import { sampleTrack } from './animation.js';
 import { stringifyParticleData, safeParticlePath } from './particle-data.js';
@@ -121,17 +123,25 @@ export function validateParticleRecipe(recipe) {
   if (!recipe.native || !Array.isArray(recipe.ingredients) || recipe.ingredients.length < 1 || recipe.ingredients.length > 256) throw Error('Invalid effect ingredients.');
   const model = recipe.native;
   if ((model.Nodes?.length || 0) > 10000 || (model.Textures?.length || 0) > 1024 || (model.Sequences?.length || 0) > 2048) throw Error('Preset exceeds native resource limits.');
+
+  const nodes=Object.values(NODE_TYPES).flatMap(([family])=>model[family]||[]);
+  if(nodes.length>10000||nodes.some(n=>!Number.isInteger(n.ObjectId)||n.ObjectId<0||n.ObjectId>10000))throw Error('Preset exceeds node identity limits.');
+  const effects=effectNodes(model);
+  if(effects.length!==recipe.ingredients.length||new Set(recipe.ingredients.map(i=>i.objectId)).size!==effects.length)throw Error('Every native effect needs one ingredient identity.');
+  const finiteNative=value=>{if(typeof value==='number'&&(!Number.isFinite(value)||Math.abs(value)>3.4028234663852886e38))throw Error('Preset exceeds finite native numeric values.');if(value&&typeof value==='object')for(const child of Object.values(value))finiteNative(child);};
+  finiteNative(model);
   for (const dep of recipe.dependencies || []) if (dep.path && !safeParticlePath(dep.path)) throw Error('Preset dependency needs a portable logical path.');
   for (const texture of model.Textures || []) if (texture.Image && !safeParticlePath(texture.Image)) throw Error('Invalid texture dependency path.');
   for (const node of [...(model.ParticleEmitters || []), ...(model.ParticleEmitterPopcorns || [])]) if (node.Path && !safeParticlePath(node.Path)) throw Error('Invalid external effect path.');
   for (const item of recipe.ingredients) if (!EFFECT_FAMILIES.includes(item.family) || !model[item.family]?.some(node => node.ObjectId === item.objectId)) throw Error('Missing native ingredient.');
+  validateParticleAssets(recipe);
   const errors = validateModel(model).filter(item => item.severity === 'error');
   if (errors.length) throw Error(errors.slice(0,3).map(item => item.message).join('\n'));
   stringifyParticleData(recipe);
   return recipe;
 }
 export function particleModelDocument(model) {
-  const doc = openDocument('Version { FormatVersion ' + model.Version + ', } Model "Particle Lab" { BlendTime 150, }', 'Particle-Lab.mdl');
+  const doc = openDocument(generateCompatibleMdx({...model,BindPoses:model.BindPoses?.length?model.BindPoses:undefined}), 'Particle-Lab.mdx');
   if (doc.readOnly) throw Error('Unsupported native model version.');
   const state = doc.captureRecoveryState({includeHistory:false});
   state.model = clone(model); state.savedModel = clone(model);
@@ -154,7 +164,9 @@ export function placeParticleRecipe(target, recipe, options = {}) {
   wrapper.Name = recipe.name; wrapper.Parent = options.parent ?? null;
   const position = options.position || [0,0,0];
   if (position.length !== 3 || position.some(n => !Number.isFinite(n))) throw Error('Invalid effect anchor.');
-  if (position.some(n => n !== 0)) wrapper.Translation = { LineType: 0, Keys: [{ Frame: options.targetInterval?.[0] || 0, Vector: new Float32Array(position) }] };
+  if (position.some(n => n !== 0)) wrapper.Translation = { LineType: 0, GlobalSeqId: null, Keys: [{ Frame: options.targetInterval?.[0] || 0, Vector: new Float32Array(position) }] };
   const result = copyEffectGraph(target, source, recipe.ingredients.map(item => item.objectId), { ...options, parent: wrapper.ObjectId });
+  if(options.motion==='target')for(const [originalId,newId]of result.maps.nodes)if(!recipe.ingredients.some(item=>item.objectId===originalId)){const node=target.Nodes[newId];delete node.Translation;delete node.Rotation;delete node.Scaling;}
+  
   return { ...result, anchorId: wrapper.ObjectId };
 }

@@ -117,3 +117,23 @@ Verification:
 - Vite production build passed and tracked dist rebuilt. Offscreen screenshots are automated evidence, not user visual acceptance.
 
 Still required: global-period endpoint/loop seam tests, bounded preview overload behavior, ribbon controls/sweep path, placement ghost and surface/pivot handling, full Picture tools, personal preset portability/management, complete corpus compatibility/naming review, visible owner-picking runtime tests, MDL/MDX UI save/reopen, recovery/read-only proof, and measured performance. Native ModelSpace and atlas-frame rendering require source-level compatibility review. Warcraft testing remains unverified. The earlier acceptance table is historical checkpoint-2 status; this checkpoint updates only the evidence described above. This is not contract completion.
+
+## Checkpoint 4 — ribbon sweeps, placement and pictures
+
+Account counter: 9% after reset, approximately 24 of the continuation's 33 percentage points remain. This remains an isolated prototype on codex/particle-editor-prototype, draft PR 60; no merge, release or version bump.
+
+Implemented and exercised:
+- Native ribbon controls and direct edge gestures, source-pose sweep paths, ambiguous-crossing time choices, focused looping and explicit emission windows. Demonstration motion exists only in preview clones.
+- A live placement ghost with attachment selection, draggable anchor, pivot and surface placement mechanisms, source/target motion choice and explicit confirmation. Cancel leaves target and history unchanged; confirm is one insertion; undo/redo reproduce exact canonical target states.
+- Actual Picture atlas with separate four native frame ranges/repeats, explicit correction before shrinking an incompatible grid, and ten sequential native blend comparisons across light/dark surfaces.
+- Portable custom picture bytes, bounded generated asset paths, preset duplicate/export/import/tag APIs and UI, draft embedding, cached page thumbnails, stale-thumbnail invalidation and visible thumbnail failures.
+- The private pinned-renderer adapter now carries ModelSpace particles through the emitter matrix and respects atlas repeats and rectangular atlas indexing. No imported library was edited. Compatibility reference: https://raw.githubusercontent.com/flowtsohg/mdx-m3-viewer/master/src/viewer/handlers/mdx/particle2.ts and https://raw.githubusercontent.com/flowtsohg/mdx-m3-viewer/master/src/viewer/handlers/mdx/shaders/particles.vert.ts . These are renderer references, not Warcraft acceptance.
+- A visible preview budget stops excessive reconstruction without rewriting authored values. Native global endpoint events and focused-loop reconstruction are tested.
+- Recipe documents open from a complete native MDX boundary so surgical MDL saving retains their dependency tables; ribbon MDL and MDX round trips now pass.
+
+Verification:
+- 93/93 targeted and compatibility tests pass (14 recipe/binding, 11 native preview, 7 sweep, 5 library, 56 compatibility).
+- Rebuilt dist and offscreen Electron test passed: all checkpoint-3 gestures/clocks; actual atlas cell edits; explicit grid correction; ten blend captures; importing and saving embedded custom bytes; real CASC Flame Strike source identity; ghost drag/cancel/confirm/undo/redo; ribbon edge gesture, demonstration isolation and emission window. Zero JavaScript page errors.
+- Screenshots inspected: real CASC placement ghost, blue ribbon sweep and Picture workspace. Ribbon demonstration framing clips part of the path and needs refinement. Offscreen automation is not user acceptance.
+
+Remaining work includes direct life changeover marker and burst timing, complete teaching examples, preset import/export and restart UI proof, recovery/read-only/no-model checks, source-group extraction and unsupported gallery identities, stock naming review, parent/replaceable/renderer coverage, main-editor picking runtime proof, UI MDL/MDX saving/reopening, performance measurements and per-gate final evidence. Warcraft validation remains unrun. The library is a labeled subset, not complete classic coverage. This checkpoint does not satisfy the entire contract.

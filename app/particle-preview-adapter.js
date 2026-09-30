@@ -1,8 +1,48 @@
-import { Matrix4, Vector3 } from 'three';
+import { Matrix4, Vector3, Vector2, Raycaster } from 'three';
 import { ModelRenderer } from 'war3-model';
-import { sampleTrack } from '../src/animation.js';
+import { particleSweepPath } from '../src/particle-sweep.js';
+import { samplePreviewMatrices } from './preview-pose.js';
+import { screenPlaneTranslation } from './viewport-math.js';
+import { sampleTrack, skinGeoset, sampleGeosetAnimation } from '../src/animation.js';
 import { pickParticleSamples } from '../src/particle-handles.js';
 import { resetPreviewEffects } from './warcraft-preview-adapter.js';
+
+
+const compatibleParticleRuntimes=new WeakSet();
+/** Source audit: pinned 4.0.1 ignores ModelSpace and UV repeat, and divides atlas rows by Rows.
+ * Model-space local integration and exclusive-end interval semantics are cross-checked
+ * against mdx-m3-viewer/particle2.ts and shaders/particles.vert.ts. Game validation is separate.
+ */
+export function particleAtlasFrame(range,progress,columns,rows){
+ const [first=0,end=0,repeat=1]=range||[],count=end-first;
+ const offset=count>0?((Math.floor(count*repeat*(Number.isFinite(progress)?progress:0))%count)+count)%count:0;
+ return Math.min(Math.max(0,columns*rows-1),first+offset);
+}
+export function installParticleNativeCompatibility(native){
+ if(compatibleParticleRuntimes.has(native))return;compatibleParticleRuntimes.add(native);
+ const particles=native.particlesController,create=particles.createParticle,buffers=particles.updateParticleBuffers;
+ const identity=new Matrix4().elements,point=new Vector3(),velocity=new Vector3(),origin=new Vector3(),matrix=new Matrix4(),positionValues=new Float32Array(3),velocityValues=new Float32Array(3);
+ particles.createParticle=function(emitter,transform){return create.call(this,emitter,emitter.props.Flags&524288?identity:transform);};
+ particles.updateParticleBuffers=function(particle,index,emitter){
+   if(!(emitter.props.Flags&524288))return buffers.call(this,particle,index,emitter);
+   const position=particle.pos,speed=particle.speed;matrix.fromArray(native.rendererData.nodes[emitter.props.ObjectId].matrix);
+   point.fromArray(position).applyMatrix4(matrix);origin.set(0,0,0).applyMatrix4(matrix);velocity.fromArray(speed).applyMatrix4(matrix).sub(origin);
+   positionValues.set(point.toArray());velocityValues.set(velocity.toArray());particle.pos=positionValues;particle.speed=velocityValues;
+   try{return buffers.call(this,particle,index,emitter);}finally{particle.pos=position;particle.speed=speed;}
+ };
+ particles.updateParticleTexCoordsByType=function(index,emitter,early,progress,type){
+   const props=emitter.props,columns=props.Columns,rows=props.Rows,range=type===2?(early?props.TailUVAnim:props.TailDecayUVAnim):(early?props.LifeSpanUVAnim:props.DecayUVAnim);
+   const target=type===2?emitter.tailTexCoords:emitter.headTexCoords;if(!target||!(columns>0&&rows>0))return;
+   const cell=particleAtlasFrame(range,progress,columns,rows),x=cell%columns,y=Math.floor(cell/columns);
+   target.set([x/columns,y/rows,x/columns,(y+1)/rows,(x+1)/columns,y/rows,(x+1)/columns,(y+1)/rows],index*8);
+ };
+ const ribbons=native.ribbonsController,uv=ribbons.updateEmitterTexCoords;
+ ribbons.updateEmitterTexCoords=function(emitter,now){
+   uv.call(this,emitter,now);const rows=emitter.props.Rows,columns=emitter.props.Columns;if(!(rows>0&&columns>0))return;
+   const cell=this.interp.animVectorVal(emitter.props.TextureSlot,0),y=Math.floor(cell/columns)/rows;
+   for(let i=0;i<emitter.creationTimes.length;i++){emitter.texCoords[i*4+1]=y;emitter.texCoords[i*4+3]=y+1/rows;}
+ };
+}
 
 /** All Particle Editor private access is pinned to war3-model 4.0.1 here. */
 export function updateParticlePreview(native, source) {
@@ -13,10 +53,13 @@ export function updateParticlePreview(native, source) {
       if (!target) continue;
       for (const key of Object.keys(target)) if (!Object.hasOwn(node,key)) delete target[key];
       Object.assign(target,structuredClone(node));
+      if(native.model.__particleDemoParents?.[node.ObjectId]!=null)target.Parent=native.model.__particleDemoParents[node.ObjectId];
     }
   }
+  sweepCache.delete(native);
 }
-export function particleStageSnapshot(native,camera,width,height,selectedId,all=false) {
+const sweepCache=new WeakMap();
+export function particleStageSnapshot(native,camera,width,height,selectedId,all=false,options={}) {
   const project=value=>{const p=new Vector3().fromArray(value).project(camera);return [(p.x+1)*width/2,(1-p.y)*height/2,p.z];};
   const samples=[];let count=0;
   for(const wrapper of native.particlesController?.emitters||[]) {
@@ -43,7 +86,33 @@ export function particleStageSnapshot(native,camera,width,height,selectedId,all=
     const spreadArc=Array.from({length:181},(_,i)=>{const angle=low+(high-low)*i/180;return {angle,point:direction(angle)};});
     guide={origin:point([0,0,0]),area:[point([-w,-l,0]),point([w,-l,0]),point([w,l,0]),point([-w,l,0])],widthHandle:point([w,0,0]),widthUnit:point([w+1,0,0]),lengthHandle:point([0,l,0]),lengthUnit:point([0,l+1,0]),aim:point([0,0,60]),spread:direction(latitude),spreadArc};
   }
-  return {width,height,samples,guide,liveParticles:count,frame:native.getFrame()};
+
+  const ribbon=native.model.RibbonEmitters.find(p=>p.ObjectId===selectedId);
+  if(ribbon){
+    const transform=new Matrix4().fromArray(native.rendererData.nodes[ribbon.ObjectId]?.matrix||new Matrix4().elements);
+    const point=offset=>project(new Vector3().fromArray(ribbon.PivotPoint||[0,0,0]).add(new Vector3(...offset)).applyMatrix4(transform).toArray());
+    const at=field=>native.ribbonsController.interp.animVectorVal(ribbon[field],0),above=at('HeightAbove'),below=at('HeightBelow');
+    guide={origin:point([0,0,0]),upper:point([0,above,0]),upperUnit:point([0,above+1,0]),lower:point([0,-below,0]),lowerUnit:point([0,-below-1,0])};
+  }
+  let sweep;
+  if(options.sweepRange){
+    const key=selectedId+':'+native.getSequence()+':'+options.sweepRange.join(':');let cached=sweepCache.get(native);
+    if(cached?.key!==key){cached={key,path:particleSweepPath(native.model,selectedId,native.getSequence(),options.sweepRange,camera)};sweepCache.set(native,cached);}
+    sweep=cached.path.map(p=>({...p,point:project(p.world)}));
+    if(ribbon)for(const p of sweep.filter((_,i)=>i%8===0)){
+      const matrix=samplePreviewMatrices(native.model,p.time,native.getSequence(),p.time,camera).get(selectedId),at=field=>sampleTrack(ribbon[field],p.time,{interval:native.model.Sequences[native.getSequence()].Interval,globalSequences:native.model.GlobalSequences,globalTime:p.time,fallback:0});
+      p.edges=[-at('HeightBelow'),at('HeightAbove')].map(y=>project(new Vector3().fromArray(ribbon.PivotPoint).add(new Vector3(0,y,0)).applyMatrix4(matrix).toArray()));
+    }
+  }
+  let anchor;
+  const anchorNode=native.model.Nodes?.[options.anchorId];
+  if(anchorNode){
+    const world=new Vector3().fromArray(anchorNode.PivotPoint||[0,0,0]).applyMatrix4(new Matrix4().fromArray(native.rendererData.nodes[options.anchorId].matrix));
+    const parentMatrix=anchorNode.Parent==null?new Matrix4():new Matrix4().fromArray(native.rendererData.nodes[anchorNode.Parent].matrix),inverse=parentMatrix.clone();
+    if(Math.abs(inverse.determinant())>1e-10){inverse.invert();const local=world.clone().applyMatrix4(inverse);anchor={point:project(world.toArray()),dx:world.clone().add(screenPlaneTranslation(camera,world,width,height,1,0)).applyMatrix4(inverse).sub(local).toArray(),dy:world.clone().add(screenPlaneTranslation(camera,world,width,height,0,1)).applyMatrix4(inverse).sub(local).toArray()};}
+  }
+  return {width,height,samples,guide,sweep,anchor,liveParticles:count,frame:native.getFrame()};
+
 }
 const particlePictures=new WeakMap();
 export function rememberParticlePicture(native,id,texture,flags=0,compressedPixels) {
@@ -138,9 +207,10 @@ function restoreNativeEffectState(native,state) {
     e.emission=item.emission;e.creationTimes=item.creationTimes.slice();if(item.vertices)e.vertices.set(item.vertices);
   }
 }
+export class ParticlePreviewBudgetError extends Error {constructor(limit){super('Preview paused at the '+limit.toLocaleString('en-US')+' live-particle budget. Authored values are unchanged.');this.name='ParticlePreviewBudgetError';this.limit=limit;}}
 export class NativeParticleSimulation {
-  constructor(model,sequence=0,{seed=0x4d444c58,timeline}={}) {
-    this.native=new ModelRenderer(structuredClone(model));this.sequence=sequence;this.native.setSequence(sequence);
+  constructor(model,sequence=0,{seed=0x4d444c58,timeline,maxLive=12000}={}) {
+    this.maxLive=maxLive;this.native=new ModelRenderer(structuredClone(model));installParticleNativeCompatibility(this.native);this.sequence=sequence;this.native.setSequence(sequence);
     const start=model.Sequences[sequence].Interval[0];
     this.timeline=structuredClone(timeline||[{at:0,frame:start,global:start,fx:0,poseRate:1,fxRate:1}]);
     this.time=0;this.random=seededParticleRandom(seed);this.seed=seed;this.tracks=simulationTracks(this.native.model);this.burstStamps=new Map();this.checkpoints=[];
@@ -187,17 +257,24 @@ export class NativeParticleSimulation {
           // Visit actual authored events exactly, including repeated global phases.
           const period=model.GlobalSequences[rate.GlobalSeqId],value=period>0?phaseOf(phase.global,period):phase.frame;
           props.EmissionRate=0;
-          if(exactEvents)for(const key of rate.Keys)if(Math.abs(key.Frame-value)<1e-5){
-            const stamp=(period>0?Math.floor((phase.global+1e-6)/period):this.sequence)+':'+key.Frame;
-            if(this.burstStamps.get(props.ObjectId)!==stamp){
-              this.burstStamps.set(props.ObjectId,stamp);
+          if(exactEvents)for(const key of rate.Keys)if(Math.abs(key.Frame-value)<1e-5||(period>0&&phase.global>0&&Math.abs(value)<1e-5&&Math.abs(key.Frame-period)<1e-5)){
+            const stamp=period>0?Math.floor((phase.global+1e-6)/period)-(key.Frame===period?1:0):this.sequence;
+            const identity=props.ObjectId+':'+key.Frame;
+            if(this.burstStamps.get(identity)!==stamp){
+              this.burstStamps.set(identity,stamp);
               if(allowBirths&&props.Visibility>0&&key.Vector[0]>0)emitter.emission+=key.Vector[0]*1000;
             }
           }
         }else if(!ribbon&&rate?.Keys){const value=at(rate,0,sampling);props.EmissionRate=Number(value?.[0]??value);}
       }
       const priorNow=Date.now;Date.now=()=>current.fx;
-      try{withParticleRandom(this.random,()=>native.update(step));}
+      try{
+        let projected=0;
+        for(const e of native.particlesController.emitters)projected+=e.particles.length+(e.props.Visibility>0?Math.max(0,Math.floor((e.emission+Number(e.props.EmissionRate||0)*step)/1000)):0);
+        for(const e of native.ribbonsController.emitters)projected+=e.creationTimes.length+(e.props.Visibility>0?1:0);
+        if(!Number.isFinite(projected)||projected>this.maxLive)throw new ParticlePreviewBudgetError(this.maxLive);
+        withParticleRandom(this.random,()=>native.update(step));
+      }
       finally{Date.now=priorNow;for(const [props,visibility,rate]of saved.splice(0)){props.Visibility=visibility;props.EmissionRate=rate;}}
     };
     // Integrate the interval using its left-hand visibility/rate at an event,
@@ -261,21 +338,22 @@ function copyParticleSimulationToPreview(simulation,native,phase) {
     if(from.texCoords)to.texCoords.set(from.texCoords.subarray(0,from.creationTimes.length*4));
   }
 }
-const appearanceParticleFields=new Set(['ParticleScaling','Alpha','SegmentColor','Time','TailLength','FilterMode','Rows','Columns','TextureID','PriorityPlane','ReplaceableId']);
+const appearanceParticleFields=new Set(['ParticleScaling','Alpha','SegmentColor','Time','TailLength','FilterMode','Rows','Columns','TextureID','PriorityPlane','ReplaceableId','Color','MaterialID','TextureSlot']);
 /** Keep the GL instance and last valid FX frame while the newest recipe is replayed. */
 export class ParticleAuthoringPreview {
   constructor(native) {
     this.native=native;this.sequence=-1;this.target=0;this.timeline=[];this.simulation=null;this.pending=null;this.revision=0;this.linked=true;this.status={busy:false};
   }
+  makeSimulation(){this.limit=null;try{return new NativeParticleSimulation(this.native.model,this.sequence,{timeline:this.timeline});}catch(error){if(!(error instanceof ParticlePreviewBudgetError))throw error;this.limit=error;return null;}}
   phase(){return particleTimelineAt(this.timeline,this.target);}
   reset(sequence,frame){
     this.sequence=sequence;const start=this.native.model.Sequences[sequence].Interval[0];
     this.timeline=[{at:0,frame:start,global:start,fx:0,poseRate:1,fxRate:1}];this.target=Math.max(0,frame-start);
-    this.pending=new NativeParticleSimulation(this.native.model,sequence,{timeline:this.timeline});this.rates=null;
+    this.pending=this.makeSimulation();this.rates=null;
   }
   updateSource(source,field,id){
-    const before=this.native.model.ParticleEmitters2.find(node=>node.ObjectId===id);
-    const after=source.ParticleEmitters2.find(node=>node.ObjectId===id);
+    const before=[...this.native.model.ParticleEmitters2,...this.native.model.RibbonEmitters].find(node=>node.ObjectId===id);
+    const after=[...source.ParticleEmitters2,...source.RibbonEmitters].find(node=>node.ObjectId===id);
     const same=field&&before&&after&&JSON.stringify(before[field])===JSON.stringify(after[field]);
     updateParticlePreview(this.native,source);
     if(same||this.sequence<0)return;
@@ -283,13 +361,14 @@ export class ParticleAuthoringPreview {
     if(appearanceParticleFields.has(field)&&this.simulation&&!this.pending){
       updateParticlePreview(this.simulation.native,source);this.simulation.refresh();
     }else {
-      this.pending=new NativeParticleSimulation(this.native.model,this.sequence,{timeline:this.timeline});
+      this.pending=this.makeSimulation();
     }
   }
   advance({sequence,frame,seek=false,elapsed=0,playing=false,animationRate=1,fxRate=animationRate,linked=true,loop=true,range,cameraPosition,cameraQuaternion,budgetMs=5}){
     const clip=this.native.model.Sequences[sequence],start=range?.[0]??clip.Interval[0],end=range?.[1]??clip.Interval[1];
     if(sequence!==this.sequence||seek||linked&&!this.linked)this.reset(sequence,Math.max(start,Math.min(end,frame)));
     this.linked=linked;
+    if(this.limit)return this.status={busy:false,frame:this.native.getFrame(),global:this.phase().global,fx:this.phase().fx,ended:true,error:this.limit.message,limit:this.limit.limit};
     const maximum=Math.max(animationRate,fxRate),poseRate=maximum>0?animationRate/maximum:0,effectRate=maximum>0?fxRate/maximum:0;
     const rates=poseRate+':'+effectRate;
     if(rates!==this.rates){
@@ -314,7 +393,7 @@ export class ParticleAuthoringPreview {
     }
     const candidate=this.pending||this.simulation;
     if(cameraPosition&&cameraQuaternion)candidate.setCamera(cameraPosition,cameraQuaternion);
-    const result=candidate.advance(this.target,{budgetMs});
+    let result;try{result=candidate.advance(this.target,{budgetMs});}catch(error){if(!(error instanceof ParticlePreviewBudgetError))throw error;this.limit=error;return this.status={busy:false,frame:this.native.getFrame(),global:this.phase().global,fx:this.phase().fx,ended:true,error:error.message,limit:error.limit};}
     if(result.complete&&this.pending){this.simulation=this.pending;this.pending=null;}
     const visible=this.simulation;
     if(visible){
@@ -325,4 +404,23 @@ export class ParticleAuthoringPreview {
     this.status={busy:!!this.pending||!result.complete,frame:phase.frame,global:phase.global,fx:phase.fx,ended,liveParticles:visible?.native.particlesController.emitters.reduce((sum,e)=>sum+e.particles.length,0)||0};
     return this.status;
   }
+}
+
+/** Native posed triangle hit, converted through the chosen attachment's full affine transform. */
+export function particleSurfaceAnchor(native,camera,width,height,x,y,anchorId) {
+ const anchor=native.model.Nodes?.[anchorId];if(!anchor)return null;
+ const raycaster=new Raycaster();raycaster.setFromCamera(new Vector2(x/width*2-1,1-y/height*2),camera);
+ const matrices=new Map(native.rendererData.nodes.flatMap((n,i)=>n?.matrix?[[i,new Matrix4().fromArray(n.matrix)]]:[]));
+ let nearest=null,distance=Infinity;
+ for(const [index,geo]of native.model.Geosets.entries()){
+  if(sampleGeosetAnimation(native.model,index,native.getFrame(),native.getSequence()).alpha<=.001)continue;
+  const vertices=skinGeoset(geo,matrices);
+  for(let i=0;i<geo.Faces.length;i+=3){
+   const triangle=[0,1,2].map(k=>new Vector3().fromArray(vertices,geo.Faces[i+k]*3)),point=raycaster.ray.intersectTriangle(...triangle,false,new Vector3());
+   if(point){const d=point.distanceToSquared(camera.position);if(d<distance){distance=d;nearest=point;}}
+  }
+ }
+ if(!nearest)return null;
+ const matrix=matrices.get(anchor.Parent)||new Matrix4();if(Math.abs(matrix.determinant())<1e-10)return null;
+ return nearest.applyMatrix4(matrix.clone().invert()).toArray();
 }

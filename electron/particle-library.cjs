@@ -2,7 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { Worker } = require('node:worker_threads');
-const THUMBNAIL_VERSION = 'native-4.0.1-authoring-2';
+const THUMBNAIL_VERSION = 'native-4.0.1-authoring-3';
 const ID = /^(?:wc3-[a-f0-9]{24}|my-[a-f0-9-]{36})$/;
 const atomic = async(file,data) => {
   await fs.mkdir(path.dirname(file),{recursive:true});
@@ -32,9 +32,22 @@ class ParticleLibrary {
         items.push({id:recipe.id,name:recipe.name,tags:recipe.tags,categories:recipe.categories,naming:{state:'personal'},collection:'My presets',unsupported:recipe.compatibility?.unsupported||[]});
       }
     }catch(error){if(error.code!=='ENOENT')throw error;}
-    for(const item of items)try{item.thumbnail=await fs.readFile(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,item.id+'.txt'),'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
+    const thumbnails=await this.thumbnails(items.slice(0,36).map(item=>item.id));
+    for(const item of items)if(thumbnails[item.id])item.thumbnail=thumbnails[item.id];
     return {items:items.map(item=>({...item,...meta[item.id],favorite:!!meta[item.id]?.favorite})),coverage,status:this.status};
   }
+
+  async thumbnails(ids){
+    if(!Array.isArray(ids)||ids.length>72||ids.some(id=>!ID.test(id)))throw Error('Invalid thumbnail request.');
+    const values=await Promise.all(ids.map(async id=>{try{return [id,await fs.readFile(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,id+'.txt'),'utf8')];}catch(error){if(error.code!=='ENOENT')throw error;return [id,null];}}));return Object.fromEntries(values);
+  }
+  async exportData(id){
+    const {parseParticleData,stringifyParticleData}=await import('../src/particle-data.js'),{validateParticleRecipe}=await import('../src/particle-recipes.js');
+    const recipe=parseParticleData(await this.read(id)),meta=(await this.metadata())[id]||{};
+    for(const key of ['name','tags','categories'])if(meta[key]!==undefined)recipe[key]=meta[key];
+    validateParticleRecipe(recipe);return stringifyParticleData(recipe);
+  }
+  async duplicate(id){const data=await this.exportData(id),{parseParticleData}=await import('../src/particle-data.js');return this.save({data,name:(parseParticleData(data).name+' copy').slice(0,120)});}
   async thumbnail({id,url}) { if(!ID.test(id)||typeof url!=='string'||!/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(url)||url.length>1024*1024)throw Error('Invalid effect thumbnail.');return this.enqueue(()=>atomic(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,id+'.txt'),url)); }
   async read(id) {
     if(!ID.test(id))throw Error('Invalid effect identity.');
@@ -51,12 +64,12 @@ class ParticleLibrary {
     const recipe=parseParticleData(data);
     recipe.id=id&&/^my-[a-f0-9-]{36}$/.test(id)?id:'my-'+crypto.randomUUID();
     recipe.name=String(name||recipe.name).trim();validateParticleRecipe(recipe);
-    await atomic(path.join(this.directory,'mine',recipe.id+'.json'),stringifyParticleData(recipe));return {id:recipe.id,name:recipe.name};
+    await atomic(path.join(this.directory,'mine',recipe.id+'.json'),stringifyParticleData(recipe));await fs.rm(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,recipe.id+'.txt'),{force:true});return {id:recipe.id,name:recipe.name};
   }); }
   async annotate({id,name,tags,categories,favorite}) { return this.enqueue(async()=>{
     if(!ID.test(id))throw Error('Invalid effect identity.');
     const metadata=await this.metadata(), next={...metadata[id]};
-    if(name!==undefined){if(typeof name!=='string'||!name.trim()||name.length>120)throw Error('Use a short effect name.');next.name=name.trim();}
+    if(name!==undefined){if(typeof name!=='string'||!name.trim()||name.length>120)throw Error('Use a short effect name.');next.name=name.trim();next.naming={state:'user-reviewed'};}
     for(const [key,value]of Object.entries({tags,categories}))if(value!==undefined){if(!Array.isArray(value)||value.length>32||value.some(v=>typeof v!=='string'||v.length>80))throw Error('Invalid effect tags.');next[key]=value;}
     if(favorite!==undefined)next.favorite=!!favorite;
     metadata[id]=next;await atomic(path.join(this.directory,'metadata.json'),JSON.stringify(metadata));return next;

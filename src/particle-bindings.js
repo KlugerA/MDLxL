@@ -14,6 +14,11 @@ const descriptions = {
   TailLength: ['Streak length','float32','seconds of velocity',false,0,5,'appearance'],
   Time: ['Changeover','float32','fraction of particle age',false,0,1,'appearance'],
   Visibility: ['Emitting','float32','native visibility',true,0,1,'births'],
+  HeightAbove:['Upper edge','float32','local Y offset',true,0,80,'history'],
+  HeightBelow:['Lower edge','float32','local Y offset',true,0,80,'history'],
+  Color:['Color','float32[3]','RGB tint',true,0,1,'appearance'],
+  MaterialID:['Material','uint32 reference','material index',false,0,0,'appearance'],
+  TextureSlot:['Picture cell','uint32','ribbon atlas cell',true,0,16,'appearance'],
   Rotation: ['Aim','float32 quaternion','degrees shown; native quaternion track',true,-180,180,'births'],
   Alpha: ['Opacity','uint8[3]','0–255 per life stage',false,0,255,'appearance'],
   SegmentColor: ['Color','float32[3][3]','RGB tint per life stage',false,0,1,'appearance'],
@@ -38,8 +43,9 @@ export function particleAimAngles(emitter,options={}) {
 export function particleValue(emitter, field, options={}) {
   const {frame=0,interval,globalSequences=[],stage,axis=1}=options;
   if (field === 'ParticleScaling') return Number.isInteger(stage)?emitter.ParticleScaling?.[stage]||0:Math.max(0,...Array.from(emitter.ParticleScaling || [0,0,0]));
-  if (field === 'Alpha') return emitter.Alpha?.[stage??1]??255;
+  if (field === 'Alpha'&&options.family!=='RibbonEmitters') return emitter.Alpha?.[stage??1]??255;
   if (field === 'SegmentColor') return Array.from(emitter.SegmentColor?.[stage??1]||[1,1,1]);
+  if(field==='Color')return Array.from(sampleTrack(emitter.Color,frame,{interval,globalSequences,globalTime:frame,fallback:[1,1,1]}));
   if (field === 'Rotation') return particleAimAngles(emitter,options)[axis];
   const value = emitter[field];
   const sampled=typeof value==='number'?value:sampleTrack(value,frame,{interval,globalSequences,globalTime:frame,fallback:[field==='Visibility'?1:0]});
@@ -68,7 +74,7 @@ export function beginParticleParameter(emitter, field, options = {}) {
         if(components.length!==3)throw Error('Color needs RGB components.');
         const result=clone(baseline);result[options.stage??1]=new Float32Array(components);return result;
       }
-      if(field==='Alpha'){
+      if(field==='Alpha'&&options.family!=='RibbonEmitters'){
         if(value<0||value>255)throw Error('Opacity is outside its native range.');
         const result=new Uint8Array(baseline);result[options.stage??1]=Math.round(value);return result;
       }
@@ -94,19 +100,19 @@ export function beginParticleParameter(emitter, field, options = {}) {
         else values[1]=value;
         return new Float32Array(values);
       }
-      if (!track) return value;
+      if (!track) return field==='Color'?new Float32Array(components):value;
       const next=clone(track);
       if (options.scope === 'track') {
-        const offset=value-sampled;
+        const offsets=components.map((v,i)=>v-(Array.isArray(sampled)?sampled[i]:sampled));
         for(const point of next.Keys) if(!interval || point.Frame>=interval[0] && point.Frame<=interval[1]) {
-          point.Vector[0]+=offset;
+          for(let i=0;i<components.length;i++)point.Vector[i]+=offsets[i];
           // Bezier controls are points; Hermite tangents are derivatives.
-          if(next.LineType===3) for(const tangent of ['InTan','OutTan'])if(point[tangent])point[tangent][0]+=offset;
+          if(next.LineType===3) for(const tangent of ['InTan','OutTan'])if(point[tangent])for(let i=0;i<components.length;i++)point[tangent][i]+=offsets[i];
         }
       } else {
         let point=next.Keys.find(point=>point.Frame===keyTime);
-        if(!point){point={Frame:keyTime,Vector:new Float32Array([value])};if(next.LineType>=2){point.InTan=new Float32Array([next.LineType===2?0:value]);point.OutTan=clone(point.InTan);}next.Keys.push(point);next.Keys.sort((a,b)=>a.Frame-b.Frame);}
-        else point.Vector[0]=value;
+        if(!point){point={Frame:keyTime,Vector:new Float32Array(components)};if(next.LineType>=2){point.InTan=new Float32Array(components.map(v=>next.LineType===2?0:v));point.OutTan=clone(point.InTan);}next.Keys.push(point);next.Keys.sort((a,b)=>a.Frame-b.Frame);}
+        else for(let i=0;i<components.length;i++)point.Vector[i]=components[i];
       }
       return next;
     }
@@ -115,19 +121,20 @@ export function beginParticleParameter(emitter, field, options = {}) {
 /** Document stays committed while a gesture edits only its preview working copy. */
 export function createParticleGesture({doc,id,field,options={},commit=(label,sections,mutate)=>doc.apply(label,sections,mutate)}) {
   if(doc.readOnly)throw Error('Read-only model.');
-  const emitter=doc.model.ParticleEmitters2.find(node=>node.ObjectId===id);
+  const family=options.family||'ParticleEmitters2';
+  const emitter=doc.model[family].find(node=>node.ObjectId===id);
   if(!emitter)throw Error('Choose an emitter.');
   const parameter=beginParticleParameter(emitter,field,options), revision=doc.revision;
   let next=clone(parameter.baseline), finished=false;
   return {
     parameter,
-    update(value){if(finished)throw Error('Gesture already ended.');next=parameter.change(value);return clone(next);},
+    update(value){if(finished)throw Error('Gesture already ended.');next=options.raw?clone(value):parameter.change(value);return clone(next);},
     cancel(){finished=true;return clone(parameter.baseline);},
     finish(){
       if(finished)return false;finished=true;
       if(doc.revision!==revision)throw Error('The document changed during this gesture.');
       return commit('Change particle '+(particleBindings[field]?.label||field),['Nodes'],model=>{
-        const current=model.ParticleEmitters2.find(node=>node.ObjectId===id);
+        const current=model[family].find(node=>node.ObjectId===id);
         if(!current)throw Error('Emitter was removed.');
         if(next===undefined)delete current[field];else current[field]=clone(next);
       });

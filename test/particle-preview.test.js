@@ -71,3 +71,35 @@ test('restoring an earlier checkpoint after a partial display step cannot jump t
   const sim=new NativeParticleSimulation(make());sim.advance(500);const before=sim.snapshot();sim.advance(1573);sim.restore(before);sim.advance(900);
   const reference=new NativeParticleSimulation(make());reference.advance(900);assert.deepEqual(particles(sim),particles(reference));assert.equal(sim.time,900);
 });
+
+test('excessive native bursts stop at an explicit preview budget without changing the recipe',async()=>{
+ const model=make(),p=model.ParticleEmitters2[0];p.Squirt=true;p.EmissionRate=track([[0,1e8]]);const before=structuredClone(model);
+ const {ModelRenderer}=await import('war3-model'),{ParticleAuthoringPreview}=await import('../app/particle-preview-adapter.js');
+ const native=new ModelRenderer(structuredClone(model)),preview=new ParticleAuthoringPreview(native);
+ const state=preview.advance({sequence:0,frame:0,playing:false,budgetMs:Infinity});
+ assert.match(state.error,/12,000/);assert.equal(state.ended,true);assert.deepEqual(model,before);assert.equal(native.model.ParticleEmitters2[0].EmissionRate.Keys[0].Vector[0],1e8);
+ model.ParticleEmitters2[0].EmissionRate=track([[0,7]]);preview.updateSource(model,'EmissionRate',0);
+ const resumed=preview.advance({sequence:0,frame:0,playing:false,budgetMs:Infinity});assert.equal(resumed.error,undefined);assert.equal(resumed.liveParticles,7);
+});
+
+test('ModelSpace carries live particles with source motion while world-space particles stay behind',()=>{
+ const model=make(),p=model.ParticleEmitters2[0];p.Speed=0;p.Width=0;p.Length=0;p.Gravity=0;p.EmissionRate=10;p.LifeSpan=10;
+ p.Translation={LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(0,0,0)},{Frame:5000,Vector:v(100,0,0)}]};
+ p.Flags|=524288;const carried=new NativeParticleSimulation(model);carried.advance(1000);
+ const moving=carried.native.particlesController.emitters[0],center=(moving.headVertices[0]+moving.headVertices[3]+moving.headVertices[6]+moving.headVertices[9])/4;
+ assert.ok(Math.abs(center-20)<1e-5);assert.equal(moving.particles[0].pos[0],0,'Native particle remains local during integration');
+ p.Flags&=~524288;const world=new NativeParticleSimulation(model);world.advance(1000);
+ const fixed=world.native.particlesController.emitters[0],fixedCenter=(fixed.headVertices[0]+fixed.headVertices[3]+fixed.headVertices[6]+fixed.headVertices[9])/4;
+ assert.ok(fixedCenter<3,'Particles born early remain at their birth position');
+});
+test('four atlas ranges repeat independently and non-square sheets use columns for their row index',async()=>{
+ const {particleAtlasFrame}=await import('../app/particle-preview-adapter.js');
+ assert.equal(particleAtlasFrame([8,12,2],.25,4,4),10);
+ assert.equal(particleAtlasFrame([8,12,2],.75,4,4),10);
+ assert.equal(particleAtlasFrame([8,12,0],.75,4,4),8);
+ const model=make(),p=model.ParticleEmitters2[0];p.Rows=2;p.Columns=4;p.FrameFlags=3;p.Time=.5;
+ p.LifeSpanUVAnim=new Uint32Array([5,5,1]);p.TailUVAnim=new Uint32Array([6,6,1]);
+ const sim=new NativeParticleSimulation(model);sim.advance(100);
+ const e=sim.native.particlesController.emitters[0];assert.ok(e.particles.length>0);
+ assert.equal(e.headTexCoords[0],.25);assert.equal(e.headTexCoords[1],.5);assert.equal(e.tailTexCoords[0],.5);assert.equal(e.tailTexCoords[1],.5);
+});

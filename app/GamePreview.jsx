@@ -1,4 +1,4 @@
-import { ParticleAuthoringPreview, updateParticlePreview, particleStageSnapshot, rememberParticlePicture, pickPreviewParticles, seededParticleRandom, withParticleRandom, replayParticlePreview } from './particle-preview-adapter.js';
+import { installParticleNativeCompatibility, particleSurfaceAnchor, ParticleAuthoringPreview, updateParticlePreview, particleStageSnapshot, rememberParticlePicture, pickPreviewParticles, seededParticleRandom, withParticleRandom, replayParticlePreview } from './particle-preview-adapter.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { EditorCameraControls, editorCameraAngles, preserveShiftCameraAction, setEditorCameraAngles, zoomEditorCamera } from './editor-camera-controls.js';
@@ -272,7 +272,7 @@ export default function GamePreview(inputProps) {
       lightDirection: latest.current.portraitMode ? [.3,-.3,.25] : latest.current.showcase ? displayLight().toArray() : cameraLeftLight(camera, controls.target, radius).direction.toArray(),
       viewDirection: (displayCamera || camera).getWorldDirection(new THREE.Vector3()).negate().toArray(), preferences: latest.current.preferences, hiddenGeosets: latest.current.hiddenGeosets, hideRgbGeoset: latest.current.hideRgbGeoset, surface: latest.current.mode === 'solid', lighting: latest.current.portraitMode || (latest.current.showcase ? latest.current.showcaseLight !== 'none' : latest.current.shaded !== false && graphicsOptions(latest.current.preferences).lighting) }));
     try {
-      native = new ModelRenderer(ownedModel); native.initGL(gl); previewAdapter.ready(native);
+      native = new ModelRenderer(ownedModel); installParticleNativeCompatibility(native); native.initGL(gl); previewAdapter.ready(native);
       // Layered WC3 materials redraw the same triangles at identical depth.
       // WebGL's default LESS would discard diffuse layers over team color.
       gl.depthFunc(gl.LEQUAL);
@@ -515,7 +515,7 @@ export default function GamePreview(inputProps) {
       if (event.key === 'Escape' && selectionGesture) finishNodeGesture({ pointerId: selectionGesture.id, type: 'pointercancel', preventDefault: () => event.preventDefault(), stopImmediatePropagation: () => event.stopImmediatePropagation() });
       if (event.key === 'Escape' && nodeGesture) { finishNodeGesture({ pointerId: nodeGesture.id, type: 'pointercancel', preventDefault: () => event.preventDefault(), stopImmediatePropagation: () => event.stopImmediatePropagation() }); }
     };
-    const pickParticle=event=>{const p=latest.current;if(!p.onParticlePick||event.button!==0)return;const rect=canvas.getBoundingClientRect(),hits=pickPreviewParticles(native,displayCamera||camera,rect.width,rect.height,event.clientX-rect.left,event.clientY-rect.top,p.particleSelectedId);if(hits.length){event.preventDefault();event.stopImmediatePropagation();const current=hits.findIndex(h=>h.owner===p.particleSelectedId);p.onParticlePick(hits[(current+1)%hits.length].owner,hits.map(h=>h.owner));}};
+    const pickParticle=event=>{const p=latest.current;if(event.button!==0)return;if(p.onParticleSurfacePlace){const rect=canvas.getBoundingClientRect(),point=particleSurfaceAnchor(native,displayCamera||camera,rect.width,rect.height,event.clientX-rect.left,event.clientY-rect.top,p.particleAnchorId);if(point){event.preventDefault();event.stopImmediatePropagation();p.onParticleSurfacePlace(point);}return;}if(!p.onParticlePick)return;const rect=canvas.getBoundingClientRect(),hits=pickPreviewParticles(native,displayCamera||camera,rect.width,rect.height,event.clientX-rect.left,event.clientY-rect.top,p.particleSelectedId);if(hits.length){event.preventDefault();event.stopImmediatePropagation();const current=hits.findIndex(h=>h.owner===p.particleSelectedId);p.onParticlePick(hits[(current+1)%hits.length].owner,hits.map(h=>h.owner));}};
     canvas.addEventListener('dblclick',pickParticle,true);
     canvas.addEventListener('pointermove', nodePointerMove, true); canvas.addEventListener('pointerup', finishNodeGesture, true); canvas.addEventListener('pointercancel', finishNodeGesture, true); canvas.addEventListener('keydown', cancelNodeGesture, true);
     canvas.addEventListener('lostpointercapture', endShowcaseCursor);
@@ -863,7 +863,7 @@ export default function GamePreview(inputProps) {
           const quaternion=displayCamera.quaternion.clone().multiply(billboardCameraCorrection);
           const status=particleAuthor.advance({sequence:selected,frame:p.time??start,seek:sequenceChanged||userSeek,elapsed:captureOnly?0:delta,playing:p.playing&&!captureOnly,animationRate:Math.max(0,(p.playbackSpeed??100)/100),fxRate:Math.max(0,(p.particleFxSpeed??p.playbackSpeed??100)/100),linked:p.particleLinked!==false,loop:p.loop!==false,range:[start,end],cameraPosition:displayCamera.position.toArray(),cameraQuaternion:quaternion.toArray()});
           globalClock=status.global;playback={frame:status.frame,elapsed:0,finished:false};
-          const statusKey=String(status.busy);if(statusKey!==particleStatusKey){particleStatusKey=statusKey;p.onParticleStatus?.(status);}
+          const statusKey=String(status.busy)+':'+(status.error||'');if(statusKey!==particleStatusKey){particleStatusKey=statusKey;p.onParticleStatus?.(status);}
           if(status.ended&&p.playing)p.onPlayingChange?.(false);
           if(status.busy)invalidate();
         } else if (dt > 0) {
@@ -914,7 +914,7 @@ export default function GamePreview(inputProps) {
         if (!captureOnly) presentation.draw(camera, p.preferences, p.workplane, p.overlays?.grid ?? !!p.showGrid, center, radius, bounds.min.z, { gridOnly: true, showAxes: p.showAxes ?? p.overlays?.axes ?? !!p.showGrid });
         const wireframe = !captureOnly && (p.mode === 'wireframe' || p.mode === 'vertices');
         if (wireframe) gl.colorMask(false, false, false, false);
-        try { native.render(displayCamera.matrixWorldInverse.elements, displayCamera.projectionMatrix.elements, { wireframe: false, useEnvironmentMap: p.shaded !== false && graphics.lighting }); if(p.onParticleStage && now-particleReportAt>60){particleReportAt=now;p.onParticleStage(particleStageSnapshot(native,displayCamera,canvas.clientWidth,canvas.clientHeight,p.particleSelectedId));} }
+        try { native.render(displayCamera.matrixWorldInverse.elements, displayCamera.projectionMatrix.elements, { wireframe: false, useEnvironmentMap: p.shaded !== false && graphics.lighting }); if(p.onParticleStage && now-particleReportAt>60){particleReportAt=now;p.onParticleStage(particleStageSnapshot(native,displayCamera,canvas.clientWidth,canvas.clientHeight,p.particleSelectedId,false,{sweepRange:p.particleSweepRange,anchorId:p.particleAnchorId}));} }
         finally { gl.colorMask(true, true, true, true); }
         if (!wireframe) eventPreview.render({ frame:native.getFrame(), sequenceIndex:poseSequence, globalTime:globalClock, playback:p.showcase?showcaseSample:undefined, camera:displayCamera, teamColor:p.teamColor });
         if (!captureOnly && !p.portraitMode) presentation.draw(camera, p.preferences, p.workplane, false, center, radius, bounds.min.z, { platformOnly: true });
@@ -1106,7 +1106,7 @@ export default function GamePreview(inputProps) {
         while (!disposed) {
           const entry = backgroundState.current, human = portraitFrame.current, layers = layerAPI.current; await Promise.all([entry.promise, texturePromise, eventPreview.ready, layers?.whenReady(), (portraitHasFrame(latest.current) || latest.current.preparePortraitFrame) ? human.promise : undefined]);
           if (disposed) break;
-          if (entry === backgroundState.current && layers === layerAPI.current && (!portraitHasFrame(latest.current) || human === portraitFrame.current)) { if (entry.status === 'failed') throw entry.error; if(particleAuthor&&(!particleAuthor.simulation||particleAuthor.status.busy)){render(performance.now(),0,{captureOnly:true});await new Promise(resolve=>setTimeout(resolve,0));continue;} return; }
+          if (entry === backgroundState.current && layers === layerAPI.current && (!portraitHasFrame(latest.current) || human === portraitFrame.current)) { if (entry.status === 'failed') throw entry.error; if(particleAuthor?.status.error)throw Error(particleAuthor.status.error);if(particleAuthor&&(!particleAuthor.simulation||particleAuthor.status.busy)){render(performance.now(),0,{captureOnly:true});await new Promise(resolve=>setTimeout(resolve,0));continue;} return; }
         }
         throw new Error('This animation preview is no longer open.');
       },

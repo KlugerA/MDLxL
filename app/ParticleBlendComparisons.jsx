@@ -1,0 +1,12 @@
+import React,{Suspense,lazy,useMemo,useRef,useState} from 'react';
+import {particleBlendNames} from '../src/particle-picture.js';
+const GamePreview=lazy(()=>import('./GamePreview.jsx'));
+/** One hidden native renderer at a time; identical recipe, seed, clip, time and framing. */
+export default function ParticleBlendComparisons({source,id,assets,preferences,sequence,time,onChoose,onClose}){
+ const base=useRef(structuredClone(source)),[index,setIndex]=useState(0),[images,setImages]=useState({}),[error,setError]=useState(''),busy=useRef(false);
+ const model=useMemo(()=>{const next=structuredClone(base.current);next.ParticleEmitters2=next.ParticleEmitters2.filter(n=>n.ObjectId===id);next.RibbonEmitters=[];next.ParticleEmitters=[];next.ParticleEmitterPopcorns=[];next.Geosets=[];const emitter=next.ParticleEmitters2[0];if(emitter)emitter.FilterMode=Math.min(4,Math.floor(index/2));return next;},[index]);
+ const color=index%2?'#d0d0d0':'#24282c',prefs={...preferences,graphics:{...preferences.graphics,pauseWhenHidden:false},viewportAppearance:{...preferences.viewportAppearance,background:{type:'color',color}}};
+ const ready=async api=>{if(!api||busy.current||index>=10)return;busy.current=true;try{await api.whenReady();api.fit();const image=api.captureFrame({maxDimension:192}).toDataURL('image/png');setImages(old=>({...old,[index]:image}));}catch(error){setError(error.message);}finally{busy.current=false;setIndex(v=>v+1);}};
+ return <div className="pe-blend-comparison"><div className="pe-picture-heading"><span>Blend looks</span><button onClick={onClose}>Close comparison</button></div>{particleBlendNames.map((name,mode)=><button key={name} aria-label={'Use '+name+' blend'} onClick={()=>onChoose(mode)}><span className="pe-blend-pair">{[0,1].map(side=><span key={side} style={{background:side?'#d0d0d0':'#24282c'}}>{images[mode*2+side]?<img src={images[mode*2+side]} alt={side?'Light background':'Dark background'}/>:<span>…</span>}</span>)}</span>{name}</button>)}{error&&<small role="status">{error}</small>}
+ {index<10&&<div className="pe-thumbnail-renderer" aria-hidden="true"><Suspense fallback={null}><GamePreview key={index} presentation="preview" model={model} textureAssets={assets} preferences={prefs} particleAuthoring sequenceIndex={sequence} time={time} playing={false} showParticles showGrid={false} mode="textured" view="perspective" overlays={{bones:false,nodes:false,particles:false,attachments:false}} onCaptureReady={ready}/></Suspense></div>}</div>;
+}

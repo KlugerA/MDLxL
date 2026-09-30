@@ -7,6 +7,7 @@ export default function ParticleStageTools({snapshot,tool,emitter,options,lifeSt
   useEffect(()=>{drag.current=null;setPinned(null);},[emitter?.ObjectId,tool,cancelVersion]);
   if(!snapshot||!emitter)return null;
   const {width,height,guide}=snapshot;
+  const ribbon=options.family==='RibbonEmitters';
   const samples=snapshot.samples.filter(item=>item.owner===emitter.ObjectId);
   const real=samples.find(item=>item.age>=.2&&item.age<=.7)||samples[0];
   const proxy=real||guide&&{owner:emitter.ObjectId,points:[[-10,-10],[-10,10],[10,-10],[10,10]].map(p=>[guide.origin[0]+p[0],guide.origin[1]+p[1],guide.origin[2]])};
@@ -36,8 +37,9 @@ export default function ParticleStageTools({snapshot,tool,emitter,options,lifeSt
     if(['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();event.stopPropagation();const delta=['ArrowRight','ArrowUp'].includes(event.key)?1:-1;begin(field,field==='ParticleScaling'?stage:undefined);change(field==='Rotation'?value(field)+delta:Math.max(0,value(field)+delta));finish();}
   }}><circle cx={point[0]} cy={point[1]} r="7"/><title>{label}</title></g>;
   return <svg className="pe-stage-tools" viewBox={'0 0 '+width+' '+height} aria-label="Particle stage handles">
-    {(tool==='Basics'||tool==='Life')&&sample&&<g className="pe-size-proxy"><polygon points={[sample.points[0],sample.points[1],sample.points[3],sample.points[2]].map(p=>p.slice(0,2).join(',')).join(' ')}/>{handle(sample.points[2],'ParticleScaling','Resize particle')}<text x={sample.points[0][0]} y={sample.points[0][1]-8}>{pinned?'Pinned sample':tool==='Life'?['Young','Middle','End'][lifeStage]:'Size'}</text></g>}
-    {tool==='Shape'&&guide&&<g><polygon points={guide.area.map(p=>p.slice(0,2).join(',')).join(' ')}/>
+    {!ribbon&&(tool==='Basics'||tool==='Life')&&sample&&<g className="pe-size-proxy"><polygon points={[sample.points[0],sample.points[1],sample.points[3],sample.points[2]].map(p=>p.slice(0,2).join(',')).join(' ')}/>{handle(sample.points[2],'ParticleScaling','Resize particle')}<text x={sample.points[0][0]} y={sample.points[0][1]-8}>{pinned?'Pinned sample':tool==='Life'?['Young','Middle','End'][lifeStage]:'Size'}</text></g>}
+    {ribbon&&guide?.upper&&guide?.lower&&<g><line x1={guide.lower[0]} y1={guide.lower[1]} x2={guide.upper[0]} y2={guide.upper[1]}/>{handle(guide.upper,'HeightAbove','Ribbon upper edge',particleAxisMapping(guide.upper,guide.upperUnit))}{handle(guide.lower,'HeightBelow','Ribbon lower edge',particleAxisMapping(guide.lower,guide.lowerUnit))}</g>}
+    {!ribbon&&tool==='Shape'&&guide?.area&&<g><polygon points={guide.area.map(p=>p.slice(0,2).join(',')).join(' ')}/>
       {handle(guide.widthHandle,'Width','Spawn width handle',particleAxisMapping(guide.widthHandle,guide.widthUnit))}
       {handle(guide.lengthHandle,'Length','Spawn length handle',particleAxisMapping(guide.lengthHandle,guide.lengthUnit))}
       <line x1={guide.origin[0]} y1={guide.origin[1]} x2={guide.aim[0]} y2={guide.aim[1]}/>

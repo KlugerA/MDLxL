@@ -78,6 +78,12 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
       for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){const value=hook.memoizedState;if(value?.doc?.model&&value?.recipe)return {model:JSON.parse(JSON.stringify(value.doc.model)),undo:value.doc.historyStats.undoSteps,dirty:value.doc.dirty};}
       throw Error('Lab document not found');
     });
+
+    const readModel=()=>page.evaluate(()=>{
+      let fiber=document.querySelector('.pe-window')[Object.keys(document.querySelector('.pe-window')).find(k=>k.startsWith('__reactFiber'))];
+      for(;fiber;fiber=fiber.return){const doc=fiber.memoizedProps?.doc;if(doc?.model)return {model:JSON.parse(JSON.stringify(doc.model)),undo:doc.historyStats.undoSteps,dirty:doc.dirty};}
+      throw Error('Target document not found');
+    });
     const beforeMode=await readLab();
     await page.getByLabel('Particle editor mode',{exact:true}).selectOption('Classic');
     await page.getByLabel('Particle editor mode',{exact:true}).selectOption('Clueless');
@@ -140,22 +146,104 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1400,920));
     console.log('Independent clocks, FX pause, relink, model preservation and compact layout passed');
 
+
+    await page.getByRole('button',{name:'Picture',exact:true}).click();
+    await page.getByRole('button',{name:'Add picture row',exact:true}).click();
+    await page.getByRole('button',{name:'Add picture column',exact:true}).click();
+    const grid=page.getByRole('button',{name:'Picture frame grid',exact:true}),gridBox=await grid.boundingBox();
+    await grid.click({position:{x:gridBox.width*.75,y:gridBox.height*.75}});
+    await page.getByRole('button',{name:/Through cell/}).click();
+    await grid.click({position:{x:gridBox.width*.75,y:gridBox.height*.75}});
+    assert.equal((await readLab()).model.ParticleEmitters2[0].LifeSpanUVAnim[1],4);
+    const beforeGrid=await readLab();
+    await page.getByRole('button',{name:'Remove picture row',exact:true}).click();
+    assert.deepEqual((await readLab()).model,beforeGrid.model,'Grid correction must wait for explicit confirmation');
+    await page.getByRole('button',{name:'Change grid and bound these ranges',exact:true}).click();
+    assert.equal((await readLab()).model.ParticleEmitters2[0].LifeSpanUVAnim[1],2);
+    await page.getByRole('button',{name:'Compare blend looks',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelectorAll('.pe-blend-pair img').length===10,{},{timeout:30000});
+    await page.screenshot({path:path.join(out,'picture-blends.png')});
+    await page.getByRole('button',{name:'Close comparison',exact:true}).click();
+    const {starterTextureAsset}=await import('../src/particle-starters.js'),picture=path.join(out,'own-picture.tga');fs.writeFileSync(picture,starterTextureAsset().bytes);
+    await app.evaluate(({dialog},picture)=>{global.__particleOpen=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[picture]});},picture);
+    await page.getByText('Choose picture',{exact:true}).click();
+    await page.getByRole('button',{name:'Load picture…',exact:true}).click();
+    await page.waitForFunction(()=>{let f=document.querySelector('.pe-window')[Object.keys(document.querySelector('.pe-window')).find(k=>k.startsWith('__reactFiber'))];for(;f;f=f.return)for(let h=f.memoizedState;h;h=h.next)if(h.memoizedState?.doc?.model?.Textures.some(t=>/Particle_[a-f0-9]{32}/.test(t.Image)))return true;});
+    await app.evaluate(({dialog})=>{dialog.showOpenDialog=global.__particleOpen;delete global.__particleOpen;});
+    await page.locator('.pe-window').getByRole('button',{name:'Save preset',exact:true}).click();
+    await page.getByLabel('Preset name',{exact:true}).fill('Portable picture sparks');
+    await page.getByRole('button',{name:'Save to My presets',exact:true}).click();
+    await page.getByText('Saved Portable picture sparks',{exact:true}).waitFor();
+    const personal=fs.readdirSync(path.join(testLibrary,'mine')).map(f=>f.endsWith('.json')?JSON.parse(fs.readFileSync(path.join(testLibrary,'mine',f),'utf8')):null).find(r=>r?.name==='Portable picture sparks');
+    assert.equal(personal.embeddedAssets.length,1);assert.ok(personal.embeddedAssets[0].data.length>0);
+    console.log('Native blend comparisons, bounded grid correction and portable custom-picture save passed');
+    await page.getByRole('button',{name:'Basics',exact:true}).click();
     await page.locator('.pe-window').getByRole('button',{name:'Library',exact:true}).click();
     await page.waitForTimeout(5000);await page.screenshot({path:path.join(out,'library.png')});
     await page.getByLabel('Find an effect',{exact:true}).fill('flamestrikeembers');
     await page.locator('.pe-effect-card').first().click();
-    if(await page.getByRole('button',{name:'Discard and open',exact:true}).count())await page.getByRole('button',{name:'Discard and open',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('.pe-library')||[...document.querySelectorAll('button')].some(b=>b.textContent==='Discard and open'));
+    if(await page.getByRole('button',{name:'Discard and open',exact:true}).isVisible())await page.getByRole('button',{name:'Discard and open',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('.pe-library'));
     await page.waitForTimeout(1200);
+    const loadedRecipe=await readLab();
+    assert.ok(loadedRecipe.model.ParticleEmitters2.some(p=>/LowFire|LowSmoke/.test(p.Name)),'The selected CASC recipe replaces the starter');
+
     console.log('real recipe',await page.locator('.pe-window .re-status').innerText());
     await page.screenshot({path:path.join(out,'casc-effect.png')});
+
+    const beforePlacement=await readModel();
     await page.getByRole('button',{name:'Add to model',exact:true}).click();
+    const anchorHandle=page.getByRole('slider',{name:'Move effect anchor',exact:true});await anchorHandle.waitFor();
+    const anchorBox=await anchorHandle.locator('circle').boundingBox();
+    await page.mouse.move(anchorBox.x+10,anchorBox.y+10);await page.mouse.down();await page.mouse.move(anchorBox.x+75,anchorBox.y-15,{steps:8});await page.mouse.up();
+    await page.waitForTimeout(250);
+    assert.deepEqual(await readModel(),beforePlacement,'Dragging the ghost never edits the target');
+    assert.ok(Math.abs(Number(await page.getByLabel('Effect anchor X',{exact:true}).inputValue()))>0);
+    await page.screenshot({path:path.join(out,'placement-ghost.png')});
+    await page.getByRole('button',{name:'Cancel placement',exact:true}).click();
+    assert.deepEqual(await readModel(),beforePlacement,'Cancel placement leaves target and undo unchanged');
+    await page.getByRole('button',{name:'Add to model',exact:true}).click();
+
     await page.getByRole('checkbox',{name:'Fit timing to this animation',exact:true}).check();
     await page.getByRole('button',{name:'Confirm placement',exact:true}).click();
     await page.waitForTimeout(200);
     console.log('placement',await page.locator('.pe-window .re-status').innerText());
     assert.equal(await page.getByLabel('Particle context',{exact:true}).inputValue(),'On model');
     await page.waitForTimeout(1200);await page.screenshot({path:path.join(out,'placed-effect.png')});
+
+    const confirmed=await readModel();assert.equal(confirmed.undo,beforePlacement.undo+1);
+    assert.ok(confirmed.model.ParticleEmitters2.length>beforePlacement.model.ParticleEmitters2.length);
+    await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).click();assert.deepEqual((await readModel()).model,beforePlacement.model);
+    await page.locator('.pe-window').getByRole('button',{name:'Redo',exact:true}).click();
+    assert.deepEqual((await readModel()).model,confirmed.model);
+    console.log('Placement ghost, cancel, single insertion, undo and redo passed');
+
+    await page.getByLabel('Particle context',{exact:true}).selectOption('Lab');
+    const {createStarterRecipe}=await import('../src/particle-starters.js'),{extractParticleRecipe}=await import('../src/particle-recipes.js'),{createNode}=await import('../src/editor-document.js'),{stringifyParticleData}=await import('../src/particle-data.js');
+    const ribbonModel=structuredClone(createStarterRecipe().native);ribbonModel.ParticleEmitters2=[];ribbonModel.Nodes=[];ribbonModel.PivotPoints=[];
+    ribbonModel.Materials=[{RenderMode:0,PriorityPlane:0,Layers:[{FilterMode:3,Shading:16,TextureID:0,CoordId:0,Alpha:1}]}];
+    const ribbon=createNode(ribbonModel,'RibbonEmitter');ribbon.Visibility=1;ribbon.EmissionRate=40;
+    const ribbonRecipe=extractParticleRecipe(ribbonModel,[ribbon.ObjectId],{name:'MDLxL test ribbon'});
+    await page.evaluate(data=>window.desktop.particleSave({data,name:'MDLxL test ribbon'}),stringifyParticleData(ribbonRecipe));
+    await page.locator('.pe-window').getByRole('button',{name:'Library',exact:true}).click();
+    await page.getByRole('button',{name:'My presets',exact:true}).click();
+    await page.getByRole('button',{name:'MDLxL test ribbon',exact:true}).click();
+    await page.getByRole('slider',{name:'Upper edge',exact:true}).waitFor();
+    const ribbonBefore=await readLab(),upper=await page.getByRole('slider',{name:'Ribbon upper edge',exact:true}).locator('circle').boundingBox();
+    await page.mouse.move(upper.x+7,upper.y+7);await page.mouse.down();await page.mouse.move(upper.x+40,upper.y-20,{steps:6});await page.mouse.up();
+    assert.notEqual((await readLab()).model.RibbonEmitters[0].HeightAbove,ribbonBefore.model.RibbonEmitters[0].HeightAbove);
+    assert.equal((await readLab()).undo,ribbonBefore.undo+1);
+    await page.getByRole('button',{name:'Sweep',exact:true}).click();
+    const beforeDemo=await readLab();
+    await page.getByRole('button',{name:'Demonstration sweep',exact:true}).click();
+    await page.waitForTimeout(500);await page.getByRole('slider',{name:'Sweep time',exact:true}).waitFor();
+    assert.deepEqual((await readLab()).model,beforeDemo.model,'Demonstration motion stays out of the document');
+    await page.screenshot({path:path.join(out,'ribbon-sweep.png')});
+    await page.getByRole('button',{name:'Emit during this window',exact:true}).click();
+    assert.ok((await readLab()).model.RibbonEmitters[0].Visibility.Keys.length>=2);
+    console.log('Ribbon direct edges, demonstration isolation and native emission window passed');
     console.log('errors',errors);assert.deepEqual(errors,[]);
     fs.writeFileSync(path.join(out,'runtime.json'),JSON.stringify({state,errors},null,2));
-  } finally {await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
+  } catch(error){const failed=await app.firstWindow();console.error('ORIGINAL FAILURE',error);console.error('PAGE ERRORS',errors);console.error('FAILURE UI',(await failed.locator('body').innerText()).slice(-6000));await failed.screenshot({path:path.join(out,'failure.png')});throw error;} finally {await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
 })().catch(error=>{console.error(error);process.exit(1);});

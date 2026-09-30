@@ -1,0 +1,58 @@
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+import {createStarterRecipe,starterTextureAsset} from '../src/particle-starters.js';
+import {stringifyParticleData,parseParticleData} from '../src/particle-data.js';
+import {validateParticleRecipe} from '../src/particle-recipes.js';
+import {includeParticleAssets,embeddedParticleAssets} from '../src/particle-assets.js';
+import {particleGridChange,particleCellAt} from '../src/particle-picture.js';
+const {ParticleLibrary}=createRequire(import.meta.url)('../electron/particle-library.cjs');
+const directory=path.resolve('out/particle-prototype/store-tests-'+Date.now());
+const makeStore=()=>new ParticleLibrary({directory,discover:async()=>({cascFolders:[]})});
+test('personal preset persistence, independent duplication and metadata overrides survive restart',async()=>{
+ const store=makeStore(),source=createStarterRecipe(),before=stringifyParticleData(source),saved=await store.save({data:before,name:'Original glow'});
+ await store.annotate({id:saved.id,name:'Blue glow',tags:['blue','glow'],favorite:true});
+ const restarted=makeStore(),catalog=await restarted.catalog(),item=catalog.items.find(i=>i.id===saved.id);
+ assert.equal(item.name,'Blue glow');assert.deepEqual(item.tags,['blue','glow']);assert.equal(item.favorite,true);
+ assert.equal(parseParticleData(await restarted.read(saved.id)).name,'Original glow','Metadata never rewrites source recipe');
+ const copy=await restarted.duplicate(saved.id);assert.notEqual(copy.id,saved.id);assert.equal(copy.name,'Blue glow copy');
+ assert.deepEqual(parseParticleData(await restarted.exportData(copy.id)).native,source.native);
+ assert.equal(stringifyParticleData(source),before);
+});
+test('preset updates invalidate cached thumbnails and retain a recoverable previous file',async()=>{
+ const store=makeStore(),source=createStarterRecipe(),saved=await store.save({data:stringifyParticleData(source),name:'Before'});
+ const image='data:image/png;base64,iVBORw0KGgo=';
+ await store.thumbnail({id:saved.id,url:image});assert.equal((await store.thumbnails([saved.id]))[saved.id],image);
+ source.native.ParticleEmitters2[0].Speed=123;
+ await store.save({id:saved.id,data:stringifyParticleData(source),name:'After'});
+ assert.equal((await store.thumbnails([saved.id]))[saved.id],null);
+ const previous=parseParticleData(await fs.readFile(path.join(directory,'mine',saved.id+'.json.previous'),'utf8'));assert.equal(previous.name,'Before');
+ await store.draft(stringifyParticleData({schema:'mdlxl-particle-draft',version:1,test:'kept'}));assert.equal(parseParticleData(await makeStore().draft()).test,'kept');
+});
+test('portable custom pictures reopen from preset bytes without their original directory',()=>{
+ const recipe=createStarterRecipe(),asset=starterTextureAsset(),name='MDLxL_Forge\\Particle_'+'b'.repeat(32)+'.tga';recipe.native.Textures[0].Image=name;
+ recipe.dependencies[0].path=name;const assets=new Map([[name.toLowerCase(),{name,bytes:asset.bytes,origin:'particle-custom'}]]);
+ includeParticleAssets(recipe,assets);validateParticleRecipe(recipe);
+ const reopened=parseParticleData(stringifyParticleData(recipe)),resolved=embeddedParticleAssets(reopened);
+ assert.deepEqual(resolved.get(name.toLowerCase()).bytes,asset.bytes);
+ const bad=structuredClone(recipe);bad.embeddedAssets[0].path='..\\outside.tga';assert.throws(()=>validateParticleRecipe(bad),/picture/);
+ const huge=structuredClone(recipe);huge.native.ParticleEmitters2[0].ObjectId=1e9;assert.throws(()=>validateParticleRecipe(huge),/identity/);
+});
+test('picture grid changes are bounded only after explicit correction and preserve separate repeats',()=>{
+ const p=structuredClone(createStarterRecipe().native.ParticleEmitters2[0]);p.Rows=4;p.Columns=8;
+ p.LifeSpanUVAnim=new Uint32Array([10,20,3]);p.TailUVAnim=new Uint32Array([3,7,5]);const before=structuredClone(p);
+ const proposal=particleGridChange(p,2,4);assert.deepEqual(p,before);assert.deepEqual(proposal.invalid,['Early sprites']);assert.equal(proposal.values.LifeSpanUVAnim,undefined);
+ const accepted=particleGridChange(p,2,4,{correct:true});assert.deepEqual(Array.from(accepted.values.LifeSpanUVAnim),[7,8,3]);assert.equal(accepted.values.TailUVAnim,undefined);
+ assert.equal(particleCellAt(159,127,256,256,4,8),12);assert.equal(particleCellAt(256,256,256,256,4,8),31);
+});
+test('malformed imports never overwrite an existing preset or allocate unbounded native identities',async()=>{
+ const store=makeStore(),saved=await store.save({data:stringifyParticleData(createStarterRecipe()),name:'Keep'}),before=await store.read(saved.id),malformed=createStarterRecipe();
+ malformed.native.ParticleEmitters2[0].Speed=1e200;
+ await assert.rejects(store.save({id:saved.id,data:stringifyParticleData(malformed)}),/finite native/);
+ assert.equal(await store.read(saved.id),before);
+ await assert.rejects(store.read('../escape'),/identity/);
+ await assert.rejects(store.thumbnails(Array(73).fill(saved.id)),/thumbnail/);
+});
