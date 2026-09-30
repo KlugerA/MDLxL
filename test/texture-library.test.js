@@ -4,15 +4,37 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {createRequire} from 'node:module';
-import {prepareTextureLibrary,searchTextureLibrary,folderContains,textureFolderTree} from '../src/texture-library-search.js';
+import {prepareTextureLibrary,searchTextureLibrary,initialTextureLibraryResults,folderContains,textureFolderTree} from '../src/texture-library-search.js';
 import {russianTextureQuery} from '../src/texture-library/russian-query.mjs';
 const require=createRequire(import.meta.url);
-const {TextureLibrary}=require('../electron/texture-library.cjs');
+const {TextureLibrary,previewCatalog}=require('../electron/texture-library.cjs');
 const {CascTextures}=require('../electron/casc.cjs');
 const {TextureResolver}=require('../electron/texture-resolver.cjs');
 const data=JSON.parse(await fs.readFile(new URL('../electron/data/texture-library-catalog.json',import.meta.url),'utf8'));
 const annotated=data.items.map(t=>({...t,source:'native',sourcePath:'war3.w3mod:'+t.path,folder:'war3.w3mod:'+t.path.slice(0,t.path.lastIndexOf('\\')),variant:'classic'}));
 const prepared=prepareTextureLibrary(annotated);
+
+test('first Library page matches completed empty search before indexing',()=>{
+  for(const options of [
+    {variant:'classic',vibe:true,limit:12},
+    {variant:'classic',vibe:false,format:'blp',limit:12},
+    {variant:'all',vibe:true,kind:'units',limit:12},
+    {variant:'classic',vibe:true,folder:'war3.w3mod:Units',limit:12},
+  ]){
+    const first=initialTextureLibraryResults(annotated,options);
+    const complete=searchTextureLibrary(prepared,{query:'',...options});
+    assert.equal(first.total,complete.total);
+    assert.deepEqual(first.items.map(item=>item.id),complete.items.map(item=>item.id));
+  }
+  assert.equal(initialTextureLibraryResults(annotated,{query:'rusty metal'}),null);
+  for(const format of ['all','blp']){
+    const preview=previewCatalog({signature:'fixture',items:annotated},format);
+    const complete=searchTextureLibrary(prepared,{query:'',variant:preview.variant,format,limit:120});
+    assert.equal(preview.signature,'fixture');assert.equal(preview.result.total,complete.total);
+    assert.deepEqual(preview.result.items.map(item=>item.id),complete.items.map(item=>item.id));
+  }
+  assert.equal(previewCatalog({signature:'custom',items:[{id:'custom',name:'Custom',path:'custom.png',variant:'custom'}]}).variant,'all');
+});
 
 test('vibe rusty chain mail finds usable mail panels and labels missing rust',()=>{
   const result=searchTextureLibrary(prepared,{query:'rusty chain mail'});
