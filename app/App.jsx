@@ -578,7 +578,7 @@ export default function App() {
       if(!opened.model||opened.version==null)throw Error('This file has no readable model. The Showcase model was kept.');
       const next=newSession(opened,record.path||null);
       latest.current.showcaseSession=next;setShowcaseSession(next);
-      await resolveTextures(next);refresh();say('Showcase: '+record.name);
+      await resolveTextures(next);refresh();say('Showcase: '+record.name);return next;
     }catch(error){say(error.message,true);}
   }
   useEffect(()=>{if(mode==='showcase')setShowcaseVisited(true);},[mode]);

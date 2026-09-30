@@ -10,7 +10,7 @@ import { SHOWCASE_PRESETS, builtinSetup, listShowcasePresets, saveShowcasePreset
 import { validateShowcaseExport } from './showcase-export.js';
 import { moveDragPoint } from './classic-gestures.js';
 import { loopEffectTiming, timeShowcasePlaylist, showcaseEmitters } from './showcase-effects.js';
-import { remapShowcasePlaylist, snapshotShowcaseModel, hydrateShowcaseModel } from './showcase-model.js';
+import { remapShowcasePlaylist, remapShowcaseTake, snapshotShowcaseModel, hydrateShowcaseModel } from './showcase-model.js';
 import { alignShowcaseText } from './showcase-text.js';
 
 const GamePreview = lazy(() => import('./GamePreview.jsx'));
@@ -111,6 +111,7 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
   const framedPortrait = portrait && portraitFrameEnabled && !mainPicture;
   const [grid,setGrid]=useState(false),[gridDensity,setGridDensity]=useState(5);
   const [presets,setPresets]=useState([]),[presetDialog,setPresetDialog]=useState(null),[presetName,setPresetName]=useState(''),[presetId,setPresetId]=useState(SHOWCASE_PRESETS[0].id),[setupBusy,setSetupBusy]=useState(false);
+  const [presetKind,setPresetKind]=useState('layout'),[presetEditing,setPresetEditing]=useState(null),[presetError,setPresetError]=useState('');
   const [recordingList,setRecordingList]=useState([]),[backgroundAsset,setBackgroundAsset]=useState(null),[applyVersion,setApplyVersion]=useState(0);
   const [editingRecording,setEditingRecording]=useState(null),recordingDraft=useRef(null);
   const setupURLs=useRef(new Set()),pendingApply=useRef(null),apiRef=useRef(null),captureSettings=useRef(null),batchRestore=useRef(null);
@@ -233,7 +234,7 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
       pendingApply.current={setup,resolve,reject,previousURLs,previousAPI:apiRef.current,modelSource};
       flushSync(()=>{
         if(modelSource)setRecordingModel(modelSource);
-        stopPreview();setCropEditing(false);setMainPicture(!!setup.mainPicture);setMode(setup.mode);setSequenceExtraTime(setup.sequenceExtraTime??Math.max(0,(Number(setup.sequenceLength)||0)-(setup.sequencePlaylist||sequencePlaylist).reduce((sum,row)=>sum+Number(row.seconds),0)));setPortraitExtraTime(setup.portraitExtraTime??Math.max(0,(Number(setup.portraitLength)||0)-(setup.portraitPlaylist||portraitPlaylist).reduce((sum,row)=>sum+Number(row.seconds),0)));
+        stopPreview();setCropEditing(false);setMainPicture(!!setup.mainPicture);setMode(setup.mode);setSequenceExtraTime(Math.max(0,Number(setup.sequenceExtraTime)||0));setPortraitExtraTime(Math.max(0,Number(setup.portraitExtraTime)||0));
         setOrbitTiming(setup.orbitTiming==='circle'?'circle':'speed');setOrbitSpeed(setup.orbitSpeed);setOrbitDirection(setup.orbitDirection===-1?-1:1);setOrbitRadius(setup.orbitRadius);setOrbitAngle(setup.orbitAngle||0);setLight(setup.light);setQuality(setup.quality);setFPS(setup.fps);
         setBackgroundMode(setup.backgroundMode);setColor(setup.color);setCrop(setup.crop);setCropPreset(setup.cropPreset);setMedia(setup.media);setBackgroundAsset(setup.backgroundAsset);onBackground(setup.background||'');setTrim(setup.trim);setVideoDuration(0);
         setPortraitZoom(setup.portraitZoom);setPortraitFrameEnabled(setup.portraitFrameEnabled);setGrid(!!setup.grid);setGridDensity(setup.gridDensity||5);setLayers(setup.layers);setActiveLayer(null);setLayersEditing(false);setSelected(0);
@@ -257,17 +258,66 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
     })().catch(error=>{if(!cancelled&&pendingApply.current===pending){pendingApply.current=null;pending.reject(error);}});
     return()=>{cancelled=true;};
   },[api,applyVersion]);
-  async function saveSetup(){
-    setSetupBusy(true);
-    try{const name=presetName.trim()||'Showcase setup',prior=presets.find(row=>row.name===name);const row={id:prior?.id||crypto.randomUUID(),name,setup:await captureSetup()};await saveShowcasePreset(row);setPresets(await listShowcasePresets());setPresetId(row.id);setPresetDialog(null);onStatus?.('Saved preset: '+name);}
-    catch(error){onStatus?.('Could not save preset: '+error.message,true);}finally{setSetupBusy(false);}
+  const presetType=row=>row.kind==='set'?'set':'layout';
+  const matchingPresets=presets.filter(row=>presetType(row)===presetKind);
+  function openPresetDialog(action){
+    setPresetError('');setPresetDialog(action);
+    setPresetName(presetEditing?.name||modelName.replace(/\.[^.]+$/,'')+(presetKind==='set'?' set':' layout'));
+    setPresetId(action==='save'?'':matchingPresets[0]?.id||(presetKind==='layout'?SHOWCASE_PRESETS[0].id:''));
+  }
+  function changePresetKind(kind){
+    setPresetKind(kind);setPresetError('');
+    setPresetId(presetDialog==='save'?'':presets.find(row=>presetType(row)===kind)?.id||(kind==='layout'?SHOWCASE_PRESETS[0].id:''));
+    setPresetName(modelName.replace(/\.[^.]+$/,'')+(kind==='set'?' set':' layout'));
+  }
+  async function presetContents(kind){
+    if(kind==='layout')return {setup:await captureSetup()};
+    const working=await captureSetup(true);
+    const currentTake={id:editingRecording||crypto.randomUUID(),name:playlist.map(row=>model.Sequences[row.sequence]?.Name).join(' → ')+' · '+length+'s',setup:working};
+    const recordings=recordingList.length?recordingList.map(row=>row.id===editingRecording?currentTake:row):[currentTake];
+    return {working,recordings:structuredClone(recordings),exportTarget};
+  }
+  async function saveSetup(update=null){
+    setSetupBusy(true);setPresetError('');
+    try{
+      const prior=update||presets.find(row=>row.id===presetId&&presetType(row)===presetKind),kind=update?.kind||presetKind;
+      const name=(update?.name||presetName).trim();if(!name)throw Error('Enter a preset name.');
+      const row={id:prior?.id||crypto.randomUUID(),name,kind,...await presetContents(kind)};
+      await saveShowcasePreset(row);setPresets(await listShowcasePresets());setPresetId(row.id);setPresetDialog(null);setPresetEditing(null);
+      onStatus?.('Saved '+(kind==='set'?'recording set: ':'layout: ')+name);
+    }catch(error){setPresetError(error.message);onStatus?.('Could not save preset: '+error.message,true);}finally{setSetupBusy(false);}
   }
   async function loadSetup(){
+    setSetupBusy(true);setPresetError('');
+    try{
+      const saved=matchingPresets.find(row=>row.id===presetId),builtin=presetKind==='layout'&&!saved?SHOWCASE_PRESETS.find(row=>row.id===presetId):null;
+      if(!builtin&&!saved)throw Error('Choose a preset.');
+      if(saved?.kind==='set'){
+        if(!saved.recordings?.length||!saved.working)throw Error('This recording set is incomplete.');
+        await applySetup(saved.working);setRecordingList(structuredClone(saved.recordings));
+        setExportTarget(['hive','catbox'].includes(saved.exportTarget)?saved.exportTarget:null);
+      }else{
+        const frame=builtin?cropPresetRect(previewSize.width,previewSize.height,SHOWCASE_CROP_PRESETS[builtin.cropPreset]):null;
+        await applySetup(builtin?builtinSetup(builtin,frame):saved.setup);
+      }
+      const chosen=saved||builtin;
+      setPresetEditing(presetDialog==='edit'?{id:chosen.id,name:chosen.name,kind:presetKind}:null);
+      setPresetDialog(null);onStatus?.((presetDialog==='edit'?'Editing preset: ':'Loaded preset: ')+chosen.name);
+    }catch(error){setPresetError(error.message);onStatus?.('Could not load preset: '+error.message,true);}finally{setSetupBusy(false);}
+  }
+  async function loadModel(file){
+    if(!onLoadModel||busy||setupBusy)return;
     setSetupBusy(true);
-    try{const builtin=SHOWCASE_PRESETS.find(row=>row.id===presetId),saved=presets.find(row=>row.id===presetId);if(!builtin&&!saved)throw Error('Choose a preset.');
-      const frame=builtin?cropPresetRect(previewSize.width,previewSize.height,SHOWCASE_CROP_PRESETS[builtin.cropPreset]):null;
-      await applySetup(builtin?builtinSetup(builtin,frame):saved.setup);setPresetDialog(null);onStatus?.('Loaded preset: '+(builtin||saved).name);
-    }catch(error){onStatus?.('Could not load preset: '+error.message,true);}finally{setSetupBusy(false);}
+    try{
+      const before=editingRecording?await captureSetup(true):null;
+      const next=await onLoadModel(file);if(!next)return;
+      if(before){
+        const modelSource=await snapshotShowcaseModel({model:next.doc.model,modelName:next.doc.name,modelPath:next.path,revision:next.doc.revision,sessionId:next.id,textureAssets:next.assets});
+        const take=remapShowcaseTake({setup:before},before.modelSource.model,next.doc.model);
+        await applySetup({...take.setup,modelSource});
+        onStatus?.('Recording model replaced. Save changes to keep it.');
+      }
+    }catch(error){onStatus?.('Could not load recording model: '+error.message,true);}finally{setSetupBusy(false);}
   }
   async function addRecording(){
     setSetupBusy(true);
@@ -308,9 +358,9 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
       <AnimationPreviewTools exportTarget={exportTarget} onExportTarget={chooseExportTarget} mainPicture={mainPicture} cropAspect={framedPortrait?undefined:mainPicture?612/490:SHOWCASE_CROP_PRESETS[cropPreset]} active={active} sessionId={inputSessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={framedPortrait?null:selectedCrop} locked={setupBusy||!!editingRecording} recordingList={recordingList} prepareTake={take=>applySetup(take.setup)} onTakeComplete={id=>setRecordingList(rows=>rows.filter(row=>row.id!==id))} beforeBatch={async()=>{batchRestore.current=await captureSetup(true);}} afterBatch={async()=>{const saved=batchRestore.current;batchRestore.current=null;if(saved)await applySetup(saved);}} disabled={!!exportError || setupBusy || overflow.some(Boolean) || !playlist.length || portrait && cameraIndex < 0 || !portrait && backgroundMode === 'folder' && !backgroundAsset && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)stopPreview();}}/>
       {exportError&&<div className="showcase-error" role="alert">{exportError}</div>}
       <fieldset disabled={busy||setupBusy} className="showcase-fields">
-        <div className="showcase-model-file"><button onClick={()=>window.desktop?onLoadModel?.():modelInput.current.click()}>Load model</button><small translate="no" title={modelPath||modelName}>{modelName}</small></div>
-        <input ref={modelInput} type="file" accept=".mdl,.mdx" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)onLoadModel?.(file);}}/>
-        <div className="showcase-preset-actions"><button disabled={!api} onClick={()=>{setPresetName(modelName.replace(/\.[^.]+$/,'')+' setup');setPresetDialog('save');}}>Save Preset</button><button disabled={!api} onClick={()=>setPresetDialog('load')}>Load Preset</button></div>
+        <div className="showcase-model-file"><button title={editingRecording?'Replace this recording’s model':'Load Showcase model'} onClick={()=>window.desktop?loadModel():modelInput.current.click()}>Load model</button><small title={modelPath||modelName}>{modelName}</small></div>
+        <input ref={modelInput} type="file" accept=".mdl,.mdx" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)loadModel(file);}}/>
+        <div className="showcase-preset-actions" aria-label="Presets">{presetEditing?<><button disabled={!api||!!editingRecording} title={presetEditing.name} onClick={()=>saveSetup(presetEditing)}>Update preset</button><button onClick={()=>setPresetEditing(null)}>Done</button></>:<><button disabled={!api} onClick={()=>openPresetDialog('save')}>Save preset</button><button disabled={!api||!!editingRecording} onClick={()=>openPresetDialog('load')}>Load</button><button disabled={!api||!!editingRecording} onClick={()=>openPresetDialog('edit')}>Edit</button></>}</div>
         {editingRecording?<div className="showcase-preset-actions"><button disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={()=>finishRecordingEdit(true)}>Save changes</button><button onClick={()=>finishRecordingEdit(false)}>Cancel</button></div>:<button className="showcase-wide" disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={addRecording}>Add to recording list{recordingList.length?' · '+recordingList.length:''}</button>}
         {recordingList.length>0&&<ol className="showcase-recording-list" aria-label="Recording list">{recordingList.map((take,index)=><li key={take.id}><button translate="no" className="showcase-recording-edit" aria-label={translate('Edit recording '+(index+1))} aria-pressed={editingRecording===take.id} disabled={!!editingRecording} title={translate('Edit')+' '+take.name+(take.setup.modelSource?' · '+take.setup.modelSource.modelName:'')} onClick={()=>editRecording(take)}>{index+1}. {take.name}</button><button disabled={!!editingRecording} aria-label={'Remove recording '+(index+1)} onClick={()=>setRecordingList(rows=>rows.filter(row=>row.id!==take.id))}>×</button></li>)}</ol>}
         <ExtraTimeField value={portrait?portraitExtraTime:sequenceExtraTime} base={portrait?portraitBase:sequenceBase} onChange={portrait?setPortraitExtraTime:setSequenceExtraTime}/>
@@ -358,9 +408,18 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
         </section>
       </fieldset>
     </aside>
-    {presetDialog&&<Dialog title={presetDialog==='save'?'Save Preset':'Load Preset'} onClose={()=>{if(!setupBusy)setPresetDialog(null);}} onSubmit={()=>{if(!setupBusy)(presetDialog==='save'?saveSetup:loadSetup)();}}>
-      {presetDialog==='save'?<label>Name<input autoFocus aria-label="Showcase preset name" value={presetName} onChange={event=>setPresetName(event.target.value)} disabled={setupBusy}/></label>:<label>Preset<select aria-label="Showcase presets" value={presetId} onChange={event=>setPresetId(event.target.value)} disabled={setupBusy}><optgroup label="Included">{SHOWCASE_PRESETS.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</optgroup>{presets.length>0&&<optgroup label="Saved">{presets.map(row=><option translate="no" key={row.id} value={row.id}>{row.name}</option>)}</optgroup>}</select></label>}
-      <small>{setupBusy?'Loading…':'Includes layout, media, text and camera settings. Animations stay as selected.'}</small>
+    {presetDialog&&<Dialog title={presetDialog==='save'?'Save preset':presetDialog==='edit'?'Edit preset':'Load preset'} onClose={()=>!setupBusy&&setPresetDialog(null)} onSubmit={()=>!setupBusy&&(presetDialog==='save'?saveSetup():loadSetup())}>
+      <fieldset disabled={setupBusy} className="showcase-fields">
+        <div className="showcase-preset-actions" role="group" aria-label="Preset type"><button type="button" aria-pressed={presetKind==='layout'} onClick={()=>changePresetKind('layout')}>Layout</button><button type="button" aria-pressed={presetKind==='set'} onClick={()=>changePresetKind('set')}>Recording set</button></div>
+        <label>{presetDialog==='save'?'Save to':'Preset'}<select aria-label="Showcase presets" value={presetId} onChange={event=>{setPresetId(event.target.value);const row=matchingPresets.find(item=>item.id===event.target.value);if(row)setPresetName(row.name);}}>
+          {presetDialog==='save'?<option value="">New preset</option>:<option value="" disabled>Choose preset</option>}
+          {presetDialog!=='save'&&presetKind==='layout'&&<optgroup label="Included">{SHOWCASE_PRESETS.filter(row=>!presets.some(saved=>saved.id===row.id)).map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</optgroup>}
+          {matchingPresets.length>0&&<optgroup label="Saved">{matchingPresets.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</optgroup>}
+        </select></label>
+        {presetDialog==='save'&&<label>Name<input autoFocus aria-label="Showcase preset name" value={presetName} onChange={event=>setPresetName(event.target.value)}/></label>}
+        <small>{presetKind==='set'?'All recordings, models, animations and settings.':'Presentation settings without models or animations.'}</small>
+        {presetError&&<div className="showcase-error" role="alert">{presetError}</div>}
+      </fieldset>
     </Dialog>}
     <section ref={previewRef} className={`showcase-preview${framedPortrait?" portrait":portrait?" portrait-frameless":""}`} aria-label="Showcase preview" style={framedPortrait?{"--portrait-zoom":portraitZoom/125,backgroundColor:color}:portrait?{backgroundColor:"#000000"}:undefined} inert={busy || setupBusy || undefined}><Suspense fallback={<div className="classic-empty-view">Loading model preview…</div>}><GamePreview suspended={!active} showcase={director} presentation="preview" previewMode="textured" mode="textured" overlays={CLEAN} showGrid={false} showAxes={false} showParticles playing={false} sequenceIndex={0} time={model.Sequences?.[0]?.Interval?.[0]||0} model={model} revision={revision} modelPath={modelPath} textureAssets={textureAssets} preferences={localPreferences} teamColor={teamColor} view="perspective" cameraMode="rotate" showcaseLight={light} showcaseCrop={framedPortrait?null:selectedCrop} showcaseRadius={orbitRadius} showcasePortraitMode={portrait} showcasePortraitFrame={portraitFrameEnabled&&!mainPicture} showcasePortraitZoom={portraitZoom} portraitCameraIndex={cameraIndex} showcaseGrid={grid&&!busy} showcaseGridDensity={gridDensity} showcaseLayers={layers} showcaseLayerEditing={layersEditing&&!cropEditing} showcaseActiveLayer={activeLayer} onShowcaseLayerSelect={setActiveLayer} onShowcaseLayerChange={(id,patch)=>setLayers(values=>values.map(layer=>layer.id===id?{...layer,...patch}:layer))} onShowcaseLayerError={message=>onStatus?.(message,true)} onCaptureReady={captureReady} backgroundUrl={backgroundUrl} backgroundType={backgroundType} backgroundTrim={trim} onBackgroundMetadata={setVideoDuration} preserveCameraView showcasePlaying={playing&&active} showcaseConfig={[playlist,length,previewOrbit,orbitSpeed,orbitDirection,orbitTiming,exportTarget,mainPicture,orbitRadius,orbitAngle,light,portrait,portraitZoom,portraitFrameEnabled]}/></Suspense>
       {!framedPortrait&&(cropEditing||selectedCrop)&&<div className={'showcase-crop-overlay'+(cropEditing?' editing':'')} aria-label="Crop area" onPointerDown={cropEditing?startCrop:undefined} onPointerMove={cropEditing?moveCrop:undefined} onPointerUp={cropEditing?finishCrop:undefined} onPointerCancel={cropEditing?finishCrop:undefined}>
