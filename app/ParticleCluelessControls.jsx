@@ -40,7 +40,7 @@ export function ParticleSample({emitter,asset,replaceableId=0,teamColor='#ed3333
     {notice&&<button className="pe-sample-note" onClick={()=>setNotice('')}>{notice} ×</button>}
   </div>;
 }
-export default function ParticleCluelessControls({model,emitter,frame,globalTime,sequence,tool,scope,setScope,asset,assets,preferences,teamColor,update,patch,onImport,onTeamPicture,begin,change,finish,cancel,lifeStage=1,setLifeStage,onSeek}) {
+export default function ParticleCluelessControls({model,emitter,frame,globalTime,sequence,tool,scope,setScope,asset,assets,preferences,teamColor,update,patch,onImport,onTeamPicture,onDemo,demo,begin,change,finish,cancel,lifeStage=1,setLifeStage,onSeek}) {
   const options={frame,globalTime,interval:model.Sequences[sequence]?.Interval,globalSequences:model.GlobalSequences};
   const slider=field=><ParticleSlider key={field} field={field} label={field==='EmissionRate'&&emitter.Squirt?'Burst amount':undefined} value={particleValue(emitter,field,options)} {...{begin,change,finish,cancel}}/>;
   const animated=['Rotation',...primaryParticleFields,'Width','Length','Variation','Visibility'].some(field=>emitter[field]?.Keys);
@@ -49,7 +49,7 @@ export default function ParticleCluelessControls({model,emitter,frame,globalTime
     {tool==='Basics'&&primaryParticleFields.map(slider)}
     {tool==='Shape'&&<>{['Width','Length','Latitude','Variation','TailLength'].map(slider)}{[0,1,2].map(axis=><ParticleSlider key={'aim'+axis} label={'Aim '+['X','Y','Z'][axis]} field="Rotation" stage={{axis}} value={particleValue(emitter,'Rotation',{...options,axis})} {...{begin,change,finish,cancel}}/>)}</>}
     {tool==='Life'&&<><div className="pe-life-strip">{[0,1,2].map(index=><ParticleSample key={index} stage={index} replaceableId={emitter.ReplaceableId||model.Textures[emitter.TextureID]?.ReplaceableId||0} selected={lifeStage===index} onSelect={setLifeStage} {...{emitter,asset,teamColor,begin,change,finish,cancel}}/>)}</div><ParticleLifeMarker value={emitter.Time} {...{begin,change,finish,cancel}} onSelect={setLifeStage}/>{slider('Time')}{slider('LifeSpan')}<ParticleSlider label={stages[lifeStage]+' size'} field="ParticleScaling" stage={lifeStage} value={emitter.ParticleScaling?.[lifeStage]||0} {...{begin,change,finish,cancel}}/></>}
-    {tool==='Picture'&&<ParticlePictureTool {...{model,emitter,assets,asset,preferences,teamColor,sequence,frame,update,patch,onImport,onTeamPicture,begin,change,finish,cancel}}/>}
+    {tool==='Picture'&&<ParticlePictureTool {...{model,emitter,assets,asset,preferences,teamColor,sequence,frame,update,patch,onImport,onTeamPicture,onDemo,demo,begin,change,finish,cancel}}/>}
     {tool==='Timing'&&<ParticleTimingTool {...{emitter,options,begin,change,finish,cancel,update,patch,onSeek}}/>}
   </div>;
 }

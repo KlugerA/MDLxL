@@ -110,3 +110,9 @@ test('native PE2 replacement overrides only that emitter while retaining the sha
  controller.setLayerProps(controller.emitters[0]);assert.ok(calls.some(c=>c[0]==='uniform1f'&&c[1]==='replacement'&&c[2]===2));assert.deepEqual(sim.native.model.Textures,before);
  controller.emitters[0].props.ReplaceableId=0;calls.length=0;controller.setLayerProps(controller.emitters[0]);assert.ok(calls.some(c=>c[0]==='uniform1f'&&c[1]==='replacement'&&c[2]===0));
 });
+
+test('ribbon history grows beyond the initial native allocation and animated color reaches the draw',()=>{
+ const model=structuredClone(createStarterRecipe('ribbon').native),r=model.RibbonEmitters[0];r.EmissionRate=100;r.LifeSpan=10;model.Sequences[0].Interval=new Uint32Array([0,10000]);r.Color={LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(1,0,0)},{Frame:10000,Vector:v(0,0,1)}]};
+ const sim=new NativeParticleSimulation(model);sim.advance(6000);const controller=sim.native.ribbonsController,emitter=controller.emitters[0];assert.ok(emitter.creationTimes.length>256);assert.ok(emitter.vertices.length>=emitter.creationTimes.length*6);assert.ok(emitter.texCoords.length>=emitter.creationTimes.length*4);
+ const calls=[],before=structuredClone(sim.native.model.RibbonEmitters[0].Color);controller.shaderProgramLocations={colorUniform:'color'};controller.gl=new Proxy({}, {get:(_,name)=>name.toUpperCase()===name?name:(...args)=>calls.push([name,...args])});sim.native.rendererData.materialLayerTextureID=[[0]];controller.render(new Float32Array(16),new Float32Array(16));const color=calls.find(c=>c[0]==='uniform4f'&&c[1]==='color');assert.ok(Math.abs(color[2]-.4)<1e-6);assert.ok(Math.abs(color[4]-.6)<1e-6);assert.deepEqual(sim.native.model.RibbonEmitters[0].Color,before);
+});

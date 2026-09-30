@@ -9,7 +9,7 @@ function PictureTile({asset,replaceableId,teamColor,label,selected,onClick}){
  useEffect(()=>{let live=true;setMissing(false);particlePictureCanvas(asset,{replaceableId,teamColor}).then(image=>{if(live){const c=canvas.current.getContext('2d');c.clearRect(0,0,64,64);c.drawImage(image,0,0,64,64);}}).catch(()=>{if(live)setMissing(true);});return()=>{live=false;};},[asset,replaceableId,teamColor]);
  return <button className="pe-picture-tile" onClick={onClick} aria-pressed={selected} aria-label={label}><canvas ref={canvas} width="64" height="64"/><span>{missing?'Missing picture':label}</span></button>;
 }
-export default function ParticlePictureTool({model,emitter,assets,asset,preferences,teamColor,sequence,frame,update,patch,onImport,onTeamPicture,begin,change,finish,cancel}){
+export default function ParticlePictureTool({model,emitter,assets,asset,preferences,teamColor,sequence,frame,update,patch,onImport,onTeamPicture,onDemo,demo,begin,change,finish,cancel}){
  const canvas=useRef(null),[group,setGroup]=useState('LifeSpanUVAnim'),[endpoint,setEndpoint]=useState(0),[pending,setPending]=useState(null),[message,setMessage]=useState(''),[compare,setCompare]=useState(null),[pictureLimit,setPictureLimit]=useState(64);
  const replaceableId=emitter.ReplaceableId||model.Textures[emitter.TextureID]?.ReplaceableId||0;
  const rows=emitter.Rows,columns=emitter.Columns,values=emitter[group]||[0,0,1],visibleGrid=rows*columns<=4096&&rows<=256&&columns<=256;
@@ -27,7 +27,7 @@ export default function ParticlePictureTool({model,emitter,assets,asset,preferen
   <label>Draw as<select aria-label="Draw as" value={emitter.FrameFlags} onChange={e=>update('FrameFlags',Number(e.target.value))}><option value={1}>Sprites</option><option value={2}>Streaks</option><option value={3}>Both</option></select></label>
   <label>Blend look<select aria-label="Blend look" value={emitter.FilterMode} onChange={e=>update('FilterMode',Number(e.target.value))}>{particleBlendNames.map((name,i)=><option key={name} value={i}>{name}</option>)}</select></label><button onClick={()=>setCompare({source:structuredClone(model),sequence,time:frame})}>Compare blend looks</button>
   {compare&&<ParticleBlendComparisons {...compare} id={emitter.ObjectId} {...{assets,preferences}} onChoose={value=>{update('FilterMode',value);setCompare(null);}} onClose={()=>setCompare(null)}/>}
-  <details><summary>Orientation and draw options</summary>{[['Face camera / Flat',1048576],['Keep brightness',32768],['Ignore fog',262144],['Sort distant particles',65536]].map(([name,bit])=><button key={bit} aria-pressed={!!(emitter.Flags&bit)} onClick={()=>update('Flags',emitter.Flags^bit)}>{name}</button>)}</details>
+  <details><summary>Orientation and draw options</summary><div className="pe-timing-mode"><button aria-pressed={!!(emitter.Flags&524288)} onClick={()=>update('Flags',emitter.Flags|524288)}>Carry particles</button><button aria-pressed={!(emitter.Flags&524288)} onClick={()=>update('Flags',emitter.Flags&~524288)}>Leave behind</button></div>{onDemo&&<button aria-pressed={demo} onClick={()=>onDemo(!demo)}>Demonstration motion</button>}{[['Face camera / Flat',1048576],['Keep brightness',32768],['Ignore fog',262144],['Sort distant particles',65536]].map(([name,bit])=><button key={bit} aria-pressed={!!(emitter.Flags&bit)} onClick={()=>update('Flags',emitter.Flags^bit)}>{name}</button>)}</details>
   {message&&<small role="status">{message}</small>}
  </div>;
 }

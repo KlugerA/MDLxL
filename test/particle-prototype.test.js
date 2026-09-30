@@ -175,3 +175,9 @@ test('original teaching variants save natively without demonstration motion or s
  const {particleExampleNames,particleExamplePair}=await import('../src/particle-examples.js');
  for(const [kind]of particleExampleNames){const before=stringifyParticleData(particleExamplePair(kind));for(const variant of particleExamplePair(kind).pairs){const doc=particleRecipeDocument(variant.recipe);for(const format of ['mdl','mdx']){const reopened=openDocument(doc.serialize(format),'example.'+format);assert.equal(reopened.readOnly,false,kind+' '+format);assert.equal(reopened.model.ParticleEmitters2.length,doc.model.ParticleEmitters2.length);assert.equal(reopened.model.RibbonEmitters.length,doc.model.RibbonEmitters.length);assert.ok(reopened.model.Helpers.every(n=>n.Name!=='Preview demonstration'));}}assert.equal(stringifyParticleData(particleExamplePair(kind)),before);}
 });
+
+test('repeated-instance inspection preserves source data and native references in every copy',async()=>{
+ const {createStarterRecipe}=await import('../src/particle-starters.js'),{particleInspectionModel,particleConstantRateEstimate}=await import('../src/particle-inspection.js');const source=createStarterRecipe('glow').native,before=stringifyParticleData(source),ids=source.ParticleEmitters2.map(p=>p.ObjectId);
+ for(const instances of [1,4,9]){const model=particleInspectionModel(source,ids,{instances});assert.equal(model.ParticleEmitters2.length,instances*2);assert.equal(particleConstantRateEstimate(model),28*instances);assert.equal(validateModel(model).filter(d=>d.severity==='error').length,0);assert.equal(new Set(model.Nodes.map(n=>n.ObjectId)).size,model.Nodes.length);assert.equal(stringifyParticleData(source),before);}
+ assert.throws(()=>particleInspectionModel(source,ids,{instances:10000}),/1, 4 or 9/);assert.equal(particleConstantRateEstimate(createStarterRecipe('impact').native),null);
+});

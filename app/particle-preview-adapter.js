@@ -43,7 +43,13 @@ export function installParticleNativeCompatibility(native){
   if(replacement===1||replacement===2)this.rendererData.model.Textures[id]={Image:'',ReplaceableId:replacement,Flags:original?.Flags||0};
   try{return layer.call(this,emitter);}finally{if(replacement===1||replacement===2)this.rendererData.model.Textures[id]=original;}
  };
- const ribbons=native.ribbonsController,uv=ribbons.updateEmitterTexCoords;
+ const ribbons=native.ribbonsController,uv=ribbons.updateEmitterTexCoords,resizeRibbon=ribbons.resizeEmitterBuffers,renderRibbons=ribbons.render;
+ // Upstream caps ribbon allocation at its initial rate/lifetime estimate. Authoring can exceed it.
+ ribbons.resizeEmitterBuffers=function(emitter,size){emitter.baseCapacity=Math.max(emitter.baseCapacity,size);return resizeRibbon.call(this,emitter,size);};
+ ribbons.render=function(...args){
+  const saved=[];for(const emitter of this.emitters)if(emitter.props.Color?.Keys){const track=emitter.props.Color;saved.push([emitter.props,track]);emitter.props.Color=sampleTrack(track,native.getFrame(),{interval:native.model.Sequences[native.getSequence()]?.Interval,globalSequences:native.model.GlobalSequences,globalTime:native.rendererData.globalSequencesFrames[track.GlobalSeqId]??native.getFrame(),fallback:[1,1,1]});}
+  try{return renderRibbons.apply(this,args);}finally{for(const [props,color]of saved)props.Color=color;}
+ };
  ribbons.updateEmitterTexCoords=function(emitter,now){
    uv.call(this,emitter,now);const rows=emitter.props.Rows,columns=emitter.props.Columns;if(!(rows>0&&columns>0))return;
    const cell=this.interp.animVectorVal(emitter.props.TextureSlot,0),y=Math.floor(cell/columns)/rows;
@@ -428,7 +434,7 @@ export class ParticleAuthoringPreview {
       if(visible!==candidate&&this.target>=visible.time)try{visible.advance(this.target,{budgetMs:Math.min(2,budgetMs)});}catch(error){if(!(error instanceof ParticlePreviewBudgetError))throw error;this.limit=error;return this.status={busy:false,frame:this.native.getFrame(),global:phase.global,fx:phase.fx,ended:true,error:error.message,limit:error.limit};}
       visible.refresh();copyParticleSimulationToPreview(visible,this.native,phase);
     }
-    this.status={busy:!!this.pending||!result.complete,frame:phase.frame,global:phase.global,fx:phase.fx,ended,liveParticles:visible?.native.particlesController.emitters.reduce((sum,e)=>sum+e.particles.length,0)||0};
+    this.status={busy:!!this.pending||!result.complete,frame:phase.frame,global:phase.global,fx:phase.fx,ended,liveRibbons:visible?.native.ribbonsController.emitters.reduce((sum,e)=>sum+e.creationTimes.length,0)||0,liveParticles:visible?.native.particlesController.emitters.reduce((sum,e)=>sum+e.particles.length,0)||0};
     return this.status;
   }
 }

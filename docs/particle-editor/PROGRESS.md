@@ -173,3 +173,15 @@ Verification: 113/113 focused, desktop-menu/settings and current compatibility t
 Performance rerun after full-loop changes: baseline 50.00 FPS, current 50.00 FPS at about 796–800 particles; Size p95 15.8 ms, Speed p95 53.3 ms. Heavy preview retained authored values and stopped at the same explicit 12,000-particle budget. See PERFORMANCE.md for method and limits.
 
 Still open: repeated-instance/game-distance test view, full parent/axis/direct-gesture matrix and surface/pivot UI proof, source lifecycle/weapon coverage, PE1 simulation, remaining source exceptions, broad appearance review, native draw ordering/ribbon gravity compatibility, and Warcraft game acceptance. Captures are offscreen automated evidence, not user visual acceptance. This is a working prototype checkpoint, not complete contract fulfillment.
+
+## Checkpoint 7 — repeated-instance inspection and ribbon history
+
+Account counter: 18% after reset; approximately 15 of the allocated 33 points remain. Branch and draft PR remain isolated, with no merge or release.
+
+A temporary Test view now renders 1, 4 or 9 copies of the current effect through the shared native preview. It provides close/game-like/far viewing distances, two team colors, light/dark backgrounds and optional live-count/cost details. Inspection copies and their anchor offsets never enter either document. The Picture orientation details now expose Carry particles / Leave behind and a preview-only motion demonstration. Authoring controls are disabled while snapshot inspection views are open.
+
+The pinned renderer's ribbon buffer allocation stopped growing at its initial capacity. The adapter now expands runtime capacity before the native allocator and samples animated ribbon Color for drawing while retaining the original track. Targeted tests cover more than 256 history segments and RGB reaching the native draw call. Ribbon gravity and advanced draw ordering remain explicitly unverified/unsupported in preview; their authored values are preserved.
+
+Verification: 115/115 focused, desktop-settings and compatibility tests pass. Production build and expanded Electron workflow pass with zero JS errors. Actual four-instance rendering, distance/team/background changes, optional cost details and unchanged Lab/target documents were exercised. Placement tests now also snap the ghost to a parent pivot and a posed surface, then confirm once, undo exactly and redo. Earlier MDL/MDX Save As/reopen evidence remains in checkpoint 6. These automated windows are offscreen; user visual acceptance and Warcraft execution remain outstanding.
+
+See ACCEPTANCE.md for the current per-gate evidence and remaining limits, replacing the historical checkpoint-2 table as the current status.
