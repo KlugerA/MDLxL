@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { createDemoDocument } from '../src/editor-document.js';
+import { createDemoDocument, createNode } from '../src/editor-document.js';
 
 // Execute the real JSX component, not a regex over source. This catches
 // undefined render-time variables even when the production bundler succeeds.
@@ -51,6 +51,16 @@ test('Movement places Highlight Chain directly under Highlight KF and exposes co
   assert.ok(html.indexOf('Highlight KF') < html.indexOf('Highlight Chain'));
   assert.match(html,/Highlight KF<\/label><label[^>]*><input type="checkbox" checked=""\/>Highlight Chain/);
   for(const title of ['Current Sequence','Object','Workplane','Tools','Restrictions','Controller']) assert.match(html,new RegExp(`<summary>${title}<\\/summary>`));
+});
+test('Movement object list separates colored Bones from purple Helpers at the bottom',()=>{
+  const model=fixture(),helper=createNode(model,'Helper');helper.Name='Bone_Chest';
+  const html=renderToStaticMarkup(React.createElement(Movement,{model,sequenceIndex:0,selectedNodeIds:[helper.ObjectId],time:0}));
+  const picker=html.match(/<select[^>]*aria-label="Movement bone or node"[\s\S]*?<\/select>/)[0];
+  assert.ok(picker.indexOf('label="Bones"') < picker.indexOf('label="Other Objects"'));
+  assert.ok(picker.indexOf('label="Other Objects"') < picker.indexOf('label="Helpers"'));
+  assert.match(picker,/label="Bones" style="color:#4cff59"/);
+  assert.match(picker,/label="Helpers" style="color:#8a2be2"/);
+  assert.match(picker,/data-node-kind="helper" style="color:#8a2be2"/);
 });
 test('Animations remains editable with no selected vertices or checked geosets',()=>{
   const html=renderToStaticMarkup(React.createElement(Animation,{model:fixture(),sequenceIndex:0,time:0,selectedGeosets:[]}));
