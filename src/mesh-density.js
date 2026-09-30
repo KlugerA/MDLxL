@@ -19,7 +19,6 @@ const normal = values => {
   return length > 1e-12 ? values.map(value => value / length) : [0, 0, 1];
 };
 const positionKey = (geoset, index) => point(geoset.Vertices, index, 3).map(value => Object.is(value, -0) ? 0 : Math.fround(value)).join(',');
-const geometricEdgeKey = (geoset, a, b) => [positionKey(geoset, a), positionKey(geoset, b)].sort().join('|');
 const indexedEdgeKey = (a, b) => a < b ? `${a}:${b}` : `${b}:${a}`;
 
 function validateGeoset(geoset) {
@@ -35,7 +34,7 @@ function validateGeoset(geoset) {
 
 export function densityTargetTriangles(triangles, amount) {
   amount = clampAmount(amount);
-  if (amount >= 0) return Math.max(1, Math.round(triangles * (1 + amount * 0.03)));
+  if (amount >= 0) return Math.max(1, Math.round(triangles * (1 + amount * .0106666667)));
   return Math.max(1, Math.round(triangles * (1 + amount * 0.0075)));
 }
 
@@ -55,9 +54,9 @@ function addClassicGroup(groups, first, second) {
   return index;
 }
 
-function blendSkin(source, a, b) {
+function blendSkin(source, a, b, t = .5) {
   const weights = new Map();
-  for (const [index, factor] of [[a, .5], [b, .5]]) {
+  for (const [index, factor] of [[a, 1 - t], [b, t]]) {
     const offset = index * 8;
     for (let slot = 0; slot < 4; slot++) {
       const weight = source[offset + 4 + slot];
@@ -75,41 +74,120 @@ function blendSkin(source, a, b) {
   return [...chosen.map(entry => entry[0]), 0, 0, 0, 0].slice(0, 4).concat([...rounded, 0, 0, 0, 0].slice(0, 4));
 }
 
-function splitSelectedEdges(source, selected) {
-  const geoset = structuredClone(source), count = validateGeoset(geoset), groups = geoset.Groups ? geoset.Groups.map(group => [...group]) : [];
-  const vertices = Array.from(geoset.Vertices), normals = Array.from(geoset.Normals || []), vertexGroups = Array.from(geoset.VertexGroup || []);
-  const tangents = geoset.Tangents?.length ? Array.from(geoset.Tangents) : null;
-  const skins = geoset.SkinWeights?.length ? Array.from(geoset.SkinWeights) : null;
-  const uvs = (geoset.TVertices || []).map(stream => Array.from(stream)), midpointByEdge = new Map();
-  const midpoint = (a, b) => {
-    const key = indexedEdgeKey(a, b);
-    if (midpointByEdge.has(key)) return midpointByEdge.get(key);
+function triangleLongestEdge(geoset, offset) {
+  const indices = geoset.Faces.slice(offset, offset + 3);
+  let longest = 0;
+  for (let edge = 0; edge < 3; edge++) {
+    const a = indices[edge], b = indices[(edge + 1) % 3];
+    longest = Math.max(longest, Math.hypot(...point(geoset.Vertices, a, 3).map((value, axis) => value - geoset.Vertices[b * 3 + axis])));
+  }
+  return longest;
+}
+
+function adaptiveCutRegion(geoset) {
+  const stats = Array.from({ length: geoset.Faces.length / 3 }, (_, triangle) => ({ triangle, length: triangleLongestEdge(geoset, triangle * 3) }));
+  const ordered = stats.filter(entry => entry.length > 1e-10).sort((a, b) => b.length - a.length || a.triangle - b.triangle);
+  let selectedCount = ordered.length, bestGap = 1.75;
+  for (let index = 1; index <= Math.floor(ordered.length / 2); index++) {
+    const ratio = ordered[index - 1].length / Math.max(ordered[index].length, 1e-10);
+    if (ratio > bestGap) { bestGap = ratio; selectedCount = index; }
+  }
+  const active = new Set((selectedCount < ordered.length ? ordered.slice(0, selectedCount) : ordered).map(entry => entry.triangle));
+  const unique = new Map();
+  for (const triangle of active) for (const index of geoset.Faces.slice(triangle * 3, triangle * 3 + 3)) unique.set(positionKey(geoset, index), point(geoset.Vertices, index, 3));
+  const positions = [...unique.values()];
+  const spans = [0, 1, 2].map(axis => Math.max(...positions.map(value => value[axis])) - Math.min(...positions.map(value => value[axis])));
+  const axis = spans.indexOf(Math.max(...spans)), span = spans[axis];
+  if (!(span > 1e-10)) return { active, axis, lower: 0, upper: 0 };
+  const values = positions.map(value => value[axis]).sort((a, b) => a - b), tolerance = Math.max(1e-6, span * .005), clusters = [];
+  for (const value of values) {
+    const cluster = clusters.at(-1);
+    if (!cluster || value - cluster.at(-1) > tolerance) clusters.push([value]);
+    else cluster.push(value);
+  }
+  const center = cluster => cluster.reduce((sum, value) => sum + value, 0) / cluster.length;
+  let lower = center(clusters[0]), upper = center(clusters.at(-1));
+  if (clusters.length >= 4) {
+    const innerLower = center(clusters[1]), innerUpper = center(clusters.at(-2));
+    if (innerUpper - innerLower >= span * .35) { lower = innerLower; upper = innerUpper; }
+  }
+  return { active, axis, lower, upper };
+}
+
+export function densifyGeoset(source, cutCount) {
+  validateGeoset(source);
+  cutCount = Math.max(0, Math.min(4, Math.round(cutCount)));
+  if (!cutCount) return structuredClone(source);
+  const geoset = structuredClone(source), groups = geoset.Groups ? geoset.Groups.map(group => [...group]) : [];
+  let vertices = Array.from(geoset.Vertices), normals = Array.from(geoset.Normals || []), vertexGroups = Array.from(geoset.VertexGroup || []);
+  let tangents = geoset.Tangents?.length ? Array.from(geoset.Tangents) : null, skins = geoset.SkinWeights?.length ? Array.from(geoset.SkinWeights) : null;
+  let uvs = (geoset.TVertices || []).map(stream => Array.from(stream));
+  const intersections = new Map(), { active, axis, lower, upper } = adaptiveCutRegion(geoset);
+  if (!(upper > lower)) return geoset;
+  const cuts = Array.from({ length: cutCount }, (_, index) => lower + (upper - lower) * (index + 1) / (cutCount + 1));
+  const projection = index => vertices[index * 3 + axis], epsilon = Math.max(1e-7, (upper - lower) * 1e-7);
+  const interpolate = (a, b, t, cutIndex) => {
+    const key = `${indexedEdgeKey(a, b)}@${cutIndex}`;
+    if (intersections.has(key)) return intersections.get(key);
     const index = vertices.length / 3;
-    for (let axis = 0; axis < 3; axis++) vertices.push((geoset.Vertices[a * 3 + axis] + geoset.Vertices[b * 3 + axis]) / 2);
-    if (normals.length) normals.push(...normal([0, 1, 2].map(axis => geoset.Normals[a * 3 + axis] + geoset.Normals[b * 3 + axis])));
-    uvs.forEach((stream, channel) => stream.push(...[0, 1].map(axis => (geoset.TVertices[channel][a * 2 + axis] + geoset.TVertices[channel][b * 2 + axis]) / 2)));
+    for (let component = 0; component < 3; component++) vertices.push(vertices[a * 3 + component] * (1 - t) + vertices[b * 3 + component] * t);
+    if (normals.length) normals.push(...normal([0, 1, 2].map(component => normals[a * 3 + component] * (1 - t) + normals[b * 3 + component] * t)));
+    uvs.forEach(stream => stream.push(...[0, 1].map(component => stream[a * 2 + component] * (1 - t) + stream[b * 2 + component] * t)));
     if (tangents) {
-      const xyz = normal([0, 1, 2].map(axis => geoset.Tangents[a * 4 + axis] + geoset.Tangents[b * 4 + axis]));
-      tangents.push(...xyz, geoset.Tangents[a * 4 + 3] + geoset.Tangents[b * 4 + 3] < 0 ? -1 : 1);
+      tangents.push(...normal([0, 1, 2].map(component => tangents[a * 4 + component] * (1 - t) + tangents[b * 4 + component] * t)), tangents[a * 4 + 3] * (1 - t) + tangents[b * 4 + 3] * t < 0 ? -1 : 1);
     }
-    if (skins) skins.push(...blendSkin(geoset.SkinWeights, a, b));
-    if (vertexGroups.length) vertexGroups.push(addClassicGroup(groups, geoset.VertexGroup[a], geoset.VertexGroup[b]));
-    midpointByEdge.set(key, index);
+    if (skins) skins.push(...blendSkin(skins, a, b, t));
+    if (vertexGroups.length) vertexGroups.push(addClassicGroup(groups, vertexGroups[a], vertexGroups[b]));
+    intersections.set(key, index);
     return index;
   };
-  const faces = [];
+  const intersection = (a, b, cut, cutIndex) => {
+    const from = projection(a), distance = projection(b) - from;
+    if (Math.abs(distance) <= epsilon) return a;
+    return interpolate(a, b, Math.max(0, Math.min(1, (cut - from) / distance)), cutIndex);
+  };
+  const cleanPolygon = polygon => {
+    const clean = polygon.filter((index, at) => !at || index !== polygon[at - 1]);
+    if (clean.length > 1 && clean[0] === clean.at(-1)) clean.pop();
+    return clean;
+  };
+  const clip = (polygon, cut, cutIndex, keepLow) => {
+    const output = [];
+    let previous = polygon.at(-1), previousInside = keepLow ? projection(previous) <= cut + epsilon : projection(previous) >= cut - epsilon;
+    for (const current of polygon) {
+      const currentInside = keepLow ? projection(current) <= cut + epsilon : projection(current) >= cut - epsilon;
+      if (currentInside !== previousInside) output.push(intersection(previous, current, cut, cutIndex));
+      if (currentInside) output.push(current);
+      previous = current; previousInside = currentInside;
+    }
+    return cleanPolygon(output);
+  };
+  let faces = [];
   for (let offset = 0; offset < geoset.Faces.length; offset += 3) {
-    const [a, b, c] = geoset.Faces.slice(offset, offset + 3), ab = selected.has(geometricEdgeKey(geoset, a, b)), bc = selected.has(geometricEdgeKey(geoset, b, c)), ca = selected.has(geometricEdgeKey(geoset, c, a));
-    const mask = (ab ? 1 : 0) | (bc ? 2 : 0) | (ca ? 4 : 0);
-    if (!mask) { faces.push(a, b, c); continue; }
-    const mab = ab ? midpoint(a, b) : -1, mbc = bc ? midpoint(b, c) : -1, mca = ca ? midpoint(c, a) : -1;
-    if (mask === 1) faces.push(a, mab, c, mab, b, c);
-    else if (mask === 2) faces.push(b, mbc, a, mbc, c, a);
-    else if (mask === 4) faces.push(c, mca, b, mca, a, b);
-    else if (mask === 3) faces.push(b, mbc, mab, a, mab, mbc, a, mbc, c);
-    else if (mask === 5) faces.push(a, mab, mca, b, c, mca, b, mca, mab);
-    else if (mask === 6) faces.push(c, mca, mbc, a, b, mbc, a, mbc, mca);
-    else faces.push(a, mab, mca, mab, b, mbc, mca, mbc, c, mab, mbc, mca);
+    const triangle = offset / 3, original = Array.from(geoset.Faces.slice(offset, offset + 3));
+    if (!active.has(triangle)) { faces.push(...original); continue; }
+    let polygons = [original];
+    cuts.forEach((cut, cutIndex) => {
+      const next = [];
+      for (const polygon of polygons) {
+        const low = clip(polygon, cut, cutIndex, true), high = clip(polygon, cut, cutIndex, false);
+        if (low.length >= 3) next.push(low);
+        if (high.length >= 3) next.push(high);
+      }
+      polygons = next;
+    });
+    for (const polygon of polygons) for (let index = 1; index < polygon.length - 1; index++) faces.push(polygon[0], polygon[index], polygon[index + 1]);
+  }
+  const sourceIsTriangleCorners = source.Faces.length === source.Vertices.length / 3 && new Set(source.Faces).size === source.Faces.length;
+  if (sourceIsTriangleCorners) {
+    const gather = (array, width) => faces.flatMap(index => array.slice(index * width, index * width + width));
+    vertices = gather(vertices, 3);
+    if (normals.length) normals = gather(normals, 3);
+    if (vertexGroups.length) vertexGroups = gather(vertexGroups, 1);
+    if (tangents) tangents = gather(tangents, 4);
+    if (skins) skins = gather(skins, 8);
+    uvs = uvs.map(stream => gather(stream, 2));
+    faces = faces.map((_, index) => index);
   }
   if (vertices.length / 3 > 65536) throw Error('This density exceeds Warcraft III\'s 65,536-vertex limit for one geoset.');
   geoset.Vertices = new geoset.Vertices.constructor(vertices);
@@ -122,42 +200,6 @@ function splitSelectedEdges(source, selected) {
   if ('TotalGroupsCount' in geoset) geoset.TotalGroupsCount = groups.reduce((sum, group) => sum + group.length, 0);
   geoset.Faces = new geoset.Faces.constructor(faces);
   updatePrimitiveCounts(geoset);
-  return geoset;
-}
-
-function edgeBuckets(geoset) {
-  const edges = new Map();
-  for (let offset = 0; offset < geoset.Faces.length; offset += 3) for (let edge = 0; edge < 3; edge++) {
-    const a = geoset.Faces[offset + edge], b = geoset.Faces[offset + (edge + 1) % 3], key = geometricEdgeKey(geoset, a, b);
-    if (!edges.has(key)) edges.set(key, { key, length: Math.hypot(...point(geoset.Vertices, a, 3).map((value, axis) => value - geoset.Vertices[b * 3 + axis])), uses: 0 });
-    edges.get(key).uses++;
-  }
-  const ordered = [...edges.values()].filter(edge => edge.length > 1e-10).sort((a, b) => b.length - a.length || a.key.localeCompare(b.key)), buckets = [];
-  for (const edge of ordered) {
-    const last = buckets.at(-1), tolerance = Math.max(1e-7, edge.length * 1e-5);
-    if (!last || Math.abs(last.length - edge.length) > tolerance) buckets.push({ length: edge.length, edges: [edge], increment: edge.uses });
-    else { last.edges.push(edge); last.increment += edge.uses; }
-  }
-  return buckets;
-}
-
-export function densifyGeoset(source, targetTriangles) {
-  validateGeoset(source);
-  let geoset = structuredClone(source), triangles = geoset.Faces.length / 3;
-  targetTriangles = Math.max(triangles, Math.min(triangles * 4, Math.round(targetTriangles)));
-  for (let pass = 0; pass < 8 && triangles < targetTriangles; pass++) {
-    const selected = new Set(); let projected = triangles;
-    for (const bucket of edgeBuckets(geoset)) {
-      const next = projected + bucket.increment;
-      if (selected.size && next > targetTriangles && Math.abs(targetTriangles - projected) <= Math.abs(next - targetTriangles)) break;
-      bucket.edges.forEach(edge => selected.add(edge.key)); projected = next;
-      if (projected >= targetTriangles) break;
-    }
-    if (!selected.size) break;
-    const next = splitSelectedEdges(geoset, selected);
-    if (next.Faces.length === geoset.Faces.length) break;
-    geoset = next; triangles = geoset.Faces.length / 3;
-  }
   return geoset;
 }
 
@@ -247,7 +289,8 @@ export async function reduceGeosetDensity(source, targetTriangles) {
 
 export async function changeGeosetDensity(source, amount) {
   const verticesBefore = validateGeoset(source), trianglesBefore = source.Faces.length / 3, normalized = clampAmount(amount), target = densityTargetTriangles(trianglesBefore, normalized);
-  const geoset = normalized > 0 ? densifyGeoset(source, target) : normalized < 0 ? await reduceGeosetDensity(source, target) : structuredClone(source);
+  const geoset = normalized > 0 ? densifyGeoset(source, Math.ceil(normalized / 25)) : normalized < 0 ? await reduceGeosetDensity(source, target) : structuredClone(source);
   const densityError = geoset._densityError || 0; delete geoset._densityError;
-  return { amount: normalized, geoset, verticesBefore, verticesAfter: geoset.Vertices.length / 3, trianglesBefore, trianglesAfter: geoset.Faces.length / 3, targetTriangles: target, constrained: normalized < 0 && geoset.Faces.length / 3 > target, densityError };
+  const trianglesAfter = geoset.Faces.length / 3;
+  return { amount: normalized, geoset, verticesBefore, verticesAfter: geoset.Vertices.length / 3, trianglesBefore, trianglesAfter, targetTriangles: normalized > 0 ? trianglesAfter : target, constrained: normalized < 0 && trianglesAfter > target, densityError };
 }

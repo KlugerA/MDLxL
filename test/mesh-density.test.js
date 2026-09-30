@@ -22,18 +22,46 @@ function grid(size = 9) {
   return { Vertices: new Float32Array(vertices), Normals: new Float32Array(normals), TVertices: [new Float32Array(uv)], VertexGroup: new Uint8Array(size * size), Groups: [[0]], Faces: new Uint16Array(faces), PrimitiveTypes: new Uint32Array([4]), PrimitiveCounts: new Uint32Array([faces.length]) };
 }
 
+function sparseBlade() {
+  const triangles = [];
+  for (let index = 0; index < 4; index++) {
+    triangles.push([[0, index * 2, 0], [10, index * 2, 0], [9, index * 2 + 1, 0]]);
+    triangles.push([[10, index * 2 + 1, 0], [0, index * 2 + 1, 0], [1, index * 2, 0]]);
+  }
+  for (let index = 0; index < 52; index++) {
+    const y = 20 + index * 2;
+    triangles.push([[20, y, 0], [21, y, 0], [20, y + 1, 0]]);
+  }
+  const vertices = triangles.flat(2), count = vertices.length / 3;
+  return {
+    Vertices: new Float32Array(vertices), Normals: new Float32Array(Array.from({ length: count }, () => [0, 0, 1]).flat()),
+    TVertices: [new Float32Array(Array.from({ length: count }, (_, index) => [vertices[index * 3] / 21, vertices[index * 3 + 1] / 124]).flat())],
+    VertexGroup: new Uint8Array(count), Groups: [[0]], TotalGroupsCount: 1,
+    Faces: new Uint16Array(Array.from({ length: count }, (_, index) => index)), PrimitiveTypes: new Uint32Array([4]), PrimitiveCounts: new Uint32Array([count]),
+  };
+}
+
 test('more density splits shared edges conformingly and interpolates the existing surface and UVs', async () => {
   const source = quad(), result = await changeGeosetDensity(source, 100), geoset = result.geoset;
-  assert.equal(result.trianglesBefore, 2); assert.equal(result.trianglesAfter, 8); assert.equal(geoset.PrimitiveCounts[0], geoset.Faces.length);
+  assert.equal(result.trianglesBefore, 2); assert.equal(result.trianglesAfter, 18); assert.equal(geoset.PrimitiveCounts[0], geoset.Faces.length);
   assert.deepEqual(source, quad(), 'preview generation must not mutate the source');
   const records = Array.from({ length: geoset.Vertices.length / 3 }, (_, index) => ({ p: [...geoset.Vertices.slice(index * 3, index * 3 + 3)], uv: [...geoset.TVertices[0].slice(index * 2, index * 2 + 2)] }));
-  assert.equal(records.filter(record => record.p[0] === .5 && record.p[1] === .5).length, 1, 'the shared diagonal must have one conforming midpoint');
+  for (const cut of [.2, .4, .6, .8]) assert.equal(records.filter(record => Math.abs(record.p[0] - cut) < 1e-6 && Math.abs(record.p[1] - cut) < 1e-6).length, 1, `the shared diagonal must have one conforming vertex at ${cut}`);
   for (const record of records) assert.deepEqual(record.uv, record.p.slice(0, 2), 'new UVs follow the same barycentric position as the flat source');
 });
 
 test('equal-length mirrored edges are refined together instead of producing one-sided cuts', () => {
-  const geoset = densifyGeoset(quad(2), 4), positions = Array.from({ length: geoset.Vertices.length / 3 }, (_, index) => [...geoset.Vertices.slice(index * 3, index * 3 + 2)]), keys = new Set(positions.map(value => value.join(',')));
-  for (const [x, y] of positions) assert.ok(keys.has(`${2 - x},${y}`), `missing X mirror of ${x},${y}`);
+  const geoset = densifyGeoset(quad(2), 4), xs = new Set(Array.from({ length: geoset.Vertices.length / 3 }, (_, index) => geoset.Vertices[index * 3].toFixed(5)));
+  for (const x of xs) assert.ok(xs.has((2 - Number(x)).toFixed(5)), `missing mirrored cut plane for X ${x}`);
+});
+
+test('the slider adds even adaptive cross-cuts and reaches the supplied flexible 60 to 124 maximum', async () => {
+  const source = sparseBlade(), expected = [[25, 76], [50, 92], [75, 108], [100, 124]];
+  for (const [amount, triangles] of expected) assert.equal((await changeGeosetDensity(source, amount)).trianglesAfter, triangles);
+  const maximum = (await changeGeosetDensity(source, 100)).geoset;
+  assert.equal(maximum.Vertices.length / 3, 372, 'triangle-corner UV topology stays independently wrappable');
+  const cuts = [...new Set(Array.from(maximum.Vertices).filter((_, index) => index % 3 === 0).map(value => Number(value.toFixed(1))))].filter(value => value > 1 && value < 9).sort((a, b) => a - b);
+  assert.deepEqual(cuts, [2.6, 4.2, 5.8, 7.4]);
 });
 
 test('new vertices preserve classic and HD binding formats', async () => {

@@ -45,13 +45,13 @@ async function setRange(locator, value) {
     await main.getByRole('button', { name: 'Pick geoset', exact: true }).click();
     await main.getByLabel('Forge geoset').selectOption('1');
     const forgeSlider = main.locator('.forge-density-body').getByLabel('Triangle density');
-    await setRange(forgeSlider, 18);
-    await main.waitForFunction(() => document.querySelector('.forge-density-body .mesh-density-counts')?.textContent.includes('92 triangles'));
+    await setRange(forgeSlider, 100);
+    await main.waitForFunction(() => document.querySelector('.forge-density-body .mesh-density-counts')?.textContent.includes('124 triangles'));
     assert.equal(await main.locator('.forge-density-body .forge-preview-canvas').count(), 1, 'Forge must show the wireframe density preview');
     await main.screenshot({ path: path.join(output, 'forge-density.png') });
     await main.locator('.forge-dialog footer .forge-primary').click();
     await main.locator('.forge-dialog').waitFor({ state: 'detached' });
-    await main.waitForFunction(() => document.querySelector('.classic-status')?.textContent.includes('Geoset 2: 60 → 92 triangles.'));
+    await main.waitForFunction(() => document.querySelector('.classic-status')?.textContent.includes('Geoset 2: 60 → 124 triangles.'));
 
     const opened = app.waitForEvent('window');
     await main.locator('[data-warmkey="uv"]').click();
@@ -64,17 +64,17 @@ async function setRange(locator, value) {
     await popup.waitFor();
     assert.equal(await popup.locator('input[type="range"]').count(), 1, 'UV popup must contain one density slider');
     assert.equal(await popup.locator('select').count(), 0, 'UV popup must not contain a geoset picker');
-    await setRange(popup.getByLabel('Triangle density'), 18);
+    await setRange(popup.getByLabel('Triangle density'), 100);
     await uv.waitForFunction(() => {
       const text = document.querySelector('.uv-density-popup .mesh-density-counts')?.textContent || '';
-      return /\d+ triangles/.test(text) && !text.includes('92 triangles');
+      return /\d+ triangles/.test(text) && !text.includes('124 triangles');
     });
     const uvCount = await popup.locator('.mesh-density-counts').innerText();
     await popup.getByRole('button', { name: 'Apply', exact: true }).click();
     await popup.waitFor({ state: 'detached' });
 
     assert.ok(fs.readFileSync(fixture).equals(original), 'Preview and Apply must not overwrite the supplied model before Save');
-    console.log(`PASS Forge and UV triangle-density sliders: geoset picker, 60→92 wireframe preview, compact UV popup, Apply, original file unchanged (${uvCount.trim()})`);
+    console.log(`PASS Forge and UV triangle-density sliders: geoset picker, supplied flexible 60→124 wireframe preview, compact UV popup, Apply, original file unchanged (${uvCount.trim()})`);
   } finally {
     await app.evaluate(({ app }) => app.exit(0));
   }
