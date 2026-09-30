@@ -24,9 +24,9 @@ function grid(size = 9) {
 
 function sparseBlade() {
   const triangles = [];
-  for (let index = 0; index < 4; index++) {
-    triangles.push([[0, index * 2, 0], [10, index * 2, 0], [9, index * 2 + 1, 0]]);
-    triangles.push([[10, index * 2 + 1, 0], [0, index * 2 + 1, 0], [1, index * 2, 0]]);
+  for (const side of [0, 1]) {
+    const left = [side, 0, 0], right = [side, 10, 0], upperLeft = [side, 1, 1], lowerLeft = [side, 1, -1], upperRight = [side, 9, 1], lowerRight = [side, 9, -1];
+    triangles.push([left, right, lowerRight], [right, left, upperRight], [upperRight, left, upperLeft], [left, lowerRight, lowerLeft]);
   }
   for (let index = 0; index < 52; index++) {
     const y = 20 + index * 2;
@@ -41,13 +41,16 @@ function sparseBlade() {
   };
 }
 
-test('more density splits shared edges conformingly and interpolates the existing surface and UVs', async () => {
+test('more density replaces long diagonals with a compact square grid and interpolates the surface and UVs', async () => {
   const source = quad(), result = await changeGeosetDensity(source, 100), geoset = result.geoset;
   assert.equal(result.trianglesBefore, 2); assert.equal(result.trianglesAfter, 18); assert.equal(geoset.PrimitiveCounts[0], geoset.Faces.length);
   assert.deepEqual(source, quad(), 'preview generation must not mutate the source');
   const records = Array.from({ length: geoset.Vertices.length / 3 }, (_, index) => ({ p: [...geoset.Vertices.slice(index * 3, index * 3 + 3)], uv: [...geoset.TVertices[0].slice(index * 2, index * 2 + 2)] }));
-  for (const cut of [.2, .4, .6, .8]) assert.equal(records.filter(record => Math.abs(record.p[0] - cut) < 1e-6 && Math.abs(record.p[1] - cut) < 1e-6).length, 1, `the shared diagonal must have one conforming vertex at ${cut}`);
   for (const record of records) assert.deepEqual(record.uv, record.p.slice(0, 2), 'new UVs follow the same barycentric position as the flat source');
+  for (let offset = 0; offset < geoset.Faces.length; offset += 3) {
+    const positions = Array.from(geoset.Faces.slice(offset, offset + 3), index => [...geoset.Vertices.slice(index * 3, index * 3 + 2)]);
+    for (let edge = 0; edge < 3; edge++) assert.ok(Math.hypot(positions[edge][0] - positions[(edge + 1) % 3][0], positions[edge][1] - positions[(edge + 1) % 3][1]) <= Math.SQRT2 / 3 + 1e-6, 'grid contains a stretched edge');
+  }
 });
 
 test('equal-length mirrored edges are refined together instead of producing one-sided cuts', () => {
@@ -55,13 +58,35 @@ test('equal-length mirrored edges are refined together instead of producing one-
   for (const x of xs) assert.ok(xs.has((2 - Number(x)).toFixed(5)), `missing mirrored cut plane for X ${x}`);
 });
 
-test('the slider adds even adaptive cross-cuts and reaches the supplied flexible 60 to 124 maximum', async () => {
+test('square-grid coverage works on a surface with no world-axis alignment', async () => {
+  const source = quad(2), along = [1 / Math.sqrt(3), 1 / Math.sqrt(3), 1 / Math.sqrt(3)], across = [1 / Math.sqrt(2), -1 / Math.sqrt(2), 0];
+  for (let index = 0; index < source.Vertices.length / 3; index++) {
+    const x = source.Vertices[index * 3], y = source.Vertices[index * 3 + 1];
+    for (let axis = 0; axis < 3; axis++) source.Vertices[index * 3 + axis] = along[axis] * x + across[axis] * y;
+  }
+  const result = await changeGeosetDensity(source, 100);
+  assert.ok(result.trianglesAfter > result.trianglesBefore);
+  for (let offset = 0; offset < result.geoset.Faces.length; offset += 3) {
+    const positions = Array.from(result.geoset.Faces.slice(offset, offset + 3), index => [...result.geoset.Vertices.slice(index * 3, index * 3 + 3)]);
+    for (let edge = 0; edge < 3; edge++) assert.ok(Math.hypot(...positions[edge].map((value, axis) => value - positions[(edge + 1) % 3][axis])) < 1.1, 'rotated surface retained a long texture-stretching edge');
+  }
+});
+
+test('the slider builds simple square-like coverage and reaches the supplied flexible 60 to 124 maximum', async () => {
   const source = sparseBlade(), expected = [[25, 76], [50, 92], [75, 108], [100, 124]];
   for (const [amount, triangles] of expected) assert.equal((await changeGeosetDensity(source, amount)).trianglesAfter, triangles);
   const maximum = (await changeGeosetDensity(source, 100)).geoset;
   assert.equal(maximum.Vertices.length / 3, 372, 'triangle-corner UV topology stays independently wrappable');
-  const cuts = [...new Set(Array.from(maximum.Vertices).filter((_, index) => index % 3 === 0).map(value => Number(value.toFixed(1))))].filter(value => value > 1 && value < 9).sort((a, b) => a - b);
-  assert.deepEqual(cuts, [2.6, 4.2, 5.8, 7.4]);
+  let bladeTriangles = 0;
+  for (let offset = 0; offset < maximum.Faces.length; offset += 3) {
+    const positions = Array.from(maximum.Faces.slice(offset, offset + 3), index => [...maximum.Vertices.slice(index * 3, index * 3 + 3)]);
+    if (positions.every(value => value[0] < 2)) {
+      bladeTriangles++;
+      assert.ok(Math.max(...positions.map(value => value[1])) - Math.min(...positions.map(value => value[1])) <= 1.00001, 'a triangle crosses more than one grid column');
+      assert.ok(Math.max(...positions.map(value => value[2])) - Math.min(...positions.map(value => value[2])) <= 1.00001, 'a triangle crosses more than one grid row');
+    }
+  }
+  assert.equal(bladeTriangles, 72);
 });
 
 test('new vertices preserve classic and HD binding formats', async () => {

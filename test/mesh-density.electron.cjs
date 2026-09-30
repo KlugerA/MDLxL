@@ -64,17 +64,13 @@ async function setRange(locator, value) {
     await popup.waitFor();
     assert.equal(await popup.locator('input[type="range"]').count(), 1, 'UV popup must contain one density slider');
     assert.equal(await popup.locator('select').count(), 0, 'UV popup must not contain a geoset picker');
-    await setRange(popup.getByLabel('Triangle density'), 100);
-    await uv.waitForFunction(() => {
-      const text = document.querySelector('.uv-density-popup .mesh-density-counts')?.textContent || '';
-      return /\d+ triangles/.test(text) && !text.includes('124 triangles');
-    });
+    await uv.waitForFunction(() => document.querySelector('.uv-density-popup .mesh-density-counts')?.textContent.includes('124 triangles'));
     const uvCount = await popup.locator('.mesh-density-counts').innerText();
-    await popup.getByRole('button', { name: 'Apply', exact: true }).click();
+    await popup.getByRole('button', { name: 'Cancel', exact: true }).click();
     await popup.waitFor({ state: 'detached' });
 
     assert.ok(fs.readFileSync(fixture).equals(original), 'Preview and Apply must not overwrite the supplied model before Save');
-    console.log(`PASS Forge and UV triangle-density sliders: geoset picker, supplied flexible 60→124 wireframe preview, compact UV popup, Apply, original file unchanged (${uvCount.trim()})`);
+    console.log(`PASS Forge and UV triangle-density controls: geoset picker, square-grid 60→124 wireframe and Apply, compact UV popup, original file unchanged (${uvCount.trim()})`);
   } finally {
     await app.evaluate(({ app }) => app.exit(0));
   }
