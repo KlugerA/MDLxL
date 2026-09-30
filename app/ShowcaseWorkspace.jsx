@@ -113,7 +113,9 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
   const [presets,setPresets]=useState([]),[presetDialog,setPresetDialog]=useState(null),[presetName,setPresetName]=useState(''),[presetId,setPresetId]=useState(SHOWCASE_PRESETS[0].id),[setupBusy,setSetupBusy]=useState(false);
   const [presetKind,setPresetKind]=useState('layout'),[presetEditing,setPresetEditing]=useState(null),[presetError,setPresetError]=useState('');
   const [recordingList,setRecordingList]=useState([]),[backgroundAsset,setBackgroundAsset]=useState(null),[applyVersion,setApplyVersion]=useState(0);
-  const [editingRecording,setEditingRecording]=useState(null),recordingDraft=useRef(null);
+  const [editingRecording,setEditingRecording]=useState(null),recordingDraft=useRef(null),recordingEdits=useRef(new Map());
+  const draggedRecording=useRef(null),[recordingDrop,setRecordingDrop]=useState(null);
+  const recordingPlan=recordingList.map(take=>recordingEdits.current.get(take.id)||take);
   const setupURLs=useRef(new Set()),pendingApply=useRef(null),apiRef=useRef(null),captureSettings=useRef(null),batchRestore=useRef(null);
   const captureReady=useCallback(value=>{apiRef.current=value;setAPI(value);},[]);
   const previousModel=useRef({model,sessionId}),modelView=useRef(null);
@@ -274,7 +276,7 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
     if(kind==='layout')return {setup:await captureSetup()};
     const working=await captureSetup(true);
     const currentTake={id:editingRecording||crypto.randomUUID(),name:playlist.map(row=>model.Sequences[row.sequence]?.Name).join(' → ')+' · '+length+'s',setup:working};
-    const recordings=recordingList.length?recordingList.map(row=>row.id===editingRecording?currentTake:row):[currentTake];
+    const recordings=recordingList.length?recordingPlan.map(row=>row.id===editingRecording?currentTake:row):[currentTake];
     return {working,recordings:structuredClone(recordings),exportTarget};
   }
   async function saveSetup(update=null){
@@ -294,7 +296,7 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
       if(!builtin&&!saved)throw Error('Choose a preset.');
       if(saved?.kind==='set'){
         if(!saved.recordings?.length||!saved.working)throw Error('This recording set is incomplete.');
-        await applySetup(saved.working);setRecordingList(structuredClone(saved.recordings));
+        await applySetup(saved.working);recordingEdits.current.clear();recordingDraft.current=null;setRecordingList(structuredClone(saved.recordings));
         setExportTarget(['hive','catbox'].includes(saved.exportTarget)?saved.exportTarget:null);
       }else{
         const frame=builtin?cropPresetRect(previewSize.width,previewSize.height,SHOWCASE_CROP_PRESETS[builtin.cropPreset]):null;
@@ -325,13 +327,17 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
     catch(error){onStatus?.('Could not add recording: '+error.message,true);}finally{setSetupBusy(false);}
   }
   async function editRecording(take){
-    if(busy||setupBusy||editingRecording)return;
+    if(busy||setupBusy||editingRecording===take.id)return;
     setSetupBusy(true);
     try{
-      recordingDraft.current=await captureSetup(true);
+      const setup=await captureSetup(true);
+      if(editingRecording){
+        const prior=recordingList.find(row=>row.id===editingRecording);
+        recordingEdits.current.set(editingRecording,{...prior,setup,name:playlist.map(row=>model.Sequences[row.sequence]?.Name).join(' → ')+' · '+length+'s'});
+      }else recordingDraft.current=setup;
+      await applySetup((recordingEdits.current.get(take.id)||take).setup);
       setEditingRecording(take.id);
-      await applySetup(take.setup);
-      onStatus?.('Editing queued recording. Save changes or Cancel to return.');
+      onStatus?.('Editing recording. Other drafts are kept when switching.');
     }catch(error){onStatus?.('Could not open recording: '+error.message,true);}
     finally{setSetupBusy(false);}
   }
@@ -342,10 +348,35 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
       const replacement=save?{setup:await captureSetup(true),name:playlist.map(row=>model.Sequences[row.sequence]?.Name).join(' → ')+' · '+length+'s'}:null;
       await applySetup(recordingDraft.current);
       if(replacement)setRecordingList(rows=>rows.map(row=>row.id===editingRecording?{...row,...replacement}:row));
+      recordingEdits.current.delete(editingRecording);
       recordingDraft.current=null;setEditingRecording(null);
-      onStatus?.(save?'Queued recording updated.':'Recording changes cancelled.');
+      onStatus?.(save?'Recording saved. Other drafts kept.':'Recording changes cancelled. Other drafts kept.');
     }catch(error){onStatus?.('Could not '+(save?'update recording':'return to your setup')+': '+error.message,true);}
     finally{setSetupBusy(false);}
+  }
+  function removeRecording(id){
+    recordingEdits.current.delete(id);setRecordingList(rows=>rows.filter(row=>row.id!==id));
+  }
+  function startRecordingDrag(event,id){
+    if(busy||setupBusy){event.preventDefault();return;}
+    draggedRecording.current=id;event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',id);
+  }
+  function overRecording(event,id){
+    if(!draggedRecording.current||busy||setupBusy)return;
+    event.preventDefault();event.dataTransfer.dropEffect='move';
+    const rect=event.currentTarget.getBoundingClientRect(),after=event.clientY>rect.top+rect.height/2;
+    setRecordingDrop(current=>current?.id===id&&current.after===after?current:{id,after});
+  }
+  function dropRecording(event,id){
+    event.preventDefault();const moved=draggedRecording.current;
+    const rect=event.currentTarget.getBoundingClientRect(),after=event.clientY>rect.top+rect.height/2;
+    draggedRecording.current=null;setRecordingDrop(null);
+    if(!moved||moved===id||busy||setupBusy)return;
+    setRecordingList(rows=>{
+      const take=rows.find(row=>row.id===moved);if(!take||!rows.some(row=>row.id===id))return rows;
+      const next=rows.filter(row=>row.id!==moved),index=next.findIndex(row=>row.id===id);
+      next.splice(index+(after?1:0),0,take);return next;
+    });
   }
   async function alignText(id,x,y){
     const layer=layers.find(row=>row.id===id);if(!layer)return;
@@ -355,14 +386,14 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
   }
   return <div className="showcase-workspace">
     <aside className="showcase-sidebar" aria-label="Showcase controls">
-      <AnimationPreviewTools exportTarget={exportTarget} onExportTarget={chooseExportTarget} mainPicture={mainPicture} cropAspect={framedPortrait?undefined:mainPicture?612/490:SHOWCASE_CROP_PRESETS[cropPreset]} active={active} sessionId={inputSessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={framedPortrait?null:selectedCrop} locked={setupBusy||!!editingRecording} recordingList={recordingList} prepareTake={take=>applySetup(take.setup)} onTakeComplete={id=>setRecordingList(rows=>rows.filter(row=>row.id!==id))} beforeBatch={async()=>{batchRestore.current=await captureSetup(true);}} afterBatch={async()=>{const saved=batchRestore.current;batchRestore.current=null;if(saved)await applySetup(saved);}} disabled={!!exportError || setupBusy || overflow.some(Boolean) || !playlist.length || portrait && cameraIndex < 0 || !portrait && backgroundMode === 'folder' && !backgroundAsset && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)stopPreview();}}/>
+      <AnimationPreviewTools exportTarget={exportTarget} onExportTarget={chooseExportTarget} mainPicture={mainPicture} cropAspect={framedPortrait?undefined:mainPicture?612/490:SHOWCASE_CROP_PRESETS[cropPreset]} active={active} sessionId={inputSessionId} modelName={modelName} captureAPI={api} preferences={localPreferences} loop length={length} crop={framedPortrait?null:selectedCrop} locked={setupBusy||!!editingRecording} recordingList={recordingPlan} prepareTake={take=>applySetup(take.setup)} onTakeComplete={removeRecording} beforeBatch={async()=>{batchRestore.current=await captureSetup(true);}} afterBatch={async()=>{const saved=batchRestore.current;batchRestore.current=null;if(saved)await applySetup(saved);}} disabled={!!exportError || setupBusy || overflow.some(Boolean) || !playlist.length || portrait && cameraIndex < 0 || !portrait && backgroundMode === 'folder' && !backgroundAsset && backgroundLibrary.loading} onStatus={onStatus} onBusy={value=>{setBusy(value);if(value)stopPreview();}}/>
       {exportError&&<div className="showcase-error" role="alert">{exportError}</div>}
       <fieldset disabled={busy||setupBusy} className="showcase-fields">
         <div className="showcase-model-file"><button title={editingRecording?'Replace this recording’s model':'Load Showcase model'} onClick={()=>window.desktop?loadModel():modelInput.current.click()}>Load model</button><small title={modelPath||modelName}>{modelName}</small></div>
         <input ref={modelInput} type="file" accept=".mdl,.mdx" hidden onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)loadModel(file);}}/>
         <div className="showcase-preset-actions" aria-label="Presets">{presetEditing?<><button disabled={!api||!!editingRecording} title={presetEditing.name} onClick={()=>saveSetup(presetEditing)}>Update preset</button><button onClick={()=>setPresetEditing(null)}>Done</button></>:<><button disabled={!api} onClick={()=>openPresetDialog('save')}>Save preset</button><button disabled={!api||!!editingRecording} onClick={()=>openPresetDialog('load')}>Load</button><button disabled={!api||!!editingRecording} onClick={()=>openPresetDialog('edit')}>Edit</button></>}</div>
         {editingRecording?<div className="showcase-preset-actions"><button disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={()=>finishRecordingEdit(true)}>Save changes</button><button onClick={()=>finishRecordingEdit(false)}>Cancel</button></div>:<button className="showcase-wide" disabled={!api||overflow.some(Boolean)||!playlist.length||(portrait&&cameraIndex<0)||(backgroundMode==='folder'&&!backgroundAsset&&backgroundLibrary.loading)} onClick={addRecording}>Add to recording list{recordingList.length?' · '+recordingList.length:''}</button>}
-        {recordingList.length>0&&<ol className="showcase-recording-list" aria-label="Recording list">{recordingList.map((take,index)=><li key={take.id}><button translate="no" className="showcase-recording-edit" aria-label={translate('Edit recording '+(index+1))} aria-pressed={editingRecording===take.id} disabled={!!editingRecording} title={translate('Edit')+' '+take.name+(take.setup.modelSource?' · '+take.setup.modelSource.modelName:'')} onClick={()=>editRecording(take)}>{index+1}. {take.name}</button><button disabled={!!editingRecording} aria-label={'Remove recording '+(index+1)} onClick={()=>setRecordingList(rows=>rows.filter(row=>row.id!==take.id))}>×</button></li>)}</ol>}
+        {recordingList.length>0&&<ol className="showcase-recording-list" aria-label="Recording list">{recordingPlan.map((take,index)=><li key={take.id} draggable={!busy&&!setupBusy} data-drop={recordingDrop?.id===take.id?(recordingDrop.after?'after':'before'):undefined} onDragStart={event=>startRecordingDrag(event,take.id)} onDragOver={event=>overRecording(event,take.id)} onDrop={event=>dropRecording(event,take.id)} onDragEnd={()=>{draggedRecording.current=null;setRecordingDrop(null);}}><button translate="no" className="showcase-recording-edit" aria-label={translate('Edit recording '+(index+1))} aria-pressed={editingRecording===take.id} title={translate((recordingEdits.current.has(take.id)?'Unsaved draft · ':'Edit ')+take.name+(take.setup.modelSource?' · '+take.setup.modelSource.modelName:'')+' · Drag to reorder')} onClick={()=>editRecording(take)}>{index+1}. {recordingEdits.current.has(take.id)?'* ':''}{take.name}</button><button disabled={!!editingRecording} aria-label={'Remove recording '+(index+1)} onClick={()=>removeRecording(take.id)}>×</button></li>)}</ol>}
         <ExtraTimeField value={portrait?portraitExtraTime:sequenceExtraTime} base={portrait?portraitBase:sequenceBase} onChange={portrait?setPortraitExtraTime:setSequenceExtraTime}/>
         {(!portrait||framedPortrait)&&<section className={sectionClass('background')} aria-label={portrait?"Portrait color":"Background"}>
           <header>{sectionToggle('background',portrait?'Color':'Background')}{!portrait&&!collapsed.background&&<select aria-label="Background source" value={backgroundMode} onChange={event=>setBackgroundMode(event.target.value)}><option value="folder">Backgrounds</option><option value="color">Color</option><option value="media">Image/Video</option></select>}</header>
