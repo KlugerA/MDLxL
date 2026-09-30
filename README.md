@@ -1,4 +1,4 @@
-# MDLxL 0.14.0
+# MDLxL 0.14.1
 
 Warcraft III model editor. This source continues the requested MDLVis rebuild lane, with the MDLxL name and icon.
 
@@ -6,7 +6,7 @@ For the Windows release, extract the whole ZIP and run MDLxL.exe. Keep its resou
 
 For source development, use Node.js 22.12 or newer and pnpm. Run `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run build`, then `pnpm start` to launch the desktop app directly from the checkout. `pnpm run dev` starts browser development. After building, `pnpm run package` creates the Windows package under `release/MDLxL-win32-x64`. No installer is required.
 
-Version 0.14.0 adds editable global-sequence RGB and visibility keys, focused movement and skeleton controls, visible Bones picker labels, correct saved-model close handling, and a persisted 7×7 UV zoom-out limit that users can increase beside Disable Wrapping. The Texture Library now shows its first page before full search indexing finishes. See [the 0.14.0 release notes](docs/RELEASE-0.14.0.md). The geoset-density slider is not included. The 56 compatibility regression tests run with `pnpm test`; the restored historical suite runs separately with `pnpm run test:source`. See [the compatibility fix status](docs/MDL-MDX-COMPATIBILITY-FIXES.md) for coverage and limitations. After pulling source changes, rebuild before launching: `pnpm run build`, then `pnpm start`.
+Version 0.14.1 adds Forge and UV Wrapper controls for rebuilding a selected geoset as evenly spread, square-like UV triangles. Density stops at the useful six-cell grid instead of allowing another excessive pass, and Focused Skeleton keeps its highlighted bone markers visible whether Bones is enabled or not. It also includes every 0.14.0 change. See [the 0.14.1 release notes](docs/RELEASE-0.14.1.md). The 56 compatibility regression tests run with `pnpm test`; the restored historical suite runs separately with `pnpm run test:source`. See [the compatibility fix status](docs/MDL-MDX-COMPATIBILITY-FIXES.md) for coverage and limitations. After pulling source changes, rebuild before launching: `pnpm run build`, then `pnpm start`.
 
 See `docs/ADDONS.md` for add-ons and `THIRD_PARTY_NOTICES.md` for component credits.
 

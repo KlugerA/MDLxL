@@ -357,13 +357,19 @@ export function densifyGeoset(source, level) {
 
 export function maximumDensityAmount(source) {
   validateGeoset(source);
-  let maximum = 0, previous = source.Faces.length;
-  for (let level = 1; level <= 4; level++) {
-    const faces = densifyGeoset(source, level).Faces.length;
-    if (faces !== previous) maximum = level * 25;
-    previous = faces;
+  try {
+    let maximum = 0, previous = source.Faces.length;
+    for (let level = 1; level <= 4; level++) {
+      const faces = densifyGeoset(source, level).Faces.length;
+      if (faces !== previous) maximum = level * 25;
+      previous = faces;
+    }
+    return maximum;
+  } catch {
+    // Keep the control available; the normal preview pass reports the exact
+    // unsupported-surface reason instead of crashing the Forge dialog.
+    return 100;
   }
-  return maximum;
 }
 
 function bindingKey(geoset, index) {
