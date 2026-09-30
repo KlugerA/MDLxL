@@ -660,5 +660,72 @@
       "sequence": 0,
       "time": 444.44444444444446
     }
+  },
+  "wc3-838fc48f5ca1aa51639306d7": {
+    "name": "Drifting gray dust",
+    "categories": [
+      "Smoke"
+    ],
+    "tags": [
+      "gray",
+      "dust",
+      "cloud",
+      "burst"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native lifecycle preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "dabb861e694c907d35bff72135961054fc93cb71131544365854fffe7bc47689"
+    },
+    "previewSample": {
+      "sequence": 10,
+      "time": 31900
+    }
+  },
+  "wc3-b77c9b1c56c50dec1ffcfd04": {
+    "name": "Twin blue sweeping ribbons",
+    "categories": [
+      "Trails"
+    ],
+    "tags": [
+      "blue",
+      "twin",
+      "ribbon",
+      "sweep",
+      "weapon"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native lifecycle preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "bbc7dc3d2a5b9b1b234b96e0f9dcadd3d4b8551e73179c73656071ec1c90d44c"
+    },
+    "previewSample": {
+      "sequence": 8,
+      "time": 68766.5
+    }
+  },
+  "wc3-eb436de856fa4d1e5ddf2d62": {
+    "name": "Golden slash and spark burst",
+    "categories": [
+      "Trails",
+      "Bursts"
+    ],
+    "tags": [
+      "golden",
+      "orange",
+      "slash",
+      "spark",
+      "weapon",
+      "burst"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native lifecycle preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "0464bc7095533aad067439d9e47cda341209b70456f1e24906099ada8547a961"
+    },
+    "previewSample": {
+      "sequence": 3,
+      "time": 18019.7
+    }
   }
 }

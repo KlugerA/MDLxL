@@ -1,7 +1,6 @@
 import {validateParticleAssets} from './particle-assets.js';
 import {generateCompatibleMdx} from './mdx-compatibility.js';
 import { createNode, NODE_TYPES, validateModel, openDocument } from './editor-document.js';
-import { sampleTrack } from './animation.js';
 import { stringifyParticleData, safeParticlePath } from './particle-data.js';
 
 export const EFFECT_FAMILIES = ['ParticleEmitters2', 'RibbonEmitters', 'ParticleEmitters', 'ParticleEmitterPopcorns'];
@@ -45,15 +44,12 @@ export function copyEffectGraph(target, source, ids, { parent = null, sourceInte
       const [a,b] = sourceInterval, [c,d] = targetInterval;
       if (!(b > a && d > c)) throw Error('Choose valid source and target intervals.');
       const keys = value.Keys.filter(key => key.Frame >= a && key.Frame <= b);
-      if (keys.length !== value.Keys.length) {
-        // Explicit clip mapping isolates the chosen source clip. Add evaluated boundaries
-        // only when there is no authored boundary, retaining all interior tangents.
-        for (const Frame of [a,b]) if (!keys.some(key => key.Frame === Frame)) keys.push({ Frame, Vector: new Float32Array(sampleTrack(value, Frame, { interval: sourceInterval, globalSequences: source.GlobalSequences, globalTime: Frame, fallback: value.Keys[0]?.Vector || [0], quaternion: value.Keys[0]?.Vector?.length === 4 })) });
-      }
+      // Native sampling holds the first/last key in a clip and uses the native
+      // fallback for an empty clip. Synthetic boundary keys change cubic holds
+      // and can import values from an unrelated animation. Keep authored keys.
       const ratio = fit ? (d-c)/(b-a) : 1;
       value.Keys = keys.sort((x,y) => x.Frame-y.Frame).map(key => ({ ...key, Frame: Math.round(c + (key.Frame-a)*ratio) }));
       if (value.Keys.some((key,i) => key.Frame > d || i && key.Frame <= value.Keys[i-1].Frame)) throw Error('The target interval cannot contain these source keys; choose Fit timing or a longer interval.');
-      if (value.LineType >= 2) for (const key of value.Keys) { key.InTan ??= clone(key.Vector); key.OutTan ??= clone(key.Vector); }
     }
     for (const child of Object.values(value)) tracks(child);
   }

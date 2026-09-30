@@ -2,7 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { Worker } = require('node:worker_threads');
-const THUMBNAIL_VERSION = 'native-4.0.1-authoring-4';
+const THUMBNAIL_VERSION = 'native-4.0.1-authoring-5';
 const {particleSourceState}=require('./particle-source.cjs');
 const reviewedNames = require('../src/particle-reviewed-names.json');
 const reviewFor = item => {const review=reviewedNames[item.id];return review&&item.sources?.some(source=>source.contentHash===review.naming.sourceContentHash)?review:{};};
@@ -39,14 +39,31 @@ class ParticleLibrary {
     items.sort((a,b)=>Number(!!a.blocked)-Number(!!b.blocked)||Number(['reviewed','user-reviewed'].includes(b.naming?.state))-Number(['reviewed','user-reviewed'].includes(a.naming?.state)));
     if(coverage){coverage.reviewedNames=items.filter(item=>item.collection==='Warcraft'&&['reviewed','user-reviewed'].includes(item.naming?.state)).length;coverage.reviewNeededNames=items.filter(item=>item.collection==='Warcraft').length-coverage.reviewedNames;}
     const thumbnails=await this.thumbnails(items.slice(0,36).map(item=>item.id));
-    for(const item of items)if(thumbnails[item.id])item.thumbnail=thumbnails[item.id];
+    for(const item of items)if(thumbnails[item.id]?.url)item.thumbnail=thumbnails[item.id].url;
     const sourceStatus=current?await particleSourceState(this.discover,current.sourceKey):null;
     return {sourceStatus,items,coverage,status:this.status};
   }
 
+  async thumbnailRevision(id,current) {
+    if(!ID.test(id))throw Error('Invalid effect identity.');
+    if(current===undefined)current=await this.current();
+    if(id.startsWith('wc3-')&&!current)return null;
+    try {
+      const file=path.join(this.directory,id.startsWith('my-')?'mine':current.sourceKey,id+'.json'),info=await fs.stat(file,{bigint:true});
+      return crypto.createHash('sha256').update(JSON.stringify([THUMBNAIL_VERSION,id.startsWith('wc3-')?current.sourceKey:null,info.size.toString(),info.mtimeNs.toString(),reviewedNames[id]?.previewSample])).digest('hex');
+    }catch(error){if(error.code==='ENOENT')return null;throw error;}
+  }
   async thumbnails(ids){
     if(!Array.isArray(ids)||ids.length>72||ids.some(id=>!ID.test(id)))throw Error('Invalid thumbnail request.');
-    const values=await Promise.all(ids.map(async id=>{try{return [id,await fs.readFile(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,id+'.txt'),'utf8')];}catch(error){if(error.code!=='ENOENT')throw error;return [id,null];}}));return Object.fromEntries(values);
+    const current=await this.current(),values=await Promise.all(ids.map(async id=>{
+      const revision=await this.thumbnailRevision(id,current),empty=[id,{url:null,revision}];if(!revision)return empty;
+      const file=path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,id+'.json');
+      try {
+        if((await fs.stat(file)).size>1024*1024+256)return empty;
+        const entry=JSON.parse(await fs.readFile(file,'utf8'));
+        return entry.revision===revision&&typeof entry.url==='string'?[id,entry]:empty;
+      }catch(error){if(error.code==='ENOENT'||error instanceof SyntaxError)return empty;throw error;}
+    }));return Object.fromEntries(values);
   }
   async exportData(id){
     const {parseParticleData,stringifyParticleData}=await import('../src/particle-data.js'),{validateParticleRecipe}=await import('../src/particle-recipes.js');
@@ -55,7 +72,13 @@ class ParticleLibrary {
     validateParticleRecipe(recipe);return stringifyParticleData(recipe);
   }
   async duplicate(id){const data=await this.exportData(id),{parseParticleData}=await import('../src/particle-data.js');return this.save({data,name:(parseParticleData(data).name+' copy').slice(0,120)});}
-  async thumbnail({id,url}) { if(!ID.test(id)||typeof url!=='string'||!/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(url)||url.length>1024*1024)throw Error('Invalid effect thumbnail.');return this.enqueue(()=>atomic(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,id+'.txt'),url)); }
+  async thumbnail({id,url,revision}) {
+    if(!ID.test(id)||typeof url!=='string'||!/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(url)||url.length>1024*1024||typeof revision!=='string'||!/^[a-f0-9]{64}$/.test(revision))throw Error('Invalid effect thumbnail.');
+    return this.enqueue(async()=>{
+      if(revision!==await this.thumbnailRevision(id))throw Error('The effect changed while its preview was rendering. Reopen the library to refresh it.');
+      return atomic(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,id+'.json'),JSON.stringify({revision,url}));
+    });
+  }
   async read(id) {
     if(!ID.test(id))throw Error('Invalid effect identity.');
     const current=await this.current();
@@ -71,7 +94,7 @@ class ParticleLibrary {
     const recipe=parseParticleData(data);
     recipe.id=id&&/^my-[a-f0-9-]{36}$/.test(id)?id:'my-'+crypto.randomUUID();
     recipe.name=String(name||recipe.name).trim();validateParticleRecipe(recipe);
-    await atomic(path.join(this.directory,'mine',recipe.id+'.json'),stringifyParticleData(recipe));await fs.rm(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,recipe.id+'.txt'),{force:true});return {id:recipe.id,name:recipe.name};
+    await atomic(path.join(this.directory,'mine',recipe.id+'.json'),stringifyParticleData(recipe));await fs.rm(path.join(this.directory,'thumbnails',THUMBNAIL_VERSION,recipe.id+'.json'),{force:true});return {id:recipe.id,name:recipe.name};
   }); }
   async annotate({id,name,tags,categories,favorite}) { return this.enqueue(async()=>{
     if(!ID.test(id))throw Error('Invalid effect identity.');

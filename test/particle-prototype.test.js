@@ -181,3 +181,17 @@ test('repeated-instance inspection preserves source data and native references i
  for(const instances of [1,4,9]){const model=particleInspectionModel(source,ids,{instances});assert.equal(model.ParticleEmitters2.length,instances*2);assert.equal(particleConstantRateEstimate(model),28*instances);assert.equal(validateModel(model).filter(d=>d.severity==='error').length,0);assert.equal(new Set(model.Nodes.map(n=>n.ObjectId)).size,model.Nodes.length);assert.equal(stringifyParticleData(source),before);}
  assert.throws(()=>particleInspectionModel(source,ids,{instances:10000}),/1, 4 or 9/);assert.equal(particleConstantRateEstimate(createStarterRecipe('impact').native),null);
 });
+
+
+test('fitting an explicit source clip preserves cubic endpoint holds and empty-track native fallback',async()=>{
+ const {createStarterRecipe}=await import('../src/particle-starters.js'),{sampleTrack}=await import('../src/animation.js');
+ for(const LineType of [2,3]){
+  const source=createStarterRecipe(),p=source.native.ParticleEmitters2[0];p.Speed={LineType,GlobalSeqId:null,Keys:[[0,90],[1250,10],[1750,20],[3000,50]].map(([Frame,value])=>({Frame,Vector:v(value),InTan:v(value+7),OutTan:v(value-3)}))};
+  p.Gravity={LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(99)},{Frame:3000,Vector:v(88)}]};p._MdxDefaults={Gravity:5};const before=structuredClone(source);
+  const target=createStarterRecipe().native;target.Sequences[0].Interval=new Uint32Array([10000,12000]);const result=placeParticleRecipe(target,source,{sourceInterval:[1000,2000],targetInterval:[10000,12000],fit:true}),placed=target.Nodes[result.ids[0]];
+  assert.deepEqual(placed.Speed.Keys.map(k=>k.Frame),[10500,11500]);assert.equal(placed.Speed.LineType,LineType);assert.deepEqual(placed.Gravity.Keys,[]);assert.equal(placed._MdxDefaults.Gravity,5);
+  for(let offset=0;offset<=1000;offset+=25){const expected=sampleTrack(p.Speed,1000+offset,{interval:[1000,2000]}),actual=sampleTrack(placed.Speed,10000+offset*2,{interval:[10000,12000]});assert.ok(Math.abs(actual-expected)<1e-6,'Cubic sampling retains constant endpoint holds and its interior curve');assert.equal(sampleTrack(placed.Gravity,10000+offset*2,{interval:[10000,12000],fallback:0}),0,'An empty clip does not borrow the other clip gravity');}
+  assert.deepEqual(source,before);assert.equal(validateModel(target).filter(d=>d.severity==='error').length,0);
+  for(const format of ['mdl','mdx']){const reopened=openDocument(particleRecipeDocument(extractParticleRecipe(target,result.ids)).serialize(format),'clip.'+format);assert.equal(reopened.readOnly,false);}
+ }
+});

@@ -25,10 +25,12 @@ test('personal preset persistence, independent duplication and metadata override
 test('preset updates invalidate cached thumbnails and retain a recoverable previous file',async()=>{
  const store=makeStore(),source=createStarterRecipe(),saved=await store.save({data:stringifyParticleData(source),name:'Before'});
  const image='data:image/png;base64,iVBORw0KGgo=';
- await store.thumbnail({id:saved.id,url:image});assert.equal((await store.thumbnails([saved.id]))[saved.id],image);
+ const revision=(await store.thumbnails([saved.id]))[saved.id].revision;await store.thumbnail({id:saved.id,url:image,revision});assert.equal((await store.thumbnails([saved.id]))[saved.id].url,image);
  source.native.ParticleEmitters2[0].Speed=123;
  await store.save({id:saved.id,data:stringifyParticleData(source),name:'After'});
- assert.equal((await store.thumbnails([saved.id]))[saved.id],null);
+ assert.equal((await store.thumbnails([saved.id]))[saved.id].url,null);
+ await assert.rejects(store.thumbnail({id:saved.id,url:image,revision}),/changed while/);
+ const current=(await store.thumbnails([saved.id]))[saved.id];assert.notEqual(current.revision,revision);await store.thumbnail({id:saved.id,url:image,revision:current.revision});assert.equal((await store.thumbnails([saved.id]))[saved.id].url,image);
  const previous=parseParticleData(await fs.readFile(path.join(directory,'mine',saved.id+'.json.previous'),'utf8'));assert.equal(previous.name,'Before');
  await store.draft(stringifyParticleData({schema:'mdlxl-particle-draft',version:1,test:'kept'}));assert.equal(parseParticleData(await makeStore().draft()).test,'kept');
 });
@@ -90,4 +92,12 @@ test('source-context preview is bound to the exact indexed model and source name
  const casc={readSnapshot:async name=>{calls.push(name);return name===source.physicalPath?bytes:starterTextureAsset().bytes;}};
  const result=await resolveParticleSourceContext(source,{discover,casc});assert.equal(result.name,'Test.mdx');assert.equal(result.assets.length,1);assert.ok(calls[1].startsWith('war3.w3mod:_teen.w3mod:'));assert.deepEqual(Buffer.from(result.bytes),Buffer.from(bytes));
  await assert.rejects(resolveParticleSourceContext({...source,contentHash:'a'.repeat(64)},{discover,casc}),/indexed identity/);await assert.rejects(resolveParticleSourceContext({...source,physicalPath:'..\\secret'},{discover,casc}),/no indexed source/);
+});
+
+
+test('stock thumbnail revisions separate game builds and reject a late capture from the old build',async()=>{
+ const root=path.join(directory,'thumbnail-builds'),id='wc3-'+'1'.repeat(24),image='data:image/png;base64,iVBORw0KGgo=',store=new ParticleLibrary({directory:root,discover:async()=>({cascFolders:[]})});
+ for(const key of ['a','b']){const cache=path.join(root,key.repeat(64));await fs.mkdir(cache,{recursive:true});const recipe=createStarterRecipe();recipe.id=id;await fs.writeFile(path.join(cache,id+'.json'),stringifyParticleData(recipe));}
+ await fs.writeFile(path.join(root,'current.json'),JSON.stringify({sourceKey:'a'.repeat(64)}));const old=(await store.thumbnails([id]))[id].revision;await store.thumbnail({id,url:image,revision:old});assert.equal((await store.thumbnails([id]))[id].url,image);
+ await fs.writeFile(path.join(root,'current.json'),JSON.stringify({sourceKey:'b'.repeat(64)}));const current=(await store.thumbnails([id]))[id];assert.equal(current.url,null);assert.notEqual(current.revision,old);await assert.rejects(store.thumbnail({id,url:image,revision:old}),/changed while/);await store.thumbnail({id,url:image,revision:current.revision});assert.equal((await store.thumbnails([id]))[id].url,image);
 });

@@ -1,8 +1,8 @@
 # Particle Editor prototype acceptance evidence
 
-Checkpoint 8, 30 September 2026. This is an isolated working prototype, not full contract acceptance or a release. Automated Electron captures are offscreen. The user also interacted with a visible isolated tester and authorized continuing; that is not acceptance of every gate. No Warcraft runtime test has been performed.
+Checkpoint 9, 30 September 2026. This is an isolated working prototype, not full contract acceptance or a release. Automated Electron captures are offscreen. The user also interacted with a visible isolated tester and authorized continuing; that is not acceptance of every gate. No Warcraft runtime test has been performed.
 
-Evidence commands: the focused native tests in test/particle-{prototype,preview,sweep,library}.test.js, test/desktop-settings.test.js and tests/*.test.js (116 passing); production Vite build; test/particle-prototype.electron.cjs; test/particle-model-io.electron.cjs; test/particle-parent.electron.cjs; test/particle-review.electron.cjs; test/particle-performance.electron.cjs. Runtime harnesses use private profiles. Logs and captures are local ignored output; no Warcraft asset bytes are committed.
+Evidence commands: the focused native tests in test/particle-{prototype,preview,sweep,library}.test.js, test/desktop-settings.test.js and tests/*.test.js (118 passing); production Vite build; test/particle-prototype.electron.cjs; test/particle-model-io.electron.cjs; test/particle-parent.electron.cjs; test/particle-lifecycle.electron.cjs; test/particle-review.electron.cjs; test/particle-performance.electron.cjs. Runtime harnesses use private profiles. Logs and captures are local ignored output; no Warcraft asset bytes are committed.
 
 | Gate | Demonstrated evidence | Remaining boundary |
 |---|---|---|
@@ -18,15 +18,15 @@ Evidence commands: the focused native tests in test/particle-{prototype,preview,
 | A10 | Key time/global phase/scope latch at gesture start; spline tangent/whole-track semantics tested; no continuous key creation. | Complete animated-field UI matrix pending. |
 | A11 | Fixed-grid native simulations produce exact particle-state equality at matching clocks across display partitions. | Real Warcraft matching is unverified. |
 | A12 | Independent clocks, FX pause/resume, visible unlinked state and coherent relink pass without canonical mutations. | Inspection timing is deliberately not exported. |
-| A13 | Backward replay, narrow one-millisecond windows, exact Squirt/global events, full-loop survivors and endpoint seeking pass. | Broader real source lifecycle fixtures pending. |
-| A14 | Native ribbon edge handles/window/path selection and demonstration isolation pass; paired PE2/ribbon motion example renders. | Real source weapon/lifecycle matrix and ribbon gravity parity incomplete. |
+| A13 | Backward replay, narrow one-millisecond windows, exact Squirt/global events, full-loop survivors and endpoint seeking pass. | 99 discrete samples from real Golem, Direwolf and Blademaster recipes pass; complete continuous/game lifecycle coverage remains open. |
+| A14 | Native ribbon edge handles/window/path selection and demonstration isolation pass; paired PE2/ribbon motion example renders. | Real Direwolf and Blademaster weapon/lifecycle samples now render; broader source coverage and ribbon gravity parity remain incomplete. |
 | A15 | Actual main-view double-click opens an existing emitter; overlap cycling and invisible list access pass. | Posed alpha holes, UV animation, depth flags and culling are unit-tested; mip/MSAA edges remain approximate. |
 | A16 | Actual ghost drag, pivot/surface snap, cancel, one-step confirm, exact undo/redo pass. | Target without an animation clip is not supported by placement yet. |
-| A17 | Sparse object/resource/global remapping, minimal ancestors and source/target motion choices tested without unrelated mutations. | Nonuniform-parent visual matrix and arbitrary spline boundary fitting need more proof; BPOS graphs are explicitly blocked. |
+| A17 | Sparse object/resource/global remapping, minimal ancestors and source/target motion choices tested without unrelated mutations. | Cubic endpoint holds, empty-track defaults and MDL/MDX reopening now pass after clip fitting. Broader parent transforms remain unverified; BPOS graphs are explicitly blocked. |
 | A18 | Actual MDL/MDX Save As and reopen of mixed stock/custom PE2+ribbon passes; output equals codec expectation, custom sidecar retained, original input untouched. | Does not certify every indexed effect or Warcraft rendering. |
-| A19 | Source groups retain their native ingredients; PE1/Popcorn/missing dependencies remain visible as incomplete. | PE1 simulation/insertion and other discovered exceptions prevent full classic support. |
+| A19 | Source groups retain their native ingredients. On-demand thumbnails, preview mute, selection and complete-group saving leave both documents unchanged; unsupported ingredients remain explicit. | PE1 simulation/insertion and other discovered exceptions prevent full classic support. |
 | A20 | Build-bound actual CASC inventory accounts for 3,486 candidates, 3,485 parsed, 4,581 recipes and 437 unavailable identities; coverage dimensions are separate. | Preview/insertion compatibility counts remain uncertified, not inferred from extraction. |
-| A21 | Personal naming/tags/favorite/duplicate/import/export and native-close/restart persistence exercised; custom bytes and independent documents retained. | Broader stale-dependency thumbnail matrix pending. |
+| A21 | Personal naming/tags/favorite/duplicate/import/export and native-close/restart persistence exercised; custom bytes and independent documents retained. | Preset edits and changed source builds reject stale in-flight captures. Renderer/sample versions are part of cache identity; broader external dependency cases remain useful. |
 | A22 | Source/build/hash/namespace verification, missing assets and no-install starters have distinct paths and tests. | Full UI changed-build/missing-install matrix not exercised. |
 | A23 | Unsafe keys, traversal, oversized/count/depth/nonfinite/typed overflow and malformed recipes rejected; atomic recoverable saves tested. | No independent security audit claim. |
 | A24 | Controlled retrospective baseline/current fixture: both 50 FPS, Size p95 15.8 ms, Speed p95 53.3 ms; heavy preview stops visibly at 12,000 without authored clamps. | 60 FPS not achieved; baseline was reconstructed afterward. See PERFORMANCE.md. |
@@ -34,7 +34,7 @@ Evidence commands: the focused native tests in test/particle-{prototype,preview,
 | A26 | Not run. | Warcraft build/assets/test sequence and observed game results remain required. |
 | A27 | Effect-first gallery, appearance categories/search, active isolated thumbnails, selected playback and explicit source context work in both modes. | Most neutral catalog entries still lack reviewed useful names. |
 | A28 | Real configured CASC extraction, cached restart, corrupt-file continuation and cancel/resume from 25 to 50 unique assets demonstrated. | Full scan timing/resume stress matrix not measured. |
-| A29 | 31 observed effect names are content-hash bound; exact duplicate associations and name/tag override persistence tested. | 4,987 catalog identities remain review-needed; an ambiguous blank ribbon was deliberately not named. |
+| A29 | 34 observed effect names are content-hash bound; exact duplicate associations and name/tag override persistence tested. | 4,984 catalog identities remain review-needed; an ambiguous blank ribbon was deliberately not named. |
 
 Additional contract evidence: five original paired examples share camera/seed/time/global phase; a disposable test view supports repeated instances, viewing distance, backgrounds and team colors. Source contexts, examples and test views leave both documents unchanged.
 

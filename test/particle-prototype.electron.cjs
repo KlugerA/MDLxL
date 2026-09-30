@@ -189,6 +189,8 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     const {starterTextureAsset}=await import('../src/particle-starters.js'),picture=path.join(out,'own-picture.tga');fs.writeFileSync(picture,starterTextureAsset().bytes);
     await app.evaluate(({dialog},picture)=>{global.__particleOpen=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[picture]});},picture);
     await page.getByText('Choose picture',{exact:true}).click();
+    await page.getByText('Orientation and draw options',{exact:true}).click();const beforeFlags=await readLab();await page.getByRole('button',{name:'Flat',exact:true}).click();assert.ok((await readLab()).model.ParticleEmitters2[0].Flags&1048576);await page.getByRole('button',{name:'Face camera',exact:true}).click();assert.equal((await readLab()).model.ParticleEmitters2[0].Flags&1048576,0);
+    await page.getByRole('button',{name:'Keep brightness',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.pe-window .re-status')?.textContent.includes('Lighting and fog flags are saved'),{},{timeout:8000});assert.match(await page.locator('.pe-window .re-status').innerText(),/Lighting and fog flags are saved/);await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).click();assert.equal((await readLab()).model.ParticleEmitters2[0].Flags,beforeFlags.model.ParticleEmitters2[0].Flags);await page.getByText('Orientation and draw options',{exact:true}).click();
     const beforeTeam=await readLab();await page.getByRole('button',{name:'Team glow',exact:true}).click();await page.waitForTimeout(150);
     assert.equal((await readLab()).model.ParticleEmitters2[0].ReplaceableId,2);
     const teamPixels=await page.locator('.pe-picture-grid').evaluate(c=>Array.from(c.getContext('2d').getImageData(128,128,1,1).data));assert.ok(teamPixels[0]>0,'Team picture grid renders its native replacement');
@@ -283,6 +285,29 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     assert.ok((await readLab()).model.RibbonEmitters[0].Visibility.Keys.length>=2);
     console.log('Ribbon direct edges, demonstration isolation and native emission window passed');
 
+    await page.locator('.pe-window').getByRole('button',{name:'New',exact:true}).click();await page.getByRole('button',{name:'Magic glow',exact:true}).click();await page.getByRole('button',{name:'Discard and open',exact:true}).click();
+    await page.getByRole('button',{name:'Basics',exact:true}).click();
+    const beforeIngredients=await readLab(),targetBeforeIngredients=await readModel();assert.equal(beforeIngredients.model.ParticleEmitters2.length,2);
+    await page.getByRole('button',{name:'Ingredients',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelectorAll('.pe-ingredient-picture img').length===2,{},{timeout:20000});
+    const ingredientPixels=await page.locator('.pe-ingredient-picture img').evaluateAll(async images=>{const counts=[];for(const image of images){await image.decode();const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;const context=canvas.getContext('2d');context.drawImage(image,0,0);const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;let count=0;for(let i=0;i<pixels.length;i+=4)if(Math.abs(pixels[i]-pixels[0])+Math.abs(pixels[i+1]-pixels[1])+Math.abs(pixels[i+2]-pixels[2])>30)count++;counts.push(count);}return counts;});assert.ok(ingredientPixels.every(count=>count>60),'Both ingredient captures must show a recognizable rendered glow: '+ingredientPixels);
+    await page.getByRole('button',{name:'Mute Particle 1',exact:true}).click();
+    assert.equal(await page.getByRole('button',{name:'Mute Particle 1',exact:true}).getAttribute('aria-pressed'),'true');
+    await page.keyboard.press('Control+z');assert.deepEqual(await readLab(),beforeIngredients,'Inspection keyboard undo does not change the document');
+    await page.screenshot({path:path.join(out,'ingredients.png')});
+    await page.getByRole('button',{name:'Edit Particle 2',exact:true}).click();
+    const waitIngredientCount=count=>page.waitForFunction(count=>{const el=document.querySelector('.pe-preview>.game-preview-root');if(!el)return false;let f=el[Object.keys(el).find(k=>k.startsWith('__reactFiber'))];for(;f;f=f.return)for(let h=f.memoizedState;h;h=h.next){const native=h.memoizedState?.current?.native;if(native)return native.model.ParticleEmitters2.length===count;}return false;},count,{timeout:10000});
+    await waitIngredientCount(1);assert.equal(Number(await page.getByLabel('Effect ingredient',{exact:true}).inputValue()),beforeIngredients.model.ParticleEmitters2[1].ObjectId);
+    assert.deepEqual(await readLab(),beforeIngredients);assert.deepEqual(await readModel(),targetBeforeIngredients);
+    await page.getByRole('button',{name:'Save preset',exact:true}).click();await page.getByText('Whole effect · 2 ingredients',{exact:true}).waitFor();
+    await page.getByLabel('Preset name',{exact:true}).fill('Complete layered glow');await page.getByRole('button',{name:'Save to My presets',exact:true}).click();await page.getByText('Saved Complete layered glow',{exact:true}).waitFor();
+    const savedGroup=fs.readdirSync(path.join(testLibrary,'mine')).filter(f=>f.endsWith('.json')).map(f=>JSON.parse(fs.readFileSync(path.join(testLibrary,'mine',f)))).find(r=>r.name==='Complete layered glow');
+    assert.equal(savedGroup.native.ParticleEmitters2.length,2,'Preview mute must not remove the ingredient from a saved recipe');
+    assert.deepEqual(savedGroup.native.ParticleEmitters2.map(p=>p.Visibility),beforeIngredients.model.ParticleEmitters2.map(p=>p.Visibility));
+    await page.getByRole('button',{name:'Ingredients · 1 muted',exact:true}).click();await page.getByRole('button',{name:'Mute Particle 1',exact:true}).click();await page.getByRole('button',{name:'Close ingredients',exact:true}).click();await waitIngredientCount(2);
+    assert.deepEqual((await readLab()).model,beforeIngredients.model);assert.equal((await readLab()).undo,beforeIngredients.undo);assert.deepEqual(await readModel(),targetBeforeIngredients);
+    console.log('On-demand ingredient captures, selection, preview mute and complete-group save preserve native data');
+
     await page.getByRole('button',{name:'Library',exact:true}).click();await page.getByRole('button',{name:'My presets',exact:true}).click();
     const details=page.getByRole('button',{name:'Details for Portable picture sparks',exact:true});await details.click();
     const tags=page.getByLabel('Effect tags',{exact:true});await tags.fill('portable, cyan, prototype');await tags.press('Tab');await page.waitForTimeout(150);
@@ -295,7 +320,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     await app.evaluate(({dialog},file)=>{global.__open=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},exportFile);
     await page.getByRole('button',{name:'Import preset…',exact:true}).click();await page.waitForTimeout(250);await app.evaluate(({dialog})=>{dialog.showOpenDialog=global.__open;delete global.__open;});
     assert.equal(await page.getByRole('button',{name:'Portable picture sparks',exact:true}).count(),2);
-    await page.getByRole('button',{name:'Portable picture sparks copy',exact:true}).click();await page.getByRole('button',{name:'Discard and open',exact:true}).click();
+    const discardBeforeImport=(await readLab()).dirty;await page.getByRole('button',{name:'Portable picture sparks copy',exact:true}).click();if(discardBeforeImport)await page.getByRole('button',{name:'Discard and open',exact:true}).click();
     await page.getByRole('button',{name:'Basics',exact:true}).click();
     await page.getByRole('slider',{name:'Size',exact:true}).press('ArrowRight');
     const recoveredExpected=await readLab();assert.equal(recoveredExpected.dirty,true);
