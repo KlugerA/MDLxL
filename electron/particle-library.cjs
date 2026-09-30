@@ -2,8 +2,10 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { Worker } = require('node:worker_threads');
-const THUMBNAIL_VERSION = 'native-4.0.1-authoring-3';
+const THUMBNAIL_VERSION = 'native-4.0.1-authoring-4';
 const {particleSourceState}=require('./particle-source.cjs');
+const reviewedNames = require('../src/particle-reviewed-names.json');
+const reviewFor = item => {const review=reviewedNames[item.id];return review&&item.sources?.some(source=>source.contentHash===review.naming.sourceContentHash)?review:{};};
 const ID = /^(?:wc3-[a-f0-9]{24}|my-[a-f0-9-]{36})$/;
 const atomic = async(file,data) => {
   await fs.mkdir(path.dirname(file),{recursive:true});
@@ -33,10 +35,13 @@ class ParticleLibrary {
         items.push({id:recipe.id,name:recipe.name,tags:recipe.tags,categories:recipe.categories,naming:{state:'personal'},collection:'My presets',unsupported:recipe.compatibility?.unsupported||[]});
       }
     }catch(error){if(error.code!=='ENOENT')throw error;}
+    items=items.map(item=>({...item,...reviewFor(item),...meta[item.id],favorite:!!meta[item.id]?.favorite}));
+    items.sort((a,b)=>Number(!!a.blocked)-Number(!!b.blocked)||Number(['reviewed','user-reviewed'].includes(b.naming?.state))-Number(['reviewed','user-reviewed'].includes(a.naming?.state)));
+    if(coverage){coverage.reviewedNames=items.filter(item=>item.collection==='Warcraft'&&['reviewed','user-reviewed'].includes(item.naming?.state)).length;coverage.reviewNeededNames=items.filter(item=>item.collection==='Warcraft').length-coverage.reviewedNames;}
     const thumbnails=await this.thumbnails(items.slice(0,36).map(item=>item.id));
     for(const item of items)if(thumbnails[item.id])item.thumbnail=thumbnails[item.id];
     const sourceStatus=current?await particleSourceState(this.discover,current.sourceKey):null;
-    return {sourceStatus,items:items.map(item=>({...item,...meta[item.id],favorite:!!meta[item.id]?.favorite})),coverage,status:this.status};
+    return {sourceStatus,items,coverage,status:this.status};
   }
 
   async thumbnails(ids){
@@ -45,8 +50,8 @@ class ParticleLibrary {
   }
   async exportData(id){
     const {parseParticleData,stringifyParticleData}=await import('../src/particle-data.js'),{validateParticleRecipe}=await import('../src/particle-recipes.js');
-    const recipe=parseParticleData(await this.read(id)),meta=(await this.metadata())[id]||{};
-    for(const key of ['name','tags','categories'])if(meta[key]!==undefined)recipe[key]=meta[key];
+    const recipe=parseParticleData(await this.read(id)),meta={...reviewFor(recipe),...(await this.metadata())[id]};
+    for(const key of ['name','tags','categories','naming','previewSample'])if(meta[key]!==undefined)recipe[key]=meta[key];
     validateParticleRecipe(recipe);return stringifyParticleData(recipe);
   }
   async duplicate(id){const data=await this.exportData(id),{parseParticleData}=await import('../src/particle-data.js');return this.save({data,name:(parseParticleData(data).name+' copy').slice(0,120)});}

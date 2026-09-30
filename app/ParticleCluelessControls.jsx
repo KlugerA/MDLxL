@@ -13,12 +13,12 @@ export function ParticleSlider({label,field,value,begin,change,finish,cancel,sta
   const end=()=>{if(down.current){down.current=false;finish();}};
   return <label className="pe-slider"><span>{label||particleBindings[field]?.label||field}</span><input type="range" aria-label={label||particleBindings[field]?.label||field} title={particleBindings[field]?.units} disabled={disabled} min={Math.min(min??domain[0],value)} max={Math.max(max??domain[1],value)} step={step} value={Number.isFinite(value)?value:0} onPointerDown={e=>{e.currentTarget.focus();start();e.currentTarget.setPointerCapture(e.pointerId);}} onChange={e=>{start();change(Number(e.target.value));}} onPointerUp={end} onPointerCancel={()=>{down.current=false;cancel();}} onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();down.current=false;cancel();}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(e.key))start();}} onKeyUp={end} onBlur={end}/></label>;
 }
-export function ParticleSample({emitter,asset,stage=1,begin,change,finish,cancel,selected,onSelect}) {
+export function ParticleSample({emitter,asset,replaceableId=0,teamColor='#ed3333',stage=1,begin,change,finish,cancel,selected,onSelect}) {
   const canvas=useRef(null),drag=useRef(null),colorGesture=useRef(false),[ready,setReady]=useState(false),[notice,setNotice]=useState('');
   useEffect(()=>{
     let cancelled=false;setReady(false);
-    if(!asset)return;
-    particlePictureCanvas(asset).then(source=>{
+    if(!asset&&!replaceableId)return;
+    particlePictureCanvas(asset,{replaceableId,teamColor}).then(source=>{
       if(cancelled)return;
       const target=canvas.current,ctx=target.getContext('2d');
       ctx.clearRect(0,0,100,100);
@@ -29,7 +29,7 @@ export function ParticleSample({emitter,asset,stage=1,begin,change,finish,cancel
       for(let i=0;i<pixels.data.length;i+=4){for(let k=0;k<3;k++)pixels.data[i+k]*=colors[k];pixels.data[i+3]*=alpha;}
       ctx.putImageData(pixels,0,0);setReady(true);
     }).catch(()=>setReady(false));return()=>{cancelled=true;};
-  },[asset,emitter.ParticleScaling?.[stage],emitter.Alpha?.[stage],...emitter.SegmentColor?.[stage]||[],emitter.Rows,emitter.Columns,...emitter.LifeSpanUVAnim||[],...emitter.DecayUVAnim||[]]);
+  },[asset,replaceableId,teamColor,emitter.ParticleScaling?.[stage],emitter.Alpha?.[stage],...emitter.SegmentColor?.[stage]||[],emitter.Rows,emitter.Columns,...emitter.LifeSpanUVAnim||[],...emitter.DecayUVAnim||[]]);
   const startColor=()=>{if(!colorGesture.current){colorGesture.current=true;begin('SegmentColor',stage);}};
   const endColor=()=>{if(colorGesture.current){colorGesture.current=false;finish();}};
   return <div className={'pe-life-sample'+(selected?' selected':'')}>
@@ -40,7 +40,7 @@ export function ParticleSample({emitter,asset,stage=1,begin,change,finish,cancel
     {notice&&<button className="pe-sample-note" onClick={()=>setNotice('')}>{notice} ×</button>}
   </div>;
 }
-export default function ParticleCluelessControls({model,emitter,frame,globalTime,sequence,tool,scope,setScope,asset,assets,preferences,update,patch,onImport,onTeamPicture,begin,change,finish,cancel,lifeStage=1,setLifeStage,onSeek}) {
+export default function ParticleCluelessControls({model,emitter,frame,globalTime,sequence,tool,scope,setScope,asset,assets,preferences,teamColor,update,patch,onImport,onTeamPicture,begin,change,finish,cancel,lifeStage=1,setLifeStage,onSeek}) {
   const options={frame,globalTime,interval:model.Sequences[sequence]?.Interval,globalSequences:model.GlobalSequences};
   const slider=field=><ParticleSlider key={field} field={field} label={field==='EmissionRate'&&emitter.Squirt?'Burst amount':undefined} value={particleValue(emitter,field,options)} {...{begin,change,finish,cancel}}/>;
   const animated=['Rotation',...primaryParticleFields,'Width','Length','Variation','Visibility'].some(field=>emitter[field]?.Keys);
@@ -48,8 +48,8 @@ export default function ParticleCluelessControls({model,emitter,frame,globalTime
     {animated&&<label className="pe-scope">Edit<select aria-label="Animated edit scope" value={scope} onChange={e=>{cancel();setScope(e.target.value);}}><option value="key">This key</option><option value="track">{tool==='Shape'?'Whole track · offset / rotate':'Whole track · offset'}</option></select></label>}
     {tool==='Basics'&&primaryParticleFields.map(slider)}
     {tool==='Shape'&&<>{['Width','Length','Latitude','Variation','TailLength'].map(slider)}{[0,1,2].map(axis=><ParticleSlider key={'aim'+axis} label={'Aim '+['X','Y','Z'][axis]} field="Rotation" stage={{axis}} value={particleValue(emitter,'Rotation',{...options,axis})} {...{begin,change,finish,cancel}}/>)}</>}
-    {tool==='Life'&&<><div className="pe-life-strip">{[0,1,2].map(index=><ParticleSample key={index} stage={index} selected={lifeStage===index} onSelect={setLifeStage} {...{emitter,asset,begin,change,finish,cancel}}/>)}</div><ParticleLifeMarker value={emitter.Time} {...{begin,change,finish,cancel}} onSelect={setLifeStage}/>{slider('Time')}{slider('LifeSpan')}<ParticleSlider label={stages[lifeStage]+' size'} field="ParticleScaling" stage={lifeStage} value={emitter.ParticleScaling?.[lifeStage]||0} {...{begin,change,finish,cancel}}/></>}
-    {tool==='Picture'&&<ParticlePictureTool {...{model,emitter,assets,asset,preferences,sequence,frame,update,patch,onImport,onTeamPicture,begin,change,finish,cancel}}/>}
+    {tool==='Life'&&<><div className="pe-life-strip">{[0,1,2].map(index=><ParticleSample key={index} stage={index} replaceableId={emitter.ReplaceableId||model.Textures[emitter.TextureID]?.ReplaceableId||0} selected={lifeStage===index} onSelect={setLifeStage} {...{emitter,asset,teamColor,begin,change,finish,cancel}}/>)}</div><ParticleLifeMarker value={emitter.Time} {...{begin,change,finish,cancel}} onSelect={setLifeStage}/>{slider('Time')}{slider('LifeSpan')}<ParticleSlider label={stages[lifeStage]+' size'} field="ParticleScaling" stage={lifeStage} value={emitter.ParticleScaling?.[lifeStage]||0} {...{begin,change,finish,cancel}}/></>}
+    {tool==='Picture'&&<ParticlePictureTool {...{model,emitter,assets,asset,preferences,teamColor,sequence,frame,update,patch,onImport,onTeamPicture,begin,change,finish,cancel}}/>}
     {tool==='Timing'&&<ParticleTimingTool {...{emitter,options,begin,change,finish,cancel,update,patch,onSeek}}/>}
   </div>;
 }

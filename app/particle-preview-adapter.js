@@ -139,7 +139,7 @@ export function rememberParticlePicture(native,id,texture,flags=0,compressedPixe
   let pictures=particlePictures.get(native);if(!pictures)particlePictures.set(native,pictures=new Map());
   pictures.set(id,{width:source.width,height:source.height,data:new Uint8Array(data),flags});
 }
-export function pickPreviewParticles(native,camera,width,height,x,y,selectedId) {
+export function pickPreviewParticles(native,camera,width,height,x,y,selectedId,hiddenGeosets) {
   const pictures=new Map(particlePictures.get(native)||[]);
   const replacements=[...native.model.Textures.map((texture,id)=>[texture,id]),...native.model.ParticleEmitters2.filter(p=>[1,2].includes(p.ReplaceableId)).map(p=>[{ReplaceableId:p.ReplaceableId},'replacement:'+p.ReplaceableId])];
   replacements.forEach(([texture,id])=>{
@@ -151,7 +151,7 @@ export function pickPreviewParticles(native,camera,width,height,x,y,selectedId) 
     }
     pictures.set(id,{width:size,height:size,data,flags:0});
   });
-  const depth=particleOpaqueDepth(native,camera,width,height,x,y);
+  const depth=particleOpaqueDepth(native,camera,width,height,x,y,hiddenGeosets);
   return pickParticleSamples(particleStageSnapshot(native,camera,width,height,selectedId,true).samples,x,y,pictures,depth);
 }
 export function seededParticleRandom(seed=0x4d444c58) {
@@ -194,7 +194,8 @@ export function particleTimelineAt(timeline,time) {
   let segment=timeline[0];
   for(const next of timeline){if(next.at>time+1e-8)break;segment=next;}
   const elapsed=Math.max(0,time-segment.at);
-  return {frame:segment.frame+elapsed*segment.poseRate,global:segment.global+elapsed*segment.poseRate,fx:segment.fx+elapsed*segment.fxRate,poseRate:segment.poseRate,fxRate:segment.fxRate};
+  const rawFrame=segment.frame+elapsed*segment.poseRate,span=segment.loop?segment.loop[1]-segment.loop[0]:0,cycles=span>0?Math.floor((rawFrame-segment.loop[0]+1e-8)/span):0;
+  return {frame:span>0?segment.loop[0]+phaseOf(rawFrame-segment.loop[0],span):rawFrame,global:segment.global+elapsed*segment.poseRate,fx:segment.fx+elapsed*segment.fxRate,poseRate:segment.poseRate,fxRate:segment.fxRate,cycle:(segment.cycle||0)+cycles,loop:segment.loop};
 }
 function simulationTracks(model) {
   const result=[],seen=new Set();
@@ -240,6 +241,7 @@ export class NativeParticleSimulation {
     let next=Math.min(target,(Math.floor((this.time+1e-7)/10)+1)*10);
     const current=particleTimelineAt(this.timeline,this.time),model=this.native.model;
     for(const segment of this.timeline)if(segment.at>this.time+1e-7)next=Math.min(next,segment.at);
+    if(current.poseRate>0&&current.loop)next=Math.min(next,this.time+(current.loop[1]-current.frame)/current.poseRate);
     if(current.poseRate>0)for(const track of this.tracks) {
       const period=model.GlobalSequences?.[track.GlobalSeqId];
       if(period>0) {
@@ -247,7 +249,9 @@ export class NativeParticleSimulation {
         if(wrap>1e-7)next=Math.min(next,this.time+wrap);
         for(const key of track.Keys){let distance=key.Frame-phase;if(distance<=1e-7)distance+=period;if(distance>1e-7)next=Math.min(next,this.time+distance/current.poseRate);}
       }else for(const key of track.Keys){
-        const distance=(key.Frame-current.frame)/current.poseRate;
+        if(current.loop&&(key.Frame<current.loop[0]||key.Frame>current.loop[1]))continue;
+        let delta=key.Frame-current.frame;if(current.loop&&delta<=1e-7)delta+=current.loop[1]-current.loop[0];
+        const distance=delta/current.poseRate;
         if(distance>1e-7)next=Math.min(next,this.time+distance);
       }
     }
@@ -276,7 +280,7 @@ export class NativeParticleSimulation {
           const period=model.GlobalSequences[rate.GlobalSeqId],value=period>0?phaseOf(phase.global,period):phase.frame;
           props.EmissionRate=0;
           if(exactEvents)for(const key of rate.Keys)if(Math.abs(key.Frame-value)<1e-5||(period>0&&phase.global>0&&Math.abs(value)<1e-5&&Math.abs(key.Frame-period)<1e-5)){
-            const stamp=period>0?Math.floor((phase.global+1e-6)/period)-(key.Frame===period?1:0):this.sequence;
+            const stamp=period>0?Math.floor((phase.global+1e-6)/period)-(key.Frame===period?1:0):this.sequence+':'+(phase.cycle||0);
             const identity=props.ObjectId+':'+key.Frame;
             if(this.burstStamps.get(identity)!==stamp){
               this.burstStamps.set(identity,stamp);
@@ -297,7 +301,9 @@ export class NativeParticleSimulation {
     };
     // Integrate the interval using its left-hand visibility/rate at an event,
     // then fire exact event keys without aging their newly born particles.
-    if(to>from&&!poseOnly)run(delta,current,current.fxRate>0,false,sample);
+    const wrapped=current.loop&&current.cycle>sample.cycle,priorEnd=wrapped?{...current,frame:current.loop[1],cycle:current.cycle-1}:current;
+    if(to>from&&!poseOnly)run(delta,priorEnd,current.fxRate>0,false,sample);
+    if(wrapped&&!poseOnly)run(0,priorEnd,current.fxRate>0,events);
     run(0,current,!poseOnly&&current.fxRate>0,events&&!poseOnly);
     this.time=to;
   }
@@ -366,7 +372,7 @@ export class ParticleAuthoringPreview {
   phase(){return particleTimelineAt(this.timeline,this.target);}
   reset(sequence,frame){
     this.sequence=sequence;const start=this.native.model.Sequences[sequence].Interval[0];
-    this.timeline=[{at:0,frame:start,global:start,fx:0,poseRate:1,fxRate:1}];this.target=Math.max(0,frame-start);
+    this.timeline=[{at:0,frame:start,global:start,fx:0,poseRate:1,fxRate:1,loop:this.fullLoop?Array.from(this.native.model.Sequences[sequence].Interval):undefined}];this.target=Math.max(0,frame-start);
     this.pending=this.makeSimulation();this.rates=null;
   }
   updateSource(source,field,id){
@@ -384,13 +390,15 @@ export class ParticleAuthoringPreview {
   }
   advance({sequence,frame,seek=false,elapsed=0,playing=false,animationRate=1,fxRate=animationRate,linked=true,loop=true,range,cameraPosition,cameraQuaternion,budgetMs=5}){
     const clip=this.native.model.Sequences[sequence],start=range?.[0]??clip.Interval[0],end=range?.[1]??clip.Interval[1];
-    if(sequence!==this.sequence||seek||linked&&!this.linked)this.reset(sequence,Math.max(start,Math.min(end,frame)));
+    if(seek||sequence!==this.sequence||playing)this.holdEnd=!playing&&frame===end;
+    const fullLoop=loop&&!this.holdEnd&&start===clip.Interval[0]&&end===clip.Interval[1],loopChanged=this.fullLoop!==fullLoop;this.fullLoop=fullLoop;
+    if(sequence!==this.sequence||seek||linked&&!this.linked||loopChanged)this.reset(sequence,Math.max(start,Math.min(end,frame)));
     this.linked=linked;
     if(this.limit)return this.status={busy:false,frame:this.native.getFrame(),global:this.phase().global,fx:this.phase().fx,ended:true,error:this.limit.message,limit:this.limit.limit};
     const maximum=Math.max(animationRate,fxRate),poseRate=maximum>0?animationRate/maximum:0,effectRate=maximum>0?fxRate/maximum:0;
     const rates=poseRate+':'+effectRate;
     if(rates!==this.rates){
-      const phase=this.phase();this.timeline.push({at:this.target,frame:phase.frame,global:phase.global,fx:phase.fx,poseRate,fxRate:effectRate});
+      const phase=this.phase();this.timeline.push({at:this.target,frame:phase.frame,global:phase.global,fx:phase.fx,poseRate,fxRate:effectRate,loop:phase.loop,cycle:phase.cycle});
       if(this.simulation)this.simulation.timeline=structuredClone(this.timeline);
       if(this.pending)this.pending.timeline=structuredClone(this.timeline);
       this.rates=rates;
@@ -417,7 +425,7 @@ export class ParticleAuthoringPreview {
     const visible=this.simulation;
     if(visible){
       if(cameraPosition&&cameraQuaternion)visible.setCamera(cameraPosition,cameraQuaternion);
-      if(visible!==candidate&&this.target>=visible.time)visible.advance(this.target,{budgetMs:Math.min(2,budgetMs)});
+      if(visible!==candidate&&this.target>=visible.time)try{visible.advance(this.target,{budgetMs:Math.min(2,budgetMs)});}catch(error){if(!(error instanceof ParticlePreviewBudgetError))throw error;this.limit=error;return this.status={busy:false,frame:this.native.getFrame(),global:phase.global,fx:phase.fx,ended:true,error:error.message,limit:error.limit};}
       visible.refresh();copyParticleSimulationToPreview(visible,this.native,phase);
     }
     this.status={busy:!!this.pending||!result.complete,frame:phase.frame,global:phase.global,fx:phase.fx,ended,liveParticles:visible?.native.particlesController.emitters.reduce((sum,e)=>sum+e.particles.length,0)||0};
@@ -445,14 +453,30 @@ export function particleSurfaceAnchor(native,camera,width,height,x,y,anchorId) {
 }
 
 /** Hide effect hits behind actual opaque posed surfaces; transparent surfaces need coverage-aware depth. */
-function particleOpaqueDepth(native,camera,width,height,x,y){
+function particleOpaqueDepth(native,camera,width,height,x,y,hiddenGeosets=new Set()){
  const raycaster=new Raycaster();raycaster.setFromCamera(new Vector2(x/width*2-1,1-y/height*2),camera);
  const matrices=new Map(native.rendererData.nodes.flatMap((n,i)=>n?.matrix?[[i,new Matrix4().fromArray(n.matrix)]]:[]));let depth=Infinity;
  for(const [index,geo]of native.model.Geosets.entries()){
-  if(sampleGeosetAnimation(native.model,index,native.getFrame(),native.getSequence()).alpha<.999)continue;
+  if(hiddenGeosets.has(index)||sampleGeosetAnimation(native.model,index,native.getFrame(),native.getSequence()).alpha<.999)continue;
   const material=native.model.Materials[geo.MaterialID];if(!material?.Layers.some(layer=>layer.FilterMode===0&&Number(sampleTrack(layer.Alpha,native.getFrame(),{interval:native.model.Sequences[native.getSequence()]?.Interval,globalSequences:native.model.GlobalSequences,globalTime:native.getFrame(),fallback:1}))>=.999))continue;
   const vertices=skinGeoset(geo,matrices);
   for(let i=0;i<geo.Faces.length;i+=3){const triangle=[0,1,2].map(k=>new Vector3().fromArray(vertices,geo.Faces[i+k]*3)),hit=raycaster.ray.intersectTriangle(...triangle,false,new Vector3());if(hit)depth=Math.min(depth,hit.project(camera).z);}
  }
  return depth;
+}
+
+/** Fit the visible effect and optional authored path, using only live geometry rather than buffer capacity. */
+export function particlePreviewBounds(native,{sweepRange,selectedId,camera,hiddenGeosets=[]}={}){
+ const minimum=[Infinity,Infinity,Infinity],maximum=[-Infinity,-Infinity,-Infinity],add=values=>{if(!values.every(Number.isFinite))return;for(let i=0;i<3;i++){minimum[i]=Math.min(minimum[i],values[i]);maximum[i]=Math.max(maximum[i],values[i]);}},hidden=new Set(hiddenGeosets);
+ const matrices=new Map(native.rendererData.nodes.flatMap((n,i)=>n?.matrix?[[i,new Matrix4().fromArray(n.matrix)]]:[]));
+ for(const [index,geo]of native.model.Geosets.entries())if(!hidden.has(index)&&sampleGeosetAnimation(native.model,index,native.getFrame(),native.getSequence()).alpha>.001){const vertices=skinGeoset(geo,matrices);for(let i=0;i<vertices.length;i+=3)add(Array.from(vertices.subarray(i,i+3)));}
+ for(const emitter of native.particlesController.emitters)for(const [flag,vertices]of [[1,emitter.headVertices],[2,emitter.tailVertices]])if(vertices&&emitter.type&flag)for(let i=0;i<emitter.particles.length*12;i+=3)add(Array.from(vertices.subarray(i,i+3)));
+ for(const emitter of native.ribbonsController.emitters)if(emitter.vertices)for(let i=0;i<emitter.creationTimes.length*6;i+=3)add(Array.from(emitter.vertices.subarray(i,i+3)));
+ const selected=native.model.Nodes[selectedId];
+ if(selected&&native.model.ParticleEmitters2.some(p=>p.ObjectId===selectedId)){
+  const matrix=matrices.get(selectedId)||new Matrix4(),pivot=new Vector3().fromArray(selected.PivotPoint||[0,0,0]),at=field=>native.particlesController.interp.animVectorVal(selected[field],0),w=Math.max(60,Math.abs(at('Width'))),l=Math.max(60,Math.abs(at('Length')));
+  for(const x of [-w,w])for(const y of [-l,l])for(const z of [-60,90])add(pivot.clone().add(new Vector3(x,y,z)).applyMatrix4(matrix).toArray());
+ }
+ if(sweepRange)for(const point of particleSweepPath(native.model,selectedId,native.getSequence(),sweepRange,camera))add(point.world);
+ if(!Number.isFinite(minimum[0]))return null;return {center:minimum.map((v,i)=>(v+maximum[i])/2),radius:Math.max(8,Math.hypot(...minimum.map((v,i)=>maximum[i]-v))/2)*1.15};
 }

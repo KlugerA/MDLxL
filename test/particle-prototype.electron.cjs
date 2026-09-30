@@ -91,7 +91,10 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     assert.deepEqual((await readLab()).model,beforeMode.model,'UI mode changes preserve the canonical model');
     const layout=await page.locator('.pe-body').evaluate(body=>({body:body.getBoundingClientRect().width,stage:body.querySelector('.pe-preview-pane').getBoundingClientRect().width,controls:body.querySelectorAll('.pe-clueless-controls input[type=range]').length}));
     assert.ok(layout.stage/layout.body>=2/3);assert.equal(layout.controls,6);
-    await page.getByRole('button',{name:'Shape',exact:true}).click();
+    const beforeExamples=await readLab(),targetBeforeExamples=await readModel();await page.locator('.pe-window').getByRole('button',{name:'New',exact:true}).click();await page.getByRole('button',{name:'Compare examples',exact:true}).click();
+    for(const label of ['Smoke','Sparks','Magic glow','Impact burst','Weapon sweep']){await page.getByRole('dialog',{name:'Particle examples',exact:true}).getByRole('button',{name:label,exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.pe-example-pair img').length===2,{},{timeout:30000});await page.screenshot({path:path.join(out,'example-'+label.replaceAll(' ','-')+'.png')});}
+    assert.deepEqual(await readLab(),beforeExamples);assert.deepEqual(await readModel(),targetBeforeExamples);await page.getByRole('button',{name:'Close examples',exact:true}).click();console.log('Five native example comparisons preserve Lab and model');
+    await page.getByRole('button',{name:'Shape',exact:true}).click();await page.getByRole('button',{name:'Fit view',exact:true}).click();
     await page.getByRole('slider',{name:'Spawn width handle',exact:true}).waitFor();
     const beforeWidth=await readLab(),widthPoint=await page.getByRole('slider',{name:'Spawn width handle',exact:true}).locator('circle').boundingBox();
     await page.mouse.move(widthPoint.x+7,widthPoint.y+7);await page.mouse.down();await page.mouse.move(widthPoint.x+47,widthPoint.y+22,{steps:8});await page.mouse.up();
@@ -184,6 +187,11 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     const {starterTextureAsset}=await import('../src/particle-starters.js'),picture=path.join(out,'own-picture.tga');fs.writeFileSync(picture,starterTextureAsset().bytes);
     await app.evaluate(({dialog},picture)=>{global.__particleOpen=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[picture]});},picture);
     await page.getByText('Choose picture',{exact:true}).click();
+    const beforeTeam=await readLab();await page.getByRole('button',{name:'Team glow',exact:true}).click();await page.waitForTimeout(150);
+    assert.equal((await readLab()).model.ParticleEmitters2[0].ReplaceableId,2);
+    const teamPixels=await page.locator('.pe-picture-grid').evaluate(c=>Array.from(c.getContext('2d').getImageData(128,128,1,1).data));assert.ok(teamPixels[0]>0,'Team picture grid renders its native replacement');
+    await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).click();assert.deepEqual((await readLab()).model,beforeTeam.model);
+    if(!await page.getByRole('button',{name:'Load picture…',exact:true}).isVisible())await page.getByText('Choose picture',{exact:true}).click();
     await page.getByRole('button',{name:'Load picture…',exact:true}).click();
     await page.waitForFunction(()=>{let f=document.querySelector('.pe-window')[Object.keys(document.querySelector('.pe-window')).find(k=>k.startsWith('__reactFiber'))];for(;f;f=f.return)for(let h=f.memoizedState;h;h=h.next)if(h.memoizedState?.doc?.model?.Textures.some(t=>/Particle_[a-f0-9]{32}/.test(t.Image)))return true;});
     await app.evaluate(({dialog})=>{dialog.showOpenDialog=global.__particleOpen;delete global.__particleOpen;});
@@ -198,6 +206,13 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     await page.locator('.pe-window').getByRole('button',{name:'Library',exact:true}).click();
     await page.waitForTimeout(5000);await page.screenshot({path:path.join(out,'library.png')});
     await page.getByLabel('Find an effect',{exact:true}).fill('flamestrikeembers');
+    const beforeSourceLab=await readLab(),beforeSourceTarget=await readModel();
+    await page.getByRole('button',{name:'Details for Orange ember patch',exact:true}).click();
+    await page.getByRole('button',{name:'View source context',exact:true}).click();
+    await page.locator('.pe-source-stage [data-clean-model-canvas]').waitFor();await page.getByRole('button',{name:'Pause source',exact:true}).click();
+    await page.waitForTimeout(500);assert.deepEqual(await readLab(),beforeSourceLab);assert.deepEqual(await readModel(),beforeSourceTarget);
+    await page.screenshot({path:path.join(out,'source-context.png')});await page.getByRole('button',{name:'Close source context',exact:true}).click();
+    console.log('Explicit CASC source context preserves both Lab and target');
     await page.locator('.pe-effect-card').first().click();
     await page.waitForFunction(()=>!document.querySelector('.pe-library')||[...document.querySelectorAll('button')].some(b=>b.textContent==='Discard and open'));
     if(await page.getByRole('button',{name:'Discard and open',exact:true}).isVisible())await page.getByRole('button',{name:'Discard and open',exact:true}).click();

@@ -170,3 +170,8 @@ test('particle picking respects perspective UV interpolation and opaque-surface 
  assert.equal(particleSampleHit(sample,75,25,picture,.4),false,'Opaque foreground hides the effect');
  assert.equal(particleSampleHit({...sample,points:sample.points.map(p=>p.slice(0,3))},75,25,picture),false,'Screen-linear UVs alone would miss this coverage');
 });
+
+test('original teaching variants save natively without demonstration motion or source mutation',async()=>{
+ const {particleExampleNames,particleExamplePair}=await import('../src/particle-examples.js');
+ for(const [kind]of particleExampleNames){const before=stringifyParticleData(particleExamplePair(kind));for(const variant of particleExamplePair(kind).pairs){const doc=particleRecipeDocument(variant.recipe);for(const format of ['mdl','mdx']){const reopened=openDocument(doc.serialize(format),'example.'+format);assert.equal(reopened.readOnly,false,kind+' '+format);assert.equal(reopened.model.ParticleEmitters2.length,doc.model.ParticleEmitters2.length);assert.equal(reopened.model.RibbonEmitters.length,doc.model.RibbonEmitters.length);assert.ok(reopened.model.Helpers.every(n=>n.Name!=='Preview demonstration'));}}assert.equal(stringifyParticleData(particleExamplePair(kind)),before);}
+});

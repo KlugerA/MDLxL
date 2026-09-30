@@ -8,9 +8,9 @@ export function activeParticleSample(model){
   for(const time of candidates){let score=0;
    for(const p of model.ParticleEmitters2||[]){const at=(field,atTime=time)=>{const n=sampleTrack(p[field],atTime,{interval:clip.Interval,globalSequences:model.GlobalSequences,globalTime:atTime,fallback:field==='Visibility'?1:0});return Number(n?.[0]??n);};
     if(p.Squirt&&p.EmissionRate?.Keys){const duration=model.GlobalSequences[p.EmissionRate.GlobalSeqId],phase=duration>0?time%duration:time;for(const key of p.EmissionRate.Keys)if(phase>=key.Frame&&phase-key.Frame<p.LifeSpan*1000&&at('Visibility',key.Frame)>0)score+=Math.max(0,key.Vector[0]);}
-    else score+=Math.max(0,at('EmissionRate'))*Math.max(0,p.LifeSpan)*(at('Visibility')>0?1:0);
+    else score+=Math.max(0,at('EmissionRate'))*Math.max(0,Math.min(p.LifeSpan,(time-start)/1000))*(at('Visibility')>0?1:0);
    }
-   for(const r of model.RibbonEmitters||[]){const n=sampleTrack(r.Visibility,time,{interval:clip.Interval,globalSequences:model.GlobalSequences,globalTime:time,fallback:0});if(Number(n?.[0]??n)>0)score+=Math.max(0,r.EmissionRate*r.LifeSpan);}
+   for(const r of model.RibbonEmitters||[]){const n=sampleTrack(r.Visibility,time,{interval:clip.Interval,globalSequences:model.GlobalSequences,globalTime:time,fallback:0});if(Number(n?.[0]??n)>0)score+=Math.max(0,r.EmissionRate*Math.min(r.LifeSpan,(time-start)/1000));}
    if(score>chosen.score)chosen={sequence,time,score};
   }
  }

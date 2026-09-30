@@ -85,3 +85,22 @@ test('all original teaching examples retain native data through MDL and MDX, and
  for(const [kind]of PARTICLE_STARTERS){const recipe=createStarterRecipe(kind),doc=particleRecipeDocument(recipe);assert.equal(recipe.sources[0].original,true);for(const format of ['mdl','mdx'])assert.equal(openDocument(doc.serialize(format),'example.'+format).readOnly,false);}
  const impact=createStarterRecipe('impact'),sample=activeParticleSample(impact.native);assert.ok(sample.time>=600&&sample.time<1300);assert.ok(sample.score>0);
 });
+
+test('natural full-clip loops retain particle age and birth accumulation while focused loops reconstruct',()=>{
+ const model=structuredClone(createStarterRecipe().native);model.Sequences[0].Interval=new Uint32Array([0,33]);const p=model.ParticleEmitters2[0];Object.assign(p,{EmissionRate:10,LifeSpan:2,Visibility:1,Speed:0});
+ const native=new ModelRenderer(model),preview=new ParticleAuthoringPreview(native),options={sequence:0,frame:0,playing:true,elapsed:0,budgetMs:Infinity,loop:true};
+ preview.advance(options);preview.advance({...options,elapsed:500});assert.equal(native.particlesController.emitters[0].particles.length,5);assert.ok(native.particlesController.emitters[0].particles[0].lifeSpan<1.7);assert.equal(preview.status.frame,5);
+ const fresh=new ParticleAuthoringPreview(new ModelRenderer(structuredClone(model)));fresh.advance(options);for(let i=0;i<50;i++)fresh.advance({...options,elapsed:10});assert.deepEqual(fresh.simulation.snapshot().particles,preview.simulation.snapshot().particles);
+});
+test('local burst start and end keys fire once each per full-clip cycle without clearing survivors',()=>{
+ const model=structuredClone(createStarterRecipe().native);model.Sequences[0].Interval=new Uint32Array([0,100]);const p=model.ParticleEmitters2[0];p.Squirt=true;p.Visibility=1;p.LifeSpan=10;p.EmissionRate={LineType:0,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(2)},{Frame:100,Vector:v(3)}]};
+ const preview=new ParticleAuthoringPreview(new ModelRenderer(model)),options={sequence:0,frame:0,playing:true,budgetMs:Infinity,loop:true};preview.advance({...options,elapsed:0});assert.equal(preview.simulation.native.particlesController.emitters[0].particles.length,2);
+ preview.advance({...options,elapsed:100});assert.equal(preview.simulation.native.particlesController.emitters[0].particles.length,7);preview.advance({...options,elapsed:100});assert.equal(preview.simulation.native.particlesController.emitters[0].particles.length,12);
+});
+
+test('an explicit paused seek to the clip end inspects that endpoint before wrapping on resume',()=>{
+ const model=structuredClone(createStarterRecipe().native);model.Sequences[0].Interval=new Uint32Array([0,100]);const p=model.ParticleEmitters2[0];p.LifeSpan=2;p.Squirt=true;p.EmissionRate={LineType:0,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(2)},{Frame:100,Vector:v(3)}]};
+ const preview=new ParticleAuthoringPreview(new ModelRenderer(model)),options={sequence:0,frame:100,playing:false,budgetMs:Infinity,loop:true};
+ const end=preview.advance({...options,seek:true});assert.equal(end.frame,100);assert.equal(end.liveParticles,5);assert.equal(preview.advance(options).frame,100);
+ const resumed=preview.advance({...options,playing:true,elapsed:10});assert.equal(resumed.frame,10);assert.equal(resumed.liveParticles,7);
+});

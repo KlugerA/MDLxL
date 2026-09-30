@@ -141,14 +141,14 @@ test('middle button and DPI preferences persist with desktop validation and long
   menu.submenu.find(item => item.label === 'Rescan game data').click(); assert.deepEqual(actions, ['game-data-rescan']);
 });
 
-test('native particle and geoset-animation editors dispatch shared commands only while editing is available', () => {
+test('independent particle Lab is available for read-only models while model resource editing stays disabled', () => {
   const select = menu => [menu.find(item => item.label === 'Modules').submenu.find(item => item.label === 'Particle Editor…'), menu.find(item => item.label === 'Windows').submenu.find(item => item.label === 'Geoset Animation Manager…')];
   const actions = [];
   for (const state of [{ readOnly: true, saving: false }, { readOnly: false, saving: true }, { readOnly: true, saving: true }]) {
     const entries = select(buildMenuTemplate({}, id => actions.push(id), 'win32', [], value => value, state));
-    for (const entry of entries) { assert.equal(entry.enabled, false); entry.click(); }
+    assert.equal(entries[0].enabled,!state.saving);assert.equal(entries[1].enabled,false);for(const entry of entries)entry.click();
   }
-  assert.deepEqual(actions, []);
+  assert.deepEqual(actions, ['particles']);actions.length=0;
   const entries = select(buildMenuTemplate({}, id => actions.push(id), 'win32', [], value => value, { readOnly: false, saving: false }));
   for (const entry of entries) { assert.equal(entry.enabled, true); entry.click(); }
   assert.deepEqual(actions, ['particles', 'GeosetAnims']);

@@ -10,7 +10,7 @@ const {GameDataDiscovery,selectedGameDataSources}=require('./game-data.cjs');
 const {TextureResolver,IMAGE_EXTENSIONS}=require('./texture-resolver.cjs');
 const {CascTextures}=require('./casc.cjs');
 const {ParticleLibrary}=require('./particle-library.cjs');
-const {resolveParticleSourceAssets}=require('./particle-source.cjs');
+const {resolveParticleSourceAssets,resolveParticleSourceContext}=require('./particle-source.cjs');
 const {HUMAN_PORTRAIT_RESOURCES,validateHumanPortraitResources}=require('./human-portrait-frame.cjs');
 const {TextureLibrary,previewCatalog}=require('./texture-library.cjs');
 const {TexturePreviewCache}=require('./texture-preview-cache.cjs');
@@ -47,6 +47,7 @@ let gameDataDiscovery,recoveryPrompt=false,crashedWithEdits=false;
 const particleLibrary=new ParticleLibrary({directory:path.join(profile,'particles'),discover:()=>gameDataDiscovery.discover({explicitFolder:settings.gameData}),onProgress:status=>{if(win&&!win.isDestroyed())win.webContents.send('particles:progress',status);}});
 
 ipcMain.handle('particles:assets',(_,payload)=>resolveParticleSourceAssets(payload,{discover:()=>gameDataDiscovery.discover({explicitFolder:settings.gameData}),casc:textureResolver.casc}));
+ipcMain.handle('particles:sourceContext',async(_,payload)=>{if(!payload||!Number.isInteger(payload.sourceIndex)||payload.sourceIndex<0)throw Error('Choose an indexed source.');const {parseParticleData}=await import('../src/particle-data.js'),recipe=parseParticleData(await particleLibrary.read(payload.id));return resolveParticleSourceContext(recipe.sources[payload.sourceIndex],{discover:()=>gameDataDiscovery.discover({explicitFolder:settings.gameData}),casc:textureResolver.casc});});
 ipcMain.handle('particles:thumbnails',(_,ids)=>particleLibrary.thumbnails(ids));
 ipcMain.handle('particles:duplicate',(_,id)=>particleLibrary.duplicate(id));
 ipcMain.handle('particles:import',async()=>{

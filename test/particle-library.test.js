@@ -73,3 +73,21 @@ test('dependency namespaces stay in the source variant and preserve fallback ord
  assert.deepEqual(particleDependencyCandidates('Textures\\Smoke.blp','war3.w3mod:_teen.w3mod:Units\\Source.mdx'),['war3.w3mod:_teen.w3mod:Textures\\Smoke.blp','war3.w3mod:Textures\\Smoke.blp']);
  assert.deepEqual(particleDependencyCandidates('war3.w3mod:_hd.w3mod:Exact.blp','war3.w3mod:Source.mdx'),['war3.w3mod:_hd.w3mod:Exact.blp']);
 });
+
+test('observed stock names overlay exact source identities and user names survive rescan',async()=>{
+ const reviews=JSON.parse(await fs.readFile(new URL('../src/particle-reviewed-names.json',import.meta.url))),[id,review]=Object.entries(reviews)[0],sourceKey='a'.repeat(64),root=path.join(directory,'curated'),cache=path.join(root,sourceKey);
+ await fs.mkdir(cache,{recursive:true});const item={id,name:'Generated name',collection:'Warcraft',sources:[{contentHash:review.naming.sourceContentHash}],naming:{state:'review-needed'}};
+ await fs.writeFile(path.join(root,'current.json'),JSON.stringify({sourceKey}));await fs.writeFile(path.join(cache,'catalog.json'),JSON.stringify([item]));await fs.writeFile(path.join(cache,'manifest.json'),JSON.stringify({sourceKey,processed:[],failures:[],missingDependencies:[],unsupported:[]}));
+ const store=new ParticleLibrary({directory:root,discover:async()=>({cascFolders:[]})}),before=await fs.readFile(path.join(cache,'catalog.json'),'utf8');
+ let catalog=await store.catalog();assert.equal(catalog.items[0].name,review.name);assert.equal(catalog.coverage.reviewedNames,1);assert.equal(await fs.readFile(path.join(cache,'catalog.json'),'utf8'),before);
+ await store.annotate({id,name:'My reviewed name',tags:['mine']});await fs.writeFile(path.join(cache,'catalog.json'),JSON.stringify([{...item,name:'Rescanned automatic name'}]));catalog=await store.catalog();assert.equal(catalog.items[0].name,'My reviewed name');assert.deepEqual(catalog.items[0].tags,['mine']);
+ await fs.writeFile(path.join(root,'metadata.json'),'{}');item.sources[0].contentHash='changed';await fs.writeFile(path.join(cache,'catalog.json'),JSON.stringify([item]));catalog=await store.catalog();assert.equal(catalog.items[0].name,'Generated name');assert.equal(catalog.coverage.reviewedNames,0);
+});
+
+test('source-context preview is bound to the exact indexed model and source namespaces',async()=>{
+ const {resolveParticleSourceContext,particleSourceState}=createRequire(import.meta.url)('../electron/particle-source.cjs'),{particleRecipeDocument}=await import('../src/particle-recipes.js'),crypto=await import('node:crypto'),folder=path.join(directory,'context-install');await fs.mkdir(folder,{recursive:true});await fs.writeFile(path.join(folder,'.build.info'),'context-build');
+ const discover=async()=>({cascFolders:[folder]}),state=await particleSourceState(discover,'0'.repeat(64)),recipe=createStarterRecipe(),doc=particleRecipeDocument(recipe),bytes=doc.serialize('mdx'),hash=crypto.createHash('sha256').update(bytes).digest('hex'),source={physicalPath:'war3.w3mod:_teen.w3mod:Test.mdx',logicalPath:'Test.mdx',contentHash:hash,buildKey:state.sourceKey},calls=[];
+ const casc={readSnapshot:async name=>{calls.push(name);return name===source.physicalPath?bytes:starterTextureAsset().bytes;}};
+ const result=await resolveParticleSourceContext(source,{discover,casc});assert.equal(result.name,'Test.mdx');assert.equal(result.assets.length,1);assert.ok(calls[1].startsWith('war3.w3mod:_teen.w3mod:'));assert.deepEqual(Buffer.from(result.bytes),Buffer.from(bytes));
+ await assert.rejects(resolveParticleSourceContext({...source,contentHash:'a'.repeat(64)},{discover,casc}),/indexed identity/);await assert.rejects(resolveParticleSourceContext({...source,physicalPath:'..\\secret'},{discover,casc}),/no indexed source/);
+});

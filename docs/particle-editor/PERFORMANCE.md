@@ -21,3 +21,9 @@ Input-to-native-draw: Size, 26 samples, p50 15.5 ms / p95 15.7 ms / max 15.7 ms.
 The heavy fixture reached the visible 12,000-particle authoring budget during initial reconstruction and stopped with its message. Its authored emission rate remained 400 for all 32 emitters. It did not establish a completed valid FX frame, so no heavy-fixture FPS is reported. No values were silently lowered.
 
 Evidence: test/particle-performance.electron.cjs and out/particle-prototype/performance.json. The baseline source archive is local and must be recreated from c62faa4299a0b44519f992cf3765da7623e72417 when rerunning on another checkout.
+
+## Checkpoint 6 repeat
+
+After preserving native particles across full-clip loops, the same isolated fixture produced baseline 50.00 FPS (250 draws, p95 interval 20.3 ms) and current 50.00 FPS (251 draws, p95 interval 21.3 ms). Current local/global times diverged correctly after a loop (approximately 4035/9035 ms); live count remained 796.
+
+Size: 26 samples, p50 15.6 / p95 15.8 / max 15.8 ms. Speed: 25 samples, p50 52.2 / p95 53.3 / max 53.4 ms. Heavy fixture again stopped during reconstruction at the explicit budget with emission rate 400 unchanged, so no heavy FPS is claimed. The original environment and measurement limits above still apply.

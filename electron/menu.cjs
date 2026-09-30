@@ -14,9 +14,9 @@ function nativeAccelerator(chord) {
 function buildMenuTemplate(bindings, dispatch, platform = process.platform, recentFiles = [], translate = value => value, editorState = {}) {
   const item = (label, id) => {
     const keys = (bindings[id] || []).filter(key => /^[A-Za-z0-9]$|^F(?:[1-9]|1\d|2[0-4])$/.test(key) || ['Delete','Escape','Insert','Tab'].includes(key));
-    const requiresEditable = id === 'particles' || id === 'GeosetAnims';
-    const enabled = id === 'uv' ? !!editorState.uvEnabled : !requiresEditable || (!editorState.readOnly && !editorState.saving);
-    const result = { label, click: () => { if (enabled) dispatch(id); }, ...((requiresEditable || id==='uv') ? { enabled } : {}) };
+    const requiresEditable = id === 'GeosetAnims';
+    const enabled = id === 'particles' ? !editorState.saving : id === 'uv' ? !!editorState.uvEnabled : !requiresEditable || (!editorState.readOnly && !editorState.saving);
+    const result = { label, click: () => { if (enabled) dispatch(id); }, ...((requiresEditable || id==='uv'||id==='particles') ? { enabled } : {}) };
     // The renderer owns shortcuts so input fields, dialogs, and remapped keys use
     // the same rules as the browser build. Native accelerators only display them.
     const accelerator = keys.length ? nativeAccelerator(keys[0]) : null;

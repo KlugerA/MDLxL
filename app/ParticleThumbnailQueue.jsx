@@ -21,7 +21,7 @@ export default function ParticleThumbnailQueue({items,preferences,onThumbnail,on
       const names=doc.model.Textures.filter(t=>t.Image&&!assets.has(normalize(t.Image))).map(t=>t.Image),sourceKey=recipe.sources?.find(source=>source.buildKey)?.buildKey;
       const records=sourceKey?await window.desktop.particleAssets({sourceKey,dependencies:recipe.dependencies.filter(dep=>names.includes(dep.path))}):await window.desktop.resolveTextures({names});
       for(const record of records||[])if(record.bytes)assets.set(normalize(record.name),record);
-      if(mounted.current)setCurrent({id:item.id,model:doc.model,assets,...activeParticleSample(doc.model)});
+      if(mounted.current)setCurrent({id:item.id,model:doc.model,assets,...(item.previewSample||activeParticleSample(doc.model))});
     })().catch(error=>{if(mounted.current){onFailure?.(item.id,error.message);setCurrent({failed:true,id:item.id});}});
   },[items,current]);
   useEffect(()=>{if(current?.failed)setCurrent(null);},[current]);

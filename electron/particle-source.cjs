@@ -23,4 +23,18 @@ async function resolveParticleSourceAssets(payload,{discover,casc}){
  }
  return result;
 }
-module.exports={particleSourceState,resolveParticleSourceAssets};
+/** Resolve an explicit, read-only context view from a recorded recipe identity. */
+async function resolveParticleSourceContext(source,{discover,casc}){
+ const {safeParticlePath}=await import('../src/particle-data.js'),{openDocument}=await import('../src/editor-document.js'),{particleDependencyCandidates}=await import('./particle-library-worker.mjs');
+ if(!source||!safeParticlePath(source.physicalPath)||!/^war3[.]w3mod:/i.test(source.physicalPath)||!/^[a-f0-9]{64}$/.test(source.contentHash||'')||!/^[a-f0-9]{64}$/.test(source.buildKey||''))throw Error('This preset has no indexed source-model context.');
+ const state=await particleSourceState(discover,source.buildKey);if(state.state!=='ready')throw Error(state.message);
+ const bytes=await casc.readSnapshot(source.physicalPath,state.folder,state.sourceKey);if(!bytes)throw Error('The source model is unavailable. Index Warcraft assets again.');if(bytes.byteLength>128*1024*1024)throw Error('Source model exceeds the context preview budget.');if(hash(bytes)!==source.contentHash)throw Error('The source model no longer matches its indexed identity. Index Warcraft assets again.');
+ const doc=openDocument(bytes,source.logicalPath),assets=[],missing=[];let total=bytes.byteLength;
+ if(doc.model.Textures.length>1024)throw Error('Source model has too many pictures for context preview.');
+ for(const texture of doc.model.Textures){if(!texture.Image||texture.ReplaceableId)continue;if(!safeParticlePath(texture.Image))throw Error('Source model contains an invalid picture path.');let found=false;
+  for(const physicalPath of particleDependencyCandidates(texture.Image,source.physicalPath)){const picture=await casc.readSnapshot(physicalPath,state.folder,state.sourceKey);if(!picture)continue;total+=picture.byteLength;if(picture.byteLength>16*1024*1024||total>128*1024*1024)throw Error('Source context pictures exceed the preview budget.');assets.push({name:texture.Image,bytes:picture,source:'particle-casc',sourceKey:state.sourceKey,physicalPath});found=true;break;}
+  if(!found)missing.push(texture.Image);
+ }
+ return {name:source.logicalPath,bytes,assets,missing,unsupported:{modelParticles:doc.model.ParticleEmitters.length,popcorn:doc.model.ParticleEmitterPopcorns.length}};
+}
+module.exports={particleSourceState,resolveParticleSourceAssets,resolveParticleSourceContext};

@@ -9,6 +9,7 @@ import { effectNodes, extractParticleRecipe, validateParticleRecipe } from '../s
 import { stringifyParticleData, parseParticleData } from '../src/particle-data.js';
 const require = createRequire(import.meta.url);
 const { CascReader } = require('./casc.cjs');
+const reviewedNames=require('../src/particle-reviewed-names.json');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 let cancelled = false;
 parentPort?.on('message', message => { if (message === 'cancel') cancelled = true; });
@@ -48,7 +49,7 @@ export async function scanParticleLibrary({ folder, directory, maxAssets = Infin
     const byHash = new Map(entries.filter(item=>!item.blocked).map(item => [item.recipeHash,item]));
     async function checkpoint() {
       manifest.processed = [...completed]; manifest.updatedAt = new Date().toISOString();
-      manifest.reviewNeededNames = entries.filter(item => item.naming.state !== 'reviewed').length;
+      manifest.reviewedNames=entries.filter(item=>item.naming.state==='reviewed'||item.sources?.some(source=>source.contentHash===reviewedNames[item.id]?.naming.sourceContentHash)).length;manifest.reviewNeededNames=entries.length-manifest.reviewedNames;
       manifest.recipeCount=entries.filter(item=>!item.blocked).length;manifest.blockedEntries=entries.filter(item=>item.blocked).length;manifest.catalogEntries=entries.length;manifest.sourceGroups=entries.filter(item=>item.grouping&&!item.blocked).length;
       manifest.extractionComplete = completed.size === candidates.length;
       // Renderer compatibility is recorded independently from actual render/placement validation.
