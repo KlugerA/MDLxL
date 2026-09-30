@@ -54,7 +54,8 @@ export function particleBurstAmount(node,frame,interval,globalSequences=[]) {
 export function addParticleDemonstration(model,range) {
  const roots=allNodes(model).filter(n=>n.Parent==null||n.Parent===-1),wrapper=createNode(model,'Helper');
  wrapper.Name='Preview demonstration';const [a,b]=range;
- wrapper.Translation={LineType:1,GlobalSeqId:null,Keys:Array.from({length:17},(_,i)=>{const angle=-Math.PI*.75+i/16*Math.PI*1.5;return {Frame:Math.round(a+(b-a)*i/16),Vector:new Float32Array([80*Math.cos(angle),80*Math.sin(angle),0])};})};
+ // Keep the disposable demonstration above the preview floor, including flat ribbons.
+ wrapper.Translation={LineType:1,GlobalSeqId:null,Keys:Array.from({length:17},(_,i)=>{const angle=-Math.PI*.75+i/16*Math.PI*1.5;return {Frame:Math.round(a+(b-a)*i/16),Vector:new Float32Array([80*Math.cos(angle),80*Math.sin(angle),32])};})};
  model.__particleDemoParents=Object.fromEntries(roots.map(n=>[n.ObjectId,wrapper.ObjectId]));
  for(const n of roots)n.Parent=wrapper.ObjectId;
  return wrapper.ObjectId;

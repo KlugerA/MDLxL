@@ -11,7 +11,7 @@ export default function ParticleThumbnailQueue({items,preferences,onThumbnail,on
   useEffect(()=>()=>{mounted.current=false;},[]);
   useEffect(()=>{
     if(current||loading.current)return;
-    const item=items.find(item=>!item.thumbnail&&!item.previewError&&!pending.current.has(item.id)&&!item.blocked&&!item.unsupported?.length);
+    const item=items.find(item=>!item.empty&&!item.thumbnail&&!item.previewError&&!pending.current.has(item.id)&&!item.blocked&&!item.unsupported?.length);
     if(!item)return;
     pending.current.add(item.id);loading.current=true;
     (async()=>{

@@ -13,6 +13,29 @@ import {particleRecipeDocument} from '../src/particle-recipes.js';
 const {ParticleLibrary}=createRequire(import.meta.url)('../electron/particle-library.cjs');
 const directory=path.resolve('out/particle-prototype/store-tests-'+Date.now());
 const makeStore=()=>new ParticleLibrary({directory,discover:async()=>({cascFolders:[]})});
+
+test('My work lists new Labs and renders their edited ingredient graph without replacing presets',async()=>{
+ const root=path.join(directory,'working-gallery'),store=new ParticleLibrary({directory:root,discover:async()=>({cascFolders:[]})}),recipe=createStarterRecipe(),doc=particleRecipeDocument(recipe);
+ const {createNode}=await import('../src/editor-document.js');
+ doc.apply('Add ingredient',['Nodes','PivotPoints','Info'],model=>{createNode(model,'ParticleEmitter2').Speed=123;});
+ const key='lab-new-example',draft={schema:'mdlxl-particle-draft',version:1,key,state:doc.captureRecoveryState(),recipe};
+ await store.workingCopy({id:key,data:stringifyParticleData(draft)});
+ const item=(await store.catalog()).items.find(item=>item.collection==='My work');assert.ok(item.updatedAt>0);assert.match(item.id,/^work-[a-f0-9]{64}$/);
+ const copy=parseParticleData(await store.read(item.id));assert.equal(copy.workingId,item.id);assert.equal(copy.ingredients.length,2);assert.equal(copy.native.ParticleEmitters2[1].Speed,123);validateParticleRecipe(copy);
+ const restored=doc.constructor.restoreRecoveryState(parseParticleData(await store.workingCopy({id:item.id})).state);restored.undo();assert.equal(restored.model.ParticleEmitters2.length,1);
+ const oldRevision=(await store.thumbnails([item.id]))[item.id].revision;
+ draft.state=restored.captureRecoveryState();await store.workingCopy({id:item.id,data:stringifyParticleData(draft)});
+ assert.equal((await store.catalog()).items.filter(item=>item.collection==='My work').length,1,'Opening through My work keeps the same working file');
+ assert.equal(parseParticleData(await store.workingCopy({id:key})).state.model.ParticleEmitters2.length,1);
+ assert.notEqual((await store.thumbnails([item.id]))[item.id].revision,oldRevision);
+ restored.apply('Remove last ingredient',['Nodes','PivotPoints'],model=>{model.ParticleEmitters2=[];model.Nodes=[];model.PivotPoints=[];});
+ draft.state=restored.captureRecoveryState();await store.workingCopy({id:item.id,data:stringifyParticleData(draft)});
+ assert.equal((await store.catalog()).items.find(entry=>entry.id===item.id).empty,true);
+ assert.equal(parseParticleData(await store.read(item.id)).ingredients.length,0);
+ const empty=doc.constructor.restoreRecoveryState(parseParticleData(await store.workingCopy({id:item.id})).state);empty.undo();assert.equal(empty.model.ParticleEmitters2.length,1,'Empty work keeps the removed effect in undo');
+ await assert.rejects(store.exportData(item.id),/ingredients/);
+ await assert.rejects(store.read('work-../escape'),/identity/);
+});
 test('switching effects keeps independent working copies, pictures and undo across restart',async()=>{
  const store=makeStore(),recipe=createStarterRecipe();
  const picture='MDLxL_Forge\\Particle_'+'c'.repeat(32)+'.tga';recipe.native.Textures[0].Image=picture;recipe.dependencies[0].path=picture;

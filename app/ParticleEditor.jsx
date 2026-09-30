@@ -5,6 +5,7 @@ import {activeParticleSample} from '../src/particle-sampling.js';
 import {encodeForgeTga} from '../src/forge.js';
 import {particlePictureCanvas} from './particle-picture-canvas.js';
 import {removeParticlePicture} from '../src/particle-picture.js';
+import {fitRibbonToPolygons,ribbonPolygonSelection} from '../src/particle-ribbon-fit.js';
 import {includeParticleAssets,embeddedParticleAssets,MAX_PARTICLE_PICTURE_BYTES} from '../src/particle-assets.js';
 import React,{Suspense,lazy,useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {EditorDocument,createNode,deleteNode} from '../src/editor-document.js';
@@ -145,15 +146,30 @@ export default function ParticleEditor({doc,revision=doc?.revision||0,edit,refre
     checkPlacementPictures();setLibrary(false);
     setPlacement(initialPlacement());
   }catch(error){setMessage(error.message);}};
+  const markedPolygons=useMemo(()=>doc?ribbonPolygonSelection(doc.model,selectedGeometry).polygons:0,[doc,revision,selectedGeometry]);
+  const beginRibbon=()=>{
+    cancel();if(!doc||doc.readOnly)return;
+    try{
+      const ribbon=fitRibbonToPolygons(doc.model,selectedGeometry),placement=initialPlacement();
+      placement.ribbon=ribbon;placement.position=[0,0,0];placement.motion='target';
+      placement.parent=ribbon.parent==null?(ribbon.needsBone?placement.parent:''):String(ribbon.parent);
+      setPlacement(placement);setLibrary(false);setNewOpen(false);setIngredients(null);setExamples(false);setTestView(null);setPlacementError('');setMessage('');
+    }catch(error){setMessage(error.message);}
+  };
+  const toggleLibrary=async()=>{
+    cancel();setAdding(null);setIngredients(null);setTestView(null);setExamples(false);
+    if(library){setLibrary(false);return;}
+    try{if(recoveryReady)await keepLab(lab,mode);setLibrary(true);}catch(error){setMessage(error.message);}
+  };
   const loadRecipe=async recipe=>{
     if(opening.current||!recoveryReady)return false;opening.current=true;cancel();loaded.current=true;
     try{
       await keepLab(lab,mode,false);
-      const saved=await window.desktop?.particleWorkingCopy?.({id:recipe.id}),draft=saved?parseParticleData(saved):null;
+      const key=recipe.workingId||recipe.id,saved=await window.desktop?.particleWorkingCopy?.({id:key}),draft=saved?parseParticleData(saved):null;
       if(draft&&(draft.schema!=='mdlxl-particle-draft'||draft.version!==1))throw Error('Unsupported working effect.');
       const nextDoc=draft?EditorDocument.restoreRecoveryState(draft.state):particleRecipeDocument(recipe),nextRecipe=draft?{...draft.recipe,name:recipe.name}:recipe;
-      const next={doc:nextDoc,recipe:nextRecipe,key:recipe.id,assets:await assetsFor({...nextRecipe,native:nextDoc.model})};
-      setLab(next);setContext('Lab');setEmitterId(effectNodes(next.doc.model)[0]?.node.ObjectId??null);const sample=recipe.previewSample||activeParticleSample(next.doc.model);setSequence(sample.sequence);setTime(sample.time);setPlaying(true);setLibrary(false);setPlacement(null);setMessage(draft?'Your edits are kept.':'');setStructure(v=>v+1);return true;
+      const next={doc:nextDoc,recipe:nextRecipe,key,assets:await assetsFor({...nextRecipe,native:nextDoc.model})};
+      setLab(next);setContext('Lab');setEmitterId(effectNodes(next.doc.model)[0]?.node.ObjectId??null);const sample=recipe.previewSample||activeParticleSample(next.doc.model);setSequence(sample.sequence);setTime(sample.time);setPlaying(true);setDemo(false);setLibrary(false);setPlacement(null);setMessage(draft?'Your edits are kept.':'');setStructure(v=>v+1);return true;
     }
     catch(error){setMessage(error.message);}
     finally{opening.current=false;}
@@ -186,16 +202,18 @@ export default function ParticleEditor({doc,revision=doc?.revision||0,edit,refre
   const add=()=>{cancel();setAdding(null);setIngredients(null);setTestView(null);setExamples(false);setNewOpen(v=>!v);};
   const place=()=>{
     try{
-      checkPlacementPictures();
-      const recipe=recipeNow();
+      const incoming=placement.ribbon?new Map([[pathKey(STARTER_TEXTURE),starterTextureAsset()]]):assets;
+      checkPlacementPictures(incoming);
+      if(placement.ribbon?.needsBone&&placement.parent==='')throw Error('Choose the weapon bone.');
+      const recipe=placement.ribbon?.recipe||recipeNow();
       let result;const mutate=target=>{result=placeTimedParticleRecipe(target,recipe,placement);};
       const accepted=edit?edit('Add particle effect',['Nodes','Textures','Materials','TextureAnims','GlobalSequences','PivotPoints'],mutate):doc.apply('Add particle effect',['Nodes','Textures','Materials','TextureAnims','GlobalSequences','PivotPoints'],mutate);
       if(accepted===false)return;
-      onPlacedAssets?.(assets);setContext('On model');setEmitterId(result.ids[0]);onNodeChange?.(result.ids[0]);setSequence(placement.sequence);setTime(result.interval[0]);setPlacement(null);setStructure(v=>v+1);refresh?.();setMessage('Effect added. Undo restores the model.');
+      onPlacedAssets?.(incoming);setContext('On model');setEmitterId(result.ids[0]);onNodeChange?.(result.ids[0]);setSequence(placement.sequence);setTime(result.interval[0]);setTool('Basics');setPlacement(null);setStructure(v=>v+1);refresh?.();setMessage(placement.ribbon?'Ribbon added. Drag its two ends to adjust the edge.':'Effect added. Undo restores the model.');
     }catch(error){setMessage(error.message);}
   };
-  const placementRecipe=useMemo(()=>placement?extractParticleRecipe(model,effectNodes(model).map(item=>item.node.ObjectId),{...lab.recipe,name:lab.recipe.name,defaultSequence:sequence}):null,[!!placement,model,activeDoc.revision,sequence]);
-  const placementAssets=useMemo(()=>new Map([...textureAssets,...assets]),[textureAssets,assets]);
+  const placementRecipe=useMemo(()=>placement?.ribbon?.recipe||(placement?extractParticleRecipe(model,effectNodes(model).map(item=>item.node.ObjectId),{...lab.recipe,name:lab.recipe.name,defaultSequence:sequence}):null),[!!placement,placement?.ribbon,model,activeDoc.revision,sequence]);
+  const placementAssets=useMemo(()=>new Map([...textureAssets,...assets,...(placement?.ribbon?[[pathKey(STARTER_TEXTURE),starterTextureAsset()]]:[])]),[textureAssets,assets,placement?.ribbon]);
   const focusedRange=sweepRange&&sweepRange[0]>=start&&sweepRange[1]<=end?sweepRange:[start,Math.min(end,start+Math.max(1,(end-start)*.35))];
   const asset=assets.get(pathKey(working.Textures[emitter?.TextureID]?.Image));
   return <div className="resource-editor particle-editor" onKeyDown={event=>{
@@ -207,8 +225,9 @@ export default function ParticleEditor({doc,revision=doc?.revision||0,edit,refre
   }}>
     <section ref={dialog} tabIndex={-1} className="re-window pe-window" role="dialog" aria-modal="true" aria-label="Particle Editor" data-warmkey-scope="dialog" data-warmkey-prefix="particles">
       <header className="re-caption"><span>Particle Editor <small>· {context}</small></span><button className="re-caption-close" aria-label="Close Particle Editor" onClick={close}>×</button></header>
-      <div className="pe-toolbar"><button aria-pressed={library} onClick={()=>{setAdding(null);setIngredients(null);setTestView(null);setExamples(false);setLibrary(v=>!v);}}>Library</button><button disabled={activeDoc.readOnly} onClick={add}>New</button><select aria-label="Particle editor mode" value={mode} onChange={e=>{cancel();setMode(e.target.value);}}><option>Clueless</option><option>Classic</option></select><select aria-label="Particle context" value={context} onChange={e=>chooseContext(e.target.value)}><option>Lab</option><option disabled={!doc}>On model</option></select><span className="pe-spacer"/><button onClick={()=>undo(false)} disabled={activeDoc.readOnly||library||examples||!!testView||!!ingredients||!activeDoc.canUndo}>Undo</button><button onClick={()=>undo(true)} disabled={activeDoc.readOnly||library||examples||!!testView||!!ingredients||!activeDoc.canRedo}>Redo</button><button disabled={!effectNodes(model).length} onClick={()=>{setName(context==='Lab'?lab.recipe.name:'My effect');setSaveOpen(v=>!v);}}>Save preset</button>{context==='Lab'&&<button disabled={!doc||doc.readOnly||!effectNodes(model).length} onClick={beginPlacement}>Add to model</button>}</div>
-      {newOpen&&<div className="pe-action-strip"><span>Start with</span>{PARTICLE_STARTERS.map(([id,label])=><button key={id} disabled={!recoveryReady} onClick={()=>{setNewOpen(false);chooseRecipe({...createStarterRecipe(id),id:'lab-'+crypto.randomUUID()});}}>{label}</button>)}<button onClick={()=>{setExamples(true);setNewOpen(false);}}>Compare examples</button><button onClick={()=>setNewOpen(false)}>Cancel</button></div>}
+      <div className="pe-toolbar"><button aria-pressed={library} onClick={toggleLibrary}>Library</button><button disabled={activeDoc.readOnly} onClick={add}>New</button>{markedPolygons>0&&<button disabled={doc.readOnly} onClick={beginRibbon}>Ribbon from polygons</button>}<select aria-label="Particle editor mode" value={mode} onChange={e=>{cancel();setMode(e.target.value);}}><option>Clueless</option><option>Classic</option></select><select aria-label="Particle context" value={context} onChange={e=>chooseContext(e.target.value)}><option>Lab</option><option disabled={!doc}>On model</option></select><span className="pe-spacer"/><button onClick={()=>undo(false)} disabled={activeDoc.readOnly||library||examples||!!testView||!!ingredients||!activeDoc.canUndo}>Undo</button><button onClick={()=>undo(true)} disabled={activeDoc.readOnly||library||examples||!!testView||!!ingredients||!activeDoc.canRedo}>Redo</button><button disabled={!effectNodes(model).length} onClick={()=>{setName(context==='Lab'?lab.recipe.name:'My effect');setSaveOpen(v=>!v);}}>Save preset</button>{context==='Lab'&&<button disabled={!doc||doc.readOnly||!effectNodes(model).length} onClick={beginPlacement}>Add to model</button>}</div>
+      {newOpen&&<div className="pe-action-strip"><span>Start with</span>{PARTICLE_STARTERS.map(([id,label])=><button key={id} disabled={!recoveryReady} onClick={async()=>{setNewOpen(false);if(await chooseRecipe({...createStarterRecipe(id),id:'lab-'+crypto.randomUUID()}))setDemo(id==='ribbon');}}>{label}</button>)}<button onClick={()=>{setExamples(true);setNewOpen(false);}}>Compare examples</button><button onClick={()=>setNewOpen(false)}>Cancel</button></div>}
+      {family==='RibbonEmitters'&&context==='Lab'&&!library&&!placement&&<div className="pe-action-strip"><button aria-pressed={demo} onClick={()=>setDemo(value=>!value)}>Preview swing</button><small>For a weapon: mark its back polygons in Vertices, then open EMTR.</small></div>}
       {saveOpen&&<div className="pe-action-strip">{context==='Lab'&&effectNodes(model).length>1&&<span>Whole effect · {effectNodes(model).length} ingredients</span>}<label>Preset name<input aria-label="Preset name" value={name} maxLength={120} onChange={e=>setName(e.target.value)}/></label><button onClick={save}>Save to My presets</button><button onClick={()=>setSaveOpen(false)}>Cancel</button></div>}
       <div className={'pe-body '+(mode==='Classic'?'pe-classic':'pe-clueless')+(library?' pe-browsing':'')}>
         <div className="pe-preview-pane">

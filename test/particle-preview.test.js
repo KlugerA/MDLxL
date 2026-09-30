@@ -2,11 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createNode} from '../src/editor-document.js';
 import {createStarterRecipe} from '../src/particle-starters.js';
-import {NativeParticleSimulation,particleTimelineAt} from '../app/particle-preview-adapter.js';
+import {NativeParticleSimulation,particleTimelineAt,particlePreviewBounds} from '../app/particle-preview-adapter.js';
+import {addParticleDemonstration,particleSweepPath} from '../src/particle-sweep.js';
+import {PerspectiveCamera,Vector3} from 'three';
 const v=(...n)=>new Float32Array(n);
 const track=keys=>({LineType:0,GlobalSeqId:null,Keys:keys.map(([Frame,value])=>({Frame,Vector:v(value)}))});
 const make=()=>structuredClone(createStarterRecipe().native);
 const particles=sim=>sim.snapshot().particles;
+
+test('a new ribbon preview frames its full demonstration swing before playback',()=>{
+ const model=createStarterRecipe('ribbon').native;addParticleDemonstration(model,[0,5000]);
+ const sim=new NativeParticleSimulation(model);sim.advance(800);const camera=new PerspectiveCamera(),id=model.RibbonEmitters[0].ObjectId;
+ const bounds=particlePreviewBounds(sim.native,{selectedId:id,camera});assert.ok(bounds);
+ for(const point of particleSweepPath(model,id,0,[0,5000],camera))assert.ok(new Vector3(...point.world).distanceTo(new Vector3(...bounds.center))<bounds.radius);
+ assert.ok(bounds.radius>70,'Framing includes the swing, not just its short current trail');
+});
 test('pinned native simulation gives identical particles across display rates and repeated seek replay',()=>{
   const model=make(),a=new NativeParticleSimulation(model),b=new NativeParticleSimulation(model);
   a.advance(1500);

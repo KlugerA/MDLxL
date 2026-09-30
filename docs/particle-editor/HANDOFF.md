@@ -2,7 +2,7 @@
 
 Continue on `codex/particle-editor-prototype`, draft PR https://github.com/KlugerA/MDLxL/pull/60. The managed checkout is `C:\Users\PC\.codex\worktrees\particle-editor-prototype\MDLxL`. The base was `c62faa4299a0b44519f992cf3765da7623e72417` (v0.14.1). Keep this work isolated: no main merge, release, version bump or desktop installation has been authorized. The primary checkout has unrelated local changes.
 
-The user is testing an isolated fixed snapshot while a further UX pass continues. Current tester, feedback, asset provenance and evidence are in [USER-FEEDBACK.md](USER-FEEDBACK.md); these supersede the checkpoint-9 status below. Keep their test window independent of source/dist rebuilds. This is a prototype interaction, not acceptance of every contract gate or Warcraft fidelity.
+The UX follow-up is ready for another user test: direct library entry, favorites and Picture fixes; independent My work recovery; EMTR and simple markers; chosen Movement intervals; main move/bind/visibility controls; and ribbons fitted to marked weapon polygons. Current tester, asset provenance, exact evidence and remaining boundaries are in [USER-FEEDBACK.md](USER-FEEDBACK.md); these supersede checkpoint-9 status below. Keep test windows independent of source/dist rebuilds. This is prototype evidence, not acceptance of every contract gate or Warcraft fidelity.
 
 ## Working path
 
@@ -21,6 +21,7 @@ The prototype includes pinned size/spawn/aim/spread handles; life samples and na
 | Pinned war3-model 4.0.1 private-runtime compatibility, replay and picking | `app/particle-preview-adapter.js` |
 | Direct handles and sweep tools | `app/ParticleStageTools.jsx`, `src/particle-handles.js`, `app/ParticleSweepTools.jsx`, `src/particle-sweep.js` |
 | Ghost placement and temporary inspection | `app/ParticlePlacementStage.jsx`, `app/ParticleTestView.jsx`, `app/ParticleIngredients.jsx` |
+| Marked weapon polygons, native ribbon fit and detected binding | `src/particle-ribbon-fit.js`, `app/ParticlePlacementControls.jsx` |
 | CASC index and exact-source dependency resolution | `electron/particle-library-worker.mjs`, `electron/particle-source.cjs` |
 | Preset store, source metadata and revision-bound thumbnails | `electron/particle-library.cjs`, `app/ParticleThumbnailQueue.jsx` |
 | Hash-bound observed appearance names | `src/particle-reviewed-names.json` |
@@ -38,6 +39,10 @@ $env:MDLXL_PLAYWRIGHT_MODULE = 'C:\Users\PC\.cache\codex-runtimes\codex-primary-
 node test/particle-prototype.electron.cjs
 node test/particle-model-io.electron.cjs
 node test/particle-parent.electron.cjs
+node test/particle-workflow.electron.cjs
+node test/particle-picture.electron.cjs
+node test/particle-main-rig.electron.cjs
+node test/particle-ribbon-fit.electron.cjs
 node test/particle-lifecycle.electron.cjs
 ```
 

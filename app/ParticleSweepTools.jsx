@@ -8,7 +8,7 @@ export function ParticleSweepControls({interval,range,onRange,onWindow,demo,onDe
   <label>Loop ends<input aria-label="Sweep loop end" type="range" min={interval[0]+1} max={interval[1]} value={range[1]} onChange={e=>onRange([range[0],Math.max(range[0]+1,Number(e.target.value))])}/></label>
   {(options.family==='RibbonEmitters'?['HeightAbove','HeightBelow','LifeSpan']:['ParticleScaling','LifeSpan','Latitude','TailLength']).map(field=><ParticleSlider key={field} field={field} value={particleValue(emitter,field,options)} {...{begin,change,finish,cancel}}/>)}
   <button onClick={onWindow} title="Replace emitting keys in this animation with the selected window">Emit during this window</button>
-  {context==='Lab'&&<button aria-pressed={demo} onClick={()=>onDemo(!demo)}>Demonstration sweep{demo?' · preview only':''}</button>}
+  {context==='Lab'&&options.family!=='RibbonEmitters'&&<button aria-pressed={demo} onClick={()=>onDemo(!demo)}>Demonstration sweep{demo?' · preview only':''}</button>}
   <small>Drag the marker along the existing path to inspect its timing.</small>
  </div>;
 }

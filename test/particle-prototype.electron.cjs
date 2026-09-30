@@ -95,6 +95,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     assert.deepEqual(await readLab(),beforeExamples);assert.deepEqual(await readModel(),targetBeforeExamples);await page.getByRole('button',{name:'Close examples',exact:true}).click();console.log('Five native example comparisons preserve Lab and model');
     await page.getByRole('button',{name:'Shape',exact:true}).click();await page.getByRole('button',{name:'Fit view',exact:true}).click();
     await page.getByRole('slider',{name:'Spawn width handle',exact:true}).waitFor();
+    await page.getByRole('slider',{name:'Spawn width handle',exact:true}).locator('circle').hover();
     const beforeWidth=await readLab(),widthPoint=await page.getByRole('slider',{name:'Spawn width handle',exact:true}).locator('circle').boundingBox();
     await page.mouse.move(widthPoint.x+7,widthPoint.y+7);await page.mouse.down();await page.mouse.move(widthPoint.x+47,widthPoint.y+22,{steps:8});await page.mouse.up();
     const afterWidth=await readLab();
@@ -276,7 +277,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     assert.equal((await readLab()).undo,ribbonBefore.undo+1);
     await page.getByRole('button',{name:'Sweep',exact:true}).click();
     const beforeDemo=await readLab();
-    await page.getByRole('button',{name:'Demonstration sweep',exact:true}).click();
+    await page.getByRole('button',{name:'Preview swing',exact:true}).click();
     await page.waitForTimeout(500);await page.getByRole('slider',{name:'Sweep time',exact:true}).waitFor();
     assert.deepEqual((await readLab()).model,beforeDemo.model,'Demonstration motion stays out of the document');
     await page.screenshot({path:path.join(out,'ribbon-sweep.png')});

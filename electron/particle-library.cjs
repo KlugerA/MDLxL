@@ -6,7 +6,7 @@ const THUMBNAIL_VERSION = 'native-4.0.1-authoring-5';
 const {particleSourceState}=require('./particle-source.cjs');
 const reviewedNames = require('../src/particle-reviewed-names.json');
 const reviewFor = item => {const review=reviewedNames[item.id];return review&&item.sources?.some(source=>source.contentHash===review.naming.sourceContentHash)?review:{};};
-const ID = /^(?:wc3-[a-f0-9]{24}|my-[a-f0-9-]{36})$/;
+const ID = /^(?:wc3-[a-f0-9]{24}|my-[a-f0-9-]{36}|work-[a-f0-9]{64})$/;
 const atomic = async(file,data) => {
   await fs.mkdir(path.dirname(file),{recursive:true});
   try { await fs.copyFile(file,file+'.previous'); } catch(error) { if(error.code!=='ENOENT')throw error; }
@@ -35,6 +35,13 @@ class ParticleLibrary {
         items.push({id:recipe.id,name:recipe.name,tags:recipe.tags,categories:recipe.categories,naming:{state:'personal'},collection:'My presets',unsupported:recipe.compatibility?.unsupported||[]});
       }
     }catch(error){if(error.code!=='ENOENT')throw error;}
+    try {
+      for(const file of await fs.readdir(path.join(this.directory,'working')))if(/^[a-f0-9]{64}\.json$/.test(file)){
+        const id='work-'+file.slice(0,-5),draft=await this.readWorking(id),recipe=draft.recipe,info=await fs.stat(path.join(this.directory,'working',file));
+        const {effectNodes}=await import('../src/particle-recipes.js');
+        items.push({id,name:recipe.name,tags:recipe.tags,categories:recipe.categories,naming:{state:'personal'},collection:'My work',updatedAt:info.mtimeMs,empty:!effectNodes(draft.state.model).length,unsupported:recipe.compatibility?.unsupported||[]});
+      }
+    }catch(error){if(error.code!=='ENOENT')throw error;}
     items=items.map(item=>({...item,...reviewFor(item),...meta[item.id],favorite:!!meta[item.id]?.favorite}));
     items.sort((a,b)=>Number(!!a.blocked)-Number(!!b.blocked)||Number(['reviewed','user-reviewed'].includes(b.naming?.state))-Number(['reviewed','user-reviewed'].includes(a.naming?.state)));
     if(coverage){coverage.reviewedNames=items.filter(item=>item.collection==='Warcraft'&&['reviewed','user-reviewed'].includes(item.naming?.state)).length;coverage.reviewNeededNames=items.filter(item=>item.collection==='Warcraft').length-coverage.reviewedNames;}
@@ -49,7 +56,7 @@ class ParticleLibrary {
     if(current===undefined)current=await this.current();
     if(id.startsWith('wc3-')&&!current)return null;
     try {
-      const file=path.join(this.directory,id.startsWith('my-')?'mine':current.sourceKey,id+'.json'),info=await fs.stat(file,{bigint:true});
+      const file=id.startsWith('work-')?path.join(this.directory,'working',id.slice(5)+'.json'):path.join(this.directory,id.startsWith('my-')?'mine':current.sourceKey,id+'.json'),info=await fs.stat(file,{bigint:true});
       return crypto.createHash('sha256').update(JSON.stringify([THUMBNAIL_VERSION,id.startsWith('wc3-')?current.sourceKey:null,info.size.toString(),info.mtimeNs.toString(),reviewedNames[id]?.previewSample])).digest('hex');
     }catch(error){if(error.code==='ENOENT')return null;throw error;}
   }
@@ -81,6 +88,12 @@ class ParticleLibrary {
   }
   async read(id) {
     if(!ID.test(id))throw Error('Invalid effect identity.');
+    if(id.startsWith('work-')){
+      const draft=await this.readWorking(id),{extractParticleRecipe,effectNodes}=await import('../src/particle-recipes.js'),{stringifyParticleData}=await import('../src/particle-data.js');
+      const model=draft.state.model,recipe=extractParticleRecipe(model,effectNodes(model).map(item=>item.node.ObjectId),draft.recipe);
+      recipe.embeddedAssets=(draft.recipe.embeddedAssets||[]).filter(asset=>recipe.native.Textures.some(t=>t.Image?.toLowerCase()===asset.path.toLowerCase()));
+      recipe.workingId=id;return stringifyParticleData(recipe);
+    }
     const current=await this.current();
     if(id.startsWith('wc3-')&&!current)throw Error('Index Warcraft assets first.');
     const file=path.join(this.directory,id.startsWith('my-')?'mine':current.sourceKey,id+'.json');
@@ -112,7 +125,7 @@ class ParticleLibrary {
   }
   async workingCopy({id,data}){
     if(typeof id!=='string'||!id||id.length>200)throw Error('Invalid working effect.');
-    const file=path.join(this.directory,'working',crypto.createHash('sha256').update(id).digest('hex')+'.json');
+    const file=path.join(this.directory,'working',(/^work-[a-f0-9]{64}$/.test(id)?id.slice(5):crypto.createHash('sha256').update(id).digest('hex'))+'.json');
     if(data===undefined){
       try{if((await fs.stat(file)).size>16*1024*1024)throw Error('Working effect exceeds 16 MiB.');return await fs.readFile(file,'utf8');}
       catch(error){if(error.code==='ENOENT')return null;throw error;}
@@ -120,6 +133,11 @@ class ParticleLibrary {
     const {parseParticleData}=await import('../src/particle-data.js'),draft=parseParticleData(data);
     if(draft.schema!=='mdlxl-particle-draft'||draft.version!==1||!draft.state||!draft.recipe)throw Error('Invalid working effect.');
     return this.enqueue(()=>atomic(file,data));
+  }
+  async readWorking(id){
+    if(!/^work-[a-f0-9]{64}$/.test(id))throw Error('Invalid working effect.');
+    const {parseParticleData}=await import('../src/particle-data.js'),text=await this.workingCopy({id});if(!text)throw Error('This working effect is unavailable.');
+    const draft=parseParticleData(text);if(draft.schema!=='mdlxl-particle-draft'||draft.version!==1||!draft.state?.model||!draft.recipe)throw Error('Invalid working effect.');return draft;
   }
   async scan() {
     if(this.worker)return this.status;

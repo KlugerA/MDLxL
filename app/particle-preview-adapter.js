@@ -508,6 +508,7 @@ export function particlePreviewBounds(native,{sweepRange,selectedId,camera,hidde
   const matrix=matrices.get(selectedId)||new Matrix4(),pivot=new Vector3().fromArray(selected.PivotPoint||[0,0,0]),at=field=>native.particlesController.interp.animVectorVal(selected[field],0),w=Math.max(60,Math.abs(at('Width'))),l=Math.max(60,Math.abs(at('Length')));
   for(const x of [-w,w])for(const y of [-l,l])for(const z of [-60,90])add(pivot.clone().add(new Vector3(x,y,z)).applyMatrix4(matrix).toArray());
  }
- if(sweepRange)for(const point of particleSweepPath(native.model,selectedId,native.getSequence(),sweepRange,camera))add(point.world);
+ const fitRange=sweepRange||(native.model.__particleDemoParents?native.model.Sequences[native.getSequence()]?.Interval:null);
+ if(fitRange)for(const point of particleSweepPath(native.model,selectedId,native.getSequence(),fitRange,camera))add(point.world);
  if(!Number.isFinite(minimum[0]))return null;return {center:minimum.map((v,i)=>(v+maximum[i])/2),radius:Math.max(8,Math.hypot(...minimum.map((v,i)=>maximum[i]-v))/2)*1.15};
 }

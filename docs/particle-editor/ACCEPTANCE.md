@@ -1,6 +1,6 @@
 # Particle Editor prototype acceptance evidence
 
-The subsequent UX pass is in progress. See [USER-FEEDBACK.md](USER-FEEDBACK.md) for current feedback, tests, tester status, static placement support and the explicitly requested bundled toolbar image. The table below is the historical checkpoint-9 evidence, not the status of that ongoing pass.
+The subsequent UX pass is ready for another user test. See [USER-FEEDBACK.md](USER-FEEDBACK.md) for current fixes, polygon-fitted ribbons, My work recovery, tests, tester status, static placement support and the explicitly requested bundled toolbar image. The table below is historical checkpoint-9 evidence; its superseded limits are retained as a record, not a statement of current UX behavior.
 
 Checkpoint 9, 30 September 2026. This is an isolated working prototype, not full contract acceptance or a release. Automated Electron captures are offscreen. The user also interacted with a visible isolated tester and authorized continuing; that is not acceptance of every gate. No Warcraft runtime test has been performed.
 
