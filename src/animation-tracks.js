@@ -72,9 +72,20 @@ export function animationTargets(model, { geosetIds = [], nodeIds = [] } = {}) {
 export function readAnimationTrack(model, target) {
   return resolveTarget(model, target)?.[target.property] ?? fallback(target.property);
 }
-export function sampleAnimationProperty(model, target, frame, sequenceIndex) {
+export function sampleAnimationProperty(model, target, frame, sequenceIndex, globalSeqId = null) {
   if (target.kind === 'geoset') {
-    resolveTarget(model, target);
+    const owner = resolveTarget(model, target), track = owner?.[target.property];
+    if (Number.isInteger(globalSeqId) && globalSeqId >= 0) {
+      if (isTrack(track) && track.GlobalSeqId === globalSeqId) {
+        const fallbackValue = owner?._MdxDefaults?.[target.property] ?? fallback(target.property);
+        return sampleTrack(track, frame, { globalSequences: model.GlobalSequences, globalTime: frame, fallback: fallbackValue });
+      }
+      if (target.property === 'Color' && !(owner?.Flags & 2)) return fallback(target.property);
+      if (isTrack(track)) {
+        const first = track.Keys[0]?.Vector ?? fallback(target.property);
+        return owner?._MdxDefaults?.[target.property] ?? sampleTrack(track, 0, { globalSequences: model.GlobalSequences, fallback: dimensions(target.property) === 1 ? first[0] : Array.from(first) });
+      }
+    }
     const evaluated = sampleGeosetAnimation(model, target.id, frame, sequenceIndex);
     return target.property === 'Color' ? evaluated.color : evaluated.alpha;
   }
@@ -107,6 +118,23 @@ function trackForEdit(model, target) {
   for (const seq of model.Sequences || []) if (seq.Interval) putKey(track, validFrame(seq.Interval[0]), value);
   return track;
 }
+function trackForGlobalEdit(model, target, globalSeqId) {
+  const duration = model.GlobalSequences?.[globalSeqId];
+  if (!Number.isInteger(globalSeqId) || globalSeqId < 0 || !(duration > 0)) throw new Error('Select an existing global sequence before editing its keyframes.');
+  const colorDisabled = target.kind === 'geoset' && target.property === 'Color' && !(resolveTarget(model, target)?.Flags & 2);
+  const original = colorDisabled ? fallback(target.property) : readAnimationTrack(model, target);
+  if (isTrack(original)) {
+    if (original.GlobalSeqId !== globalSeqId) {
+      const channel = target.property === 'Color' ? 'RGB' : 'visibility';
+      const owner = Number.isInteger(original.GlobalSeqId) && original.GlobalSeqId >= 0 ? `global sequence ${original.GlobalSeqId + 1}` : 'model sequences';
+      throw new Error(`This ${channel} track uses ${owner}. Change it to Global sequence ${globalSeqId + 1} in Text tracks before editing it here.`);
+    }
+    return clone(original);
+  }
+  const track = { LineType: lineDefault(target.property), GlobalSeqId: globalSeqId, Keys: [] };
+  putKey(track, 0, vectorValue(original, target.property));
+  return track;
+}
 function commitTrack(model, target, track) {
   const owner = resolveTarget(model, target, true);
   if (track === undefined) delete owner[target.property]; else owner[target.property] = track;
@@ -131,10 +159,13 @@ function editFrame(model, track, frame, sequenceIndex) {
   if (frame < interval[0] || frame > interval[1]) throw new Error('The playhead must be inside the selected animation.');
   return frame;
 }
-export function setAnimationKey(model, targets, frame, value, sequenceIndex) {
+export function setAnimationKey(model, targets, frame, value, sequenceIndex, globalSeqId = null) {
   return applyPrepared(model, targets.map(target => {
-    const vector = vectorValue(value, target.property), track = trackForEdit(model, target);
-    putKey(track, editFrame(model, track, frame, sequenceIndex), vector);
+    const vector = vectorValue(value, target.property);
+    const track = globalSeqId === null ? trackForEdit(model, target) : trackForGlobalEdit(model, target, globalSeqId);
+    const keyFrame = globalSeqId === null ? editFrame(model, track, frame, sequenceIndex) : validFrame(frame);
+    if (globalSeqId !== null && (keyFrame < 0 || keyFrame > model.GlobalSequences[globalSeqId])) throw new Error('The playhead must be inside the selected global sequence.');
+    putKey(track, keyFrame, vector);
     return { target, track };
   }));
 }

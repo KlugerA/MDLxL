@@ -63,6 +63,12 @@ test('Animations exposes inline RGB fields on All line',()=>{
   assert.doesNotMatch(html,/<input[^>]*aria-label="Animation R"[^>]*disabled/);
   assert.match(html,/aria-label="Animation R"[^>]*value="179"/);
 });
+test('Animations enables RGB and visibility fields on a global sequence',()=>{
+  const html=renderToStaticMarkup(React.createElement(Animation,{model:fixture(),sequenceIndex:-1,globalSeqId:0,time:0,selectedGeosets:[0]}));
+  assert.doesNotMatch(html,/<input[^>]*aria-label="Animation R"[^>]*disabled/);
+  assert.doesNotMatch(html,/<input[^>]*aria-label="Visibility alpha percent"[^>]*disabled/);
+  assert.match(html,/<button disabled="">Bake Sequence RGB<\/button>/);
+});
 test('actual setup dialog renders every missing-requirement combination',()=>{
   for(const [missingSequence,missingCamera]of [[true,false],[false,true],[true,true]]) {
     const html=renderToStaticMarkup(React.createElement(Setup,{model:fixture(),missingSequence,missingCamera,sourceIndex:0}));
