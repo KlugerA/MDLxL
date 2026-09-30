@@ -26,7 +26,7 @@ export function projectMovementNodes(model, frame, sequenceIndex, camera, width,
     const eventNode = (model.EventObjects || []).some(item => item.ObjectId === node.ObjectId);
     const unit = camera.isPerspectiveCamera ? 2 * world.distanceTo(camera.position) * Math.tan(camera.fov * Math.PI / 360) / camera.zoom / height : (camera.top - camera.bottom) / camera.zoom / height;
     const tetrahedron = refNode ? [[1, 1, 1], [-1, -1, 1], [-1, 1, -1], [1, -1, -1]].map(vertex => { const p = new Vector3(...vertex).multiplyScalar(unit * 5).add(world).project(camera); return { x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2 }; }) : null;
-    return { node, world, rotation, displayColor, tetrahedron, refNode, helperNode, eventNode, unitsPerPixel: unit, overlayKind: categories.get(node.ObjectId) || 'nodes', x: (screen.x + 1) * width / 2, y: (1 - screen.y) * height / 2, visible: screen.z >= -1 && screen.z <= 1 };
+    return { node, world, rotation, billboardRotation:camera.quaternion.clone(), displayColor, tetrahedron, refNode, helperNode, eventNode, unitsPerPixel: unit, overlayKind: categories.get(node.ObjectId) || 'nodes', x: (screen.x + 1) * width / 2, y: (1 - screen.y) * height / 2, visible: screen.z >= -1 && screen.z <= 1 };
   });
 }
 
@@ -125,7 +125,7 @@ export function drawBoneConnectors(context, nodes, selectedIds, camera, width, h
     if (!point.visible || !rigMarkerVisible(point, options, highlights)) continue;
     const shape = markerStyle(point, byId, options.preferences, highlights).shape;
     const hull = convexHull(shape.vertices.map(vertex => {
-      const p = new Vector3(...vertex).multiplyScalar(point.unitsPerPixel * size).applyQuaternion(point.rotation).add(point.world).project(camera);
+      const p = new Vector3(...vertex).multiplyScalar(point.unitsPerPixel * size).applyQuaternion(shape.billboard?(point.billboardRotation||point.rotation):point.rotation).add(point.world).project(camera);
       return { x: (p.x + 1) * width * ratio / 2, y: (1 - p.y) * height * ratio / 2 };
     }));
     if (hull.length < 3) continue;

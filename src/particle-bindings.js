@@ -20,6 +20,7 @@ const descriptions = {
   MaterialID:['Material','uint32 reference','material index',false,0,0,'appearance'],
   TextureSlot:['Picture cell','uint32','ribbon atlas cell',true,0,16,'appearance'],
   Rotation: ['Aim','float32 quaternion','degrees shown; native quaternion track',true,-180,180,'births'],
+  Translation: ['Position','float32[3]','parent-space world units',true,-250,250,'history'],
   Alpha: ['Opacity','uint8[3]','0–255 per life stage',false,0,255,'appearance'],
   SegmentColor: ['Color','float32[3][3]','RGB tint per life stage',false,0,1,'appearance'],
   TextureID:['Picture','uint32 reference','texture resource index',false,0,0,'texture'],
@@ -47,6 +48,7 @@ export function particleValue(emitter, field, options={}) {
   if (field === 'SegmentColor') return Array.from(emitter.SegmentColor?.[stage??1]||[1,1,1]);
   if(field==='Color')return Array.from(sampleTrack(emitter.Color,frame,{interval,globalSequences,globalTime:options.globalTime??frame,fallback:[1,1,1]}));
   if (field === 'Rotation') return particleAimAngles(emitter,options)[axis];
+  if (field === 'Translation') return Array.from(sampleTrack(emitter.Translation,frame,{interval,globalSequences,globalTime:options.globalTime??frame,fallback:[0,0,0]}));
   const value = emitter[field];
   if(field==='EmissionRate'&&emitter.Squirt&&value?.Keys){const duration=globalSequences[value.GlobalSeqId],time=duration>0?(options.globalTime??frame)%duration:frame,range=duration>0?[0,duration]:interval;const events=value.Keys.filter(k=>k.Vector[0]>0&&(!range||k.Frame>=range[0]&&k.Frame<=range[1]));const key=events.sort((a,b)=>Math.abs(a.Frame-time)-Math.abs(b.Frame-time))[0];if(key)return key.Vector[0];}
   const sampled=typeof value==='number'?value:sampleTrack(value,frame,{interval,globalSequences,globalTime:options.globalTime??frame,fallback:[field==='Visibility'?1:0]});
@@ -102,7 +104,8 @@ export function beginParticleParameter(emitter, field, options = {}) {
         else values[1]=value;
         return new Float32Array(values);
       }
-      if (!track) return field==='Color'?new Float32Array(components):value;
+      if(field==='Translation'&&components.length!==3)throw Error('Position needs three coordinates.');
+      if (!track) return field==='Translation'?{LineType:1,GlobalSeqId:null,Keys:[{Frame:keyTime,Vector:new Float32Array(components)}]}:field==='Color'?new Float32Array(components):value;
       const next=clone(track);
       if (options.scope === 'track') {
         const offsets=components.map((v,i)=>v-(Array.isArray(sampled)?sampled[i]:sampled));

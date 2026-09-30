@@ -34,7 +34,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   uvPreviewDisplay: DEFAULT_UV_PREVIEW_DISPLAY,
   uvGrid: DEFAULT_UV_GRID,
   uvViewTileLimit: DEFAULT_UV_VIEW_TILE_LIMIT,
-  language: 'en', showPressedKeys: false, capture: DEFAULT_CAPTURE,
+  language: 'en', showPressedKeys: false, capture: DEFAULT_CAPTURE, emitterMarker: 'pentagram',
   scrollSensitivity: 2.5,
   wheelMode: 'rotate',
   pointerSensitivity: 1,
@@ -158,6 +158,7 @@ export function normalizePreferences(value = {}) {
     newModelVersion: input.newModelVersion === 1000 ? 1000 : 800, uvRepeat: boolean(input.uvRepeat, false),
     uvSensitivity: uvTransformSensitivity(input), fineSensitivity: bounded(input.fineSensitivity, 0.01, 1, DEFAULT_PREFERENCES.fineSensitivity),
     cameraBindings: cameraBindings(input), visuals: legacyVisuals, grid: gridOptions(input),
+    emitterMarker: ['pentagram','tetrahedron','cube'].includes(input.emitterMarker)?input.emitterMarker:'pentagram',
     viewportPreset, viewportAppearance, viewportPresets, citadelPaint: normalizePaintAppearance(input.citadelPaint),
     rightScrollAdjust: boolean(input.rightScrollAdjust, DEFAULT_PREFERENCES.rightScrollAdjust),
     graphics: {

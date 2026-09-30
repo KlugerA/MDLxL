@@ -1,8 +1,10 @@
 import ParticleSourceContext from './ParticleSourceContext.jsx';
 import ParticleThumbnailQueue from './ParticleThumbnailQueue.jsx';
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {parseParticleData} from '../src/particle-data.js';
-export default function ParticleLibrary({onChoose,onClose,onError,preferences}) {
+export default function ParticleLibrary({onChoose,onClose,onError,preferences,disabled=false}) {
+  const opening=useRef(false);
+  const [openingName,setOpeningName]=useState('');
   const [catalog,setCatalog]=useState({items:[]}),[collection,setCollection]=useState('Warcraft'),[category,setCategory]=useState('All'),[search,setSearch]=useState(''),[limit,setLimit]=useState(36),[details,setDetails]=useState(null),[sourceContext,setSourceContext]=useState(null);
   const load=()=>window.desktop?.particleCatalog?.().then(setCatalog).catch(error=>onError(error.message));
   useEffect(()=>{load();const off=window.desktop?.onParticleProgress?.(()=>load());return()=>off?.();},[]);
@@ -10,9 +12,10 @@ export default function ParticleLibrary({onChoose,onClose,onError,preferences}) 
     const terms=search.toLowerCase().split(/\s+/).filter(Boolean);
     return [...catalog.items].sort((a,b)=>Number(!!a.blocked)-Number(!!b.blocked)||Number(['reviewed','user-reviewed'].includes(b.naming?.state))-Number(['reviewed','user-reviewed'].includes(a.naming?.state))).filter(item=>(collection==='Favorites'?item.favorite:item.collection===collection)&&(category==='All'||item.categories?.includes(category))&&terms.every(term=>[item.name,...item.tags||[],...item.aliases||[]].join(' ').toLowerCase().includes(term)));
   },[catalog,collection,category,search]);
-  const choose=async item=>{if(item.blocked){setDetails(item.id);return;}try{const recipe=parseParticleData(await window.desktop.particleRead(item.id));for(const key of ['name','tags','categories','naming','previewSample'])if(item[key]!==undefined)recipe[key]=item[key];onChoose(recipe);}catch(error){onError(error.message);}};
-  const favorite=async item=>{try{await window.desktop.particleAnnotate({id:item.id,favorite:!item.favorite});await load();}catch(error){onError(error.message);}};
-  return <div className="pe-library" aria-label="Particle Library">
+  const choose=async item=>{if(disabled||opening.current)return;if(item.blocked){setDetails(item.id);return;}opening.current=true;setOpeningName(item.name);try{const recipe=parseParticleData(await window.desktop.particleRead(item.id));for(const key of ['name','tags','categories','naming','previewSample'])if(item[key]!==undefined)recipe[key]=item[key];await onChoose(recipe);}catch(error){onError(error.message);}finally{opening.current=false;setOpeningName('');}};
+  const favorite=async item=>{try{const favorite=!item.favorite;await window.desktop.particleAnnotate({id:item.id,favorite});setCatalog(old=>({...old,items:old.items.map(entry=>entry.id===item.id?{...entry,favorite}:entry)}));}catch(error){onError(error.message);}};
+  return <div className="pe-library" aria-label="Particle Library" aria-busy={disabled||!!openingName}>
+    {(disabled||openingName)&&<div className="pe-library-loading" role="status">{openingName?'Opening '+openingName+'…':'Restoring your work…'}</div>}
     <ParticleThumbnailQueue items={!sourceContext&&(catalog.sourceStatus?.state==='ready'||collection!=='Warcraft')?items.slice(0,limit):[]} preferences={preferences} onFailure={(id,error)=>setCatalog(old=>({...old,items:old.items.map(item=>item.id===id?{...item,previewError:error}:item)}))} onThumbnail={(id,url)=>setCatalog(old=>({...old,items:old.items.map(item=>item.id===id?{...item,thumbnail:url}:item)}))}/><header><strong>Particle Library</strong><button onClick={onClose} aria-label="Close Particle Library">×</button></header>
     <div className="pe-collections"><button onClick={()=>window.desktop.particleImport().then(load).catch(error=>onError(error.message))}>Import preset…</button>{['Warcraft','My presets','Favorites'].map(name=><button key={name} aria-pressed={collection===name} onClick={()=>{setCollection(name);setLimit(36);}}>{name}</button>)}</div>
     {collection==='Warcraft'&&catalog.sourceStatus?.message&&<p role="status">{catalog.sourceStatus.message}</p>}

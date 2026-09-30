@@ -12,6 +12,7 @@ import './movement.css';
 import ModernIcon from './ModernIcon.jsx';
 import BoneToolIcon from './BoneToolIcon.jsx';
 import SidebarSection from './SidebarSection.jsx';
+import EmitterVisibility from './EmitterVisibility.jsx';
 
 const titles = { move: 'Move', rotate: 'Rotate', scale: 'Scale' };
 const icons = { select: 'sb_select', move: 'sb_bonemove', rotate: 'sb_bonerot', scale: 'sb_bonescale' };
@@ -44,7 +45,7 @@ function PositionField({ axis, value, disabled, onCommit }) {
 }
 
 
-export default function MovementController({ model, revision = 0, sequenceIndex = -1, time = 0, selectedNodeIds = [], selectionByGeoset = {}, onSelectNodes, onEdit, onVertexTransform, onPlayingChange, transformMode = 'move', onTransformMode, transformSpace = 'local', onTransformSpace, rotateOnOwnAxis = false, onRotateOnOwnAxis, onOpenNodeManager, globalSeqId = null, onTimelineChange, highlightKeyframes = false, onHighlightKeyframes, highlightChain = false, onHighlightChain, disabled = false, restPose = false, multiple, onMultiple, workplaneEnabled = false, onWorkplaneEnabled, workplane = 'xy', onWorkplane, restrictions = {}, onRestrictions, portraitMode = false, controlModel = false, portraitCameraIndex = 0, onPortraitCameraIndex, onPortraitNew, onPortraitUpdate, onDeleteNode, onRenameNode, onBillboarded, onCreateRigNode, onAttach, onDetach, onSoftBind, onHardBind, onDetachVertices, attachActive = false, createOpen = false, onCreateOpen, canDeleteNode = false, canAttach = false, canDetach = false, canBind = false }) {
+export default function MovementController({ model, revision = 0, sequenceIndex = -1, time = 0, selectedNodeIds = [], selectionByGeoset = {}, onSelectNodes, onEdit, onVertexTransform, onPlayingChange, transformMode = 'move', onTransformMode, transformSpace = 'local', onTransformSpace, rotateOnOwnAxis = false, onRotateOnOwnAxis, onOpenNodeManager, onOpenEmitter, globalSeqId = null, onTimelineChange, highlightKeyframes = false, onHighlightKeyframes, highlightChain = false, onHighlightChain, disabled = false, restPose = false, multiple, onMultiple, workplaneEnabled = false, onWorkplaneEnabled, workplane = 'xy', onWorkplane, restrictions = {}, onRestrictions, portraitMode = false, controlModel = false, portraitCameraIndex = 0, onPortraitCameraIndex, onPortraitNew, onPortraitUpdate, onDeleteNode, onRenameNode, onBillboarded, onCreateRigNode, onAttach, onDetach, onSoftBind, onHardBind, onDetachVertices, attachActive = false, createOpen = false, onCreateOpen, canDeleteNode = false, canAttach = false, canDetach = false, canBind = false }) {
   const [localMultiple, setLocalMultiple] = useState(false), [values, setValues] = useState([0, 0, 0]), [error, setError] = useState('');
   const [curveOpen, setCurveOpen] = useState(false), [curve, setCurve] = useState({ tension: 0, continuity: 0, bias: 0 });
   const [incoming, setIncoming] = useState(''), [outgoing, setOutgoing] = useState('');
@@ -141,6 +142,7 @@ export default function MovementController({ model, revision = 0, sequenceIndex 
       <label className="movement-check"><input type="checkbox" checked={multiselect} onChange={event => { setLocalMultiple(event.target.checked); onMultiple?.(event.target.checked); }}/>Multiselect</label>
       {restPose && <label className="movement-check movement-billboard"><input aria-label="Billboarded" type="checkbox" checked={!!(selectedBone?.Flags & 8)} disabled={disabled || !selectedBone} onChange={event => onBillboarded?.(selectedBone.ObjectId, event.target.checked)}/>Billboarded</label>}
     </div></SidebarSection>
+    <EmitterVisibility model={model} selectedNodeIds={selectedNodeIds} frame={frame} sequenceIndex={editSequenceIndex} globalSeqId={globalSeqId} restPose={restPose} disabled={disabled} onEdit={onEdit} onOpen={onOpenEmitter} onPause={onPlayingChange}/>
     <SidebarSection title="Workplane"><div className="movement-workplane"><label className="movement-check"><input data-warmkey="workplaneEnabled" type="checkbox" checked={workplaneEnabled} onChange={event => onWorkplaneEnabled?.(event.target.checked)}/>Workplane</label><div className="movement-planes" role="group" aria-label="Movement workplane">{[['xy', 'XY'], ['xz', 'ZX'], ['yz', 'YZ']].map(([value, label]) => <label key={value}><input data-warmkey={`plane:${value}`} type="radio" name={`movement-plane-${restPose ? 'bones' : 'animation'}`} checked={(workplane === 'zx' ? 'xz' : workplane) === value} onChange={() => onWorkplane?.(value)}/>{label}</label>)}</div></div></SidebarSection>
     <SidebarSection title="Tools">{restPose ? <div className="movement-tools bone-tools" role="group" aria-label="Bones tools">
       <button type="button" data-warmkey="select" title="Select Tool (A)" aria-label="Select Tool" aria-pressed={transformMode === 'select' && !attachActive} onClick={() => onTransformMode?.('select')}><ModernIcon name={icons.select}/></button>

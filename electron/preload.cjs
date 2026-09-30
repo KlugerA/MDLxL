@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('desktop', {
   particleAnnotate: payload => ipcRenderer.invoke('particles:annotate',payload),
   particleRemove: id => ipcRenderer.invoke('particles:remove',id),
   particleDraft: payload => ipcRenderer.invoke('particles:draft',payload),
+  particleWorkingCopy: payload => ipcRenderer.invoke('particles:workingCopy',payload),
   particleScan: () => ipcRenderer.invoke('particles:scan'),
   particleCancel: () => ipcRenderer.invoke('particles:cancel'),
   onParticleProgress: callback => {const listener=(_,data)=>callback(data);ipcRenderer.on('particles:progress',listener);return ()=>ipcRenderer.removeListener('particles:progress',listener);},

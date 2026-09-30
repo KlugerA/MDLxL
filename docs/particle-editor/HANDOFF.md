@@ -2,11 +2,11 @@
 
 Continue on `codex/particle-editor-prototype`, draft PR https://github.com/KlugerA/MDLxL/pull/60. The managed checkout is `C:\Users\PC\.codex\worktrees\particle-editor-prototype\MDLxL`. The base was `c62faa4299a0b44519f992cf3765da7623e72417` (v0.14.1). Keep this work isolated: no main merge, release, version bump or desktop installation has been authorized. The primary checkout has unrelated local changes.
 
-The user interacted with a visible prototype, then asked to close it and continue. It is now closed. Its private draft was saved in `out/particle-prototype/live-profile-1790802883740/particles/draft.json`. This is acceptance of that interaction, not every contract gate or Warcraft fidelity.
+The user is testing an isolated fixed snapshot while a further UX pass continues. Current tester, feedback, asset provenance and evidence are in [USER-FEEDBACK.md](USER-FEEDBACK.md); these supersede the checkpoint-9 status below. Keep their test window independent of source/dist rebuilds. This is a prototype interaction, not acceptance of every contract gate or Warcraft fidelity.
 
 ## Working path
 
-Open Particle Editor from the existing Windows menu. Lab opens without a model. Choose a reviewed effect in the appearance-based library or an MDLxL original, edit in Clueless or Classic, save a personal preset, or preview and confirm one undoable placement into an animated model. Existing model effects also open by double-click or the ingredient list. Exact current evidence and limits are in [ACCEPTANCE.md](ACCEPTANCE.md); the literal request is [CONTRACT.md](CONTRACT.md).
+Open Particle Editor from EMTR beside KEY/VIS or the existing Windows menu. Lab opens without a model. Choose a reviewed effect in the appearance-based library or an MDLxL original, edit in Clueless or Classic, save a personal preset, or preview and confirm one undoable placement into a model. Animated placement requires a user-chosen end. Existing model effects also open by double-click or the ingredient list. Checkpoint-9 evidence and limits are in [ACCEPTANCE.md](ACCEPTANCE.md); the literal original request is [CONTRACT.md](CONTRACT.md).
 
 The prototype includes pinned size/spawn/aim/spread handles; life samples and native track gestures; independent inspection clocks and deterministic replay; four picture UV ranges and custom embedded pictures; ribbon paths/windows; original paired examples; repeated-instance inspection; source-model context; on-demand ingredient thumbnails and preview-only mute; explicit attachment/motion placement; portable presets; and native-close draft recovery. These share native models and the existing renderer/codec/document history.
 

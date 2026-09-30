@@ -6,12 +6,12 @@ import { nodeHierarchyRows, visibleNodeRows, relatedResourceIndices } from '../s
 import { NODE_TYPES, createNode, deleteNode, duplicateGeoset, deleteGeoset, recalculateNormals } from '../src/editor-document.js';
 import { makeCube, nodeKind } from '../src/editor-commands.js';
 import { displayNumber } from '../src/display-number.js';
+import { visitTextureReferences } from '../src/texture-references.js';
 import './resource-editors.css';
 
 const titles = { Materials: 'Material Manager', Textures: 'Texture Manager', Nodes: 'Node Manager', Sequences: 'Sequence Manager', Geosets: 'Geoset Manager', GeosetAnims: 'Geoset Animation Manager', TextureAnims: 'Texture Animation Manager', GlobalSequences: 'Global Sequence Manager' };
 const nodeIcons = { Bones: Bone, Helpers: Paperclip, Attachments: Paperclip, EventObjects: Camera, Lights: Lightbulb, ParticleEmitters: Sparkles, ParticleEmitters2: Sparkles, ParticleEmitterPopcorns: Sparkles, RibbonEmitters: Sparkles, CollisionShapes: Box };
 const nodeTypeFor = collection => Object.keys(NODE_TYPES).find(type => NODE_TYPES[type][0] === collection);
-const textureSlots = ['TextureID', 'NormalTextureID', 'ORMTextureID', 'EmissiveTextureID', 'TeamColorTextureID', 'ReflectionsTextureID'];
 
 function resourceRows(model, kind, tree) {
   if (kind !== 'Nodes') return (model?.[kind] || []).map((item, index) => ({ item, index, depth: 0 }));
@@ -32,19 +32,6 @@ function ensureMaterial(model) {
   if (!model.Textures.length) model.Textures.push({ Image: '', ReplaceableId: 1, Flags: 0 });
   const material = { PriorityPlane: 0, RenderMode: 0, Layers: [{ FilterMode: 0, TextureID: 0, CoordId: 0, Alpha: 1, Shading: 0 }] };
   model.Materials.push(material); return model.Materials.length - 1;
-}
-
-function visitTextureReferences(model, visit) {
-  const field = (owner, key) => {
-    const value = owner[key];
-    if (typeof value === 'number') visit(value, next => { owner[key] = next; });
-    else if (value?.Keys) for (const keyframe of value.Keys) for (const property of ['Vector', 'InTan', 'OutTan']) {
-      const values = keyframe[property];
-      if (values) for (let i = 0; i < values.length; i++) visit(values[i], next => { values[i] = next; });
-    }
-  };
-  for (const material of model.Materials) for (const layer of material.Layers) for (const key of textureSlots) field(layer, key);
-  for (const node of model.ParticleEmitters2 || []) field(node, 'TextureID');
 }
 
 function removeResource(model, kind, index) {

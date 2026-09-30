@@ -110,6 +110,17 @@ class ParticleLibrary {
     const {parseParticleData}=await import('../src/particle-data.js');parseParticleData(data);
     return this.enqueue(()=>atomic(path.join(this.directory,'draft.json'),data));
   }
+  async workingCopy({id,data}){
+    if(typeof id!=='string'||!id||id.length>200)throw Error('Invalid working effect.');
+    const file=path.join(this.directory,'working',crypto.createHash('sha256').update(id).digest('hex')+'.json');
+    if(data===undefined){
+      try{if((await fs.stat(file)).size>16*1024*1024)throw Error('Working effect exceeds 16 MiB.');return await fs.readFile(file,'utf8');}
+      catch(error){if(error.code==='ENOENT')return null;throw error;}
+    }
+    const {parseParticleData}=await import('../src/particle-data.js'),draft=parseParticleData(data);
+    if(draft.schema!=='mdlxl-particle-draft'||draft.version!==1||!draft.state||!draft.recipe)throw Error('Invalid working effect.');
+    return this.enqueue(()=>atomic(file,data));
+  }
   async scan() {
     if(this.worker)return this.status;
     const found=await this.discover(), folder=found.cascFolders?.[0];

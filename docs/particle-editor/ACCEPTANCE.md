@@ -1,5 +1,7 @@
 # Particle Editor prototype acceptance evidence
 
+The subsequent UX pass is in progress. See [USER-FEEDBACK.md](USER-FEEDBACK.md) for current feedback, tests, tester status, static placement support and the explicitly requested bundled toolbar image. The table below is the historical checkpoint-9 evidence, not the status of that ongoing pass.
+
 Checkpoint 9, 30 September 2026. This is an isolated working prototype, not full contract acceptance or a release. Automated Electron captures are offscreen. The user also interacted with a visible isolated tester and authorized continuing; that is not acceptance of every gate. No Warcraft runtime test has been performed.
 
 Evidence commands: the focused native tests in test/particle-{prototype,preview,sweep,library}.test.js, test/desktop-settings.test.js and tests/*.test.js (118 passing); production Vite build; test/particle-prototype.electron.cjs; test/particle-model-io.electron.cjs; test/particle-parent.electron.cjs; test/particle-lifecycle.electron.cjs; test/particle-review.electron.cjs; test/particle-performance.electron.cjs. Runtime harnesses use private profiles. Logs and captures are local ignored output; no Warcraft asset bytes are committed.

@@ -1,0 +1,17 @@
+# User feedback pass — 1 October 2026
+
+This pass remains on `codex/particle-editor-prototype` and draft PR #60. No release, version bump, merge or desktop installation is authorized. The account-wide weekly counter was 26% at this pass's baseline; the user assigned 38 additional percentage points to UX (ceiling 64%) within a 45-point total allocation. Latest observed counter: 33%. Percentages are account-wide and rounded.
+
+Implemented: favorite updates retain cached thumbnails; direct opening preserves independent per-effect drafts and undo; EMTR joins KEY/VIS; Lab ingredients have Add/Remove and direct move/corner handles; insertion starts at the selected Movement frame and requires the user to choose its end; placement has pause, slow motion and End here; static target placement works; main emitter visibility edits do not touch RGB; default emitter markers are a pentagram in a circle with ordinary-marker alternatives in Settings.
+
+The requested EMTR picture is `ReplaceableTextures\CommandButtons\BTNManaFlare.blp`, extracted from the installed classic CASC source and decoded to the bundled 64x64 PNG. Source SHA-256: `163803c5af6aab63e05063d7858a84a6889f0c0349fdc115d52c0f2a6aecb7c0`. This explicitly requested toolbar image is the exception to earlier notes saying no Warcraft asset bytes are committed. Effect models, library pictures and source catalogues remain local ignored data.
+
+The user reported Picture could not open the texture library or remove added team pictures. Picture now opens the existing library through Library…, loads a chosen picture into its own portable dependency, and provides a small remove button per picture. Active removal restores an ordinary picture. Shared resources cannot be removed through an individual particle. Selecting an ordinary texture clears the emitter's team override in Clueless and Classic. These are native document transactions, with resource references and undo retained.
+
+Evidence before the Picture follow-up: 168 focused/native/settings/bone/marker tests, production build, `particle-workflow.electron.cjs` and the full `particle-prototype.electron.cjs` passed. Picture follow-up: three native removal/reference/undo tests; production build; `particle-picture.electron.cjs` passed actual installed-CASC library import, switching away from team overrides in the native preview, both removals, undo and portable preset bytes. Images were inspected at the user's 1100x760 window size. No Warcraft runtime validation was performed.
+
+The user's earlier tester was closed. A new fixed snapshot is open at `out/particle-prototype/playground-picture-20261001`, with the saved Lab draft copied to `live-profile-1790809432511`. Actual Electron proof: visible true, minimized false, focused true. It is independent of subsequent source/dist rebuilds. `live-session.json` identifies the current tester. The user said to continue; leave that window alone while developing.
+
+Checkpoint rerun: all 171 focused/native/settings/bone/marker tests and the complete Electron particle workflow pass after the Picture fix, with no JS errors. Texture removal also accounts for static MDX defaults behind animated references.
+
+Still in progress: weapon-back polygon fitting and binding for ribbons; discoverability of independently saved new Lab drafts; broader source fidelity and the outstanding contract gates in ACCEPTANCE.md. Do not describe this pass as complete yet.

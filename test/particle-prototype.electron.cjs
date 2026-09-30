@@ -21,7 +21,6 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     if(await page.getByRole('button',{name:'Close Particle Library',exact:true}).count())await page.getByRole('button',{name:'Close Particle Library',exact:true}).click();
     await page.locator('.pe-window').getByRole('button',{name:'New',exact:true}).click();
     await page.getByRole('button',{name:'Soft sparks',exact:true}).click();
-    if(await page.getByRole('button',{name:'Discard and open',exact:true}).count())await page.getByRole('button',{name:'Discard and open',exact:true}).click();
     await page.waitForTimeout(2200);
     console.log('snapshot',await page.evaluate(()=>{const el=document.querySelector('.pe-window');let fiber=el[Object.keys(el).find(k=>k.startsWith('__reactFiber'))];for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){const v=hook.memoizedState;if(v?.samples&&v?.guide)return {samples:v.samples.length,guide:v.guide,first:v.samples[0]};}return null;}));
     console.log('UI',await page.locator('.pe-window').innerText());
@@ -188,7 +187,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     await page.getByRole('button',{name:'Close comparison',exact:true}).click();
     const {starterTextureAsset}=await import('../src/particle-starters.js'),picture=path.join(out,'own-picture.tga');fs.writeFileSync(picture,starterTextureAsset().bytes);
     await app.evaluate(({dialog},picture)=>{global.__particleOpen=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[picture]});},picture);
-    await page.getByText('Choose picture',{exact:true}).click();
+    if(!await page.getByRole('button',{name:'Load picture…',exact:true}).isVisible())await page.getByText('Choose picture',{exact:true}).click();
     await page.getByText('Orientation and draw options',{exact:true}).click();const beforeFlags=await readLab();await page.getByRole('button',{name:'Flat',exact:true}).click();assert.ok((await readLab()).model.ParticleEmitters2[0].Flags&1048576);await page.getByRole('button',{name:'Face camera',exact:true}).click();assert.equal((await readLab()).model.ParticleEmitters2[0].Flags&1048576,0);
     await page.getByRole('button',{name:'Keep brightness',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.pe-window .re-status')?.textContent.includes('Lighting and fog flags are saved'),{},{timeout:8000});assert.match(await page.locator('.pe-window .re-status').innerText(),/Lighting and fog flags are saved/);await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).click();assert.equal((await readLab()).model.ParticleEmitters2[0].Flags,beforeFlags.model.ParticleEmitters2[0].Flags);await page.getByText('Orientation and draw options',{exact:true}).click();
     const beforeTeam=await readLab();await page.getByRole('button',{name:'Team glow',exact:true}).click();await page.waitForTimeout(150);
@@ -218,8 +217,6 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     await page.screenshot({path:path.join(out,'source-context.png')});await page.getByRole('button',{name:'Close source context',exact:true}).click();
     console.log('Explicit CASC source context preserves both Lab and target');
     await page.locator('.pe-effect-card').first().click();
-    await page.waitForFunction(()=>!document.querySelector('.pe-library')||[...document.querySelectorAll('button')].some(b=>b.textContent==='Discard and open'));
-    if(await page.getByRole('button',{name:'Discard and open',exact:true}).isVisible())await page.getByRole('button',{name:'Discard and open',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('.pe-library'));
     await page.waitForTimeout(1200);
     const loadedRecipe=await readLab();
@@ -241,12 +238,14 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     assert.deepEqual(await readModel(),beforePlacement,'Cancel placement leaves target and undo unchanged');
     await page.getByRole('button',{name:'Add to model',exact:true}).click();
 
+    await page.getByText('Position & motion',{exact:true}).click();
     const parent=beforePlacement.model.Bones[0];await page.getByLabel('Attach effect to',{exact:true}).selectOption(String(parent.ObjectId));await page.getByRole('button',{name:'Snap to attachment pivot',exact:true}).click();
     for(const [i,axis]of ['X','Y','Z'].entries())assert.equal(Number(await page.getByLabel('Effect anchor '+axis,{exact:true}).inputValue()),parent.PivotPoint[i]);
     await page.getByRole('button',{name:'Pause ghost',exact:true}).click();await page.waitForTimeout(200);await page.getByRole('button',{name:'Snap to surface',exact:true}).click();
     const surfacePoint=await page.evaluate(()=>{const el=document.querySelector('.pe-preview .game-preview-root');let f=el[Object.keys(el).find(k=>k.startsWith('__reactFiber'))];for(;f;f=f.return)for(let h=f.memoizedState;h;h=h.next){const v=h.memoizedState?.current;if(v?.native&&v.controls){const model=v.native.model,camera=v.controls.object;let point=null,nearest=Infinity;for(const geo of model.Geosets){const posed=[];for(let i=0;i<geo.Vertices.length/3;i++){const p=camera.position.clone().set(0,0,0),groups=geo.Groups[geo.VertexGroup[i]];for(const id of groups){const matrix=camera.matrix.clone().fromArray(v.native.rendererData.nodes[id].matrix),vertex=camera.position.clone().fromArray(geo.Vertices,i*3).applyMatrix4(matrix);p.addScaledVector(vertex,1/groups.length);}posed.push(p);}for(let i=0;i<geo.Faces.length;i+=3){const p=posed[geo.Faces[i]].clone().add(posed[geo.Faces[i+1]]).add(posed[geo.Faces[i+2]]).multiplyScalar(1/3),d=p.distanceToSquared(camera.position);if(d<nearest){nearest=d;point=p;}}}point.project(camera);const r=el.querySelector('[data-clean-model-canvas]').getBoundingClientRect();return {x:r.x+(point.x+1)*r.width/2,y:r.y+(1-point.y)*r.height/2};}}throw Error('Ghost native geometry unavailable');});
     await page.mouse.dblclick(surfacePoint.x,surfacePoint.y);await page.getByRole('button',{name:'Snap to surface',exact:true}).waitFor();const surfacePosition=await Promise.all(['X','Y','Z'].map(axis=>page.getByLabel('Effect anchor '+axis,{exact:true}).inputValue()));assert.ok(surfacePosition.some((v,i)=>Math.abs(Number(v)-parent.PivotPoint[i])>.001));assert.deepEqual(await readModel(),beforePlacement,'Surface and pivot snapping change only the ghost');
-    await page.getByRole('checkbox',{name:'Fit timing to this animation',exact:true}).check();
+    await page.getByRole('checkbox',{name:'Fit timing to Start / End',exact:true}).check();
+    await page.getByLabel('Effect end',{exact:true}).fill(String(beforePlacement.model.Sequences[0].Interval[1]));
     await page.getByRole('button',{name:'Confirm placement',exact:true}).click();
     await page.waitForTimeout(200);
     console.log('placement',await page.locator('.pe-window .re-status').innerText());
@@ -285,7 +284,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     assert.ok((await readLab()).model.RibbonEmitters[0].Visibility.Keys.length>=2);
     console.log('Ribbon direct edges, demonstration isolation and native emission window passed');
 
-    await page.locator('.pe-window').getByRole('button',{name:'New',exact:true}).click();await page.getByRole('button',{name:'Magic glow',exact:true}).click();await page.getByRole('button',{name:'Discard and open',exact:true}).click();
+    await page.locator('.pe-window').getByRole('button',{name:'New',exact:true}).click();await page.getByRole('button',{name:'Magic glow',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[aria-label="Effect ingredient"]').options.length===2);
     await page.getByRole('button',{name:'Basics',exact:true}).click();
     const beforeIngredients=await readLab(),targetBeforeIngredients=await readModel();assert.equal(beforeIngredients.model.ParticleEmitters2.length,2);
     await page.getByRole('button',{name:'Ingredients',exact:true}).click();
@@ -320,7 +319,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     await app.evaluate(({dialog},file)=>{global.__open=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},exportFile);
     await page.getByRole('button',{name:'Import preset…',exact:true}).click();await page.waitForTimeout(250);await app.evaluate(({dialog})=>{dialog.showOpenDialog=global.__open;delete global.__open;});
     assert.equal(await page.getByRole('button',{name:'Portable picture sparks',exact:true}).count(),2);
-    const discardBeforeImport=(await readLab()).dirty;await page.getByRole('button',{name:'Portable picture sparks copy',exact:true}).click();if(discardBeforeImport)await page.getByRole('button',{name:'Discard and open',exact:true}).click();
+    await page.getByRole('button',{name:'Portable picture sparks copy',exact:true}).click();await page.locator('.pe-library').waitFor({state:'hidden'});
     await page.getByRole('button',{name:'Basics',exact:true}).click();
     await page.getByRole('slider',{name:'Size',exact:true}).press('ArrowRight');
     const recoveredExpected=await readLab();assert.equal(recoveredExpected.dirty,true);

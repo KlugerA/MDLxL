@@ -3,6 +3,17 @@ import { visualOptions } from '../src/preferences.js';
 
 const CUBE = { vertices: [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]], faces: [[0,3,2,1],[4,5,6,7],[0,1,5,4],[3,7,6,2],[0,4,7,3],[1,2,6,5]] };
 const TETRA = { vertices: [[1,1,1],[-1,-1,1],[-1,1,-1],[1,-1,-1]], faces: [[0,2,1],[0,1,3],[0,3,2],[1,2,3]] };
+// Thin filled strips remain legible with ANGLE's one-pixel GL line limit.
+const PENTAGRAM = (() => {
+  const vertices=[],faces=[],line=(a,b,thickness=.1)=>{
+    const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy),x=-dy/length*thickness/2,y=dx/length*thickness/2,id=vertices.length;
+    vertices.push([a[0]+x,a[1]+y,0],[a[0]-x,a[1]-y,0],[b[0]-x,b[1]-y,0],[b[0]+x,b[1]+y,0]);faces.push([id,id+1,id+2,id+3]);
+  };
+  const point=(i,count,r=1)=>[Math.cos(Math.PI/2+i*Math.PI*2/count)*r,Math.sin(Math.PI/2+i*Math.PI*2/count)*r];
+  for(let i=0;i<32;i++)line(point(i,32),point(i+1,32),.11);
+  for(let i=0;i<5;i++)line(point(i,5,.87),point(i+2,5,.87),.09);
+  return {vertices,faces,billboard:true};
+})();
 const MARKER_LIGHT = new Vector3(-.35, -.45, 1.2).normalize();
 
 export function boneHighlightColors(nodes, selectedIds) {
@@ -36,7 +47,7 @@ export function markerStyle(point, byId, preferences, highlightColors = new Map(
     const hasParentBone = byId.get(point.node.Parent)?.overlayKind === 'bones';
     return { shape: TETRA, color: highlighted || (hasParentBone ? visual.node : '#6666e5') };
   }
-  if (point.overlayKind === 'particles') return { shape: TETRA, color: highlighted || visual.particle };
+  if (point.overlayKind === 'particles') return { shape: preferences?.emitterMarker==='tetrahedron'?TETRA:preferences?.emitterMarker==='cube'?CUBE:PENTAGRAM, color: highlighted || visual.particle };
   if (point.overlayKind === 'bones') {
     const hasParentBone = byId.get(point.node.Parent)?.overlayKind === 'bones';
     return { shape: CUBE, color: highlighted || (hasParentBone ? '#4cff59' : '#4cb259') };
@@ -59,14 +70,14 @@ export function rigMarkerGeometry(nodes, selectedIds, options = {}) {
     if (!point.visible || !rigMarkerVisible(point, options, highlights)) continue;
     const { shape, color } = markerStyle(point, byId, options.preferences, highlights), baseColor = new Color(color);
     const edgeRgb = baseColor.clone().convertLinearToSRGB().toArray();
-    const points = shape.vertices.map(vertex => new Vector3(...vertex).multiplyScalar(point.unitsPerPixel * size).applyQuaternion(point.rotation).add(point.world));
+    const points = shape.vertices.map(vertex => new Vector3(...vertex).multiplyScalar(point.unitsPerPixel * size).applyQuaternion(shape.billboard?(point.billboardRotation||point.rotation):point.rotation).add(point.world));
     const seen = new Set();
     for (const face of shape.faces) {
       // Face illumination stays in model space while the camera moves.
       const normal = points[face[1]].clone().sub(points[face[0]]).cross(points[face[2]].clone().sub(points[face[0]])).normalize();
       // Shade in linear RGB, then encode for the canvas. Multiplying encoded
       // green made the side faces far darker than the fixed-angle reference.
-      const illumination = color === '#ff0000' || color === '#ffff00' ? 1 : Math.min(1, .72 + .30 * Math.max(0, normal.dot(MARKER_LIGHT)));
+      const illumination = shape.billboard || color === '#ff0000' || color === '#ffff00' ? 1 : Math.min(1, .72 + .30 * Math.max(0, normal.dot(MARKER_LIGHT)));
       const rgb = baseColor.clone().multiplyScalar(illumination).convertLinearToSRGB().toArray();
       for (let i = 1; i + 1 < face.length; i++) for (const id of [face[0],face[i],face[i+1]]) triangles.push(...points[id].toArray(), ...rgb);
       for (let i = 0; i < face.length; i++) {
