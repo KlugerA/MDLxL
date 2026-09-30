@@ -58,6 +58,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await page.getByRole('button', { name: 'Create', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Bone' }).click();
     assert.match(await page.getByLabel('Movement bone or node').inputValue(), /^[0-9]+$/);
+    assert.ok(await page.getByLabel('Movement bone or node').evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize) > 0), 'Bones object picker menu text has a visible font size');
     assert.match(await page.getByLabel('Movement bone or node').getAttribute('title'), /bone_new0/);
     assert.equal(await page.getByRole('button', { name: 'Delete selected object' }).isEnabled(), true);
     assert.equal(await page.getByRole('button', { name: 'Attach', exact: true }).isEnabled(), true);

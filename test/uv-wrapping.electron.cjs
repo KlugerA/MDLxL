@@ -24,6 +24,13 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await page.locator('[data-warmkey="uv"]').click(); uv = await opened; uv.setDefaultTimeout(15000);
     await app.evaluate(({BrowserWindow}) => {for(const window of BrowserWindow.getAllWindows()){window.webContents.setBackgroundThrottling(false);window.setPosition(-3000,0);window.showInactive();}});
     await uv.locator('.uv-grid-toolbar').waitFor();
+    const viewLimit = uv.getByLabel('UV map tile limit');
+    assert.equal(await viewLimit.inputValue(), '7');
+    const wrapButton = uv.getByRole('button', {name:'Disable Wrapping', exact:true});
+    const [wrapBox, limitBox] = await Promise.all([wrapButton.boundingBox(), viewLimit.boundingBox()]);
+    assert.ok(wrapBox && limitBox && limitBox.x > wrapBox.x && Math.abs(limitBox.y - wrapBox.y) < 8, '7x7 view limit is beside Disable Wrapping');
+    await viewLimit.fill('12');
+    assert.equal(await viewLimit.inputValue(), '12');
     if(await uv.getByRole('button', {name:'Disable Wrapping', exact:true}).isVisible())await uv.getByRole('button', {name:'Disable Wrapping', exact:true}).click();
     await uv.getByRole('button', {name:'Enable Wrapping', exact:true}).waitFor();
     await uv.evaluate(() => {

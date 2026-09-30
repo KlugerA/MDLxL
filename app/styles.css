@@ -18,6 +18,8 @@
 .classic-sidebar .classic-tools { grid-template-columns: repeat(4,24px) 32px; }
 .classic-sidebar .geoset-options { flex-wrap: wrap; }
 .classic-sidebar .classic-animation-sidebar .inspector-section { max-width: 100%; }
+.classic-geosets.sidebar-section:not([open]){min-height:0}
+.classic-geosets.sidebar-section>.sidebar-section-body{padding:1px}
 .geoset-hover-target { min-width: 0; max-width: 100%; padding: 2px; gap: 1px; }
 
 /* Follow-up reference surfaces and compact rigging panel. Display scale is

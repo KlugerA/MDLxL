@@ -1,6 +1,6 @@
 {
   "vertices": [["Shadows", "shaded"], ["Vertices", "showVertices"], ["Normals", "normals"], ["Wireframe Overlay", "display:wires"], ["Grid", "grid"], ["Clear", "clearDisplay"]],
   "bones": [["Shadows", "shaded"], ["Vertices", "showVertices"], ["Bones", "display:bones"], ["Skeleton", "display:skeleton"], ["Nodes", "display:nodes"], ["Attachment", "display:attachments"], ["Grid", "grid"], ["Clear", "clearDisplay"]],
-  "movement": [["Shadows", "shaded"], ["Vertices", "showVertices"], ["Bones", "display:bones"], ["Skeleton", "display:skeleton"], ["Nodes", "display:nodes"], ["Attachment", "display:attachments"], ["Grid", "grid"], ["Clear", "clearDisplay"]],
-  "animations": [["Bones", "display:bones"], ["Skeleton", "display:skeleton"], ["Nodes", "display:nodes"], ["Particles", "display:particles"], ["Wireframe", "display:wires"], ["Grid", "grid"], ["Clear", "clearDisplay"]]
+  "movement": [["Shadows", "shaded"], ["Vertices", "showVertices"], ["Bones", "display:bones"], ["Skeleton", "display:skeleton"], ["Focused Skeleton", "display:focusedSkeleton"], ["Nodes", "display:nodes"], ["Attachment", "display:attachments"], ["Grid", "grid"], ["Clear", "clearDisplay"]],
+  "animations": [["Bones", "display:bones"], ["Skeleton", "display:skeleton"], ["Focused Skeleton", "display:focusedSkeleton"], ["Nodes", "display:nodes"], ["Particles", "display:particles"], ["Wireframe", "display:wires"], ["Grid", "grid"], ["Clear", "clearDisplay"]]
 }

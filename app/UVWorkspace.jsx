@@ -7,6 +7,7 @@ import { uvToolState } from '../src/uv-tool-state.js';
 import { hiddenUVPreviewGeosets, normalizeUVPreviewDisplay, previewMeshDomain, uvPreviewOverlay } from '../src/uv-preview-display.js';
 import { renderUVMaterialTexture } from './uv-material-preview.js';
 import { normalizeUVGrid, UV_GRID_SPACING_MAX, UV_GRID_SPACING_MIN, uvGridSpacingFromSlider, uvGridSpacingSliderValue } from '../src/uv-grid.js';
+import { MAX_UV_VIEW_TILE_LIMIT, MIN_UV_VIEW_TILE_LIMIT, normalizeUVViewTileLimit } from '../src/uv-view-limit.js';
 import {
   UV_PREVIEW_DEFAULT, UV_PREVIEW_MAX, UV_PREVIEW_MIN,
   UV_SIDE_DEFAULT, UV_SIDE_MAX, UV_SIDE_MIN, clampUVPreviewPercent, clampUVSidePercent,
@@ -207,6 +208,8 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   const changeLiveDisplay = change => onPreferences?.({ ...preferences, uvPreviewDisplay: { ...preferences?.uvPreviewDisplay, ...display, ...change } });
   const changeLiveColor = color => onPreferences?.({ ...preferences, visuals: { ...preferences.visuals, uvSelection: color } });
   const changeUVGrid = value => onPreferences?.({ ...preferences, uvGrid: value });
+  const viewTileLimit = normalizeUVViewTileLimit(preferences?.uvViewTileLimit);
+  const changeViewTileLimit = value => onPreferences?.({ ...preferences, uvViewTileLimit: normalizeUVViewTileLimit(value) });
 
   return <div className="uv-workspace" aria-label="UV wrapper workspace">
     <header ref={header} className="uv-workspace-header" style={{ '--uv-side-width': `${sidePercent}%` }}>
@@ -214,6 +217,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
         <button type="button" disabled={readOnly || !onWrappingChange || !imageLayers.length}
           title="Toggle Wrap U and Wrap V for this material's image textures. Applies to all uses of these textures."
           onClick={() => onWrappingChange?.([...new Set(imageLayers.map(layer => layer.textureID))], !wrappingEnabled)}>{wrappingEnabled ? 'Disable Wrapping' : 'Enable Wrapping'}</button>
+        <label className="uv-view-limit" title="Maximum texture tiles visible while zooming out"><span>View</span><input aria-label="UV map tile limit" type="number" min={MIN_UV_VIEW_TILE_LIMIT} max={MAX_UV_VIEW_TILE_LIMIT} step="1" value={viewTileLimit} onChange={event => changeViewTileLimit(event.target.value)}/><output>×{viewTileLimit}</output></label>
       </UVGridControls></div>
       <div className="uv-header-divider" aria-hidden="true"/>
       <div className="uv-header-actions"><button disabled={readOnly} onClick={onLibrary}>Replace Texture…</button>{draftCount > 0 && <><button disabled={readOnly} onClick={onSavePreview}>Save texture</button><button disabled={readOnly} onClick={onRevertPreview}>Revert texture</button></>}<button onClick={onExit}>Exit UV Wrapper</button></div>
@@ -222,7 +226,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
     {(materialError || materialPreview?.warnings?.length > 0) && <div className="uv-workspace-warning" role="status">{materialError || materialPreview.warnings.join(' · ')}</div>}
     <div ref={workspaceBody} className="uv-workspace-body" style={{ '--uv-side-width': `${sidePercent}%`, '--uv-right-header-height': `${rightHeaderHeight}px` }}>
       <section className="uv-map-pane" aria-label="UV texture map">
-        {combined?.eligibleVertices.length ? <UVEditor key="selected-geosets" geoset={combined.geoset} uvSet={0} revision={revision} textureUrl={materialPreview?.url} textureSize={materialPreview ? [materialPreview.width, materialPreview.height] : undefined} textureWrapping={!imageLayers.length || wrappingEnabled}
+        {combined?.eligibleVertices.length ? <UVEditor key="selected-geosets" geoset={combined.geoset} uvSet={0} revision={revision} textureUrl={materialPreview?.url} textureSize={materialPreview ? [materialPreview.width, materialPreview.height] : undefined} textureWrapping={!imageLayers.length || wrappingEnabled} viewTileLimit={viewTileLimit}
           eligibleVertices={combined.eligibleVertices} selectedVertices={combined.selectedVertices} transformMode={uvTool} cameraMode="work" preferences={preferences} suspended={readOnly} axis={axis}
           uvGrid={uvGrid} snapTextureFrame={display.snapTextureFrame} showTextureFrame={display.textureFrame} textureFrameColor={preferences?.visuals?.uvSelection}
           onSelectVertices={selectCombined} onChange={values => applyCombined(values)} onPreviewChange={values => values ? applyCombined(values, true) : onPreviewChanges?.(null)} />

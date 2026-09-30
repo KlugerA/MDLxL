@@ -36,6 +36,7 @@ import { bindScrollSensitivity, createRenderScheduler, graphicsOptions, pointerS
 import { createEventPreview } from './event-preview-runtime.js';
 import { applyViewPreset, applyModelCamera, gridDepthExtent, gridFrameRadius, orthographicHalfHeight, perspectiveFitDistance, updateDepthClipping, modelClipRadius, projectedPlaneTranslation, screenPlaneTranslation } from './viewport-math.js';
 import { visualOptions, viewportAppearanceOptions, gridOptions, cameraBindings } from '../src/preferences.js';
+import { scalePlaybackDelta } from '../src/playback-speed.js';
 import { HUMAN_FRAME_CROP, HUMAN_FRAME_SIZE, HUMAN_TILE_LAYOUT, PORTRAIT_ASPECT, PORTRAIT_RECT, applyEvaluatedModelCamera, editorCameraSnapshot, evaluateModelCamera, portraitCaptureLayout } from './portrait-view.js';
 import './portrait-view.css';
 import ShowcaseLayers from './ShowcaseLayers.jsx';
@@ -823,7 +824,7 @@ export default function GamePreview(inputProps) {
         }
       }
       externalFrame = p.time; lastPlaying = p.playing;
-      const playback = p.syncPlayback ? { frame: Math.min(end, Math.max(start, p.time ?? start)), elapsed: requestedSeek ? 0 : sharedGlobals ? Math.max(0,p.playbackGlobalTime-globalClock) : Math.max(0, Math.min(end,p.time)-native.getFrame()), finished: false } : previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? delta : 0, p.loop !== false);
+      const playback = p.syncPlayback ? { frame: Math.min(end, Math.max(start, p.time ?? start)), elapsed: requestedSeek ? 0 : sharedGlobals ? Math.max(0,p.playbackGlobalTime-globalClock) : Math.max(0, Math.min(end,p.time)-native.getFrame()), finished: false } : previewPlaybackStep([start, end], native.getFrame(), p.playing && !p.restPose && !nodeGesture && !playbackStopped && !captureOnly ? scalePlaybackDelta(delta, p.playbackSpeed) : 0, p.loop !== false);
       const dt = p.showcase ? 0 : playback.elapsed;
       globalClock = sharedGlobals ? p.playbackGlobalTime : globalClock + dt;
       const updateNative = (step, globalFrame = globalClock) => {
@@ -1150,7 +1151,7 @@ export default function GamePreview(inputProps) {
   useEffect(() => { props.onCaptureReady?.(runtime.current?.captureApi || null); }, [props.onCaptureReady]);
   useEffect(() => { if (model) runtime.current?.updateUV(model); }, [model, revision, props.uvRevision]);
 
-  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.showcasePlaying, props.showcaseConfig, props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.rotateOnOwnAxis, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.showcasePlaying, props.showcaseConfig, props.playbackRange, props.presentation, props.previewMode, props.previewOverlay, props.restPose, props.cleanAnimationPreview, props.restrictions, props.workplaneEnabled, props.selectableGeosets, props.multiple, props.showAxes, props.selectionByGeoset, props.hiddenGeosets, props.hideRgbGeoset, props.cameraMode, props.hoveredGeoset, props.mode, props.shaded, props.showGrid, props.workplane, props.preferences, props.showNodes, props.overlays, props.showCameras, props.selectedNodeIds, props.attachSourceIds, props.transformMode, props.transformSpace, props.rotateOnOwnAxis, props.playbackSpeed, props.playing, props.loop, props.time, sequenceIndex, props.globalSeqId, props.teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden]);
 
   useEffect(() => { runtime.current?.scheduler.sync(); }, [props.showCollisionSpheres, props.seekId, props.playbackRunning, props.playbackGlobalTime]);
   const marqueeColor = previewOverlaySettings(props.previewOverlay).color;

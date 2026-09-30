@@ -18,6 +18,7 @@ const {PreviewRecordingStore}=require('./preview-ffmpeg.cjs');
 const {CatboxUploads}=require('./catbox-upload.cjs');
 const catboxUploads=new CatboxUploads();
 const {saveForgeAssets}=require('./forge-assets.cjs');
+const {normalizeModelCloseState,needsModelClosePrompt,modelClosePrompt,modelCloseAction}=require('./model-close.cjs');
 const {saveOptimizeXLPair}=require('./optimizexl-save.cjs');
 const {BackgroundLibrary}=require('./preview-backgrounds.cjs');
 const {PaintTextureLibrary}=require('./paint-textures.cjs');
@@ -36,7 +37,7 @@ app.setName('MDLxL');
 if (process.platform === 'win32') app.setAppUserModelId('com.mdlxl.editor');
 const profile = process.env.MDLXL_PROFILE || path.resolve(__dirname,'../profile');
 app.setPath('userData',profile);
-let win, dirty=false, recents=[],settings={},initialModel=null;
+let win, modelCloseState={dirty:false,saved:false}, recents=[],settings={},initialModel=null;
 let settingsStore,preferenceApi,commandCatalog;
 let nativeEditorState={readOnly:true,saving:false};
 let translateText=value=>value;
@@ -69,7 +70,7 @@ function decodeThumbnail(asset){
 ipcMain.on('texture:decoderReady',(event,ready)=>{if(event.sender!==win?.webContents)return;textureDecoder=ready?event.sender:null;if(!ready){texturePreviews.cancel();rejectThumbnailRequests('Texture preview decoder closed.');}});
 ipcMain.on('texture:decoded',(event,payload)=>{const request=thumbnailRequests.get(payload?.requestId);if(!request||request.sender!==event.sender)return;clearTimeout(request.timer);thumbnailRequests.delete(payload.requestId);if(payload.error)request.reject(Error(String(payload.error).slice(0,500)));else request.resolve(payload.url);});
 const textureOperations=new Set();
-const readyToClose=new WeakSet(),closingWindows=new WeakSet();
+const readyToClose=new WeakSet(),closingWindows=new WeakSet(),savingBeforeCloseWindows=new WeakSet();
 const openedPaths=new Set();
 const geosetRepairs=require('./geoset-repair.cjs').createGeosetRepairStore(openedPaths);
 const filters=[{name:'Models and Paint Projects',extensions:['mdl','mdx','mdlxlpaint']},{name:'Warcraft III models',extensions:['mdl','mdx']},{name:'MDLxL Paint Project',extensions:['mdlxlpaint']}];
@@ -138,7 +139,7 @@ ipcMain.handle('model:openRecent',async(_,p,showcase=false)=>{
     throw error;
   }
 });
-ipcMain.on('model:dirty',(_,value)=>{dirty=!!value;win?.setDocumentEdited(dirty);sessionJournal.setDirty(dirty).catch(error=>console.warn('Session journal: '+error.message));});
+ipcMain.on('model:dirty',(_,value)=>{modelCloseState=normalizeModelCloseState(value,modelCloseState);win?.setDocumentEdited(modelCloseState.dirty);sessionJournal.setDirty(modelCloseState.dirty).catch(error=>console.warn('Session journal: '+error.message));});
 ipcMain.on('menu:state',(event,value)=>{
   if(event.sender!==win?.webContents||typeof value?.readOnly!=='boolean'||typeof value?.saving!=='boolean')return;
   const checks=normalizeMenuChecks(value.checks);
@@ -304,7 +305,7 @@ function flushBeforeClose(current,discardedDirty=false){
     await settingsStore?.flush();
     if(!current.isDestroyed()){
       // Recheck a model edit made while an asynchronous settings write completed.
-      if(dirty)closingWindows.delete(current);else readyToClose.add(current);
+      if(modelCloseState.dirty)closingWindows.delete(current);else readyToClose.add(current);
       current.close();
     }
   };
@@ -313,8 +314,8 @@ function flushBeforeClose(current,discardedDirty=false){
     if(payload.error){
       if(finished)return;finished=true;cleanup();closingWindows.delete(current);
       const answer=await dialog.showMessageBox(current,{type:'error',title:'Pending work could not be saved',message:'The editor could not finish saving before closing.',detail:String(payload.error).slice(0,500),buttons:['Keep editing','Close anyway'],defaultId:0,cancelId:0});
-      if(answer.response===1&&!current.isDestroyed()){await settingsStore?.flush();if(!dirty)readyToClose.add(current);current.close();}
-      else if(!current.isDestroyed()){dirty=dirty||discardedDirty;current.setDocumentEdited(dirty);}
+      if(answer.response===1&&!current.isDestroyed()){await settingsStore?.flush();if(!modelCloseState.dirty)readyToClose.add(current);current.close();}
+      else if(!current.isDestroyed()){modelCloseState={...modelCloseState,dirty:modelCloseState.dirty||discardedDirty};current.setDocumentEdited(modelCloseState.dirty);}
       return;
     }
     await finish();
@@ -325,6 +326,27 @@ function flushBeforeClose(current,discardedDirty=false){
   const timeout=()=>{if(captureBusy||captureOperations.size){timer=setTimeout(timeout,60000);return;}finish();};
   timer=setTimeout(timeout,captureBusy?60000:1500);
   current.webContents.send('app:beforeClose',requestId);
+}
+function saveBeforeClose(current){
+  if(savingBeforeCloseWindows.has(current))return;
+  savingBeforeCloseWindows.add(current);
+  const requestId=crypto.randomBytes(12).toString('hex');
+  const acknowledge=(event,payload)=>{
+    if(event.sender!==current.webContents||payload?.requestId!==requestId)return;
+    ipcMain.removeListener('app:saveBeforeCloseReady',acknowledge);
+    savingBeforeCloseWindows.delete(current);
+    if(payload.error){
+      dialog.showMessageBox(current,{type:'error',title:'Model could not be saved',message:'The model could not be saved before closing.',detail:String(payload.error).slice(0,500),buttons:['Keep editing'],defaultId:0,cancelId:0});
+      return;
+    }
+    if(payload.saved&&!current.isDestroyed()){
+      modelCloseState={dirty:false,saved:true};
+      current.setDocumentEdited(false);
+      flushBeforeClose(current);
+    }
+  };
+  ipcMain.on('app:saveBeforeCloseReady',acknowledge);
+  current.webContents.send('app:saveBeforeClose',requestId);
 }
 async function readTexture(file,logicalName){const stat=await fs.stat(file);if(stat.size>64*1024*1024)throw new Error('Texture exceeds 64 MB.');return {name:logicalName||path.basename(file),bytes:await fs.readFile(file)};}
 ipcMain.handle('texture:open',async()=>{const result=await dialog.showOpenDialog(win,{filters:[{name:'Textures',extensions:imageExtensions}],properties:['openFile','multiSelections']});if(result.canceled)return [];return Promise.all(result.filePaths.map(p=>readTexture(p)));});
@@ -376,22 +398,22 @@ async function createWindow(bounds={}){
   current.webContents.on('did-create-window',child=>{child.setMenu(null);if(process.env.MDLVIS_HEADLESS!=='1')child.maximize();else child.webContents.setBackgroundThrottling(false);child.webContents.setWindowOpenHandler(()=>({action:'deny'}));child.webContents.on('will-navigate',event=>event.preventDefault());});
   win.webContents.on('will-navigate',(event,url)=>{if(url!==win.webContents.getURL())event.preventDefault();});
   refreshMenu();
-  win.on('close',event=>{if(current!==win||readyToClose.has(current))return;let discardedDirty=false;if(dirty){const answer=dialog.showMessageBoxSync(win,{type:'question',buttons:['Keep editing','Discard changes and close'],defaultId:0,cancelId:0,title:'Unsaved models',message:'You have unsaved model changes.',detail:'Return to the editor to save your work. Local recovery drafts are available when successfully stored.'});if(answer===0){event.preventDefault();return;}discardedDirty=true;dirty=false;}event.preventDefault();flushBeforeClose(current,discardedDirty);});
-  win.webContents.on('will-prevent-unload',event=>{if(!dirty)event.preventDefault();});
+  win.on('close',event=>{if(current!==win||readyToClose.has(current))return;let discardedDirty=false;if(needsModelClosePrompt(modelCloseState)){event.preventDefault();const action=modelCloseAction(dialog.showMessageBoxSync(win,modelClosePrompt(modelCloseState)));if(action==='save'){saveBeforeClose(current);return;}if(action==='cancel')return;discardedDirty=modelCloseState.dirty;modelCloseState={...modelCloseState,dirty:false};current.setDocumentEdited(false);}event.preventDefault();flushBeforeClose(current,discardedDirty);});
+  win.webContents.on('will-prevent-unload',event=>{if(!modelCloseState.dirty)event.preventDefault();});
   current.webContents.on('render-process-gone',async(_,details)=>{
     if(current!==win||current.isDestroyed())return;
     textureDecoder=null;texturePreviews.cancel();rejectThumbnailRequests('Editor renderer closed.');
     await Promise.allSettled([...captureOperations]);
     await previewRecordings.closeOwner(current.webContents.id);
     captureBusy=false;
-    recoveryPrompt=recoveryPrompt||dirty;crashedWithEdits=crashedWithEdits||dirty;
+    recoveryPrompt=recoveryPrompt||modelCloseState.dirty;crashedWithEdits=crashedWithEdits||modelCloseState.dirty;
     // Yield past Chromium's process teardown before creating another renderer.
     // Immediate reload inside this callback can crash Electron's host process.
     await new Promise(resolve=>setImmediate(resolve));
     await recoveryStore.flush();
     if(current.isDestroyed())return;
     const answer=await dialog.showMessageBox(current,{type:'error',title:'MDLxL',message:'The editor process stopped.',detail:'Your last disk recovery copy and undo history can be restored in a fresh editor window. Reason: '+details.reason,buttons:['Reopen editor','Close']});
-    dirty=false;
+    modelCloseState={...modelCloseState,dirty:false};
     if(answer.response===0){const bounds=current.getBounds();await createWindow(bounds);crashedWithEdits=false;if(!current.isDestroyed())current.destroy();}
     else current.destroy();
   });

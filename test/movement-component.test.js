@@ -45,6 +45,13 @@ test('Movement places Rotate on Own Axis before Restrict and reflects its checke
   assert.ok(html.indexOf('Rotate on Own Axis') < html.indexOf('Restrict:'));
   assert.match(html,/type="checkbox" checked=""\/>Rotate on Own Axis/);
 });
+test('Movement places Highlight Chain directly under Highlight KF and exposes collapsible groups',()=>{
+  const model=fixture(), selectedNodeIds=[model.Bones[0].ObjectId];
+  const html=renderToStaticMarkup(React.createElement(Movement,{model,sequenceIndex:0,selectedNodeIds,time:0,highlightKeyframes:true,highlightChain:true}));
+  assert.ok(html.indexOf('Highlight KF') < html.indexOf('Highlight Chain'));
+  assert.match(html,/Highlight KF<\/label><label[^>]*><input type="checkbox" checked=""\/>Highlight Chain/);
+  for(const title of ['Current Sequence','Object','Workplane','Tools','Restrictions','Controller']) assert.match(html,new RegExp(`<summary>${title}<\\/summary>`));
+});
 test('Animations remains editable with no selected vertices or checked geosets',()=>{
   const html=renderToStaticMarkup(React.createElement(Animation,{model:fixture(),sequenceIndex:0,time:0,selectedGeosets:[]}));
   assert.match(html,/Bake Sequence RGB/);assert.match(html,/Bake All RGB/);
@@ -55,6 +62,12 @@ test('Animations exposes inline RGB fields on All line',()=>{
   const html=renderToStaticMarkup(React.createElement(Animation,{model:fixture(),sequenceIndex:-1,time:0,selectedGeosets:[0]}));
   assert.doesNotMatch(html,/<input[^>]*aria-label="Animation R"[^>]*disabled/);
   assert.match(html,/aria-label="Animation R"[^>]*value="179"/);
+});
+test('Animations enables RGB and visibility fields on a global sequence',()=>{
+  const html=renderToStaticMarkup(React.createElement(Animation,{model:fixture(),sequenceIndex:-1,globalSeqId:0,time:0,selectedGeosets:[0]}));
+  assert.doesNotMatch(html,/<input[^>]*aria-label="Animation R"[^>]*disabled/);
+  assert.doesNotMatch(html,/<input[^>]*aria-label="Visibility alpha percent"[^>]*disabled/);
+  assert.match(html,/<button disabled="">Bake Sequence RGB<\/button>/);
 });
 test('actual setup dialog renders every missing-requirement combination',()=>{
   for(const [missingSequence,missingCamera]of [[true,false],[false,true],[true,true]]) {
@@ -85,8 +98,8 @@ test('camera toolbar renders inside Movement with one create-or-update action an
 
 test('quick display shows only the active editor options without Reveal',()=>{
   const html=renderToStaticMarkup(React.createElement(QuickDisplay,{viewMode:'animations',checks:{'display:particles':true},isEnabled:()=>true,onCommand:()=>{},onClear:()=>{}}));
-  assert.equal((html.match(/type="checkbox"/g)||[]).length,6);
-  for(const label of ['Bones','Skeleton','Nodes','Particles','Wireframe','Grid','Clear']) assert.ok(html.includes(label));
+  assert.equal((html.match(/type="checkbox"/g)||[]).length,7);
+  for(const label of ['Bones','Skeleton','Focused Skeleton','Nodes','Particles','Wireframe','Grid','Clear']) assert.ok(html.includes(label));
   assert.doesNotMatch(html,/Reveal|Shadows|Vertices|Textured View/);
   assert.match(html,/<input[^>]*data-warmkey="display:particles"[^>]*checked=""/);
 });
@@ -94,4 +107,11 @@ test('quick display shows only the active editor options without Reveal',()=>{
 test('timeline displays the live frame without an effect-driven duplicate frame state',()=>{
   const html=renderToStaticMarkup(React.createElement(Timeline,{model:fixture(),sequenceIndex:0,time:375,playing:true}));
   assert.match(html,/<input[^>]*aria-label="Current animation frame"[^>]*value="375"/);
+  assert.match(html,/<input[^>]*aria-label="Playback speed percent"[^>]*value="100"/);
+});
+
+test('Animations exposes every toolbox group as a default-open collapsible section',()=>{
+  const html=renderToStaticMarkup(React.createElement(Animation,{model:fixture(),sequenceIndex:0,time:0,selectedGeosets:[]}));
+  for(const title of ['Current Sequence','Sequence Properties','Visibility &amp; Color']) assert.match(html,new RegExp(`<summary>${title}<\\/summary>`));
+  assert.equal((html.match(/<details class="sidebar-section" open=""/g)||[]).length,3);
 });

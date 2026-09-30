@@ -3,13 +3,15 @@ import { classicTimelineDomain, classicTimelineTargets, classicPaste, unrestrict
 import { timelineTracks, timelineKeys, timelineSections, copyTimelineKeys, copyTimelinePose, setTimelineKeys, clearTimelineKeys } from '../src/keyframe-timeline.js';
 import { animationMarkerTimes } from '../src/animation-markers.js';
 import { animationTrackId } from '../src/animation-tracks.js';
+import { downstreamBoneIds } from '../src/node-hierarchy.js';
+import { clampPlaybackSpeed } from '../src/playback-speed.js';
 import './KeyframeTimeline.css';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 /** The original compact reel: time selection, with authoring in the controllers. */
-export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, globalSeqId = null, time = 0, selectedNodeIds = [], selectedGeosets = [], activeController = 'rotate', highlightKeyframes = true, playing = false, onPlayingChange, onEdit, onSeek, onCommands, onStatus, disabled = false, restrictions = {}, motionFindings = [], motionActive = null, motionControls = null, onMotionFinding, onKeyClick, children }) {
-  const [range, setRange] = useState(null), [context, setContext] = useState(null), [draftTime, setDraftTime] = useState('0');
+export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, globalSeqId = null, time = 0, selectedNodeIds = [], selectedGeosets = [], activeController = 'rotate', highlightKeyframes = true, highlightChain = false, playbackSpeed = 100, onPlaybackSpeedChange, playing = false, onPlayingChange, onEdit, onSeek, onCommands, onStatus, disabled = false, restrictions = {}, motionFindings = [], motionActive = null, motionControls = null, onMotionFinding, onKeyClick, children }) {
+  const [range, setRange] = useState(null), [context, setContext] = useState(null), [draftTime, setDraftTime] = useState('0'), [draftSpeed, setDraftSpeed] = useState(String(playbackSpeed));
   const [keySelection, setKeySelection] = useState(null);
   const [, refreshClipboard] = useState(0);
   const panel = useRef(null), reel = useRef(null), menu = useRef(null), clipboard = useRef(null), cleanup = useRef(null), editingTime = useRef(false), suppressContext = useRef(false);
@@ -20,10 +22,12 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     try { return { domain: classicTimelineDomain(model, validSequence, validGlobal) }; }
     catch (error) { return { error: error.message }; }
   }, [model, revision, sequenceIndex, globalSeqId]);
+  useEffect(() => setDraftSpeed(String(clampPlaybackSpeed(playbackSpeed))), [playbackSpeed]);
   const domain = timing.domain, domainStamp = `${sequenceIndex}:${globalSeqId}:${domain?.start}:${domain?.end}`;
-  const selectionStamp = `${selectedNodeIds.join(',')}|${selectedGeosets.join(',')}`;
+  const scopedNodeIds = useMemo(() => highlightKeyframes && highlightChain ? downstreamBoneIds(model, selectedNodeIds) : selectedNodeIds, [model, revision, selectedNodeIds.join(','), highlightKeyframes, highlightChain]);
+  const selectionStamp = `${scopedNodeIds.join(',')}|${selectedGeosets.join(',')}`;
   const { targets, copyTargets, poseTargets, keys, copyKeysInDomain, times, timeSet } = useMemo(() => {
-    const options = { tracks, nodeIds: selectedNodeIds, geosetIds: selectedGeosets, activeController, highlightKeyframes, domain };
+    const options = { tracks, nodeIds: scopedNodeIds, geosetIds: selectedGeosets, activeController, highlightKeyframes, domain };
     const authored = domain ? classicTimelineTargets(model, { ...options, highlightKeyframes: false }) : [];
     const selectedTargets = domain ? classicTimelineTargets(model, { ...options, highlightKeyframes: true }) : [];
     const selectedBoneTargets = activeController === 'animations' ? selectedTargets : domain ? ['move', 'rotate', 'scale'].flatMap(controller => classicTimelineTargets(model, { ...options, activeController: controller, highlightKeyframes: true })) : [];
@@ -45,7 +49,7 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     const grouped = new Map();
     const warningTimes = activeController === 'animations' && highlightKeyframes && domain ? new Set(animationMarkerTimes(model, domain, tracks)) : timeSet;
     for (const finding of motionFindings) {
-      if (activeController !== 'animations' && highlightKeyframes && !selectedNodeIds.includes(finding.nodeId)) continue;
+      if (activeController !== 'animations' && highlightKeyframes && !scopedNodeIds.includes(finding.nodeId)) continue;
       // A sampled warning belongs to a relevant, visible stored key, never to an
       // invented key between diamonds. Coincident warnings share one hit target.
       const targetTime = finding.targets?.[0]?.time ?? finding.time;
@@ -156,6 +160,10 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     }
     seek(Math.round(value), extend, selectionAnchor());
   }
+  function commitPlaybackSpeed() {
+    const value = clampPlaybackSpeed(draftSpeed, clampPlaybackSpeed(playbackSpeed));
+    setDraftSpeed(String(value)); onPlaybackSpeedChange?.(value);
+  }
   function beginScrub(event) {
     if (!domain || ![0, 2].includes(event.button)) return;
     const ownerWindow = event.currentTarget.ownerDocument.defaultView || window;
@@ -213,11 +221,14 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
       {warningMarkers.map(([at, findings]) => <button key={at} type="button" data-frame={at} className={`motion-reel-warning${findings.every(f => motionControls?.desired[f.signature]) ? ' motion-reel-desired' : ''}`} aria-pressed={!!motionActive && findings.some(f => f.signature === motionActive.signature)} aria-label={`Motion warning: ${findings.map(f => `${f.nodeName}, ${f.property}, ${f.time} ms, ${f.kind}`).join('; ')}`} title={`${findings.length > 1 ? `${findings.length} motion warnings` : `${findings[0].nodeName} · ${findings[0].property}`} · ${at} ms — click to inspect`} style={{ left: `clamp(6px, ${percent(at)}%, calc(100% - 6px))` }} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setRange(null); setContext(null); onMotionFinding?.(findings[0], event.currentTarget); }}><span aria-hidden="true">◆</span><span className="motion-warning-underline" aria-hidden="true"/></button>)}
       <div className="classic-reel-ruler" aria-hidden="true" translate="no">{divisions.map((value, index) => <span key={value} className={index === divisions.length - 1 ? 'is-last' : ''} style={{ left: `${percent(value)}%` }}>{value}</span>)}</div>
     </div>
-    <label className="classic-reel-frame"><span>Frame:</span><input type="number" inputMode="numeric" step="1" min={domain?.start || 0} max={domain?.end || 0} aria-label="Current animation frame" data-warmkey="keyframe:time" translate="no" className={timeSet.has(frame) ? 'is-keyframe' : ''} value={editingTime.current ? draftTime : String(frame)} disabled={!domain} onFocus={() => { setDraftTime(String(frame)); editingTime.current = true; onPlayingChange?.(false); }} onChange={event => { editingTime.current = true; setDraftTime(event.target.value); }} onBlur={() => commitTime()} onKeyDown={event => {
-      if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); commitTime(event.shiftKey); }
-      if (event.key === 'Escape') { event.preventDefault(); setDraftTime(String(frame)); editingTime.current = false; }
-      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); event.stopPropagation(); editingTime.current = false; seek(frame + (event.key === 'ArrowUp' ? 1 : -1), event.shiftKey, selectionAnchor()); }
-    }}/></label>
+    <div className="classic-reel-settings">
+      <label className="classic-reel-speed" title="Playback speed"><span>Speed</span><span className="classic-reel-percent"><input type="number" inputMode="decimal" step="1" min="1" max="250" aria-label="Playback speed percent" translate="no" value={draftSpeed} onChange={event => setDraftSpeed(event.target.value)} onBlur={commitPlaybackSpeed} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') setDraftSpeed(String(clampPlaybackSpeed(playbackSpeed))); }}/><span>%</span></span></label>
+      <label className="classic-reel-frame"><span>Frame</span><input type="number" inputMode="numeric" step="1" min={domain?.start || 0} max={domain?.end || 0} aria-label="Current animation frame" data-warmkey="keyframe:time" translate="no" className={timeSet.has(frame) ? 'is-keyframe' : ''} value={editingTime.current ? draftTime : String(frame)} disabled={!domain} onFocus={() => { setDraftTime(String(frame)); editingTime.current = true; onPlayingChange?.(false); }} onChange={event => { editingTime.current = true; setDraftTime(event.target.value); }} onBlur={() => commitTime()} onKeyDown={event => {
+        if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); commitTime(event.shiftKey); }
+        if (event.key === 'Escape') { event.preventDefault(); setDraftTime(String(frame)); editingTime.current = false; }
+        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); event.stopPropagation(); editingTime.current = false; seek(frame + (event.key === 'ArrowUp' ? 1 : -1), event.shiftKey, selectionAnchor()); }
+      }}/></label>
+    </div>
     {context && <div ref={menu} className="classic-reel-menu" role="menu" style={{ left: context.x, top: context.y }}>{menuItems.map(([id, label, unavailable, title]) => <button type="button" role="menuitem" key={id} data-warmkey={`keyframe:${id}`} disabled={unavailable} title={title} onClick={() => { setContext(null); commands[id](); }}>{label}</button>)}{motionControls && <>
       <hr/>
       <button role="menuitem" disabled={motionControls.busy} onClick={() => { setContext(null); motionControls.scan(); }}>Find Motion Irregularities</button>

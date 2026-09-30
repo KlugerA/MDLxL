@@ -13,8 +13,8 @@ test('View menu follows each editor and keeps Skeleton independent',()=>{
   const expected={
     vertices:['Shadows','Vertices','Normals','Wireframe Overlay','Grid','Clear'],
     bones:['Shadows','Vertices','Bones','Skeleton','Nodes','Attachment','Grid','Clear'],
-    movement:['Shadows','Vertices','Bones','Skeleton','Nodes','Attachment','Grid','Clear'],
-    animations:['Bones','Skeleton','Nodes','Particles','Wireframe','Grid','Clear'],
+    movement:['Shadows','Vertices','Bones','Skeleton','Focused Skeleton','Nodes','Attachment','Grid','Clear'],
+    animations:['Bones','Skeleton','Focused Skeleton','Nodes','Particles','Wireframe','Grid','Clear'],
   };
   for(const [viewMode,labels] of Object.entries(expected)){
     const menus=buildMenuTemplate(bindings,id=>actions.push(id),'win32',[],x=>x,{checks,viewMode,uvEnabled:false});
