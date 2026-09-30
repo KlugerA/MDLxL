@@ -1,6 +1,7 @@
 import MaterialProperties from './MaterialProperties.jsx';
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import UVEditor from './UVEditor.jsx';
+import MeshDensitySlider from './MeshDensitySlider.jsx';
 import { combineSelectedUVGeosets, projectUVFromView, relevantUVMaterials, splitSelectedUVGeosets } from '../src/uv-tools.js';
 import { MousePointer2, Hand, RotateCw, Maximize2, FlipHorizontal2, FlipVertical2, Unlink2, FoldHorizontal } from 'lucide-react';
 import { uvToolState } from '../src/uv-tool-state.js';
@@ -82,9 +83,9 @@ function Splitter({ orientation, label, value, minimum, maximum, defaultValue, o
     onPointerMove={event => { if (pointer.current === event.pointerId) { onPointerValue(event); event.preventDefault(); } }} onPointerUp={stop} onPointerCancel={stop}><span/></div>;
 }
 
-export default function UVWorkspace({ model, materialModel = model, previewModel, revision = 0, activeGeoset = -1, eligibleSelection = {}, selectionByGeoset = {}, onSelectionChange,
+export default function UVWorkspace({ model: sourceModel, materialModel: suppliedMaterialModel, previewModel: suppliedPreviewModel, revision = 0, activeGeoset = -1, eligibleSelection: suppliedEligibleSelection = {}, selectionByGeoset: suppliedSelectionByGeoset = {}, onSelectionChange,
   onPreviewSelectionChange, onUVChanges, onPreviewChanges, onUncouple, onGeosetChange, onWrappingChange, onMaterialPreset, textureAssets, teamColor, preferences, onPreferences,
-  draftCount = 0, onLibrary, onSavePreview, onRevertPreview, previewProps, readOnly = false, onExit }) {
+  draftCount = 0, onLibrary, onSavePreview, onRevertPreview, previewProps, readOnly = false, onDensityApply, onExit }) {
   const [materialID, setMaterialID] = useState(null), [uvTool, setUVTool] = useState('select'), [axis, setAxis] = useState(null), [foldDirection, setFoldDirection] = useState('right-to-left');
   const [showOnlySelected, setShowOnlySelected] = useState(false), [hideRGB, setHideRGB] = useState(false), [showVerticles, setShowVerticles] = useState(false);
   const [projectionPreset, setProjectionPreset] = useState({ name: '', revision: 0 });
@@ -92,8 +93,24 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   const [sidePercent, setSidePercent] = useState(() => storedLayout(LAYOUT_KEYS.side, UV_SIDE_DEFAULT, clampUVSidePercent));
   const [previewPercent, setPreviewPercent] = useState(() => storedLayout(LAYOUT_KEYS.preview, UV_PREVIEW_DEFAULT, clampUVPreviewPercent));
   const [rightHeaderHeight, setRightHeaderHeight] = useState(69);
+  const [densityOpen, setDensityOpen] = useState(false), [densityValue, setDensityValue] = useState(0), [densityResult, setDensityResult] = useState(null);
   const projectionView = useRef(null), workspaceBody = useRef(null), sidePanel = useRef(null), header = useRef(null);
   const activePreviewPercent = previewPercent;
+  const baseMaterialModel = suppliedMaterialModel || sourceModel, basePreviewModel = suppliedPreviewModel || sourceModel;
+  const suppliedGeosets = Object.keys(suppliedEligibleSelection).filter(index => suppliedEligibleSelection[index]?.length).map(Number);
+  const densityIndex = suppliedEligibleSelection[activeGeoset]?.length ? activeGeoset : suppliedGeosets[0] ?? -1;
+  const densityGeoset = densityOpen && densityResult?.geoset && densityIndex >= 0 ? densityResult.geoset : null;
+  const replaceDensityGeoset = source => {
+    if (!source || !densityGeoset) return source;
+    const next = { ...source, Geosets: source.Geosets.slice() }; next.Geosets[densityIndex] = densityGeoset; return next;
+  };
+  const model = useMemo(() => replaceDensityGeoset(sourceModel), [sourceModel, densityGeoset, densityIndex]);
+  const materialModel = useMemo(() => replaceDensityGeoset(baseMaterialModel), [baseMaterialModel, densityGeoset, densityIndex]);
+  const previewModel = useMemo(() => replaceDensityGeoset(basePreviewModel), [basePreviewModel, densityGeoset, densityIndex]);
+  const densityVertices = densityGeoset ? Array.from({ length: densityGeoset.Vertices.length / 3 }, (_, index) => index) : null;
+  const eligibleSelection = densityVertices ? { [densityIndex]: densityVertices } : suppliedEligibleSelection;
+  const selectionByGeoset = densityVertices ? { [densityIndex]: densityVertices } : suppliedSelectionByGeoset;
+  const editingLocked = readOnly || densityOpen;
   const selectionKey = JSON.stringify(selectionByGeoset), eligibilityKey = JSON.stringify(eligibleSelection);
   const previewDomain = useMemo(() => previewMeshDomain(model), [model, revision]);
   const materialEntries = useMemo(() => relevantUVMaterials(materialModel, eligibleSelection), [materialModel, revision, eligibilityKey]);
@@ -101,7 +118,9 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   const imageLayers = (current?.layers || []).filter(({ texture }) => texture && !texture.ReplaceableId && texture.Image?.trim());
   const wrappingEnabled = imageLayers.length > 0 && imageLayers.every(({ texture }) => (texture.Flags & 3) === 3);
   // UV drags keep the renderer alive; material and texture changes must reload it.
-  const previewWrappingRevision = JSON.stringify({ materials: previewModel?.Materials, textures: previewModel?.Textures });
+  const previewWrappingRevision = JSON.stringify({ materials: previewModel?.Materials, textures: previewModel?.Textures, density: densityGeoset?.Faces?.length || 0 });
+
+  useEffect(() => { setDensityOpen(false); setDensityValue(0); setDensityResult(null); }, [revision]);
 
   useEffect(() => {
     if (!current) { setMaterialID(null); return; }
@@ -160,11 +179,11 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
     onSelectionChange?.(next);
   };
   const applyCombined = (values, preview = false, label = 'Edit UV coordinates') => {
-    if (!combined || readOnly) return;
+    if (!combined || editingLocked) return;
     const changes = splitSelectedUVGeosets(model, combined.refs, values);
     (preview ? onPreviewChanges : onUVChanges)?.(changes, label);
   };
-  const toolState = uvToolState({ readOnly, selectionCount: selectedCount(allSelected), draftCount });
+  const toolState = uvToolState({ readOnly: editingLocked, selectionCount: selectedCount(allSelected), draftCount });
   useEffect(() => {
     const body = workspaceBody.current;
     if (!body) return;
@@ -192,7 +211,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
     return () => window.removeEventListener('mdlvis-uv-action', action);
   }, [toolState.uncouple, selectionKey, materialEntries, onUncouple]);
   const project = () => {
-    const view = projectionView.current; if (!view || readOnly || !selectedCount(allSelected)) return;
+    const view = projectionView.current; if (!view || editingLocked || !selectedCount(allSelected)) return;
     try {
       const changes = Object.entries(allSelected).filter(([, ids]) => ids.length).map(([index, ids]) => {
         const uvSet = materialEntries.find(entry => entry.geosetIndices.includes(Number(index)))?.coordId ?? 0;
@@ -211,19 +230,21 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
   return <div className="uv-workspace" aria-label="UV wrapper workspace">
     <header ref={header} className="uv-workspace-header" style={{ '--uv-side-width': `${sidePercent}%` }}>
       <div className="uv-map-header"><strong>UV Wrapper</strong><UVGridControls value={uvGrid} onChange={changeUVGrid}>
-        <button type="button" disabled={readOnly || !onWrappingChange || !imageLayers.length}
+        <button type="button" disabled={editingLocked || !onWrappingChange || !imageLayers.length}
           title="Toggle Wrap U and Wrap V for this material's image textures. Applies to all uses of these textures."
           onClick={() => onWrappingChange?.([...new Set(imageLayers.map(layer => layer.textureID))], !wrappingEnabled)}>{wrappingEnabled ? 'Disable Wrapping' : 'Enable Wrapping'}</button>
+        <button type="button" aria-haspopup="dialog" aria-expanded={densityOpen} disabled={readOnly || densityIndex < 0 || !onDensityApply} title="Make the active geoset's UV triangles more or less dense" onClick={() => { setDensityOpen(value => !value); setDensityValue(0); setDensityResult(null); }}>Triangles</button>
       </UVGridControls></div>
       <div className="uv-header-divider" aria-hidden="true"/>
-      <div className="uv-header-actions"><button disabled={readOnly} onClick={onLibrary}>Replace Texture…</button>{draftCount > 0 && <><button disabled={readOnly} onClick={onSavePreview}>Save texture</button><button disabled={readOnly} onClick={onRevertPreview}>Revert texture</button></>}<button onClick={onExit}>Exit UV Wrapper</button></div>
-      <div className="uv-material-controls"><label><select aria-label="UV material" value={current?.materialID ?? ''} onChange={event => chooseMaterial(event.target.value)}>{materialEntries.map(entry => <option key={entry.materialID} value={entry.materialID}>{entry.label}</option>)}</select></label><MaterialProperties model={model} materialID={current?.materialID} disabled={readOnly} onChange={onMaterialPreset} compact/></div>
+      <div className="uv-header-actions"><button disabled={editingLocked} onClick={onLibrary}>Replace Texture…</button>{draftCount > 0 && <><button disabled={editingLocked} onClick={onSavePreview}>Save texture</button><button disabled={editingLocked} onClick={onRevertPreview}>Revert texture</button></>}<button onClick={onExit}>Exit UV Wrapper</button></div>
+      <div className="uv-material-controls"><label><select aria-label="UV material" value={current?.materialID ?? ''} disabled={densityOpen} onChange={event => chooseMaterial(event.target.value)}>{materialEntries.map(entry => <option key={entry.materialID} value={entry.materialID}>{entry.label}</option>)}</select></label><MaterialProperties model={model} materialID={current?.materialID} disabled={editingLocked} onChange={onMaterialPreset} compact/></div>
     </header>
     {(materialError || materialPreview?.warnings?.length > 0) && <div className="uv-workspace-warning" role="status">{materialError || materialPreview.warnings.join(' · ')}</div>}
     <div ref={workspaceBody} className="uv-workspace-body" style={{ '--uv-side-width': `${sidePercent}%`, '--uv-right-header-height': `${rightHeaderHeight}px` }}>
       <section className="uv-map-pane" aria-label="UV texture map">
+        {densityOpen && <div className="uv-density-popup" role="dialog" aria-modal="false" aria-label="Triangle density"><strong>Geoset {densityIndex + 1} triangle density</strong><MeshDensitySlider compact geoset={sourceModel.Geosets[densityIndex]} value={densityValue} onChange={value => { setDensityValue(value); setDensityResult(null); }} onResult={setDensityResult}/><div><button onClick={() => { setDensityOpen(false); setDensityValue(0); setDensityResult(null); }}>Cancel</button><button className="primary" disabled={!densityValue || !densityResult || densityResult.trianglesAfter === densityResult.trianglesBefore} onClick={() => { const next = densityResult.geoset; setDensityOpen(false); setDensityValue(0); setDensityResult(null); onDensityApply(densityIndex, next); }}>Apply</button></div></div>}
         {combined?.eligibleVertices.length ? <UVEditor key="selected-geosets" geoset={combined.geoset} uvSet={0} revision={revision} textureUrl={materialPreview?.url} textureSize={materialPreview ? [materialPreview.width, materialPreview.height] : undefined} textureWrapping={!imageLayers.length || wrappingEnabled}
-          eligibleVertices={combined.eligibleVertices} selectedVertices={combined.selectedVertices} transformMode={uvTool} cameraMode="work" preferences={preferences} suspended={readOnly} axis={axis}
+          eligibleVertices={combined.eligibleVertices} selectedVertices={combined.selectedVertices} transformMode={uvTool} cameraMode="work" preferences={preferences} suspended={editingLocked} axis={axis}
           uvGrid={uvGrid} snapTextureFrame={display.snapTextureFrame} showTextureFrame={display.textureFrame} textureFrameColor={preferences?.visuals?.uvSelection}
           onSelectVertices={selectCombined} onChange={values => applyCombined(values)} onPreviewChange={values => values ? applyCombined(values, true) : onPreviewChanges?.(null)} />
           : <div className="classic-empty-view">Select textured vertices before opening the UV wrapper.</div>}
@@ -241,11 +262,11 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
         </section>
         <section className="uv-live-preview" aria-label="Live model preview">
           <div className="uv-panel-title"><strong>Live Model Preview</strong></div>
-          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} revision={previewWrappingRevision} uvRevision={revision} presentation="preview" preserveCameraView={true} interactivePreview={!!current} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
+          <div className="uv-preview-canvas"><Suspense fallback={<div className="classic-empty-view">Loading preview…</div>}><GamePreview {...previewProps} preferences={previewPreferences} revision={previewWrappingRevision} uvRevision={revision} presentation="preview" preserveCameraView={true} interactivePreview={!densityOpen && !!current} restPose={true} model={previewModel} sequenceIndex={-1} time={0} playing={false} showParticles={false} previewOverlay={liveOverlay}
             uvOnlySelected={showOnlySelected} hiddenGeosets={hiddenPreviewGeosets} hideRgbGeoset={hideRGB && rgbTarget >= 0 ? rgbTarget : null}
             selectionByGeoset={selectionByGeoset} selectableGeosets={Object.keys(eligibleSelection).map(Number)}
             previewSelectionMode={showVerticles ? 'vertices' : 'polygons'} previewEligibleByGeoset={allEligible}
-            onSelectionChange={onPreviewSelectionChange}
+            onSelectionChange={densityOpen ? undefined : onPreviewSelectionChange}
             cameraMode="rotate" transformMode="select" cameraPresetRequest={projectionPreset} onProjectionViewChange={value => { projectionView.current = value; }} /></Suspense></div>
           <div className="uv-preview-footer">
             <button aria-label="Live Select" aria-pressed={showVerticles} disabled={!current} onClick={() => setShowVerticles(value => !value)}>Live Select</button><button aria-label="Selected Only" aria-pressed={showOnlySelected} disabled={!selectedGeosets.length} onClick={() => setShowOnlySelected(value => !value)}>Selected Only</button><button aria-pressed={hideRGB} disabled={rgbTarget < 0} onClick={() => setHideRGB(value => !value)}>Hide RGB</button>
@@ -254,7 +275,7 @@ export default function UVWorkspace({ model, materialModel = model, previewModel
         <Splitter orientation="horizontal" label="Resize live model preview" value={activePreviewPercent} minimum={UV_PREVIEW_MIN} maximum={UV_PREVIEW_MAX} defaultValue={UV_PREVIEW_DEFAULT}
           onValue={setActivePreviewPercent} onPointerValue={event => { const rect = sidePanel.current?.getBoundingClientRect(); if (rect) setActivePreviewPercent(uvPreviewPercentAtPointer(event.clientY, rect)); }}/>
         <div className="uv-side-controls">
-          <section className="uv-projection" aria-label="UV projection"><div className="uv-panel-title"><strong>Projection</strong></div><p>Rotate the model to the required viewpoint, or choose a standard projection plane.</p><div className="uv-projection-actions"><button disabled={readOnly || !selectedCount(allSelected)} onClick={project}>Project from Current View</button><select aria-label="Standard projection view" defaultValue="" onChange={event => { chooseProjectionPreset(event.target.value); event.target.value = ''; }}><option value="">Standard…</option>{STANDARD_PROJECTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select><select aria-label="Angled projection view" defaultValue="" onChange={event => { chooseProjectionPreset(event.target.value); event.target.value = ''; }}><option value="">Angled…</option>{ANGLED_PROJECTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div></section>
+          <section className="uv-projection" aria-label="UV projection"><div className="uv-panel-title"><strong>Projection</strong></div><p>Rotate the model to the required viewpoint, or choose a standard projection plane.</p><div className="uv-projection-actions"><button disabled={editingLocked || !selectedCount(allSelected)} onClick={project}>Project from Current View</button><select aria-label="Standard projection view" disabled={densityOpen} defaultValue="" onChange={event => { chooseProjectionPreset(event.target.value); event.target.value = ''; }}><option value="">Standard…</option>{STANDARD_PROJECTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select><select aria-label="Angled projection view" disabled={densityOpen} defaultValue="" onChange={event => { chooseProjectionPreset(event.target.value); event.target.value = ''; }}><option value="">Angled…</option>{ANGLED_PROJECTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div></section>
           <section className="uv-toolbox" aria-label="UV tools"><div className="uv-panel-title"><strong>Tools</strong><div className="uv-axis-controls" role="group" aria-label="UV axis when Shift is held">{['X','Y'].map(value => <button key={value} type="button" aria-label={`UV ${value} axis`} aria-pressed={axis === value} onClick={() => setAxis(previous => previous === value ? null : value)}>{value}</button>)}</div></div><div className="uv-tool-grid">
             <Tool action="select" icon="select" label="Select" active={uvTool === 'select'} onClick={() => setUVTool('select')}/>
             <Tool action="translate" icon="move" label="Move" active={uvTool === 'move'} disabled={!toolState.move} onClick={() => setUVTool('move')}/>
