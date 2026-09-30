@@ -116,3 +116,24 @@ test('ribbon history grows beyond the initial native allocation and animated col
  const sim=new NativeParticleSimulation(model);sim.advance(6000);const controller=sim.native.ribbonsController,emitter=controller.emitters[0];assert.ok(emitter.creationTimes.length>256);assert.ok(emitter.vertices.length>=emitter.creationTimes.length*6);assert.ok(emitter.texCoords.length>=emitter.creationTimes.length*4);
  const calls=[],before=structuredClone(sim.native.model.RibbonEmitters[0].Color);controller.shaderProgramLocations={colorUniform:'color'};controller.gl=new Proxy({}, {get:(_,name)=>name.toUpperCase()===name?name:(...args)=>calls.push([name,...args])});sim.native.rendererData.materialLayerTextureID=[[0]];controller.render(new Float32Array(16),new Float32Array(16));const color=calls.find(c=>c[0]==='uniform4f'&&c[1]==='color');assert.ok(Math.abs(color[2]-.4)<1e-6);assert.ok(Math.abs(color[4]-.6)<1e-6);assert.deepEqual(sim.native.model.RibbonEmitters[0].Color,before);
 });
+
+
+test('effect picking uses posed mesh alpha holes, UV animation, depth flags and front-face culling',async()=>{
+ const {particleOpaqueDepth,rememberParticlePicture}=await import('../app/particle-preview-adapter.js'),{PerspectiveCamera}=await import('three');
+ const model=make();model.ParticleEmitters2=[];model.Nodes=[];model.PivotPoints=[];
+ const parent=createNode(model,'Bone');parent.Translation={LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(0,0,0)},{Frame:5000,Vector:v(1,0,0)}]};
+ const layer={FilterMode:1,Shading:0,TextureID:0,Alpha:1};model.Materials=[{Layers:[layer]}];
+ const geo={MaterialID:0,Vertices:v(-2,-2,0,2,-2,0,2,2,0,-2,2,0),Normals:v(0,0,1,0,0,1,0,0,1,0,0,1),Faces:new Uint16Array([0,1,2,0,2,3]),VertexGroup:new Uint8Array(4),Groups:[[parent.ObjectId]],TVertices:[v(0,0,1,0,1,1,0,1)]};model.Geosets=[geo];
+ const sim=new NativeParticleSimulation(model);sim.advance(500);const native=sim.native,camera=new PerspectiveCamera(60,1,.1,100);camera.position.set(0,0,5);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+ const picture=new Uint8Array(8*8*4).fill(255);for(let y=2;y<6;y++)for(let x=2;x<6;x++)picture[(y*8+x)*4+3]=0;
+ rememberParticlePicture(native,0,{image:{width:8,height:8,data:picture}});
+ const depth=(x=100,hidden=new Set())=>particleOpaqueDepth(native,camera,200,200,x,100,hidden);
+ assert.equal(depth(),Infinity,'A real transparent hole leaves the effect pickable');assert.ok(Number.isFinite(depth(145)),'Opaque portion writes depth');
+ assert.equal(depth(145,new Set([0])),Infinity,'Hidden geoset does not block');
+ const activeLayer=native.model.Materials[0].Layers[0],activeGeo=native.model.Geosets[0];
+ activeLayer.TVertexAnimId=0;native.model.TextureAnims=[{Translation:{LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(.5,0,0)}]}}];assert.ok(Number.isFinite(depth()),'Native UV translation moves the opaque region over the hit');delete activeLayer.TVertexAnimId;
+ for(const flag of [64,128]){activeLayer.Shading=flag;assert.equal(depth(145),Infinity,'Non-depth-writing layer does not occlude');}activeLayer.Shading=0;
+ activeLayer.FilterMode=0;assert.ok(Number.isFinite(depth()),'Opaque material ignores picture alpha');activeLayer.Alpha=.5;assert.equal(depth(),Infinity,'Preview fractional alpha disables depth writes');activeLayer.Alpha=1;
+ activeGeo.Faces=new Uint16Array([0,2,1,0,3,2]);assert.equal(depth(),Infinity,'Culled back face does not block');activeLayer.Shading=16;assert.ok(Number.isFinite(depth()),'TwoSided surface does block');
+ const saved=structuredClone(native.model);depth();assert.deepEqual(native.model,saved,'Picking never changes authored data');
+});

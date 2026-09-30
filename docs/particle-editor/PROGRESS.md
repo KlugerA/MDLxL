@@ -185,3 +185,15 @@ The pinned renderer's ribbon buffer allocation stopped growing at its initial ca
 Verification: 115/115 focused, desktop-settings and compatibility tests pass. Production build and expanded Electron workflow pass with zero JS errors. Actual four-instance rendering, distance/team/background changes, optional cost details and unchanged Lab/target documents were exercised. Placement tests now also snap the ghost to a parent pivot and a posed surface, then confirm once, undo exactly and redo. Earlier MDL/MDX Save As/reopen evidence remains in checkpoint 6. These automated windows are offscreen; user visual acceptance and Warcraft execution remain outstanding.
 
 See ACCEPTANCE.md for the current per-gate evidence and remaining limits, replacing the historical checkpoint-2 table as the current status.
+
+## Checkpoint 8 — visible tester, transformed parents and mesh-aware picking
+
+Account counter: 21% since reset, approximately 12 points of the continuation allocation remain. The user requested a visible tester; the isolated production build was opened in a separate profile, the effect gallery and live edits were demonstrated, and control was handed to the user. The user then said it was okay and asked to close and continue. The native close saved the test Lab draft. This is a visible prototype interaction, not acceptance of every contract gate or game fidelity.
+
+A new animated, rotating, nonuniformly scaled parent fixture exposed a real Lab-to-model context-switch crash: the early live-update effect could apply new parent references to the old renderer before structural replacement. Live scalar updates now verify the current renderer owns the current model. The existing context remains stable during ordinary drags. Fit view also cancels an active gesture explicitly.
+
+Actual pointer tests now prove stationary input creates no edits while the parent keeps moving, a held drag creates no further changes, the original key stays latched, a completed drag creates one undo step, parent/geometry remain unchanged, broad spread stays finite, aim edits only the emitter and a zero-length handle is keyboard-editable. The production build and existing full editor and separate save/reopen desktop workflows pass afterward, with zero JS errors. The held-particle-death test now waits for observed simulation time rather than assuming 2.2 seconds of wall time always includes two seconds of playback. Focused suite: 116/116.
+
+Particle selection now respects native posed, front-facing, depth-writing model surfaces, alpha-tested picture holes and animated UVs. Hidden faces, fractional-alpha layers and NoDepthTest/NoDepthSet do not block effect hits. A targeted fixture covers these cases without mutating its model. Base-level bilinear alpha is used; distant mip edges and multisample coverage remain approximate, and HD material details are outside this proof.
+
+Corrected a manifest naming-count edge case: an unreadable asset with no source hash was accidentally counted as reviewed by comparing two undefined values. The actual incremental CASC rescan now reports 31 reviewed and 4,987 review-needed entries consistently.

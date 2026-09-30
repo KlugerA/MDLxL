@@ -1,4 +1,4 @@
-import { Matrix4, Vector3, Vector2, Raycaster } from 'three';
+import { Matrix4, Vector3, Vector2, Raycaster, Triangle } from 'three';
 import { ModelRenderer } from 'war3-model';
 import { particleSweepPath } from '../src/particle-sweep.js';
 import { samplePreviewMatrices } from './preview-pose.js';
@@ -157,7 +157,7 @@ export function pickPreviewParticles(native,camera,width,height,x,y,selectedId,h
     }
     pictures.set(id,{width:size,height:size,data,flags:0});
   });
-  const depth=particleOpaqueDepth(native,camera,width,height,x,y,hiddenGeosets);
+  const depth=particleOpaqueDepth(native,camera,width,height,x,y,hiddenGeosets,pictures);
   return pickParticleSamples(particleStageSnapshot(native,camera,width,height,selectedId,true).samples,x,y,pictures,depth);
 }
 export function seededParticleRandom(seed=0x4d444c58) {
@@ -458,15 +458,40 @@ export function particleSurfaceAnchor(native,camera,width,height,x,y,anchorId) {
  return nearest.applyMatrix4(matrix.clone().invert()).toArray();
 }
 
-/** Hide effect hits behind actual opaque posed surfaces; transparent surfaces need coverage-aware depth. */
-function particleOpaqueDepth(native,camera,width,height,x,y,hiddenGeosets=new Set()){
+/** Depth-writing mesh coverage in the pinned SD renderer. Picking uses base-level
+ * bilinear alpha; multisample coverage and distant mip edges remain approximate. */
+export function particleOpaqueDepth(native,camera,width,height,x,y,hiddenGeosets=new Set(),pictures=particlePictures.get(native)||new Map()) {
  const raycaster=new Raycaster();raycaster.setFromCamera(new Vector2(x/width*2-1,1-y/height*2),camera);
  const matrices=new Map(native.rendererData.nodes.flatMap((n,i)=>n?.matrix?[[i,new Matrix4().fromArray(n.matrix)]]:[]));let depth=Infinity;
+ const at=(value,fallback)=>sampleTrack(value,native.getFrame(),{interval:native.model.Sequences[native.getSequence()]?.Interval,globalSequences:native.model.GlobalSequences,globalTime:native.rendererData.globalSequencesFrames[value?.GlobalSeqId]??native.getFrame(),fallback});
  for(const [index,geo]of native.model.Geosets.entries()){
-  if(hiddenGeosets.has(index)||sampleGeosetAnimation(native.model,index,native.getFrame(),native.getSequence()).alpha<.999)continue;
-  const material=native.model.Materials[geo.MaterialID];if(!material?.Layers.some(layer=>layer.FilterMode===0&&Number(sampleTrack(layer.Alpha,native.getFrame(),{interval:native.model.Sequences[native.getSequence()]?.Interval,globalSequences:native.model.GlobalSequences,globalTime:native.getFrame(),fallback:1}))>=.999))continue;
+  if(hiddenGeosets.has(index)||(geo.LevelOfDetail!=null&&geo.LevelOfDetail!==0))continue;
+  const geoAlpha=Number(at(native.model.GeosetAnims?.find(animation=>animation.GeosetId===index)?.Alpha,1));
+  const layers=(native.model.Materials[geo.MaterialID]?.Layers||[]).map((layer,index)=>({layer,index})).filter(({layer})=>layer.FilterMode<=1&&!(layer.Shading&(64|128))&&geoAlpha*Number(at(layer.Alpha,1))>=.999999);
+  if(!layers.length)continue;
   const vertices=skinGeoset(geo,matrices);
-  for(let i=0;i<geo.Faces.length;i+=3){const triangle=[0,1,2].map(k=>new Vector3().fromArray(vertices,geo.Faces[i+k]*3)),hit=raycaster.ray.intersectTriangle(...triangle,false,new Vector3());if(hit)depth=Math.min(depth,hit.project(camera).z);}
+  for(let i=0;i<geo.Faces.length;i+=3){
+   const indices=[geo.Faces[i],geo.Faces[i+1],geo.Faces[i+2]],triangle=indices.map(index=>new Vector3().fromArray(vertices,index*3));
+   for(const {layer,index:layerIndex} of layers){
+    const hit=raycaster.ray.intersectTriangle(...triangle,!(layer.Shading&16),new Vector3());if(!hit)continue;
+    const z=hit.clone().project(camera).z;if(z< -1||z>1||z>=depth)continue;
+    if(layer.FilterMode===1){
+     const textureId=native.rendererData.materialLayerTextureID?.[geo.MaterialID]?.[layerIndex]??Number(at(layer.TextureID,0));
+     if(![1,2].includes(native.model.Textures[textureId]?.ReplaceableId)){
+      const picture=pictures.get(textureId),uvs=geo.TVertices?.[0];if(!picture?.data||!uvs)continue;
+      const weights=Triangle.getBarycoord(hit,...triangle,new Vector3()).toArray();
+      const uv=[0,1].map(axis=>indices.reduce((sum,index,k)=>sum+uvs[index*2+axis]*weights[k],0)),matrix=native.getTexCoordMatrix(layer);
+      // Pinned native SD rendering uses TVertices[0], including its animated UV matrix.
+      const u=matrix[0]*uv[0]+matrix[3]*uv[1]+matrix[6],v=matrix[1]*uv[0]+matrix[4]*uv[1]+matrix[7];
+      const px=u*picture.width-.5,py=v*picture.height-.5,ix=Math.floor(px),iy=Math.floor(py),fx=px-ix,fy=py-iy;
+      const coordinate=(n,size,repeat)=>repeat?((n%size)+size)%size:Math.max(0,Math.min(size-1,n));
+      const alpha=(dx,dy)=>picture.data[(coordinate(iy+dy,picture.height,picture.flags&2)*picture.width+coordinate(ix+dx,picture.width,picture.flags&1))*4+3]/255;
+      if((alpha(0,0)*(1-fx)+alpha(1,0)*fx)*(1-fy)+(alpha(0,1)*(1-fx)+alpha(1,1)*fx)*fy<.75)continue;
+     }
+    }
+    depth=z;
+   }
+  }
  }
  return depth;
 }

@@ -43,7 +43,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     assert.equal(await page.locator('.pe-window').getByRole('button',{name:'Pause',exact:true}).isVisible(),true);
     const heldTime=Number(await page.getByLabel('Particle preview playhead',{exact:true}).inputValue());
     const pinnedPoints=await page.locator('.pe-size-proxy polygon').getAttribute('points');
-    await page.waitForTimeout(2200);
+    await page.waitForFunction(start=>(Number(document.querySelector('[aria-label="Particle preview playhead"]').value)-start+5000)%5000>=2000,heldTime,{timeout:8000});
     const heldElapsed=(Number(await page.getByLabel('Particle preview playhead',{exact:true}).inputValue())-heldTime+5000)%5000;
     assert.ok(heldElapsed>=2000,'Playback advances beyond the sample lifetime during its held gesture');
     assert.equal(await page.locator('.pe-size-proxy polygon').getAttribute('points'),pinnedPoints,'Proxy remains pinned while its source particle ages and dies');

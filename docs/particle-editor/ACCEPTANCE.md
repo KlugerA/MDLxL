@@ -1,8 +1,8 @@
 # Particle Editor prototype acceptance evidence
 
-Checkpoint 7, 30 September 2026. This is an isolated working prototype, not full contract acceptance or a release. Automated Electron captures are offscreen and do not establish user visual acceptance. No Warcraft runtime test has been performed.
+Checkpoint 8, 30 September 2026. This is an isolated working prototype, not full contract acceptance or a release. Automated Electron captures are offscreen. The user also interacted with a visible isolated tester and authorized continuing; that is not acceptance of every gate. No Warcraft runtime test has been performed.
 
-Evidence commands: the focused native tests in test/particle-{prototype,preview,sweep,library}.test.js, test/desktop-settings.test.js and tests/*.test.js (115 passing); production Vite build; test/particle-prototype.electron.cjs; test/particle-model-io.electron.cjs; test/particle-review.electron.cjs; test/particle-performance.electron.cjs. Runtime harnesses use private profiles. Logs and captures are local ignored output; no Warcraft asset bytes are committed.
+Evidence commands: the focused native tests in test/particle-{prototype,preview,sweep,library}.test.js, test/desktop-settings.test.js and tests/*.test.js (116 passing); production Vite build; test/particle-prototype.electron.cjs; test/particle-model-io.electron.cjs; test/particle-parent.electron.cjs; test/particle-review.electron.cjs; test/particle-performance.electron.cjs. Runtime harnesses use private profiles. Logs and captures are local ignored output; no Warcraft asset bytes are committed.
 
 | Gate | Demonstrated evidence | Remaining boundary |
 |---|---|---|
@@ -12,15 +12,15 @@ Evidence commands: the focused native tests in test/particle-{prototype,preview,
 | A04 | Actual 1400x920 and 960x720 layouts meet the two-thirds stage and six-primary-control limits. | Other DPI/screen sizes not measured. |
 | A05 | Real pointer/slider updates, one undo, Escape and cross-control focus ordering pass; measured input-to-draw is below 100 ms. | OS scanout latency not measured. |
 | A06 | Real pinned particle resize survives more than two seconds and the sampled particle's death; only selected native size changes. | Broader moving-parent visual fixtures pending. |
-| A07 | Spawn/aim/spread guides and independent fields are implemented, with bounded projection and zero-size proxies. | Complete transformed-parent/axis/broad-angle visual matrix pending. |
-| A08 | Pointer mapping is latched; animation is not input; parent data is not edited by the gesture adapter. | Animated-parent stationary-pointer runtime proof pending. |
+| A07 | Spawn/aim/spread guides and independent fields are implemented, with bounded projection and zero-size proxies. | A rotating/translating parent with scale [2,.5,1.5], broad spread and zero-length keyboard handle passes; remaining axis/reflection combinations need more proof. |
+| A08 | Actual held-pointer and held-drag tests pass while a rotating/nonuniform parent continues moving; one original key and one undo remain latched. | Broader source-specific rigs remain untested. |
 | A09 | Actual three life samples, size/color/opacity editing, invisible proxies and Time 0/1 pass. | Additional unusual imported endpoint visuals pending. |
 | A10 | Key time/global phase/scope latch at gesture start; spline tangent/whole-track semantics tested; no continuous key creation. | Complete animated-field UI matrix pending. |
 | A11 | Fixed-grid native simulations produce exact particle-state equality at matching clocks across display partitions. | Real Warcraft matching is unverified. |
 | A12 | Independent clocks, FX pause/resume, visible unlinked state and coherent relink pass without canonical mutations. | Inspection timing is deliberately not exported. |
 | A13 | Backward replay, narrow one-millisecond windows, exact Squirt/global events, full-loop survivors and endpoint seeking pass. | Broader real source lifecycle fixtures pending. |
 | A14 | Native ribbon edge handles/window/path selection and demonstration isolation pass; paired PE2/ribbon motion example renders. | Real source weapon/lifecycle matrix and ribbon gravity parity incomplete. |
-| A15 | Actual main-view double-click opens an existing emitter; overlap cycling and invisible list access pass. | Alpha-tested model-surface occlusion still needs work. |
+| A15 | Actual main-view double-click opens an existing emitter; overlap cycling and invisible list access pass. | Posed alpha holes, UV animation, depth flags and culling are unit-tested; mip/MSAA edges remain approximate. |
 | A16 | Actual ghost drag, pivot/surface snap, cancel, one-step confirm, exact undo/redo pass. | Target without an animation clip is not supported by placement yet. |
 | A17 | Sparse object/resource/global remapping, minimal ancestors and source/target motion choices tested without unrelated mutations. | Nonuniform-parent visual matrix and arbitrary spline boundary fitting need more proof; BPOS graphs are explicitly blocked. |
 | A18 | Actual MDL/MDX Save As and reopen of mixed stock/custom PE2+ribbon passes; output equals codec expectation, custom sidecar retained, original input untouched. | Does not certify every indexed effect or Warcraft rendering. |
