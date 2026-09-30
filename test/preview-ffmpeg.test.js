@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { PreviewRecordingStore, timeline, bitmap } = require('../electron/preview-ffmpeg.cjs');
+const { PreviewRecordingStore, timeline, bitmap, gifSizeLimit } = require('../electron/preview-ffmpeg.cjs');
 const { validateGIFFile, MAX_CAPTURE_BYTES } = require('../electron/preview-capture.cjs');
 
 function inspectGIF(bytes) {
@@ -103,6 +103,17 @@ test('large invalid GIF is rejected by its contents without a renderer buffer', 
   const file=path.join(store.temporaryRoot,'large.gif');
   const handle=await fs.open(file,'w'); await handle.truncate(MAX_CAPTURE_BYTES+1); await handle.close();
   await assert.rejects(validateGIFFile(file),/complete GIF/);
+});
+
+test('local GIF size budgets target 100 MB highest and 50 MB medium per ten seconds without changing upload profiles', () => {
+  assert.equal(gifSizeLimit(undefined,'high',10000),100_000_000);
+  assert.equal(gifSizeLimit(undefined,'medium',10000),50_000_000);
+  assert.equal(gifSizeLimit(undefined,'high',5000),50_000_000);
+  assert.equal(gifSizeLimit(undefined,'medium',20000),100_000_000);
+  assert.equal(gifSizeLimit(undefined,'low',10000),Infinity);
+  assert.equal(gifSizeLimit('catbox','high',10000),20*1024*1024);
+  assert.equal(gifSizeLimit('hive','high',5000),22_500_000);
+  assert.equal(gifSizeLimit('hive-main','high',5000),Infinity);
 });
 
 
