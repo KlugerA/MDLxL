@@ -2,7 +2,7 @@
   "build": "3.0.0.24268",
   "buildKey": "3a9d8f26806936764d2d9ad526a65e04",
   "sourceKey": "6d608eb1d5ea6a375afbb253c7679d4fcd82d545712358382cbe01cb8534ea60",
-  "run": "2026-09-30T17:59:53.890Z",
+  "run": "2026-09-30T19:51:49.447Z",
   "totalEnumerated": 14984,
   "namespaces": {
     "war3.w3mod:_de.w3mod:_teen.w3mod": 1,
@@ -21,15 +21,18 @@
     "ParticleEmitters": 67,
     "ParticleEmitterPopcorns": 88
   },
-  "recipes": 3830,
+  "recipes": 4581,
   "extractionComplete": true,
-  "recipeExceptions": 342,
-  "missingDependencies": 57,
-  "unsupported": 65,
-  "exactDuplicateMappings": 118,
+  "recipeExceptions": 437,
+  "missingDependencies": 112,
+  "unsupported": 128,
+  "exactDuplicateMappings": 144,
   "fullyPreviewableRecipes": 0,
   "insertableRecipes": 0,
   "reviewedNames": 0,
-  "note": "Bulk schema-2 extraction completed. Zero-duration globals and bind-pose cases remain explicit failures. A small native-preview and placement subset has been exercised; aggregate preview/insertion/name counts remain unverified. No full-library claim.",
-  "cacheSchema": 2
+  "note": "Schema-3 real CASC extraction completed. Catalogue includes source-model particle groups and explicitly unavailable identities. Dependencies retain physical namespace and content hashes; PE1 external references are followed in the local inventory. Invalid globals, bind-pose graphs, PE1 simulation and Popcorn still limit usable coverage. Preview, placement and naming remain partial; no complete-library claim.",
+  "cacheSchema": 3,
+  "catalogEntries": 5018,
+  "sourceGroups": 751,
+  "blockedEntries": 437
 }

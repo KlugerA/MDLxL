@@ -161,3 +161,12 @@ test('projected native axes and broad spread remain finite and stationary input 
   assert.equal(particleSpreadAtPointer(arc,[100,0],-100,-100,90),180);
   assert.equal(particleSpreadAtPointer(arc,[0,100],100,-100,0),90);
 });
+
+test('particle picking respects perspective UV interpolation and opaque-surface depth',async()=>{
+ const {particleSampleHit}=await import('../src/particle-handles.js');
+ const sample={owner:0,textureId:0,filterMode:0,opacity:1,color:[1,1,1],points:[[0,0,.5,1],[0,100,.5,1],[100,0,.5,.1],[100,100,.5,.1]],uv:[0,0,0,1,1,0,1,1]};
+ const picture={width:2,height:1,flags:0,data:new Uint8Array([255,255,255,255,255,255,255,0])};
+ assert.equal(particleSampleHit(sample,75,25,picture),true,'Perspective interpolation reaches the opaque near-side texel');
+ assert.equal(particleSampleHit(sample,75,25,picture,.4),false,'Opaque foreground hides the effect');
+ assert.equal(particleSampleHit({...sample,points:sample.points.map(p=>p.slice(0,3))},75,25,picture),false,'Screen-linear UVs alone would miss this coverage');
+});

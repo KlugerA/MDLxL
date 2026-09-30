@@ -72,3 +72,16 @@ test('focused loop reconstruction revisits the same native state',()=>{
  assert.deepEqual(preview.simulation.snapshot().particles,expected.particles);
 });
 
+
+test('burst amount editing preserves zero event boundaries and independently latched global phase',async()=>{
+ const {beginParticleParameter,particleValue}=await import('../src/particle-bindings.js');const p=structuredClone(createStarterRecipe('impact').native.ParticleEmitters2[0]);
+ let command=beginParticleParameter(p,'EmissionRate',{frame:4800,interval:[0,5000]});assert.equal(command.keyTime,600);let edited=command.change(45);assert.deepEqual(edited.Keys.map(k=>k.Vector[0]),[0,45,0,0]);
+ command=beginParticleParameter(p,'EmissionRate',{frame:4800,interval:[0,5000],scope:'track'});assert.deepEqual(command.change(45).Keys.map(k=>k.Vector[0]),[0,45,0,0]);
+ p.Squirt=false;p.EmissionRate={LineType:0,GlobalSeqId:0,Keys:[{Frame:0,Vector:v(10)},{Frame:700,Vector:v(20)}]};
+ const options={frame:100,globalTime:800,globalSequences:[1000]};assert.equal(particleValue(p,'EmissionRate',options),20);assert.equal(beginParticleParameter(p,'EmissionRate',options).keyTime,700);
+});
+test('all original teaching examples retain native data through MDL and MDX, and burst sampling finds active history',async()=>{
+ const {PARTICLE_STARTERS}=await import('../src/particle-starters.js'),{activeParticleSample}=await import('../src/particle-sampling.js');
+ for(const [kind]of PARTICLE_STARTERS){const recipe=createStarterRecipe(kind),doc=particleRecipeDocument(recipe);assert.equal(recipe.sources[0].original,true);for(const format of ['mdl','mdx'])assert.equal(openDocument(doc.serialize(format),'example.'+format).readOnly,false);}
+ const impact=createStarterRecipe('impact'),sample=activeParticleSample(impact.native);assert.ok(sample.time>=600&&sample.time<1300);assert.ok(sample.score>0);
+});

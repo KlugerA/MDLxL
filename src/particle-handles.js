@@ -22,11 +22,14 @@ function triangleWeights(point,a,b,c) {
   return Math.min(x,y,z)>=-1e-5?[x,y,z]:null;
 }
 /** Sprite and tail triangles use the renderer's actual UVs and effective blend coverage. */
-export function particleSampleHit(sample,x,y,picture) {
+export function particleSampleHit(sample,x,y,picture,depth=Infinity) {
   if(!picture?.data||sample.opacity<=0)return false;
   for(const indices of [[0,1,2],[2,1,3]]) {
     const weights=triangleWeights([x,y],...indices.map(i=>sample.points[i]));if(!weights)continue;
-    const uv=[0,1].map(axis=>indices.reduce((sum,i,k)=>sum+sample.uv[i*2+axis]*weights[k],0));
+    if(indices.reduce((sum,i,k)=>sum+sample.points[i][2]*weights[k],0)>depth+1e-5)continue;
+    if(sample.opaque)return true;
+    const corrected=weights.map((w,k)=>w*(sample.points[indices[k]][3]??1)),sum=corrected.reduce((a,b)=>a+b,0);
+    const uv=[0,1].map(axis=>indices.reduce((value,i,k)=>value+sample.uv[i*2+axis]*corrected[k]/sum,0));
     const coordinate=(n,size,repeat)=>Math.min(size-1,Math.max(0,Math.floor((repeat?((n%1)+1)%1:Math.max(0,Math.min(1,n)))*size)));
     const px=coordinate(uv[0],picture.width,picture.flags&1),py=coordinate(uv[1],picture.height,picture.flags&2),offset=(py*picture.width+px)*4;
     const alpha=picture.data[offset+3]/255,colors=[0,1,2].map(i=>picture.data[offset+i]/255*(sample.color?.[i]??1));
@@ -37,9 +40,9 @@ export function particleSampleHit(sample,x,y,picture) {
   }
   return false;
 }
-export function pickParticleSamples(samples,x,y,pictures) {
+export function pickParticleSamples(samples,x,y,pictures,depth=Infinity) {
   const owners=new Map();
-  for(const sample of samples)if(particleSampleHit(sample,x,y,pictures.get(sample.textureId))) {
+  for(const sample of samples)if(particleSampleHit(sample,x,y,pictures.get(sample.textureId),depth)) {
     const depth=sample.points.reduce((sum,p)=>sum+p[2],0)/4;
     if(!owners.has(sample.owner)||depth<owners.get(sample.owner).depth)owners.set(sample.owner,{sample,depth});
   }

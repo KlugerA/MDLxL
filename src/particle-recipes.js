@@ -115,7 +115,8 @@ export function extractParticleRecipe(model, ids, metadata = {}) {
     ...native.Textures.map((texture,index) => ({ kind: 'texture', index, path: texture.Image, replaceableId: texture.ReplaceableId || 0 })),
     ...native.ParticleEmitters.filter(node => node.Path).map(node => ({ kind: 'model', path: node.Path }))
   ];
-  return { schema: 'mdlxl-particle-recipe', version: 1, id: metadata.id || 'draft', name: metadata.name || 'Particle effect', categories: metadata.categories || ['Other'], tags: metadata.tags || [], aliases: metadata.aliases || [], naming: { state: 'review-needed' }, sources: metadata.sources || [], ingredients, native, dependencies, anchor: { position: [0,0,0] }, defaultSequence: metadata.defaultSequence ?? 0, compatibility: { preview: unsupported.length ? 'incomplete' : 'unverified', insertion: 'unverified', unsupported } };
+  for(const dependency of dependencies){const prior=metadata.dependencies?.find(d=>d.kind===dependency.kind&&d.path===dependency.path);if(prior)Object.assign(dependency,clone(prior),dependency.index==null?{}:{index:dependency.index});}
+  return { schema: 'mdlxl-particle-recipe', version: 1, id: metadata.id || 'draft', name: metadata.name || 'Particle effect', categories: metadata.categories || ['Other'], tags: metadata.tags || [], aliases: metadata.aliases || [], naming: { state: 'review-needed' }, sources: metadata.sources || [], ...(metadata.grouping?{grouping:clone(metadata.grouping)}:{}), ingredients, native, dependencies, anchor: { position: [0,0,0] }, defaultSequence: metadata.defaultSequence ?? 0, compatibility: { preview: unsupported.length ? 'incomplete' : 'unverified', insertion: 'unverified', unsupported } };
 }
 export function validateParticleRecipe(recipe) {
   if (recipe?.schema !== 'mdlxl-particle-recipe' || recipe.version !== 1) throw Error('Unsupported particle preset version.');

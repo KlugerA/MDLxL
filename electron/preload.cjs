@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  particleAssets: payload=>ipcRenderer.invoke('particles:assets',payload),
   particleThumbnail: payload=>ipcRenderer.invoke('particles:thumbnail',payload),
   particleCatalog: () => ipcRenderer.invoke('particles:catalog'),
   particleThumbnails: ids=>ipcRenderer.invoke('particles:thumbnails',ids),

@@ -3,8 +3,8 @@ import {ParticleSlider} from './ParticleCluelessControls.jsx';
 import {particleValue} from '../src/particle-bindings.js';
 import {Section,NumberField,TrackEditor,TextField,SelectField} from './Fields.jsx';
 const hex=color=>'#'+Array.from(color,v=>Math.round(Math.min(1,Math.max(0,v))*255).toString(16).padStart(2,'0')).join('');
-export default function ParticleRibbonControls({model,emitter,frame,sequence,mode,scope,setScope,begin,change,finish,cancel,update}){
- const options={frame,interval:model.Sequences[sequence]?.Interval,globalSequences:model.GlobalSequences,family:'RibbonEmitters'},color=particleValue(emitter,'Color',options),colorDrag=useRef(false);
+export default function ParticleRibbonControls({model,emitter,frame,globalTime,sequence,mode,scope,setScope,begin,change,finish,cancel,update}){
+ const options={frame,globalTime,interval:model.Sequences[sequence]?.Interval,globalSequences:model.GlobalSequences,family:'RibbonEmitters'},color=particleValue(emitter,'Color',options),colorDrag=useRef(false);
  const slider=(field,label,min,max,step='any')=><ParticleSlider key={field} {...{field,label,begin,change,finish,cancel,min,max,step}} value={particleValue(emitter,field,options)}/>;
  if(mode==='Classic')return <>
   <Section title="Ribbon" open><TextField label="Name" value={emitter.Name} onChange={v=>update('Name',v)}/>{['HeightAbove','HeightBelow','Alpha','TextureSlot','Visibility'].map(field=><TrackEditor key={field} label={field} value={emitter[field]} frame={frame} globalSequences={model.GlobalSequences} defaultValue={field==='Alpha'?1:0} onChange={v=>update(field,v)}/>)}</Section>

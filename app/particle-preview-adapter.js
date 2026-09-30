@@ -36,6 +36,13 @@ export function installParticleNativeCompatibility(native){
    const cell=particleAtlasFrame(range,progress,columns,rows),x=cell%columns,y=Math.floor(cell/columns);
    target.set([x/columns,y/rows,x/columns,(y+1)/rows,(x+1)/columns,y/rows,(x+1)/columns,(y+1)/rows],index*8);
  };
+ // Native PE2 ReplaceableId overrides its texture reference, and is independent of other emitters sharing that picture.
+ const layer=particles.setLayerProps;
+ particles.setLayerProps=function(emitter){
+  const id=emitter.props.TextureID,replacement=emitter.props.ReplaceableId,original=this.rendererData.model.Textures[id];
+  if(replacement===1||replacement===2)this.rendererData.model.Textures[id]={Image:'',ReplaceableId:replacement,Flags:original?.Flags||0};
+  try{return layer.call(this,emitter);}finally{if(replacement===1||replacement===2)this.rendererData.model.Textures[id]=original;}
+ };
  const ribbons=native.ribbonsController,uv=ribbons.updateEmitterTexCoords;
  ribbons.updateEmitterTexCoords=function(emitter,now){
    uv.call(this,emitter,now);const rows=emitter.props.Rows,columns=emitter.props.Columns;if(!(rows>0&&columns>0))return;
@@ -60,7 +67,7 @@ export function updateParticlePreview(native, source) {
 }
 const sweepCache=new WeakMap();
 export function particleStageSnapshot(native,camera,width,height,selectedId,all=false,options={}) {
-  const project=value=>{const p=new Vector3().fromArray(value).project(camera);return [(p.x+1)*width/2,(1-p.y)*height/2,p.z];};
+  const project=value=>{const world=new Vector3().fromArray(value),depth=camera.isPerspectiveCamera?-world.clone().applyMatrix4(camera.matrixWorldInverse).z:1,p=world.project(camera);return [(p.x+1)*width/2,(1-p.y)*height/2,p.z,1/depth];};
   const samples=[];let count=0;
   for(const wrapper of native.particlesController?.emitters||[]) {
     count+=wrapper.particles.length;
@@ -70,7 +77,16 @@ export function particleStageSnapshot(native,camera,width,height,selectedId,all=
       if(!vertices||!(wrapper.type&flag))continue;
       const points=[0,1,2,3].map(k=>project(vertices.subarray(i*12+k*3,i*12+k*3+3)));
       if(points.some(p=>!p.every(Number.isFinite)||p[2]<-1||p[2]>1))continue;
-      samples.push({owner:wrapper.props.ObjectId,textureId:wrapper.props.TextureID,filterMode:wrapper.props.FilterMode,kind:flag===1?'sprite':'streak',points,age:1-wrapper.particles[i].lifeSpan/Math.max(.00001,wrapper.props.LifeSpan),uv:Array.from(uv?.subarray(i*8,i*8+8)||[]),color:Array.from(wrapper.colors?.subarray(i*16,i*16+3)||[1,1,1]),opacity:wrapper.colors?.[i*16+3]??1});
+      samples.push({owner:wrapper.props.ObjectId,textureId:[1,2].includes(wrapper.props.ReplaceableId)?'replacement:'+wrapper.props.ReplaceableId:wrapper.props.TextureID,filterMode:wrapper.props.FilterMode,kind:flag===1?'sprite':'streak',points,age:1-wrapper.particles[i].lifeSpan/Math.max(.00001,wrapper.props.LifeSpan),uv:Array.from(uv?.subarray(i*8,i*8+8)||[]),color:Array.from(wrapper.colors?.subarray(i*16,i*16+3)||[1,1,1]),opacity:wrapper.colors?.[i*16+3]??1});
+    }
+  }
+  for(const wrapper of native.ribbonsController?.emitters||[]){
+    if(!all&&wrapper.props.ObjectId!==selectedId)continue;
+    const material=native.model.Materials[wrapper.props.MaterialID],at=(value,fallback)=>sampleTrack(value,native.getFrame(),{interval:native.model.Sequences[native.getSequence()]?.Interval,globalSequences:native.model.GlobalSequences,globalTime:native.rendererData.globalSequencesFrames[value?.GlobalSeqId]??native.getFrame(),fallback});
+    for(const layer of material?.Layers||[]){const textureId=Number(at(layer.TextureID,0)),color=Array.from(at(wrapper.props.Color,[1,1,1])),opacity=Number(at(wrapper.props.Alpha,1))*Number(at(layer.Alpha,1)),n=all?wrapper.creationTimes.length:Math.min(wrapper.creationTimes.length,25);
+      for(let i=1;i<n;i++){const offsets=[(i-1)*6,(i-1)*6+3,i*6,i*6+3],points=offsets.map(offset=>project(wrapper.vertices.subarray(offset,offset+3)));if(points.some(p=>!p.every(Number.isFinite)||p[2]<-1||p[2]>1))continue;
+        samples.push({owner:wrapper.props.ObjectId,textureId,filterMode:[4,4,0,1,1,2,3][layer.FilterMode]??0,opaque:layer.FilterMode===0,kind:'ribbon',points,uv:Array.from(wrapper.texCoords.subarray((i-1)*4,(i+1)*4)),color,opacity});
+      }
     }
   }
   const node=native.model.ParticleEmitters2.find(p=>p.ObjectId===selectedId);let guide=null;
@@ -125,7 +141,8 @@ export function rememberParticlePicture(native,id,texture,flags=0,compressedPixe
 }
 export function pickPreviewParticles(native,camera,width,height,x,y,selectedId) {
   const pictures=new Map(particlePictures.get(native)||[]);
-  native.model.Textures.forEach((texture,id)=>{
+  const replacements=[...native.model.Textures.map((texture,id)=>[texture,id]),...native.model.ParticleEmitters2.filter(p=>[1,2].includes(p.ReplaceableId)).map(p=>[{ReplaceableId:p.ReplaceableId},'replacement:'+p.ReplaceableId])];
+  replacements.forEach(([texture,id])=>{
     if(texture.ReplaceableId!==1&&texture.ReplaceableId!==2)return;
     const size=32,data=new Uint8Array(size*size*4),color=native.rendererData.teamColor||[1,0,0];
     for(let y=0;y<size;y++)for(let x=0;x<size;x++){
@@ -134,7 +151,8 @@ export function pickPreviewParticles(native,camera,width,height,x,y,selectedId) 
     }
     pictures.set(id,{width:size,height:size,data,flags:0});
   });
-  return pickParticleSamples(particleStageSnapshot(native,camera,width,height,selectedId,true).samples,x,y,pictures);
+  const depth=particleOpaqueDepth(native,camera,width,height,x,y);
+  return pickParticleSamples(particleStageSnapshot(native,camera,width,height,selectedId,true).samples,x,y,pictures,depth);
 }
 export function seededParticleRandom(seed=0x4d444c58) {
   let state=seed>>>0;
@@ -385,12 +403,13 @@ export class ParticleAuthoringPreview {
         const next=start+((phase.frame-end)%(end-start));
         this.reset(sequence,next);this.rates=null;
         // Rate changes are inspection history; each focused loop starts coherently.
-        if(!linked){const point=this.phase();this.timeline.push({at:this.target,...point,poseRate,fxRate:effectRate});this.pending.timeline=structuredClone(this.timeline);}
+        if(!linked){const point=this.phase();this.timeline.push({at:this.target,...point,poseRate,fxRate:effectRate});if(this.pending)this.pending.timeline=structuredClone(this.timeline);}
       }else {
         this.target-=(phase.frame-end)/poseRate;ended=true;
       }
       phase=this.phase();
     }
+    if(this.limit)return this.status={busy:false,frame:this.native.getFrame(),global:this.phase().global,fx:this.phase().fx,ended:true,error:this.limit.message,limit:this.limit.limit};
     const candidate=this.pending||this.simulation;
     if(cameraPosition&&cameraQuaternion)candidate.setCamera(cameraPosition,cameraQuaternion);
     let result;try{result=candidate.advance(this.target,{budgetMs});}catch(error){if(!(error instanceof ParticlePreviewBudgetError))throw error;this.limit=error;return this.status={busy:false,frame:this.native.getFrame(),global:this.phase().global,fx:this.phase().fx,ended:true,error:error.message,limit:error.limit};}
@@ -423,4 +442,17 @@ export function particleSurfaceAnchor(native,camera,width,height,x,y,anchorId) {
  if(!nearest)return null;
  const matrix=matrices.get(anchor.Parent)||new Matrix4();if(Math.abs(matrix.determinant())<1e-10)return null;
  return nearest.applyMatrix4(matrix.clone().invert()).toArray();
+}
+
+/** Hide effect hits behind actual opaque posed surfaces; transparent surfaces need coverage-aware depth. */
+function particleOpaqueDepth(native,camera,width,height,x,y){
+ const raycaster=new Raycaster();raycaster.setFromCamera(new Vector2(x/width*2-1,1-y/height*2),camera);
+ const matrices=new Map(native.rendererData.nodes.flatMap((n,i)=>n?.matrix?[[i,new Matrix4().fromArray(n.matrix)]]:[]));let depth=Infinity;
+ for(const [index,geo]of native.model.Geosets.entries()){
+  if(sampleGeosetAnimation(native.model,index,native.getFrame(),native.getSequence()).alpha<.999)continue;
+  const material=native.model.Materials[geo.MaterialID];if(!material?.Layers.some(layer=>layer.FilterMode===0&&Number(sampleTrack(layer.Alpha,native.getFrame(),{interval:native.model.Sequences[native.getSequence()]?.Interval,globalSequences:native.model.GlobalSequences,globalTime:native.getFrame(),fallback:1}))>=.999))continue;
+  const vertices=skinGeoset(geo,matrices);
+  for(let i=0;i<geo.Faces.length;i+=3){const triangle=[0,1,2].map(k=>new Vector3().fromArray(vertices,geo.Faces[i+k]*3)),hit=raycaster.ray.intersectTriangle(...triangle,false,new Vector3());if(hit)depth=Math.min(depth,hit.project(camera).z);}
+ }
+ return depth;
 }

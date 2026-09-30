@@ -3,39 +3,23 @@ import {STARTER_TEXTURE,starterTextureAsset} from '../src/particle-starters.js';
 import React,{Suspense,lazy,useEffect,useRef,useState} from 'react';
 import {parseParticleData} from '../src/particle-data.js';
 import {particleRecipeDocument} from '../src/particle-recipes.js';
-import {sampleTrack} from '../src/animation.js';
+import {activeParticleSample} from '../src/particle-sampling.js';
 const GamePreview=lazy(()=>import('./GamePreview.jsx'));
 const normalize=value=>String(value||'').replaceAll('/','\\').toLowerCase();
-export function activeParticleSample(model) {
-  let chosen={sequence:0,time:model.Sequences?.[0]?.Interval?.[0]||0,score:-1};
-  for(const [sequence,clip]of (model.Sequences||[]).entries()){
-    const [start,end]=clip.Interval;if(!(end>start))continue;
-    for(let i=1;i<=8;i++){
-      const time=start+(end-start)*i/9;
-      let score=0;
-      for(const emitter of model.ParticleEmitters2){
-        const at=field=>{const value=sampleTrack(emitter[field],time,{interval:clip.Interval,globalSequences:model.GlobalSequences,globalTime:time,fallback:[field==='Visibility'?1:0]});return typeof value==='number'?value:value[0];};
-        score+=Math.max(0,at('EmissionRate'))*(at('Visibility')>0?1:0);
-      }
-      score+=model.RibbonEmitters.length;
-      if(score>chosen.score)chosen={sequence,time,score};
-    }
-  }
-  return chosen;
-}
 export default function ParticleThumbnailQueue({items,preferences,onThumbnail,onFailure}) {
   const [current,setCurrent]=useState(null),pending=useRef(new Set()),mounted=useRef(true);
   useEffect(()=>()=>{mounted.current=false;},[]);
   useEffect(()=>{
     if(current)return;
-    const item=items.find(item=>!item.thumbnail&&!pending.current.has(item.id)&&!item.unsupported?.length);
+    const item=items.find(item=>!item.thumbnail&&!pending.current.has(item.id)&&!item.blocked&&!item.unsupported?.length);
     if(!item)return;
     pending.current.add(item.id);
     (async()=>{
       const cached=await window.desktop.particleThumbnails([item.id]);if(cached[item.id]){if(mounted.current)onThumbnail(item.id,cached[item.id]);return;}
       const recipe=parseParticleData(await window.desktop.particleRead(item.id)),doc=particleRecipeDocument(recipe),assets=embeddedParticleAssets(recipe);
       if(doc.model.Textures.some(t=>t.Image===STARTER_TEXTURE))assets.set(normalize(STARTER_TEXTURE),starterTextureAsset());
-      const records=await window.desktop.resolveTextures({names:doc.model.Textures.filter(t=>t.Image&&!assets.has(normalize(t.Image))).map(t=>t.Image)});
+      const names=doc.model.Textures.filter(t=>t.Image&&!assets.has(normalize(t.Image))).map(t=>t.Image),sourceKey=recipe.sources?.find(source=>source.buildKey)?.buildKey;
+      const records=sourceKey?await window.desktop.particleAssets({sourceKey,dependencies:recipe.dependencies.filter(dep=>names.includes(dep.path))}):await window.desktop.resolveTextures({names});
       for(const record of records||[])if(record.bytes)assets.set(normalize(record.name),record);
       if(mounted.current)setCurrent({id:item.id,model:doc.model,assets,...activeParticleSample(doc.model)});
     })().catch(error=>{if(mounted.current){onFailure?.(item.id,error.message);setCurrent({failed:true,id:item.id});}});

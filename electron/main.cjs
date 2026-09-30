@@ -10,6 +10,7 @@ const {GameDataDiscovery,selectedGameDataSources}=require('./game-data.cjs');
 const {TextureResolver,IMAGE_EXTENSIONS}=require('./texture-resolver.cjs');
 const {CascTextures}=require('./casc.cjs');
 const {ParticleLibrary}=require('./particle-library.cjs');
+const {resolveParticleSourceAssets}=require('./particle-source.cjs');
 const {HUMAN_PORTRAIT_RESOURCES,validateHumanPortraitResources}=require('./human-portrait-frame.cjs');
 const {TextureLibrary,previewCatalog}=require('./texture-library.cjs');
 const {TexturePreviewCache}=require('./texture-preview-cache.cjs');
@@ -45,6 +46,7 @@ let translateText=value=>value;
 let gameDataDiscovery,recoveryPrompt=false,crashedWithEdits=false;
 const particleLibrary=new ParticleLibrary({directory:path.join(profile,'particles'),discover:()=>gameDataDiscovery.discover({explicitFolder:settings.gameData}),onProgress:status=>{if(win&&!win.isDestroyed())win.webContents.send('particles:progress',status);}});
 
+ipcMain.handle('particles:assets',(_,payload)=>resolveParticleSourceAssets(payload,{discover:()=>gameDataDiscovery.discover({explicitFolder:settings.gameData}),casc:textureResolver.casc}));
 ipcMain.handle('particles:thumbnails',(_,ids)=>particleLibrary.thumbnails(ids));
 ipcMain.handle('particles:duplicate',(_,id)=>particleLibrary.duplicate(id));
 ipcMain.handle('particles:import',async()=>{
@@ -444,6 +446,7 @@ async function createWindow(bounds={}){
   await current.loadFile(path.join(__dirname,'../dist/index.html'));
 }
 app.on('window-all-closed',async()=>{
+  await particleLibrary.close();
   textureDecoder=null;rejectThumbnailRequests('Editor closed.');await texturePreviews.close();
   await Promise.allSettled([settingsStore?.flush(),recoveryStore.flush(),...textureOperations,...captureOperations]);
   for(const owner of new Set([...previewRecordings.jobs.values()].map(job=>job.owner)))await previewRecordings.closeOwner(owner);

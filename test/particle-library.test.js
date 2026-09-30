@@ -56,3 +56,20 @@ test('malformed imports never overwrite an existing preset or allocate unbounded
  await assert.rejects(store.read('../escape'),/identity/);
  await assert.rejects(store.thumbnails(Array(73).fill(saved.id)),/thumbnail/);
 });
+
+test('source-bound pictures reject build changes, missing installs and mismatching bytes before substitution',async()=>{
+ const {particleSourceState,resolveParticleSourceAssets}=createRequire(import.meta.url)('../electron/particle-source.cjs'),crypto=await import('node:crypto');
+ const folder=path.join(directory,'installation');await fs.mkdir(folder,{recursive:true});await fs.writeFile(path.join(folder,'.build.info'),'test-build');
+ const discover=async()=>({cascFolders:[folder]}),state=await particleSourceState(discover,'0'.repeat(64));assert.equal(state.state,'changed');
+ const bytes=Buffer.from('source-picture'),hash=crypto.createHash('sha256').update(bytes).digest('hex'),payload={sourceKey:state.sourceKey,dependencies:[{kind:'texture',path:'Textures\\Smoke.blp',physicalPath:'war3.w3mod:_teen.w3mod:Textures\\Smoke.blp',hash}]};
+ const calls=[],casc={readSnapshot:async(...args)=>{calls.push(args);return bytes;}};
+ const result=await resolveParticleSourceAssets(payload,{discover,casc});assert.equal(result[0].physicalPath,payload.dependencies[0].physicalPath);assert.deepEqual(calls[0],[payload.dependencies[0].physicalPath,folder,state.sourceKey]);
+ await assert.rejects(resolveParticleSourceAssets(payload,{discover,casc:{readSnapshot:async()=>Buffer.from('different')}}),/no longer matches/);
+ await fs.writeFile(path.join(folder,'.build.info'),'changed-build');const before=calls.length;await assert.rejects(resolveParticleSourceAssets(payload,{discover,casc}),/build changed/);assert.equal(calls.length,before);
+ assert.equal((await particleSourceState(async()=>({cascFolders:[]}),state.sourceKey)).state,'missing');
+});
+test('dependency namespaces stay in the source variant and preserve fallback order',async()=>{
+ const {particleDependencyCandidates}=await import('../electron/particle-library-worker.mjs');
+ assert.deepEqual(particleDependencyCandidates('Textures\\Smoke.blp','war3.w3mod:_teen.w3mod:Units\\Source.mdx'),['war3.w3mod:_teen.w3mod:Textures\\Smoke.blp','war3.w3mod:Textures\\Smoke.blp']);
+ assert.deepEqual(particleDependencyCandidates('war3.w3mod:_hd.w3mod:Exact.blp','war3.w3mod:Source.mdx'),['war3.w3mod:_hd.w3mod:Exact.blp']);
+});

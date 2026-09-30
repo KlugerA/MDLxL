@@ -37,7 +37,7 @@ export const particleBindings = Object.fromEntries(Object.entries(descriptions).
 export const primaryParticleFields = ['ParticleScaling','EmissionRate','Latitude','Speed','LifeSpan','Gravity'];
 const clone = value => structuredClone(value);
 export function particleAimAngles(emitter,options={}) {
-  const value=sampleTrack(emitter.Rotation,options.frame||0,{...options,globalTime:options.frame||0,fallback:[0,0,0,1],quaternion:true});
+  const value=sampleTrack(emitter.Rotation,options.frame||0,{...options,globalTime:options.globalTime??options.frame??0,fallback:[0,0,0,1],quaternion:true});
   return new Euler().setFromQuaternion(new Quaternion().fromArray(value).normalize(),'XYZ').toArray().slice(0,3).map(v=>v*180/Math.PI);
 }
 export function particleValue(emitter, field, options={}) {
@@ -45,10 +45,11 @@ export function particleValue(emitter, field, options={}) {
   if (field === 'ParticleScaling') return Number.isInteger(stage)?emitter.ParticleScaling?.[stage]||0:Math.max(0,...Array.from(emitter.ParticleScaling || [0,0,0]));
   if (field === 'Alpha'&&options.family!=='RibbonEmitters') return emitter.Alpha?.[stage??1]??255;
   if (field === 'SegmentColor') return Array.from(emitter.SegmentColor?.[stage??1]||[1,1,1]);
-  if(field==='Color')return Array.from(sampleTrack(emitter.Color,frame,{interval,globalSequences,globalTime:frame,fallback:[1,1,1]}));
+  if(field==='Color')return Array.from(sampleTrack(emitter.Color,frame,{interval,globalSequences,globalTime:options.globalTime??frame,fallback:[1,1,1]}));
   if (field === 'Rotation') return particleAimAngles(emitter,options)[axis];
   const value = emitter[field];
-  const sampled=typeof value==='number'?value:sampleTrack(value,frame,{interval,globalSequences,globalTime:frame,fallback:[field==='Visibility'?1:0]});
+  if(field==='EmissionRate'&&emitter.Squirt&&value?.Keys){const duration=globalSequences[value.GlobalSeqId],time=duration>0?(options.globalTime??frame)%duration:frame,range=duration>0?[0,duration]:interval;const events=value.Keys.filter(k=>k.Vector[0]>0&&(!range||k.Frame>=range[0]&&k.Frame<=range[1]));const key=events.sort((a,b)=>Math.abs(a.Frame-time)-Math.abs(b.Frame-time))[0];if(key)return key.Vector[0];}
+  const sampled=typeof value==='number'?value:sampleTrack(value,frame,{interval,globalSequences,globalTime:options.globalTime??frame,fallback:[field==='Visibility'?1:0]});
   return typeof sampled==='number'?sampled:sampled[0];
 }
 export function particleSliderDomain(field,value) {
@@ -60,9 +61,10 @@ export function beginParticleParameter(emitter, field, options = {}) {
   const baseline = clone(emitter[field]), sampled = particleValue(emitter,field,options);
   const track = baseline?.Keys ? baseline : null;
   const duration = options.globalSequences?.[track?.GlobalSeqId];
-  const time = duration > 0 ? ((options.frame||0)%duration+duration)%duration : Math.round(options.frame||0);
+  const time = duration > 0 ? ((options.globalTime??options.frame??0)%duration+duration)%duration : Math.round(options.frame||0);
   const interval = duration > 0 ? [0,duration] : options.interval;
-  const keys = track?.Keys.filter(key => !interval || key.Frame>=interval[0] && key.Frame<=interval[1]) || [];
+  let keys = track?.Keys.filter(key => !interval || key.Frame>=interval[0] && key.Frame<=interval[1]) || [];
+  if(field==='EmissionRate'&&emitter.Squirt&&keys.some(k=>k.Vector[0]>0))keys=keys.filter(k=>k.Vector[0]>0);
   const key = [...keys].sort((a,b)=>Math.abs(a.Frame-time)-Math.abs(b.Frame-time))[0];
   const keyTime = key?.Frame ?? time,angles=field==='Rotation'?particleAimAngles(emitter,options):null;
   return { field,baseline,sampled,keyTime,angles,options:clone({...options,interval}), value: sampled,
@@ -105,6 +107,7 @@ export function beginParticleParameter(emitter, field, options = {}) {
       if (options.scope === 'track') {
         const offsets=components.map((v,i)=>v-(Array.isArray(sampled)?sampled[i]:sampled));
         for(const point of next.Keys) if(!interval || point.Frame>=interval[0] && point.Frame<=interval[1]) {
+          if(field==='EmissionRate'&&emitter.Squirt&&point.Vector[0]===0)continue;
           for(let i=0;i<components.length;i++)point.Vector[i]+=offsets[i];
           // Bezier controls are points; Hermite tangents are derivatives.
           if(next.LineType===3) for(const tangent of ['InTan','OutTan'])if(point[tangent])for(let i=0;i<components.length;i++)point[tangent][i]+=offsets[i];

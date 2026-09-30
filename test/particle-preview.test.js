@@ -103,3 +103,10 @@ test('four atlas ranges repeat independently and non-square sheets use columns f
  const e=sim.native.particlesController.emitters[0];assert.ok(e.particles.length>0);
  assert.equal(e.headTexCoords[0],.25);assert.equal(e.headTexCoords[1],.5);assert.equal(e.tailTexCoords[0],.5);assert.equal(e.tailTexCoords[1],.5);
 });
+
+test('native PE2 replacement overrides only that emitter while retaining the shared texture resource',()=>{
+ const model=make(),p=model.ParticleEmitters2[0];p.ReplaceableId=2;const sim=new NativeParticleSimulation(model),controller=sim.native.particlesController,calls=[];
+ const before=structuredClone(sim.native.model.Textures);controller.shaderProgramLocations={replaceableTypeUniform:'replacement'};controller.gl=new Proxy({}, {get:(_,name)=>name.toUpperCase()===name?name:(...args)=>calls.push([name,...args])});
+ controller.setLayerProps(controller.emitters[0]);assert.ok(calls.some(c=>c[0]==='uniform1f'&&c[1]==='replacement'&&c[2]===2));assert.deepEqual(sim.native.model.Textures,before);
+ controller.emitters[0].props.ReplaceableId=0;calls.length=0;controller.setLayerProps(controller.emitters[0]);assert.ok(calls.some(c=>c[0]==='uniform1f'&&c[1]==='replacement'&&c[2]===0));
+});

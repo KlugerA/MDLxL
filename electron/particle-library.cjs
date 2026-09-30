@@ -3,6 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { Worker } = require('node:worker_threads');
 const THUMBNAIL_VERSION = 'native-4.0.1-authoring-3';
+const {particleSourceState}=require('./particle-source.cjs');
 const ID = /^(?:wc3-[a-f0-9]{24}|my-[a-f0-9-]{36})$/;
 const atomic = async(file,data) => {
   await fs.mkdir(path.dirname(file),{recursive:true});
@@ -34,7 +35,8 @@ class ParticleLibrary {
     }catch(error){if(error.code!=='ENOENT')throw error;}
     const thumbnails=await this.thumbnails(items.slice(0,36).map(item=>item.id));
     for(const item of items)if(thumbnails[item.id])item.thumbnail=thumbnails[item.id];
-    return {items:items.map(item=>({...item,...meta[item.id],favorite:!!meta[item.id]?.favorite})),coverage,status:this.status};
+    const sourceStatus=current?await particleSourceState(this.discover,current.sourceKey):null;
+    return {sourceStatus,items:items.map(item=>({...item,...meta[item.id],favorite:!!meta[item.id]?.favorite})),coverage,status:this.status};
   }
 
   async thumbnails(ids){

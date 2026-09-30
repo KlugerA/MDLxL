@@ -7,10 +7,10 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
   const sourceKey=JSON.parse(fs.readFileSync(path.join(sourceLibrary,'current.json'),'utf8')).sourceKey;
   for(const name of [sourceKey,'thumbnails']){fs.mkdirSync(path.join(sourceLibrary,name),{recursive:true});fs.symlinkSync(path.join(sourceLibrary,name),path.join(testLibrary,name),'junction');}
   const {createDemoDocument}=await import('../src/editor-document.js');const fixture=path.join(out,'target.mdx');fs.writeFileSync(fixture,Buffer.from(createDemoDocument().serialize('mdx')));
-  const app=await _electron.launch({executablePath:path.resolve('node_modules/electron/dist/electron.exe'),args:['--disable-backgrounding-occluded-windows',root,fixture],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:testProfile},timeout:60000});
+  let app=await _electron.launch({executablePath:path.resolve('node_modules/electron/dist/electron.exe'),args:['--disable-backgrounding-occluded-windows',root,fixture],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:testProfile},timeout:60000});
   const errors=[];
   try{
-    const page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
+    const page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept().catch(()=>{}));
     await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.webContents.setBackgroundThrottling(false);w.setSize(1400,920);w.setPosition(-3000,0);w.showInactive();});
     await page.waitForFunction(()=>window.desktop&&document.querySelector('.classic-toolbar'));
     await page.evaluate(async()=>{const settings=await window.desktop.getSettings();await window.desktop.configure({preferences:{...settings.preferences,graphics:{...settings.preferences.graphics,pauseWhenHidden:false}}});});
@@ -20,6 +20,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     console.log('opened');
     if(await page.getByRole('button',{name:'Close Particle Library',exact:true}).count())await page.getByRole('button',{name:'Close Particle Library',exact:true}).click();
     await page.locator('.pe-window').getByRole('button',{name:'New',exact:true}).click();
+    await page.getByRole('button',{name:'Soft sparks',exact:true}).click();
     if(await page.getByRole('button',{name:'Discard and open',exact:true}).count())await page.getByRole('button',{name:'Discard and open',exact:true}).click();
     await page.waitForTimeout(2200);
     console.log('snapshot',await page.evaluate(()=>{const el=document.querySelector('.pe-window');let fiber=el[Object.keys(el).find(k=>k.startsWith('__reactFiber'))];for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){const v=hook.memoizedState;if(v?.samples&&v?.guide)return {samples:v.samples.length,guide:v.guide,first:v.samples[0]};}return null;}));
@@ -111,6 +112,10 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     assert.notEqual(afterOpacity.model.ParticleEmitters2[0].Alpha[0],beforeOpacity.model.ParticleEmitters2[0].Alpha[0]);
     assert.equal(afterOpacity.model.ParticleEmitters2[0].Alpha[1],beforeOpacity.model.ParticleEmitters2[0].Alpha[1]);
     assert.equal(afterOpacity.undo,beforeOpacity.undo+1);
+    const middle=page.getByRole('slider',{name:'Middle changeover',exact:true}),middleBox=await middle.boundingBox(),beforeMiddle=await readLab();
+    await page.mouse.move(middleBox.x+middleBox.width/2,middleBox.y+middleBox.height/2);await page.mouse.down();await page.mouse.move(middleBox.x+middleBox.width/2+35,middleBox.y+middleBox.height/2,{steps:6});await page.mouse.up();
+    const afterMiddle=await readLab();assert.ok(afterMiddle.model.ParticleEmitters2[0].Time>beforeMiddle.model.ParticleEmitters2[0].Time);assert.equal(afterMiddle.undo,beforeMiddle.undo+1);
+    await middle.press('Home');assert.equal((await readLab()).model.ParticleEmitters2[0].Time,0);await middle.press('End');assert.equal((await readLab()).model.ParticleEmitters2[0].Time,1);
     await page.screenshot({path:path.join(out,'life-stage.png')});
     await page.getByRole('button',{name:'Basics',exact:true}).click();
     console.log('Mode preservation, stage ratio, width/aim ownership and single-step life opacity passed');
@@ -147,6 +152,18 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     console.log('Independent clocks, FX pause, relink, model preservation and compact layout passed');
 
 
+    await page.getByRole('button',{name:'Timing',exact:true}).click();
+    const beforeBurst=await readLab();await page.getByRole('button',{name:'Burst',exact:true}).click();assert.deepEqual((await readLab()).model.ParticleEmitters2[0].EmissionRate,beforeBurst.model.ParticleEmitters2[0].EmissionRate);
+    await page.getByRole('button',{name:'Place burst at playhead',exact:true}).click();
+    const impact=page.getByRole('slider',{name:'Impact moment',exact:true}),impactBox=await impact.boundingBox(),beforeImpact=await readLab();
+    await page.mouse.move(impactBox.x+impactBox.width*.3,impactBox.y+impactBox.height/2);await page.mouse.down();await page.mouse.move(impactBox.x+impactBox.width*.4,impactBox.y+impactBox.height/2,{steps:6});await page.mouse.up();
+    const afterImpact=await readLab();assert.equal(afterImpact.undo,beforeImpact.undo+1);assert.notDeepEqual(afterImpact.model.ParticleEmitters2[0].EmissionRate,beforeImpact.model.ParticleEmitters2[0].EmissionRate);
+    assert.equal(Object.values(afterImpact.model.ParticleEmitters2[0].EmissionRate.Keys).filter(k=>k.Vector[0]>0).length,1);
+    await page.screenshot({path:path.join(out,'burst-timing.png')});
+    await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).click();assert.deepEqual((await readLab()).model,beforeImpact.model);
+    await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).click();await page.locator('.pe-window').getByRole('button',{name:'Undo',exact:true}).click();assert.deepEqual((await readLab()).model,beforeBurst.model);
+    await page.getByRole('button',{name:'Play',exact:true}).click();
+    console.log('Direct life changeover endpoints and one-undo native burst timing passed');
     await page.getByRole('button',{name:'Picture',exact:true}).click();
     await page.getByRole('button',{name:'Add picture row',exact:true}).click();
     await page.getByRole('button',{name:'Add picture column',exact:true}).click();
@@ -162,7 +179,7 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     assert.equal((await readLab()).model.ParticleEmitters2[0].LifeSpanUVAnim[1],2);
     await page.getByRole('button',{name:'Compare blend looks',exact:true}).click();
     await page.waitForFunction(()=>document.querySelectorAll('.pe-blend-pair img').length===10,{},{timeout:30000});
-    await page.screenshot({path:path.join(out,'picture-blends.png')});
+    await page.locator('.pe-blend-pair').last().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'picture-blends.png')});
     await page.getByRole('button',{name:'Close comparison',exact:true}).click();
     const {starterTextureAsset}=await import('../src/particle-starters.js'),picture=path.join(out,'own-picture.tga');fs.writeFileSync(picture,starterTextureAsset().bytes);
     await app.evaluate(({dialog},picture)=>{global.__particleOpen=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[picture]});},picture);
@@ -243,6 +260,36 @@ const path=require('node:path'),fs=require('node:fs'),assert=require('node:asser
     await page.getByRole('button',{name:'Emit during this window',exact:true}).click();
     assert.ok((await readLab()).model.RibbonEmitters[0].Visibility.Keys.length>=2);
     console.log('Ribbon direct edges, demonstration isolation and native emission window passed');
+
+    await page.getByRole('button',{name:'Library',exact:true}).click();await page.getByRole('button',{name:'My presets',exact:true}).click();
+    const details=page.getByRole('button',{name:'Details for Portable picture sparks',exact:true});await details.click();
+    const tags=page.getByLabel('Effect tags',{exact:true});await tags.fill('portable, cyan, prototype');await tags.press('Tab');await page.waitForTimeout(150);
+    const exportFile=path.join(out,'portable-export.mdlxl-particle');
+    await app.evaluate(({dialog},file)=>{global.__save=dialog.showSaveDialog;dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},exportFile);
+    await page.getByRole('button',{name:'Export preset',exact:true}).click();await page.waitForTimeout(200);assert.ok(fs.existsSync(exportFile));
+    await app.evaluate(({dialog})=>{dialog.showSaveDialog=global.__save;delete global.__save;});
+    const exportData=fs.readFileSync(exportFile,'utf8');assert.deepEqual(JSON.parse(exportData).tags,['portable','cyan','prototype']);
+    await page.getByRole('button',{name:'Duplicate',exact:true}).click();await page.getByRole('button',{name:'Portable picture sparks copy',exact:true}).waitFor();
+    await app.evaluate(({dialog},file)=>{global.__open=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},exportFile);
+    await page.getByRole('button',{name:'Import preset…',exact:true}).click();await page.waitForTimeout(250);await app.evaluate(({dialog})=>{dialog.showOpenDialog=global.__open;delete global.__open;});
+    assert.equal(await page.getByRole('button',{name:'Portable picture sparks',exact:true}).count(),2);
+    await page.getByRole('button',{name:'Portable picture sparks copy',exact:true}).click();await page.getByRole('button',{name:'Discard and open',exact:true}).click();
+    await page.getByRole('button',{name:'Basics',exact:true}).click();
+    await page.getByRole('slider',{name:'Size',exact:true}).press('ArrowRight');
+    const recoveredExpected=await readLab();assert.equal(recoveredExpected.dirty,true);
+    // Exercise the native close handshake before the 800 ms autosave debounce.
+    const closed=app.waitForEvent('close');await app.evaluate(({BrowserWindow,dialog})=>{dialog.showMessageBoxSync=()=>2;BrowserWindow.getAllWindows()[0].close();});await closed;
+    const draft=JSON.parse(fs.readFileSync(path.join(testLibrary,'draft.json'),'utf8'));assert.equal(draft.recipe.embeddedAssets.length,1);
+    app=await _electron.launch({executablePath:path.resolve('node_modules/electron/dist/electron.exe'),args:['--disable-backgrounding-occluded-windows',root],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:testProfile},timeout:60000});
+    const reopened=await app.firstWindow();reopened.setDefaultTimeout(15000);reopened.on('pageerror',e=>errors.push(e.message));await reopened.waitForFunction(()=>window.desktop&&document.querySelector('.classic-toolbar'));
+    await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.webContents.setBackgroundThrottling(false);w.setSize(1400,920);w.setPosition(-3000,0);w.showInactive();w.webContents.send('menu','particles');});
+    await reopened.getByRole('button',{name:'Close Particle Library',exact:true}).click();
+    await reopened.waitForTimeout(800);
+    const recovered=await reopened.evaluate(()=>{let f=document.querySelector('.pe-window')[Object.keys(document.querySelector('.pe-window')).find(k=>k.startsWith('__reactFiber'))];for(;f;f=f.return)for(let h=f.memoizedState;h;h=h.next){const v=h.memoizedState;if(v?.doc?.model&&v.recipe)return {model:JSON.parse(JSON.stringify(v.doc.model)),undo:v.doc.historyStats.undoSteps,assets:v.assets.size};}});
+    assert.deepEqual(recovered.model,recoveredExpected.model);assert.equal(recovered.undo,recoveredExpected.undo);assert.ok(recovered.assets>0);
+    await reopened.screenshot({path:path.join(out,'recovered-lab.png')});
+    assert.equal(fs.readFileSync(exportFile,'utf8'),exportData,'Editing and recovery do not mutate the exported original');
+    console.log('Preset tags, duplicate, export/import, native-close draft flush and restarted Lab recovery passed');
     console.log('errors',errors);assert.deepEqual(errors,[]);
     fs.writeFileSync(path.join(out,'runtime.json'),JSON.stringify({state,errors},null,2));
   } catch(error){const failed=await app.firstWindow();console.error('ORIGINAL FAILURE',error);console.error('PAGE ERRORS',errors);console.error('FAILURE UI',(await failed.locator('body').innerText()).slice(-6000));await failed.screenshot({path:path.join(out,'failure.png')});throw error;} finally {await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
