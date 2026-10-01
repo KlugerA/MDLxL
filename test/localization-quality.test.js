@@ -60,6 +60,12 @@ test('all paint messages, commands, view controls, and particle controls have re
   }
 });
 
+test('model-tab clipboard command labels are translated without changing their shortcuts', () => {
+  for (const locale of ['ru', 'es', 'zh']) for (const label of ['Copy selection', 'Paste selection']) assert.notEqual(translate(label, locale), label);
+  assert.deepEqual(COMMANDS.find(command => command.id === 'copy').defaultKeys, ['Ctrl+C']);
+  assert.deepEqual(COMMANDS.find(command => command.id === 'paste').defaultKeys, ['Ctrl+V', 'Ctrl+P']);
+});
+
 test('Russian uses consistent editing terms and count-based grammar for singular and plural messages', () => {
   assert.equal(translate('Material Manager…', 'ru'), 'Редактор материалов…');
   assert.equal(translate('Review tint conflict', 'ru'), 'Проверить конфликт оттенков');

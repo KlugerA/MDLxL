@@ -32,13 +32,13 @@ test('desktop rescan retains native texture resolution, cached bytes and build i
   const handlers=new Map();
   const electron={
     nativeTheme:{themeSource:'light'},
-    app:{setName(){},setPath(){},getAppPath(){return root;},on(){},whenReady(){return {then(){}};}},
+    app:{setName(){},setPath(){},getAppPath(){return root;},requestSingleInstanceLock(){return true;},on(){},whenReady(){return {then(){}};}},
     ipcMain:{handle:(name,handler)=>handlers.set(name,handler),on(){}},
   };
   const context=vm.createContext({
     require:name=>name==='electron'?electron:name==='./casc.cjs'?{CascTextures:NativeFixtureTextures}:require(name),
     __dirname:path.dirname(mainFile),console,Buffer,setTimeout,clearTimeout,setImmediate,
-    process:{env:{MDLXL_PROFILE:profile},argv:[],execPath:process.execPath},
+    process:{env:{MDLXL_PROFILE:profile},argv:[],execPath:process.execPath,cwd(){return root;}},
     discovery:new GameDataDiscovery({cacheFile:path.join(profile,'discovery.json'),env:{},registry:async()=>[game],drives:async()=>[]}),
   });
   vm.runInContext(await fs.readFile(mainFile,'utf8'),context,{filename:mainFile});
