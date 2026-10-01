@@ -9,6 +9,6 @@ export function viewportPointIndices(count, selection = [], hidden = []) {
   return { unselected: other, selected: chosen };
 }
 
-export function viewportPointDepth(pureWireframe, xrayVertices) {
-  return { depthTest: !pureWireframe, showHidden: !pureWireframe && !!xrayVertices };
+export function viewportPointDepth(pureWireframe, xrayVertices, drawThrough = false) {
+  return { depthTest: !pureWireframe, showHidden: !pureWireframe && (!!xrayVertices || drawThrough) };
 }

@@ -27,11 +27,13 @@ function retainedBytes(value, seen = new Set()) {
 export function createChanges(before, after, { ignore = () => false } = {}) {
   const changes = [];
   const active = new Set();
+  const path = [];
   function same(left, right, path) {
     if (ignore(path) || Object.is(left, right)) return true;
     if (!left || !right || typeof left !== 'object' || typeof right !== 'object' || left.constructor !== right.constructor) return false;
     if (ArrayBuffer.isView(left) || left instanceof ArrayBuffer) {
       if (left.byteLength !== right.byteLength) return false;
+      if (equalTypedValues(left, right)) return true;
       const a = byteView(left), b = byteView(right);
       for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
       return true;
@@ -40,16 +42,24 @@ export function createChanges(before, after, { ignore = () => false } = {}) {
     const keys = Object.keys(left);
     return keys.length === Object.keys(right).length && keys.every((key) => own(right, key) && same(left[key], right[key], [...path, key]));
   }
-  function visit(left, right, path, leftExists = true, rightExists = true) {
+  function replace(left, right, leftExists, rightExists) {
+    changes.push({ kind: 'value', path: [...path], beforeExists: leftExists, afterExists: rightExists, before: copy(left), after: copy(right) });
+  }
+  function child(left, right, key, existsBefore, existsAfter) {
+    if (forbidden.has(key)) throw new Error(`Unsafe document property: ${key}.`);
+    if (existsBefore === existsAfter && Object.is(left[key], right[key])) return;
+    path.push(key); visit(left[key], right[key], existsBefore, existsAfter); path.pop();
+  }
+  function visit(left, right, leftExists = true, rightExists = true) {
     if (ignore(path) || leftExists === rightExists && Object.is(left, right)) return;
-    const replace = () => changes.push({ kind: 'value', path, beforeExists: leftExists, afterExists: rightExists, before: copy(left), after: copy(right) });
-    if (!leftExists || !rightExists || !left || !right || typeof left !== 'object' || typeof right !== 'object' || left.constructor !== right.constructor) { replace(); return; }
+    if (!leftExists || !rightExists || !left || !right || typeof left !== 'object' || typeof right !== 'object' || left.constructor !== right.constructor) { replace(left, right, leftExists, rightExists); return; }
     if (ArrayBuffer.isView(left) || left instanceof ArrayBuffer) {
-      if (left.byteLength !== right.byteLength) { replace(); return; }
+      if (left.byteLength !== right.byteLength) { replace(left, right, leftExists, rightExists); return; }
+      if (equalTypedValues(left, right)) return;
       const a = byteView(left), b = byteView(right);
       // Merge nearby byte edits, avoiding one JS allocation per changed float.
       let start = -1, last = -1;
-      const flush = () => { if (start >= 0) changes.push({ kind: 'bytes', path, offset: start, before: a.slice(start, last + 1), after: b.slice(start, last + 1) }); };
+      const flush = () => { if (start >= 0) changes.push({ kind: 'bytes', path: [...path], offset: start, before: a.slice(start, last + 1), after: b.slice(start, last + 1) }); };
       for (let i = 0; i < a.length; i++) {
         if (a[i] !== b[i]) { if (start < 0) start = i; last = i; }
         else if (start >= 0 && i - last > 32) { flush(); start = -1; }
@@ -63,22 +73,51 @@ export function createChanges(before, after, { ignore = () => false } = {}) {
       let start = 0, end = 0;
       while (start < Math.min(left.length, right.length) && same(left[start], right[start], [...path, String(start)])) start++;
       while (end < Math.min(left.length, right.length) - start && same(left[left.length - end - 1], right[right.length - end - 1], [...path, String(left.length - end - 1)])) end++;
-      changes.push({ kind: 'splice', path, index: start, before: copy(left.slice(start, left.length - end)), after: copy(right.slice(start, right.length - end)) });
+      changes.push({ kind: 'splice', path: [...path], index: start, before: copy(left.slice(start, left.length - end)), after: copy(right.slice(start, right.length - end)) });
       return;
     }
+    if (path.at(-1) === 'Keys' && Array.isArray(left) && equalAnimationKeys(left, right)) return;
     if (active.has(right)) throw new Error('Document history cannot store a cyclic model value.');
     active.add(right);
-    for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
-      if (forbidden.has(key)) throw new Error(`Unsafe document property: ${key}.`);
-      visit(left[key], right[key], [...path, key], own(left, key), own(right, key));
-    }
+    // Reuse the traversal path. Dense animation tracks otherwise allocate a
+    // Set and several path arrays for every unchanged keyframe on every edit.
+    for (const key in left) if (own(left, key)) child(left, right, key, true, own(right, key));
+    for (const key in right) if (own(right, key) && !own(left, key)) child(left, right, key, false, true);
     active.delete(right);
   }
   for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
     if (forbidden.has(key)) throw new Error(`Unsafe document property: ${key}.`);
-    visit(before[key], after[key], [key], own(before, key), own(after, key));
+    path.push(key); visit(before[key], after[key], own(before, key), own(after, key)); path.pop();
   }
   return changes;
+}
+
+// Most model arrays are unchanged. Compare their scalar values before creating
+// byte views for every tiny keyframe Vector; signed zero still differs and NaN
+// falls through to byte comparison so distinct payload bits remain lossless.
+function equalTypedValues(left, right) {
+  if (left.length === undefined || left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i++) if (!Object.is(left[i], right[i]) || left[i] !== left[i]) return false;
+  return true;
+}
+
+function equalAnimationKeys(left, right) {
+  let present = 0;
+  for (let i = 0; i < left.length; i++) {
+    if (own(left, i) !== own(right, i)) return false;
+    if (own(left, i)) present++;
+    const a = left[i], b = right[i];
+    if (Object.is(a, b)) continue;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || a.constructor !== b.constructor) return false;
+    for (const key in a) if (own(a, key)) {
+      if (forbidden.has(key) || !own(b, key)) return false;
+      if (Object.is(a[key], b[key])) continue;
+      if (!ArrayBuffer.isView(a[key]) || a[key].constructor !== b[key]?.constructor || !equalTypedValues(a[key], b[key])) return false;
+    }
+    for (const key in b) if (own(b, key) && !own(a, key)) return false;
+  }
+  // Named array properties are uncommon, but must still use the general diff.
+  return Object.keys(left).length === present && Object.keys(right).length === present;
 }
 
 function validateChange(change) {

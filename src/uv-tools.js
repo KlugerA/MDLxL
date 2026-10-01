@@ -185,18 +185,27 @@ export function uncoupleUVVertices(geoset, indices, uvSet = 0) {
 
 const transform4 = (matrix, vector) => [0, 1, 2, 3].map(row => matrix[row] * vector[0] + matrix[4 + row] * vector[1] + matrix[8 + row] * vector[2] + matrix[12 + row] * vector[3]);
 
-/** Planar projection from the exact live-preview camera viewport, matching the
- * classic select-view-project workflow. Warcraft V remains top-down. */
+/** Planar projection from the exact live-preview camera viewport. Keep the UV
+ * selection anchored at its current center while the user's view controls its
+ * orientation and scale. Warcraft V remains top-down. */
 export function projectUVFromView(geoset, indices, viewMatrix, projectionMatrix, source = geoset?.TVertices?.[0]) {
   if (![viewMatrix, projectionMatrix].every(matrix => matrix?.length === 16 && Array.from(matrix).every(Number.isFinite))) throw Error('Rotate the live preview before projecting.');
   const selected = uniqueIndices(indices), next = new Float32Array(source || []), count = geoset?.Vertices?.length / 3;
   if (!selected.length || selected.some(index => index >= count || index * 2 + 1 >= next.length)) throw Error('Select valid UV vertices before projecting.');
+  const sourceCenter = [0, 0], projectedCenter = [0, 0], projected = [];
   for (const index of selected) {
     const point = Array.from(geoset.Vertices.subarray(index * 3, index * 3 + 3));
     const clip = transform4(projectionMatrix, transform4(viewMatrix, [...point, 1]));
     if (!Number.isFinite(clip[3]) || Math.abs(clip[3]) < 1e-8) throw Error('The selected vertices cannot be projected from this view.');
-    next[index * 2] = (clip[0] / clip[3] + 1) / 2;
-    next[index * 2 + 1] = (1 - clip[1] / clip[3]) / 2;
+    const uv = [(clip[0] / clip[3] + 1) / 2, (1 - clip[1] / clip[3]) / 2];
+    projected.push(uv); sourceCenter[0] += next[index * 2]; sourceCenter[1] += next[index * 2 + 1];
+    projectedCenter[0] += uv[0]; projectedCenter[1] += uv[1];
+  }
+  for (const center of [sourceCenter, projectedCenter]) { center[0] /= selected.length; center[1] /= selected.length; }
+  for (let position = 0; position < selected.length; position++) {
+    const index = selected[position], uv = projected[position];
+    next[index * 2] = sourceCenter[0] + uv[0] - projectedCenter[0];
+    next[index * 2 + 1] = sourceCenter[1] + uv[1] - projectedCenter[1];
   }
   return next;
 }

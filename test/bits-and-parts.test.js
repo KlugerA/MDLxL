@@ -72,7 +72,7 @@ test('Forge first and replacement after normal reassign/delete use the current s
   assert.throws(() => doc.apply('Delete bound bone', [], model => deleteNode(model, first.boneId)), /Reassign/);
   doc.apply('Reassign then delete', [], model => { for (const gi of [...first.geosetIndices, ...part.geosetIndices]) model.Geosets[gi].Groups = [[0]]; deleteNode(model, first.boneId); });
   previewPart(source, colors[1]); assert.equal(doc.model.Bones.filter(bone => bone.Name === 'DummyBone').length, 0);
-  const replacement = doc.apply('Part after deletion', [], model => commitPart(model, source)); assert.notEqual(replacement.boneId, first.boneId);
+  const replacement = doc.apply('Part after deletion', [], model => commitPart(model, source)); assert.equal(replacement.boneId, first.boneId, 'the canonical bone slot is safely reusable after deletion');
   assert.equal(doc.model.Bones.filter(bone => bone.Name === 'DummyBone').length, 1);
   assert.deepEqual(doc.model.Geosets[first.geosetIndices[0]].Groups, [[0]]);
 });

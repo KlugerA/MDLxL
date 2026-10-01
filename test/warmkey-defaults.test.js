@@ -11,7 +11,7 @@ test('every core action has a unique default and original MDLVis shortcuts retai
     assert.ok(action.defaultKeys.length, `${action.id} needs a default`);
     for (const key of action.defaultKeys) { assert.equal(assigned.has(key), false, `${key} already belongs to ${assigned.get(key)}`); assigned.set(key, action.id); }
   }
-  for (const [key, action] of Object.entries({ A:'select', M:'translate', Q:'translate', R:'rotate', Z:'scale', W:'cameraToggle', T:'Create triangle', U:'Uncouple', C:'Collapse', B:'Weld', F:'frame', '`':'frame', S:'frameSelection', F1:'vertices', F2:'uv', F3:'animation', 'Ctrl+Z':'undo', 'Ctrl+Y':'redo', 'Ctrl+C':'copy', 'Ctrl+V':'paste', 'Ctrl+A':'selectAll' })) assert.equal(assigned.get(key), action);
+  for (const [key, action] of Object.entries({ A:'select', M:'translate', Q:'translate', R:'rotate', Z:'scale', W:'cameraToggle', T:'Create triangle', U:'Uncouple', C:'Collapse', B:'Weld', F:'frame', '`':'frame', S:'frameSelection', F1:'vertices', F2:'uv', F3:'animation', 'Ctrl+Z':'undo', 'Ctrl+Y':'redo', 'Ctrl+C':'copy', 'Ctrl+V':'paste', 'Ctrl+P':'paste', 'Ctrl+A':'selectAll' })) assert.equal(assigned.get(key), action);
   assert.equal(assigned.get('N'), 'normals'); // Final patch explicitly assigns normal visibility.
   assert.equal(assigned.get('1'), 'anchorSelect');
   for (const key of ['H', 'K', 'Ctrl+X', 'Ctrl+B']) assert.equal(assigned.has(key), false, `${key} is reserved by original MDLVis`);

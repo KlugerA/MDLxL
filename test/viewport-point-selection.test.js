@@ -15,4 +15,5 @@ test('wireframe vertices render once above lines while General View preserves de
   assert.deepEqual(viewportPointDepth(true, true), { depthTest: false, showHidden: false });
   assert.deepEqual(viewportPointDepth(false, false), { depthTest: true, showHidden: false });
   assert.deepEqual(viewportPointDepth(false, true), { depthTest: true, showHidden: true });
+  assert.deepEqual(viewportPointDepth(false, false, true), { depthTest: true, showHidden: true }, 'Grabthrough draws occluded textured vertices');
 });

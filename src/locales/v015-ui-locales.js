@@ -2,6 +2,8 @@
 // and UV scroll work. Keep this version-scoped so the community Chinese
 // catalog remains byte-for-byte intact while new UI receives full coverage.
 const rows = [
+  ['Copy selection', 'Копировать выделение', 'Copiar selección', '复制所选内容'],
+  ['Paste selection', 'Вставить выделение', 'Pegar selección', '粘贴所选内容'],
   ['Particle Editor', 'Редактор частиц', 'Editor de partículas', '粒子编辑器'],
   ['Emitter Editor', 'Редактор эмиттеров', 'Editor de emisores', '发射器编辑器'],
   ['Particle Library', 'Библиотека частиц', 'Biblioteca de partículas', '粒子库'],
