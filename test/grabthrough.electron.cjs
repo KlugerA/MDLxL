@@ -7,7 +7,10 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
   const output = path.resolve('out/grabthrough-ui'); fs.mkdirSync(output, { recursive: true });
   const { createStarterDocument } = await import('../src/starter-model.js');
   const fixture = path.join(output, 'grabthrough.mdx');
-  fs.writeFileSync(fixture, Buffer.from(createStarterDocument().serialize('mdx')));
+  const fixtureDocument = createStarterDocument(), fixtureGeoset = fixtureDocument.model.Geosets[0], fixtureVertices = fixtureGeoset.Vertices;
+  [[0, 20, -18], [0, 28, -18], [0, 20, -10], [0, 28, -10]].forEach((point, index) => fixtureVertices.set(point, [0, 3, 4, 7][index] * 3));
+  fixtureGeoset.Faces = new Uint32Array([1, 2, 6, 1, 6, 5]);
+  fs.writeFileSync(fixture, Buffer.from(fixtureDocument.serialize('mdx')));
   const app = await _electron.launch({
     executablePath: path.resolve('node_modules/electron/dist/electron.exe'),
     args: ['--disable-backgrounding-occluded-windows', process.cwd(), fixture],
@@ -24,6 +27,20 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
       await page.mouse.up();
     };
     const selectedCount = async () => Number(await page.locator('.classic-counts>div').nth(1).locator('span').textContent());
+    const selectedPixels = async (locator, name) => {
+      await page.waitForTimeout(100);
+      const png = await locator.screenshot({ path: path.join(output, name) });
+      return page.evaluate(async source => {
+        const bytes = Uint8Array.from(atob(source), value => value.charCodeAt(0));
+        const image = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+        const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+        const context = canvas.getContext('2d'); context.drawImage(image, 0, 0); image.close();
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let count = 0;
+        for (let offset = 0; offset < pixels.length; offset += 4) if (pixels[offset] > 200 && pixels[offset + 1] < 80 && pixels[offset + 2] < 80 && pixels[offset + 3] > 200) count++;
+        return count;
+      }, png.toString('base64'));
+    };
     await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]; window.webContents.setBackgroundThrottling(false); window.setPosition(-3000, 0); window.showInactive(); });
     await page.getByRole('button', { name: 'Quad View', exact: true }).waitFor({ timeout: 60000 });
     const vertexToggle = page.getByLabel('Grabthrough');
@@ -35,6 +52,11 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await vertexToggle.check(); assert.equal(await vertexToggle.isChecked(), true);
     await marqueeAll(page.getByLabel('3D model viewport'));
     assert.equal(await selectedCount(), 8, 'Vertex Grabthrough selects the hidden rear vertices');
+    await vertexToggle.uncheck();
+    const vertexOccluded = await selectedPixels(page.getByLabel('3D model viewport'), 'vertex-grabthrough-off.png');
+    await vertexToggle.check();
+    const vertexDrawThrough = await selectedPixels(page.getByLabel('3D model viewport'), 'vertex-grabthrough-on.png');
+    assert.ok(vertexDrawThrough > vertexOccluded, `Vertex Grabthrough draws the occluded selected vertices through Textured View (${vertexOccluded} -> ${vertexDrawThrough} red pixels)`);
     await vertexToggle.uncheck();
     await page.screenshot({ path: path.join(output, 'vertex-grabthrough.png') });
 
@@ -57,6 +79,23 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
 
     await page.getByRole('button', { name: 'Bones', exact: true }).click();
     await page.getByLabel('Bones controller').waitFor();
+    await page.getByLabel('Grabthrough').uncheck();
+    const previewState = () => page.locator('.game-preview-root').evaluate(element => {
+      let fiber = element[Object.keys(element).find(key => key.startsWith('__reactFiber'))], top = fiber;
+      while (top.return) top = top.return;
+      fiber = top.stateNode.current === top ? fiber : fiber.alternate || fiber;
+      for (; fiber; fiber = fiber.return) if (fiber.memoizedProps?.model && fiber.memoizedProps?.preferences) return {
+        mode: fiber.memoizedProps.mode, grabThrough: fiber.memoizedProps.grabThrough,
+        xrayVertices: fiber.memoizedProps.preferences.viewportAppearance.xrayVertices,
+      };
+      throw Error('GamePreview props not found');
+    });
+    assert.deepEqual(await previewState(), { mode: 'textured', grabThrough: false, xrayVertices: false });
+    const bonesOccluded = await selectedPixels(page.locator('.game-preview-root'), 'bones-grabthrough-off.png');
+    await page.getByLabel('Grabthrough').check();
+    assert.deepEqual(await previewState(), { mode: 'textured', grabThrough: true, xrayVertices: false });
+    const bonesDrawThrough = await selectedPixels(page.locator('.game-preview-root'), 'bones-grabthrough-on.png');
+    assert.ok(bonesDrawThrough > bonesOccluded, `Bones Grabthrough draws the occluded selected vertices through Textured View (${bonesOccluded} -> ${bonesDrawThrough} red pixels)`);
     await page.screenshot({ path: path.join(output, 'bones-grabthrough.png') });
 
     await page.getByRole('button', { name: 'Movement', exact: true }).click();
