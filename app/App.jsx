@@ -148,7 +148,7 @@ export default function App() {
   const timelineCommands = useRef({});
   const registerTimelineCommands = useCallback(value=>{timelineCommands.current=value;},[]);
   const preferencesRef = useRef(preferences); preferencesRef.current = preferences;
-  const savedPreferences = useRef(null), preferencesTimer = useRef(), saveBeforeCloseRef = useRef(async () => false);
+  const savedPreferences = useRef(null), preferencesTimer = useRef(), saveBeforeCloseRef = useRef(async () => false), modelOpenQueue = useRef(Promise.resolve());
   function changePreferences(next) { const value = normalizePreferences(typeof next === 'function' ? next(preferencesRef.current) : next); preferencesRef.current = value; setPreferences(value); }
   const changeSensitivity = value => changePreferences({ ...preferencesRef.current, scrollSensitivity: value });
   const changePointerSensitivity = value => changePreferences({ ...preferencesRef.current, pointerSensitivity: value });
@@ -282,7 +282,7 @@ export default function App() {
   const selectionHistory = useMemo(() => new SelectionHistory(doc), [doc]);
   const selectionState = { selectable, selection, hidden, activeGeoset, uvSet, selectedNodeIds };
   useLayoutEffect(() => { if (selectionHistory.observe(selectionState)) setTick(value => value + 1); }, [selectionHistory, selectable, selection, hidden, activeGeoset, uvSet, selectedNodeIds, doc.revision]);
-  latest.current = { session, sessions, showcaseSession, doc, model, selection, selectable, hidden, mode, dialog, settingsTab, preferencesReady };
+  latest.current = { session, sessions, showcaseSession, doc, model, selection, selectable, hidden, mode, animationPanel, activeGeoset, uvSet, selectedNodeIds, globalSeqId, sequence, time, rgbPreview, rgbSequence, renderMode, showAllGeosets, dialog, settingsTab, preferencesReady };
   const refresh = () => setTick(value => value + 1);
   const say = (message, error = false) => setStatus((error ? 'Error: ' : '') + message);
   const selectBackground = value => { setBackground(value); localStorage.setItem('mdlvis-preview-background', value); };
@@ -569,7 +569,8 @@ export default function App() {
   }
   function rememberSessionView(target = session) {
     if (!target) return;
-    target.viewState = { mode, animationPanel, selectable: new Set(selectable), selection: structuredClone(selection), hidden: structuredClone(hidden), activeGeoset, uvSet, selectedNodeIds: [...selectedNodeIds], globalSeqId, sequence, time, rgbPreview, rgbSequence, renderMode, showAllGeosets };
+    const view=target===latest.current.session?latest.current:{ mode, animationPanel, selectable, selection, hidden, activeGeoset, uvSet, selectedNodeIds, globalSeqId, sequence, time, rgbPreview, rgbSequence, renderMode, showAllGeosets };
+    target.viewState = { mode:view.mode, animationPanel:view.animationPanel, selectable:new Set(view.selectable), selection:structuredClone(view.selection), hidden:structuredClone(view.hidden), activeGeoset:view.activeGeoset, uvSet:view.uvSet, selectedNodeIds:[...view.selectedNodeIds], globalSeqId:view.globalSeqId, sequence:view.sequence, time:view.time, rgbPreview:view.rgbPreview, rgbSequence:view.rgbSequence, renderMode:view.renderMode, showAllGeosets:view.showAllGeosets };
   }
   function restoreSessionView(target) {
     const viewState = target.viewState || (target.viewState = defaultSessionView(target.doc));
@@ -631,6 +632,10 @@ export default function App() {
       }
       const opened = openDocument(bytes, record.name); if (!opened.model || opened.version == null) throw new Error('This file has no readable model header. The current model was kept.'); install(newSession(opened, record.path || null));
     } catch (error) { say(error.message, true); }
+  }
+  function queueModelRecords(records) {
+    modelOpenQueue.current=modelOpenQueue.current.catch(()=>{}).then(async()=>{for(const record of records||[]){await loadFile(record);await new Promise(resolve=>requestAnimationFrame(resolve));}});
+    return modelOpenQueue.current;
   }
   async function loadShowcaseModel(record){
     try{
@@ -1046,7 +1051,8 @@ export default function App() {
   const menuChecks = {shaded:overlays.shaded,'display:bones':overlays.bones,'display:skeleton':overlays.skeleton,'display:focusedSkeleton':overlays.focusedSkeleton,'display:wires':overlays.wires,'display:nodes':overlays.nodes,'display:attachments':overlays.attachments,'display:particles':overlays.particles,showVertices:overlays.vertices,grid:overlays.grid,normals:overlays.normals};
   useEffect(()=>{window.desktop?.setMenuState?.({readOnly:doc.readOnly,saving,viewMode:displayMode,checks:menuChecks,uvEnabled:commandEnabled('uv')});},[doc.readOnly,saving,displayMode,JSON.stringify(menuChecks),selectionCount,activeGeoset]);
   useEffect(() => window.desktop?.onMenu(action => { if (action?.action === 'openRecent') { if (!latest.current.dialog && !latest.current.settingsTab) commands.current.openRecent(action.path); return; } if(['exit',...settingsCommands].includes(action) || (!latest.current.dialog && !latest.current.settingsTab)) runLatest.current(action); }), []);
-  useEffect(() => { const boot = session.id; window.desktop?.initial?.().then(async initial => { settings.current = initial.settings || {}; setGameDataPath(settings.current.gameData || ''); const persisted=normalizePreferences(settings.current.preferences || preferencesRef.current); savedPreferences.current=JSON.stringify(persisted); changePreferences(persisted); const current = latest.current.session; current.doc.configureHistory({ budgetBytes: settings.current.historyBudgetBytes ?? 512 * 1048576, maxSteps: settings.current.historyMaxSteps ?? 10000 }); setRecoveries(initial.recovery || []); if (initial.model && current.id === boot && !current.doc.dirty) await loadFile(initial.model); else refresh(); setPreferencesReady(true); if(initial.recoveryPrompt && initial.recovery?.length)setDialog({type:'recovery'}); }).catch(error => { setPreferencesReady(true); say(error.message, true); }); }, []);
+  useEffect(() => { const boot = session.id; window.desktop?.initial?.().then(async initial => { settings.current = initial.settings || {}; setGameDataPath(settings.current.gameData || ''); const persisted=normalizePreferences(settings.current.preferences || preferencesRef.current); savedPreferences.current=JSON.stringify(persisted); changePreferences(persisted); const current = latest.current.session; current.doc.configureHistory({ budgetBytes: settings.current.historyBudgetBytes ?? 512 * 1048576, maxSteps: settings.current.historyMaxSteps ?? 10000 }); setRecoveries(initial.recovery || []); const records=initial.models?.length?initial.models:initial.model?[initial.model]:[]; if(records.length&&current.id===boot&&!current.doc.dirty)await queueModelRecords(records); else refresh(); setPreferencesReady(true); if(initial.recoveryPrompt && initial.recovery?.length)setDialog({type:'recovery'}); }).catch(error => { setPreferencesReady(true); say(error.message, true); }); }, []);
+  useEffect(() => window.desktop?.onExternalModels?.(records => { queueModelRecords(records).catch(error=>say(error.message,true)); }), []);
   const hasUnsavedWork=doc.dirty||hasUVPreview||hasTrackDrafts||hasPaintChanges;
   const hasAnyUnsavedWork=sessions.some(sessionDirty);
   async function saveSessionWork(target, includeNeverSaved = false) {

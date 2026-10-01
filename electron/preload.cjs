@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld('desktop', {
   particleCancel: () => ipcRenderer.invoke('particles:cancel'),
   onParticleProgress: callback => {const listener=(_,data)=>callback(data);ipcRenderer.on('particles:progress',listener);return ()=>ipcRenderer.removeListener('particles:progress',listener);},
   initial: () => ipcRenderer.invoke('app:initial'),
+  onExternalModels: callback => {
+    const listener=(_,records)=>callback(records);
+    ipcRenderer.on('model:externalOpen',listener);ipcRenderer.send('model:externalReady',true);
+    return ()=>{ipcRenderer.send('model:externalReady',false);ipcRenderer.removeListener('model:externalOpen',listener);};
+  },
   configure: payload => ipcRenderer.invoke('settings:configure',payload),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   close: () => ipcRenderer.send('app:close'),
