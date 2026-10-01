@@ -1,4 +1,4 @@
-# MDLxL 0.15.1
+# MDLxL 0.15.2
 
 Warcraft III model editor. This source continues the requested MDLVis rebuild lane, with the MDLxL name and icon.
 
@@ -6,7 +6,7 @@ For the Windows release, extract the whole ZIP and run MDLxL.exe. Keep its resou
 
 For source development, use Node.js 22.12 or newer and pnpm. Run `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run build`, then `pnpm start` to launch the desktop app directly from the checkout. `pnpm run dev` starts browser development. After building, `pnpm run package` creates the Windows package under `release/MDLxL-win32-x64`. No installer is required.
 
-Version 0.15.1 translates the Particle Editor, EMTR workflow, ribbon tools, emitter controls, effect library, Bones/Helpers organization, Delete free vertices, and related messages into Russian, Spanish, Chinese, and the existing Mordor mode. See [the 0.15.1 release notes](docs/RELEASE-0.15.1.md). The 56 compatibility regression tests run with `pnpm test`; the restored historical suite runs separately with `pnpm run test:source`. See [the compatibility fix status](docs/MDL-MDX-COMPATIBILITY-FIXES.md) for coverage and limitations. After pulling source changes, rebuild before launching: `pnpm run build`, then `pnpm start`.
+Version 0.15.2 keeps Texture Library name searches responsive while Vibe indexing continues and adds the Grabthrough selection toggle to Vertices and Bones. See [the 0.15.2 release notes](docs/RELEASE-0.15.2.md). The 56 compatibility regression tests run with `pnpm test`; the restored historical suite runs separately with `pnpm run test:source`. See [the compatibility fix status](docs/MDL-MDX-COMPATIBILITY-FIXES.md) for coverage and limitations. After pulling source changes, rebuild before launching: `pnpm run build`, then `pnpm start`.
 
 See `docs/ADDONS.md` for add-ons and `THIRD_PARTY_NOTICES.md` for component credits.
 
