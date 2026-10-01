@@ -27,7 +27,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     fs.mkdirSync(profile, { recursive: true });
     fs.writeFileSync(path.join(profile, 'settings.json'), JSON.stringify({ preferences: { language } }));
     const app = await _electron.launch({
-      executablePath: path.resolve('node_modules/electron/dist/electron.exe'),
+      executablePath: process.env.MDLXL_ELECTRON_PATH || path.resolve('node_modules/electron/dist/electron.exe'),
       args: ['--disable-backgrounding-occluded-windows', process.cwd(), file],
       env: { ...process.env, MDLVIS_HEADLESS: '1', MDLXL_PROFILE: profile }, timeout: 60000,
     });
@@ -78,16 +78,21 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
       assert.ok(windowLabels.includes(translate('Material Manager…', locale)), `${locale}: ${JSON.stringify(windowLabels)}`);
       assert.equal(await page.evaluate(() => JSON.stringify(testDocument().model)), before, `${locale}: language must not mutate the model`);
       assert.deepEqual(await page.locator('.classic-sidebar').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width)), widths);
-      if (locale === 'ru' || locale === 'es') {
+      if (locale !== 'en') {
         await page.screenshot({ path: path.join(output, `${locale}-editor.png`) });
         await sendMenu(app, 'particles');
         const dialog = page.getByRole('dialog', { name: translate('Particle Editor', locale), exact: true });
         await dialog.waitFor();
-        const name = dialog.getByLabel(translate('Name', locale), { exact: true });
+        await dialog.getByRole('button', { name: translate('Close Particle Library', locale), exact: true }).click();
+        await dialog.getByLabel(translate('Particle context', locale), { exact: true }).selectOption('On model');
+        await dialog.getByLabel(translate('Particle editor mode', locale), { exact: true }).selectOption('Classic');
+        const name = dialog.locator('input[type="text"][value="Materials"]');
         assert.equal(await name.inputValue(), 'Materials', 'user emitter names stay literal');
-        await dialog.getByRole('button', { name: translate('Pause', locale), exact: true }).waitFor();
-        await dialog.getByLabel(translate('Rotate X (degrees)', locale), { exact: true }).focus();
-        await dialog.getByRole('button', { name: translate('Play', locale), exact: true }).waitFor();
+        const transport = dialog.locator('.pe-transport button').first();
+        assert.equal(await transport.textContent(), translate('Pause', locale));
+        await transport.click();
+        await dialog.locator('[data-particle-rotation] input[type="number"]').first().focus();
+        assert.equal(await transport.textContent(), translate('Play', locale));
         assert.equal(await dialog.locator('[data-particle-rotation]').count(), 1);
         await page.screenshot({ path: path.join(output, `${locale}-particles.png`) });
         await dialog.getByRole('button', { name: translate('Close Particle Editor', locale), exact: true }).click();
@@ -112,6 +117,6 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
   assert.deepEqual(fs.readFileSync(fixture), original);
   assert.deepEqual(fs.readFileSync(repairFixture), repairOriginal);
   assert.deepEqual(failures, [], 'No renderer exceptions');
-  console.log('PASS: seven language switches, translated native menus, unchanged model data/sidebar widths, particle rotation pause, and tint-conflict focus in Russian and Spanish.');
+  console.log('PASS: seven language switches, translated native menus, unchanged model data/sidebar widths, particle controls in Russian, Spanish, Chinese and Mordor, and tint-conflict focus in Russian and Spanish.');
   console.log(`Screenshots: ${output}`);
 })().catch(error => { console.error(error); process.exitCode = 1; });
