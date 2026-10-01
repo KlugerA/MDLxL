@@ -8,6 +8,8 @@ import {
 } from '../src/movement.js';
 import { movementSelectionSummary } from '../src/movement-selection.js';
 import { applyPortraitModelTransform } from '../src/portrait-model-control.js';
+import { HELPER_LIST_COLOR, rigNodeListGroups, rigNodeListKind } from '../src/rig-node-order.js';
+import { visualOptions } from '../src/preferences.js';
 import './movement.css';
 import ModernIcon from './ModernIcon.jsx';
 import BoneToolIcon from './BoneToolIcon.jsx';
@@ -45,13 +47,14 @@ function PositionField({ axis, value, disabled, onCommit }) {
 }
 
 
-export default function MovementController({ model, revision = 0, sequenceIndex = -1, time = 0, selectedNodeIds = [], selectionByGeoset = {}, onSelectNodes, onEdit, onVertexTransform, onPlayingChange, transformMode = 'move', onTransformMode, transformSpace = 'local', onTransformSpace, rotateOnOwnAxis = false, onRotateOnOwnAxis, onOpenNodeManager, onOpenEmitter, globalSeqId = null, onTimelineChange, highlightKeyframes = false, onHighlightKeyframes, highlightChain = false, onHighlightChain, disabled = false, restPose = false, multiple, onMultiple, workplaneEnabled = false, onWorkplaneEnabled, workplane = 'xy', onWorkplane, restrictions = {}, onRestrictions, portraitMode = false, controlModel = false, portraitCameraIndex = 0, onPortraitCameraIndex, onPortraitNew, onPortraitUpdate, onDeleteNode, onRenameNode, onBillboarded, onCreateRigNode, onAttach, onDetach, onSoftBind, onHardBind, onDetachVertices, attachActive = false, createOpen = false, onCreateOpen, canDeleteNode = false, canAttach = false, canDetach = false, canBind = false }) {
+export default function MovementController({ model, revision = 0, sequenceIndex = -1, time = 0, selectedNodeIds = [], selectionByGeoset = {}, onSelectNodes, onEdit, onVertexTransform, onPlayingChange, transformMode = 'move', onTransformMode, transformSpace = 'local', onTransformSpace, rotateOnOwnAxis = false, onRotateOnOwnAxis, onOpenNodeManager, onOpenEmitter, globalSeqId = null, onTimelineChange, highlightKeyframes = false, onHighlightKeyframes, highlightChain = false, onHighlightChain, preferences, disabled = false, restPose = false, multiple, onMultiple, workplaneEnabled = false, onWorkplaneEnabled, workplane = 'xy', onWorkplane, restrictions = {}, onRestrictions, portraitMode = false, controlModel = false, portraitCameraIndex = 0, onPortraitCameraIndex, onPortraitNew, onPortraitUpdate, onDeleteNode, onRenameNode, onBillboarded, onCreateRigNode, onAttach, onDetach, onSoftBind, onHardBind, onDetachVertices, attachActive = false, createOpen = false, onCreateOpen, canDeleteNode = false, canAttach = false, canDetach = false, canBind = false }) {
   const [localMultiple, setLocalMultiple] = useState(false), [values, setValues] = useState([0, 0, 0]), [error, setError] = useState('');
   const [curveOpen, setCurveOpen] = useState(false), [curve, setCurve] = useState({ tension: 0, continuity: 0, bias: 0 });
   const [incoming, setIncoming] = useState(''), [outgoing, setOutgoing] = useState('');
   const [nameText, setNameText] = useState(''), cancelName = useRef(false), createAnchor = useRef(null);
   const multiselect = multiple ?? localMultiple;
   const nodes = useMemo(() => allNodes(model), [model, revision]);
+  const nodeGroups = useMemo(() => rigNodeListGroups(model), [model, revision]);
   const selected = nodes.filter(node => selectedNodeIds.includes(node.ObjectId));
   const selectedBone = selected.length === 1 && model.Bones?.some(bone => bone.ObjectId === selected[0].ObjectId) ? selected[0] : null;
   useEffect(() => setNameText(selected.length === 1 ? selected[0].Name || '' : ''), [selected.length, selected[0]?.ObjectId, selected[0]?.Name, revision]);
@@ -129,7 +132,16 @@ export default function MovementController({ model, revision = 0, sequenceIndex 
     if (!restPose || selected.length !== 1 || nameText === selected[0].Name) return;
     if (onRenameNode?.(selected[0].ObjectId, nameText) === false) setNameText(selected[0].Name || '');
   };
-  const nodePicker = <select className="movement-object-picker" aria-label="Movement bone or node" title={selected.map(node => node.Name || `Node ${node.ObjectId}`).join(', ')} value={selected.length === 1 ? selected[0].ObjectId : ''} onChange={chooseNode}><option value="">{selected.length > 1 ? `${selected.length} objects selected` : 'No selection'}</option>{nodes.map(node => <option key={node.ObjectId} value={node.ObjectId} translate="no">{selectedNodeIds.includes(node.ObjectId) ? '✓ ' : ''}{node.Name || `Node ${node.ObjectId}`}</option>)}</select>;
+  const selectedKind = selected.length === 1 ? rigNodeListKind(model, selected[0]) : null;
+  const boneListColor = visualOptions(preferences).bone;
+  const listColor = selectedKind === 'bone' ? boneListColor : selectedKind === 'helper' ? HELPER_LIST_COLOR : undefined;
+  const option = (node, color) => <option key={node.ObjectId} value={node.ObjectId} translate="no" style={{ color }}>{selectedNodeIds.includes(node.ObjectId) ? '✓ ' : ''}{node.Name || `Node ${node.ObjectId}`}</option>;
+  const nodePicker = <select className="movement-object-picker" data-node-kind={selectedKind || undefined} style={listColor ? { color: listColor } : undefined} aria-label="Movement bone or node" title={selected.map(node => node.Name || `Node ${node.ObjectId}`).join(', ')} value={selected.length === 1 ? selected[0].ObjectId : ''} onChange={chooseNode}>
+    <option value="">{selected.length > 1 ? `${selected.length} objects selected` : 'No selection'}</option>
+    {!!nodeGroups.bones.length && <optgroup label="Bones" style={{ color: boneListColor }}>{nodeGroups.bones.map(node => option(node, boneListColor))}</optgroup>}
+    {!!nodeGroups.others.length && <optgroup label="Other Objects">{nodeGroups.others.map(node => option(node, undefined))}</optgroup>}
+    {!!nodeGroups.helpers.length && <optgroup label="Helpers" style={{ color: HELPER_LIST_COLOR }}>{nodeGroups.helpers.map(node => option(node, HELPER_LIST_COLOR))}</optgroup>}
+  </select>;
 
   return <section className="movement-controller" aria-label={restPose ? 'Bones controller' : 'Movement controller'} onFocusCapture={event => { if (event.target.matches('input[type="number"]')) onPlayingChange?.(false); }}>
 

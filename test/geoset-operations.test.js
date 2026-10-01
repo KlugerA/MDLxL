@@ -2,7 +2,68 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDemoDocument, openDocument } from '../src/editor-document.js';
 import { gather, updateBounds } from '../src/mesh-tools.js';
-import { separateGeosetsByLoosePart, nuclearSeparateGeosets, mergeSimilarGeosets } from '../src/geoset-operations.js';
+import { separateGeosetsByLoosePart, nuclearSeparateGeosets, mergeSimilarGeosets, deleteFreeVertices } from '../src/geoset-operations.js';
+
+test('delete free vertices uses checked geosets, preserves every kept stream, and remaps faces', () => {
+  const doc = createDemoDocument();
+  doc.apply('Prepare free vertices', ['Geosets'], model => {
+    const selected = model.Geosets[0], unselected = model.Geosets[1], boneId = model.Bones[0].ObjectId;
+    Object.assign(selected, gather(selected, [0, 1, 2, 3]));
+    selected.Faces = Uint16Array.of(0, 2, 1);
+    selected.PrimitiveTypes = Uint32Array.of(4); selected.PrimitiveCounts = Uint32Array.of(3);
+    selected.Tangents = Float32Array.from(Array.from({ length: 4 }, (_, index) => [index, index + 0.25, index + 0.5, 1]).flat());
+    selected.SkinWeights = Uint8Array.from(Array.from({ length: 4 }, () => [boneId, 0, 0, 0, 255, 0, 0, 0]).flat());
+    Object.assign(unselected, gather(unselected, [0, 1, 2, 3]));
+    unselected.Faces = Uint16Array.of(0, 1, 2);
+    unselected.PrimitiveTypes = Uint32Array.of(4); unselected.PrimitiveCounts = Uint32Array.of(3);
+  });
+  const beforeSelected = structuredClone(doc.model.Geosets[0]), beforeUnselected = structuredClone(doc.model.Geosets[1]);
+
+  const result = doc.apply('Delete free vertices', ['Geosets'], model => deleteFreeVertices(model, new Set([0])));
+  assert.equal(result.removedVertices, 1);
+  assert.deepEqual(result.touched, [0]);
+  assert.deepEqual(result.removedGeosets, []);
+  assert.deepEqual(result.oldToNew, { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4 });
+  assert.deepEqual(result.vertexMaps[0], { 0: 0, 1: 1, 2: 2 });
+  for (const field of ['Vertices', 'Normals', 'VertexGroup', 'Tangents', 'SkinWeights']) assert.deepEqual(doc.model.Geosets[0][field], gather(beforeSelected, [0, 1, 2])[field]);
+  assert.deepEqual(doc.model.Geosets[0].TVertices, gather(beforeSelected, [0, 1, 2]).TVertices);
+  assert.deepEqual(doc.model.Geosets[0].Faces, Uint16Array.of(0, 2, 1));
+  assert.deepEqual(doc.model.Geosets[1], beforeUnselected);
+  assert.equal(deleteFreeVertices(doc.model, new Set([0])), false);
+  assert.equal(doc.undo(), true);
+  assert.deepEqual(doc.model.Geosets[0], beforeSelected);
+  assert.deepEqual(doc.model.Geosets[1], beforeUnselected);
+  assert.equal(doc.redo(), true);
+  assert.equal(doc.model.Geosets[0].Vertices.length / 3, 3);
+});
+
+test('delete free vertices removes an all-free checked geoset and preserves references to the others', () => {
+  const doc = createDemoDocument();
+  const freeIndex = doc.apply('Prepare free geoset', ['Geosets', 'GeosetAnims', 'Gliders', 'Info'], model => {
+    const source = model.Geosets[0], free = structuredClone(source);
+    Object.assign(free, gather(source, [0]));
+    free.Faces = new Uint16Array(); free.PrimitiveTypes = new Uint32Array(); free.PrimitiveCounts = new Uint32Array();
+    const index = model.Geosets.push(free) - 1;
+    model.GeosetAnims.push({ ...structuredClone(model.GeosetAnims[0]), GeosetId: index });
+    model.Gliders = [{ GeosetId: index }];
+    model.Info.NumGeosets = model.Geosets.length; model.Info.NumGeosetAnims = model.GeosetAnims.length;
+    return index;
+  });
+  const untouched = structuredClone(doc.model.Geosets[0]);
+
+  const result = doc.apply('Delete free geoset', ['Geosets', 'GeosetAnims', 'Gliders', 'Info'], current => deleteFreeVertices(current, [freeIndex]));
+  assert.equal(result.removedVertices, 1);
+  assert.deepEqual(result.removedGeosets, [freeIndex]);
+  assert.equal(doc.model.Geosets.length, freeIndex);
+  assert.equal(doc.model.GeosetAnims.some(animation => animation.GeosetId === freeIndex), false);
+  assert.deepEqual(doc.model.Gliders, []);
+  assert.deepEqual(doc.model.Geosets[0], untouched);
+  assert.equal(doc.undo(), true);
+  assert.equal(doc.model.Geosets.length, freeIndex + 1);
+  assert.deepEqual(doc.model.Gliders, [{ GeosetId: freeIndex }]);
+  assert.equal(doc.redo(), true);
+  assert.equal(doc.model.Geosets.length, freeIndex);
+});
 
 test('nuclear separation only acts on selected vertices and retains every stream', () => {
   const doc = createDemoDocument();

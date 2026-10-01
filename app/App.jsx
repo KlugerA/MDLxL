@@ -58,7 +58,7 @@ import VIEW_MENU from '../src/view-menu.json';
 import { SelectionHistory } from '../src/selection-history.js';
 import { correctNormalsXL } from '../src/normals-xl.js';
 import { EditorDocument, openDocument, importGeosets, deleteGeoset, recalculateExtents, recalculateNormals } from '../src/editor-document.js';
-import { separateGeosetsByLoosePart, nuclearSeparateGeosets, mergeSimilarGeosets } from '../src/geoset-operations.js';
+import { separateGeosetsByLoosePart, nuclearSeparateGeosets, mergeSimilarGeosets, deleteFreeVertices } from '../src/geoset-operations.js';
 import { transformVertices, deleteVertices, addTriangle } from '../src/editor-commands.js';
 import { detachFaces, extrudeFaces } from '../src/mesh-tools.js';
 import { captureMeshSelection } from '../src/mesh-clipboard.js';
@@ -1053,6 +1053,27 @@ export default function App() {
     setActiveGeoset(result.geosetIndices[0] ?? activeGeoset); setUvSet(0); clearZoomAnchor();
     say(`Separated selected geometry into ${result.parts} new geoset${result.parts === 1 ? '' : 's'}.`);
   };
+  const deleteSelectedGeosetFreeVertices = () => {
+    let result;
+    try { result = edit('Delete free vertices', ['Geosets', 'GeosetAnims', 'Bones', 'Gliders', 'Info'], current => deleteFreeVertices(current, selectable), { rethrow: true }); }
+    catch { return; }
+    if (result === false) { say('No free vertices found in selected geosets.'); return; }
+    const remapVertexState = previous => {
+      const next = {};
+      for (const [oldIndex, vertices] of Object.entries(previous)) {
+        const newIndex = result.oldToNew[oldIndex];
+        if (newIndex === undefined) continue;
+        const vertexMap = result.vertexMaps[oldIndex];
+        const remapped = vertices.map(vertex => vertexMap ? vertexMap[vertex] : vertex).filter(Number.isInteger);
+        if (remapped.length) next[newIndex] = [...new Set(remapped)];
+      }
+      return next;
+    };
+    setSelection(remapVertexState); setHidden(remapVertexState);
+    setSelectable(previous => new Set([...previous].map(index => result.oldToNew[index]).filter(index => index !== undefined)));
+    setActiveGeoset(previous => result.oldToNew[previous] ?? -1); setUvSet(0); clearZoomAnchor();
+    say(`Deleted ${result.removedVertices} free ${result.removedVertices === 1 ? 'vertex' : 'vertices'} from selected geosets.`);
+  };
   const commitUVChanges = (changes, label = 'Edit UV coordinates') => {
     setLiveUV(null);
     return edit(label, ['Geosets'], current => {
@@ -1179,7 +1200,7 @@ export default function App() {
 
         </>}
       </Suspense>}
-      {mode === 'vertices' && !cameraRotating && <div className="classic-geoset-operations"><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(false)}>Seperate by Loose parts</button><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(true)}>Nuclear Seperation</button><button disabled={!editable || !selectionCount} onClick={() => changeGeosetStructure('Merge geosets', ['Geosets', 'GeosetAnims', 'Bones', 'Gliders', 'Info'], current => mergeSimilarGeosets(current, validSelection))}>Merge Geosets</button><button disabled={!editable || !selectionCount || !!normalsXL} onClick={beginNormalsXL}>NormalsXL</button></div>}
+      {mode === 'vertices' && !cameraRotating && <div className="classic-geoset-operations"><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(false)}>Seperate by Loose parts</button><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(true)}>Nuclear Seperation</button><button disabled={!editable || !selectionCount} onClick={() => changeGeosetStructure('Merge geosets', ['Geosets', 'GeosetAnims', 'Bones', 'Gliders', 'Info'], current => mergeSimilarGeosets(current, validSelection))}>Merge Geosets</button><button disabled={!editable || !selectionCount || !!normalsXL} onClick={beginNormalsXL}>NormalsXL</button><button disabled={!editable || !selectable.size} onClick={deleteSelectedGeosetFreeVertices}>Delete free vertices</button></div>}
       {(mode !== 'animation' || animationPanel === 'movement' || cameraRotating) && geosetPicker}
       {rigWorkspace && bindingPanel}
     </aside>}</main>

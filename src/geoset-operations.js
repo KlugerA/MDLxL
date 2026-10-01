@@ -1,4 +1,4 @@
-import { appendGeosetGeometry } from './editor-document.js';
+import { appendGeosetGeometry, deleteGeoset } from './editor-document.js';
 import { gather, updateBounds } from './mesh-tools.js';
 
 const textureSlots = ['TextureID', 'NormalTextureID', 'ORMTextureID', 'EmissiveTextureID', 'TeamColorTextureID', 'ReflectionsTextureID'];
@@ -168,6 +168,49 @@ export function separateGeosetsByLoosePart(model, selectionByGeoset) {
 /** Preserve the former shared-vertex-index split for explicitly selected geometry. */
 export function nuclearSeparateGeosets(model, selectionByGeoset) {
   return separateSelectedGeosets(model, selectionByGeoset, true);
+}
+
+/** Delete vertices that are not referenced by any triangle in the checked geosets. */
+export function deleteFreeVertices(model, geosetIndices) {
+  const geosets = model.Geosets || [];
+  const selected = [...new Set(geosetIndices || [])].sort((a, b) => a - b);
+  if (!selected.length) return false;
+  const plans = [];
+  for (const index of selected) {
+    if (!Number.isInteger(index) || !geosets[index]) throw new Error('Selected geoset is out of range.');
+    const geoset = geosets[index], count = geoset.Vertices?.length / 3;
+    if (!Number.isInteger(count) || !ArrayBuffer.isView(geoset.Faces) || geoset.Faces.length % 3) throw new Error('A selected geoset has invalid vertices or triangles.');
+    const used = new Set();
+    for (const vertex of geoset.Faces) {
+      if (!Number.isInteger(vertex) || vertex < 0 || vertex >= count) throw new Error('A selected geoset has a triangle with a missing vertex.');
+      used.add(vertex);
+    }
+    const kept = [], removed = [];
+    for (let vertex = 0; vertex < count; vertex++) (used.has(vertex) ? kept : removed).push(vertex);
+    if (removed.length) plans.push({ index, kept, removed });
+  }
+  if (!plans.length) return false;
+
+  const removedGeosets = [], vertexMaps = {};
+  for (const plan of plans) {
+    if (!plan.kept.length) { removedGeosets.push(plan.index); continue; }
+    const geoset = geosets[plan.index], remap = new Map(plan.kept.map((old, next) => [old, next]));
+    vertexMaps[plan.index] = Object.fromEntries(remap);
+    Object.assign(geoset, gather(geoset, plan.kept));
+    geoset.Faces = new geoset.Faces.constructor(Array.from(geoset.Faces, vertex => remap.get(vertex)));
+    updateBounds(geoset);
+  }
+  for (const index of [...removedGeosets].sort((a, b) => b - a)) deleteGeoset(model, index);
+
+  const removed = new Set(removedGeosets), oldToNew = {};
+  for (let index = 0, next = 0; index < geosets.length + removed.size; index++) if (!removed.has(index)) oldToNew[index] = next++;
+  return {
+    removedVertices: plans.reduce((sum, plan) => sum + plan.removed.length, 0),
+    touched: plans.map(plan => plan.index),
+    removedGeosets,
+    oldToNew,
+    vertexMaps,
+  };
 }
 
 function unionAnimatedExtents(target, source) {
