@@ -61,7 +61,9 @@ import { EditorDocument, openDocument, importGeosets, deleteGeoset, recalculateE
 import { separateGeosetsByLoosePart, nuclearSeparateGeosets, mergeSimilarGeosets, deleteFreeVertices } from '../src/geoset-operations.js';
 import { transformVertices, deleteVertices, addTriangle } from '../src/editor-commands.js';
 import { detachFaces, extrudeFaces } from '../src/mesh-tools.js';
-import { captureMeshSelection } from '../src/mesh-clipboard.js';
+import { applyMeshClipboardColors, captureMeshSelection } from '../src/mesh-clipboard.js';
+import { captureNodeSelection, pasteNodesToDummy } from '../src/node-clipboard.js';
+import { ensureDummyBone } from '../src/dummy-bone.js';
 import { captureUVSelection } from '../src/uv-selection.js';
 import { collapseVertices, weldSelectedVertices, uncoupleVertices, deleteSelectedFaces, averageSelectedNormals } from '../src/classic-mesh.js';
 import { allGeosets, chooseGeosets, initialGeosetSelection, invertGeosets, filterVertexSelection } from '../src/classic-selection.js';
@@ -96,7 +98,13 @@ export function neutralTextColor(hex) {
   return luminance > .36 ? '#111111' : '#ffffff';
 }
 const blank = () => openDocument(new TextEncoder().encode('Version { FormatVersion 800, }\nModel "Untitled" { BlendTime 150, MinimumExtent { 0, 0, 0 }, MaximumExtent { 0, 0, 0 }, BoundsRadius 0, }\n'), 'Untitled.mdl');
-const newSession = (doc = blank(), path = null, assets = builtinTextureAssets()) => ({ doc, path, assets, uvPreviews: {}, animationDrafts: {}, paintProject: null, paintOriginalModelBytes: null, paintWorkingModel: null, paintWorkingRevision: 0, id: crypto.randomUUID(), checkpoint: 0 });
+const sessionDirty = session => !!session && (session.doc.dirty || Object.keys(session.uvPreviews || {}).length > 0 || Object.keys(session.animationDrafts || {}).length > 0 || !!session.paintProject?.dirty);
+const defaultSessionView = doc => {
+  const selectable = initialGeosetSelection(doc.model.Geosets.length);
+  const citadel = doc.model.Textures.some(texture => /^MDLxL_Citadel[\\/]/i.test(texture.Image || ''));
+  return { mode: 'vertices', animationPanel: 'movement', selectable, selection: {}, hidden: {}, activeGeoset: selectable.size ? 0 : -1, uvSet: 0, selectedNodeIds: [], globalSeqId: null, sequence: -1, time: 0, rgbPreview: false, rgbSequence: -1, renderMode: citadel ? 'textured' : 'wireframe', showAllGeosets: !citadel };
+};
+const newSession = (doc = blank(), path = null, assets = builtinTextureAssets()) => ({ doc, path, assets, uvPreviews: {}, animationDrafts: {}, paintProject: null, paintOriginalModelBytes: null, paintWorkingModel: null, paintWorkingRevision: 0, id: crypto.randomUUID(), checkpoint: 0, viewState: defaultSessionView(doc) });
 export async function readInputBytes(file){
   const bytes=typeof file.arrayBuffer==='function'?await file.arrayBuffer():file.bytes;
   if(bytes instanceof ArrayBuffer)return new Uint8Array(bytes);
@@ -147,7 +155,9 @@ export default function App() {
   const toggleWheelMode = mode => changePreferences(previous => ({ ...previous, wheelMode: previous.wheelMode === mode ? 'rotate' : mode }));
   const toggleCamera = () => setCameraMode(previous => previous === 'work' ? 'rotate' : 'work');
   const [showcaseSession,setShowcaseSession]=useState(null),[showcaseVisited,setShowcaseVisited]=useState(false);
-  const [session, setSession] = useState(newSession), [tick, setTick] = useState(0), [status, setStatus] = useState('Ready');
+  const [session, setSession] = useState(newSession);
+  const [sessions, setSessions] = useState(() => [session]);
+  const [tick, setTick] = useState(0), [status, setStatus] = useState('Ready');
   const [repairReceipt, setRepairReceipt] = useState(null);
   const [mode, setMode] = useState('vertices'), [cameraMode, setCameraMode] = useState('work'), [view, setStoredView] = useState('orthographic'), [portraitView, setPortraitView] = useState('perspective'), [workplane, setWorkplane] = useState('xy');
   const [adjustingInput, setAdjustingInput] = useState(null);
@@ -272,7 +282,7 @@ export default function App() {
   const selectionHistory = useMemo(() => new SelectionHistory(doc), [doc]);
   const selectionState = { selectable, selection, hidden, activeGeoset, uvSet, selectedNodeIds };
   useLayoutEffect(() => { if (selectionHistory.observe(selectionState)) setTick(value => value + 1); }, [selectionHistory, selectable, selection, hidden, activeGeoset, uvSet, selectedNodeIds, doc.revision]);
-  latest.current = { session, showcaseSession, doc, model, selection, selectable, hidden, mode, dialog, settingsTab, preferencesReady };
+  latest.current = { session, sessions, showcaseSession, doc, model, selection, selectable, hidden, mode, dialog, settingsTab, preferencesReady };
   const refresh = () => setTick(value => value + 1);
   const say = (message, error = false) => setStatus((error ? 'Error: ' : '') + message);
   const selectBackground = value => { setBackground(value); localStorage.setItem('mdlvis-preview-background', value); };
@@ -507,10 +517,10 @@ export default function App() {
   const uvAction = (kind, value) => window.dispatchEvent(new CustomEvent('mdlvis-uv-action', { detail: { kind, value } }));
 
   function releaseUnusedTextureUrls() {
-    const keep = new Set([...latest.current.session.assets.values(), ...(latest.current.showcaseSession?.assets.values()||[]), ...(clipboard.current?.assets.values() || [])].map(asset=>asset.url));
+    const keep = new Set([...(latest.current.sessions || [latest.current.session]).flatMap(item => [...item.assets.values()]), ...(latest.current.showcaseSession?.assets.values()||[]), ...(clipboard.current?.assets.values() || [])].map(asset=>asset.url));
     for(const url of textureUrls.current) if(!keep.has(url)) {URL.revokeObjectURL(url);textureUrls.current.delete(url);}
   }
-  useEffect(() => { releaseUnusedTextureUrls(); },[session, session.assets,showcaseSession,showcaseSession?.assets]);
+  useEffect(() => { releaseUnusedTextureUrls(); },[sessions, session.assets,showcaseSession,showcaseSession?.assets]);
   useEffect(() => () => {for(const url of textureUrls.current)URL.revokeObjectURL(url);textureUrls.current.clear();},[]);
   const nextTextureResolution = target => {
     const generation = (textureResolutions.current.get(target) || 0) + 1;
@@ -557,14 +567,55 @@ export default function App() {
     const envelope = { id: target.id, version: ++target.checkpoint, path: target.path, dirty: target.doc.dirty || Object.keys(target.uvPreviews).length > 0 || Object.keys(target.animationDrafts).length > 0 || !!target.paintProject?.dirty, date: new Date().toISOString(), state: target.doc.captureRecoveryState(), animationDrafts: structuredClone(target.animationDrafts), uvPreviews: structuredClone(target.uvPreviews), paintProject: target.paintProject ? structuredClone(target.paintProject) : null, paintOriginalModelBytes: target.paintOriginalModelBytes ? new Uint8Array(target.paintOriginalModelBytes) : null, paintWorkingModel: target.paintWorkingModel ? structuredClone(target.paintWorkingModel) : null, paintAppliedRevision: target.paintAppliedRevision, forgeAssets: retainedForgeAssets(target.assets) };
     if (window.desktop?.writeRecovery) await window.desktop.writeRecovery(envelope); else await browserRecovery('put', envelope);
   }
-  function install(next) {
-    setShowcaseSession(null);
-    setRepairReceipt(null); setPortraitEnabled(false);
+  function rememberSessionView(target = session) {
+    if (!target) return;
+    target.viewState = { mode, animationPanel, selectable: new Set(selectable), selection: structuredClone(selection), hidden: structuredClone(hidden), activeGeoset, uvSet, selectedNodeIds: [...selectedNodeIds], globalSeqId, sequence, time, rgbPreview, rgbSequence, renderMode, showAllGeosets };
+  }
+  function restoreSessionView(target) {
+    const viewState = target.viewState || (target.viewState = defaultSessionView(target.doc));
+    setMode(viewState.mode); setAnimationPanel(viewState.animationPanel); setSelectable(new Set(viewState.selectable)); setSelection(structuredClone(viewState.selection)); setHidden(structuredClone(viewState.hidden)); setActiveGeoset(viewState.activeGeoset); setUvSet(viewState.uvSet); setSelectedNodeIds([...viewState.selectedNodeIds]); setGlobalSeqId(viewState.globalSeqId); setSequence(viewState.sequence); setTime(viewState.time); setRGBPreview(viewState.rgbPreview); setRGBSequence(viewState.rgbSequence); setRenderMode(viewState.renderMode); setShowAllGeosets(viewState.showAllGeosets);
+    setPlaying(false); setAttachSourceIds([]); setLiveUV(null); setNormalsXL(null); setDialog(null); setContext(null); setRepairReceipt(null); setPortraitEnabled(false); setShowcaseSession(null); setCleanViews({}); rangeAnchor.current = 0;
+  }
+  function activateSession(next, { remember = true } = {}) {
+    if (!next || next === session || savingRef.current) return;
+    window.dispatchEvent(new CustomEvent('mdlxl-paint-flush'));
+    if (remember) {
+      rememberSessionView(session);
+      if (sessionDirty(session)) checkpoint(session).catch(error => say(`Recovery checkpoint failed: ${error.message}`, true));
+    }
+    setSession(next); restoreSessionView(next);
+    if (latest.current.preferencesReady) resolveTextures(next);
+    say(next.doc.readOnly ? 'Read-only model; original data retained.' : `Switched to ${next.doc.name}`);
+  }
+  function install(next, { replace = false } = {}) {
     const history = settings.current; next.doc.configureHistory({ budgetBytes: history.historyBudgetBytes ?? 512 * 1024 * 1024, maxSteps: history.historyMaxSteps ?? 10000 });
-    setSelectedNodeIds([]); setLiveUV(null);
-    const citadelModel=next.doc.model.Textures.some(t=>/^MDLxL_Citadel[\\/]/i.test(t.Image||'')),initialGeosets=initialGeosetSelection(next.doc.model.Geosets.length);setCleanViews({}); setRenderMode(citadelModel?'textured':'wireframe');if(citadelModel)setShowAllGeosets(false);setSelectedNodeIds([]); setSession(next); setSelectable(initialGeosets); setSelection({}); setHidden({}); setActiveGeoset(initialGeosets.size?0:-1); setUvSet(0); setGlobalSeqId(null); setHighlightByPanel({ movement: false, animations: false }); setSequence(-1); setTime(0); setPlaying(false); setMode('vertices'); setDialog(null); rangeAnchor.current = 0; say(next.doc.readOnly ? 'Read-only model; original data retained.' : `Opened ${next.doc.name}`);
+    const currentSessions = latest.current.sessions || sessions, active = latest.current.session || session;
+    const pristinePlaceholder = currentSessions.length === 1 && active === currentSessions[0] && !active.path && active.doc.name === 'Untitled.mdl' && !sessionDirty(active) && active.doc.revision === 0;
+    const replaceActive = replace || pristinePlaceholder;
+    const nextSessions = replaceActive ? currentSessions.map(item => item === active ? next : item) : [...currentSessions, next];
+    if (!replaceActive) rememberSessionView(active);
+    setSessions(nextSessions); setSession(next); restoreSessionView(next);
+    say(next.doc.readOnly ? 'Read-only model; original data retained.' : `Opened ${next.doc.name}`);
     // The boot effect resolves once after installing the initial model and settings.
     if (latest.current.preferencesReady) resolveTextures(next);
+  }
+  function removeSession(target) {
+    const currentSessions = latest.current.sessions || sessions, index = currentSessions.indexOf(target);
+    if (index < 0) return;
+    let remaining = currentSessions.filter(item => item !== target);
+    if (!remaining.length) remaining = [newSession(createStarterDocument(preferences.newModelVersion))];
+    setSessions(remaining);
+    if (target === (latest.current.session || session)) {
+      const next = remaining[Math.min(index, remaining.length - 1)];
+      setSession(next); restoreSessionView(next); say(`Closed ${target.doc.name}`);
+    } else { releaseUnusedTextureUrls(); refresh(); }
+  }
+  function requestCloseSession(target) {
+    if (savingRef.current) return;
+    window.dispatchEvent(new CustomEvent('mdlxl-paint-flush'));
+    if (target === session) rememberSessionView(target);
+    if (sessionDirty(target)) setDialog({ type: 'closeTab', target });
+    else removeSession(target);
   }
   async function loadFile(record) {
     try {
@@ -592,11 +643,10 @@ export default function App() {
     }catch(error){say(error.message,true);}
   }
   useEffect(()=>{if(mode==='showcase')setShowcaseVisited(true);},[mode]);
-  function withUnsaved(operation) { if (savingRef.current) return; window.dispatchEvent(new CustomEvent('mdlxl-paint-flush')); if (doc.dirty || hasUVPreview || hasTrackDrafts || session.paintProject?.dirty) setDialog({ type: 'unsaved', operation }); else operation(); }
   async function showRecent() { try { setRecentFiles(await window.desktop.recent()); setDialog({type:'recent'}); } catch(error) { say(error.message,true); } }
-  function openRecent(path) { if(repairReceipt)return;if(mode==='showcase'){window.desktop.openRecent(path,true).then(loadShowcaseModel).catch(error=>say(error.message,true));return;} withUnsaved(async()=>{try{await loadFile(await window.desktop.openRecent(path));}catch(error){say(error.message,true);}}); }
+  function openRecent(path) { if(repairReceipt)return;if(mode==='showcase'){window.desktop.openRecent(path,true).then(loadShowcaseModel).catch(error=>say(error.message,true));return;} window.desktop.openRecent(path).then(loadFile).catch(error=>say(error.message,true)); }
   async function clearRecent() { try { setRecentFiles(await window.desktop.clearRecent()); say('Recent files history cleared.'); } catch(error) { say(error.message,true); } }
-  function open() { if(mode==='showcase'){if(window.desktop)loadShowcaseModel();else files.current.click();return;}withUnsaved(async () => { try { if (window.desktop) { const records = await window.desktop.open(); if (records?.length) await loadFile(records[0]); } else files.current.click(); } catch (error) { say(error.message, true); } }); }
+  function open() { if(mode==='showcase'){if(window.desktop)loadShowcaseModel();else files.current.click();return;} (async () => { try { if (window.desktop) { const records = await window.desktop.open(); if (records?.length) await loadFile(records[0]); } else files.current.click(); } catch (error) { say(error.message, true); } })(); }
   async function repairDuplicateAnimations(options) {
     if (savingRef.current) return;
     if (!window.desktop?.repairGeosetAnimations || !session.path) throw Error('Save a local MDL or MDX copy first; automatic backup and disk Undo require the desktop build.');
@@ -609,7 +659,7 @@ export default function App() {
       if (reopened.readOnly || scanGeosetAnimationDuplicates(reopened.model).length) throw Error('Repaired model failed reload verification. No file was changed.');
       await checkpoint(session);
       const result = await window.desktop.repairGeosetAnimations({ path: session.path, bytes, beforeBytes: doc.serialize(doc.format), expectedDiskBytes: doc.originalBytes });
-      install(newSession(reopened, result.path, session.assets));
+      install(newSession(reopened, result.path, session.assets), { replace: true });
       setRepairReceipt({ ...result, bytes: undefined, report });
     } finally { savingRef.current = false; setSaving(false); }
   }
@@ -618,15 +668,14 @@ export default function App() {
     savingRef.current = true; setSaving(true);
     try {
       const result = await window.desktop.undoGeosetRepair(repairReceipt.id);
-      install(newSession(openDocument(result.bytes, result.name), result.path, session.assets));
+      install(newSession(openDocument(result.bytes, result.name), result.path, session.assets), { replace: true });
       say('Repair undone. The pre-repair backup was restored; duplicate editing remains paused.');
     } finally { savingRef.current = false; setSaving(false); }
   }
-  async function save(saveAs = false, requestedFormat = session.doc.format) {
+  async function save(saveAs = false, requestedFormat = session.doc.format, target = session) {
     if (savingRef.current) return false;
-    if (hasTrackDrafts) { setAnimationPanel('animations'); selectMode('animation'); say('Press Bake Text in Animations to apply the edited track text before saving.'); return false; }
+    if (Object.keys(target.animationDrafts).length) { if (target !== session) activateSession(target); setAnimationPanel('animations'); selectMode('animation'); say('Press Bake Text in Animations to apply the edited track text before saving.'); return false; }
     savingRef.current = true; setSaving(true);
-    const target = session;
     try {
       const pending = target.uvPreviews;
       const staged = Object.keys(pending).length ? EditorDocument.restoreRecoveryState(target.doc.captureRecoveryState({ includeHistory: false })) : target.doc;
@@ -656,14 +705,14 @@ export default function App() {
     } catch (error) { say(error.message, true); return false; }
     finally { savingRef.current = false; setSaving(false); }
   }
-  const paintArtifactName = extension => `${doc.name.replace(/\.(?:mdl|mdx)$/i,'').replace(/[^a-z0-9_-]+/gi,'-') || 'model'}${extension}`;
+  const paintArtifactName = (extension, target = session) => `${target.doc.name.replace(/\.(?:mdl|mdx)$/i,'').replace(/[^a-z0-9_-]+/gi,'-') || 'model'}${extension}`;
   async function writePaintArtifact(blob, name) {
     if (window.desktop?.saveArtifact) return !!(await window.desktop.saveArtifact({name,bytes:new Uint8Array(await blob.arrayBuffer())}));
     const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }
-  function paintDocument() {
-    const staged=EditorDocument.restoreRecoveryState(doc.captureRecoveryState({includeHistory:false}));
-    if(session.paintWorkingModel)staged.model=structuredClone(session.paintWorkingModel);
+  function paintDocument(target = session) {
+    const staged=EditorDocument.restoreRecoveryState(target.doc.captureRecoveryState({includeHistory:false}));
+    if(target.paintWorkingModel)staged.model=structuredClone(target.paintWorkingModel);
     return staged;
   }
   async function applyPaintToModel(){
@@ -684,10 +733,10 @@ export default function App() {
     }catch(error){say('Could not apply paint: '+error.message,true);return false;}
     finally{savingRef.current=false;setSaving(false);}
   }
-  async function savePaintProject(value=session.paintProject) {
-    window.dispatchEvent(new CustomEvent('mdlxl-paint-flush'));
+  async function savePaintProject(value=session.paintProject, target=session) {
+    if(target===session)window.dispatchEvent(new CustomEvent('mdlxl-paint-flush'));
     if(!value||savingRef.current)return false;savingRef.current=true;setSaving(true);
-    try{const artifact=await buildPaintProjectArtifact(paintDocument(),value,session.assets,session.paintOriginalModelBytes||doc.originalBytes);if(!await writePaintArtifact(artifact,paintArtifactName('.mdlxlpaint')))return false;markPaintProjectSaved(value);refresh();say(paintMessage('paint.projectSaved'));return true;}
+    try{const artifact=await buildPaintProjectArtifact(paintDocument(target),value,target.assets,target.paintOriginalModelBytes||target.doc.originalBytes);if(!await writePaintArtifact(artifact,paintArtifactName('.mdlxlpaint',target)))return false;markPaintProjectSaved(value);refresh();say(paintMessage('paint.projectSaved'));return true;}
     catch(error){say(error.message,true);return false;}finally{savingRef.current=false;setSaving(false);}
   }
   async function exportPaintProject(value=session.paintProject) {
@@ -813,20 +862,37 @@ export default function App() {
   }
   function copy() {
     if (mode === 'animation') return timelineCommands.current.copy?.();
-    const captured = captureMeshSelection(model, validSelection, selectable);
+    if (selectedNodeIds.length) {
+      const captured = captureNodeSelection(model, selectedNodeIds);
+      if (!captured.nodeIds.length) { say('Select nodes to copy.'); return; }
+      clipboard.current = { ...captured, sourceDocument: doc, assets: new Map(session.assets) };
+      say(`Copied ${captured.nodeIds.length} node${captured.nodeIds.length === 1 ? '' : 's'}.`); refresh(); return;
+    }
+    const captured = captureMeshSelection(model, validSelection, selectable, { rgbPreview, rgbSequence });
     if (!captured.indices.length) { say('Select vertices, triangles or geosets to copy.'); return; }
     clipboard.current = { ...captured, sourceDocument: doc, assets: new Map(session.assets) };
     say(`Copied ${captured.vertexCount} vertices and ${captured.triangleCount} triangles.`); refresh();
   }
-  function paste(parent) {
+  function paste(parent, special = false) {
     if (mode === 'animation') return timelineCommands.current.paste?.();
     if (!clipboard.current || doc.readOnly) return;
-    const source = clipboard.current, result = edit('Paste geosets', ['Geosets', 'Materials', 'Textures', 'Nodes', 'PivotPoints', 'GeosetAnims', 'GlobalSequences', 'TextureAnims'], m => importGeosets(m, source.model, source.indices, parent, { sameModel: source.sourceDocument === doc, targetGeoset: activeGeoset }));
-    if (result !== false) { session.assets = new Map([...source.assets, ...session.assets]); setSelectable(new Set(result.geosetIndices)); setSelection(result.selection || Object.fromEntries(result.geosetIndices.map(gi => [gi, Array.from({ length: doc.model.Geosets[gi].Vertices.length / 3 }, (_, i) => i)]))); setActiveGeoset(result.geosetIndices[0] ?? 0); setDialog(null); say(result.warnings?.join(' ') || 'Pasted geosets.'); refresh(); }
+    const source = clipboard.current;
+    if (source.kind === 'nodes') {
+      const result = edit('Paste nodes', ['Nodes', 'PivotPoints', 'Materials', 'Textures', 'TextureAnims', 'GlobalSequences', 'Info'], model => pasteNodesToDummy(model, source));
+      if (result !== false) { session.assets = new Map([...source.assets, ...session.assets]); setSelectedNodeIds(result.nodeIds); setSelection({}); setDialog(null); say(`Pasted ${result.nodeIds.length} node${result.nodeIds.length === 1 ? '' : 's'} on DummyBone.`); refresh(); }
+      return;
+    }
+    const result = edit('Paste geosets', ['Geosets', 'Materials', 'Textures', 'Nodes', 'PivotPoints', 'GeosetAnims', 'GlobalSequences', 'TextureAnims'], m => {
+      if (special) return importGeosets(m, source.model, source.indices, parent, { sameModel: source.sourceDocument === doc, targetGeoset: activeGeoset });
+      const weighted = source.indices.some(index => source.model.Geosets[index]?.SkinWeights?.length), dummy = ensureDummyBone(m, { weighted });
+      const pasted = importGeosets(m, source.model, source.indices, null, { rigidNode: dummy.ObjectId });
+      applyMeshClipboardColors(m, pasted.geosetMap, source.rgbByGeoset); return pasted;
+    });
+    if (result !== false) { session.assets = new Map([...source.assets, ...session.assets]); setSelectedNodeIds([]); setSelectable(new Set(result.geosetIndices)); setSelection(result.selection || Object.fromEntries(result.geosetIndices.map(gi => [gi, Array.from({ length: doc.model.Geosets[gi].Vertices.length / 3 }, (_, i) => i)]))); setActiveGeoset(result.geosetIndices[0] ?? 0); setDialog(null); say(result.warnings?.join(' ') || 'Pasted geosets.'); refresh(); }
   }
   const hide = () => { setHidden(previous => { const next = { ...previous }; for (const [gi, ids] of Object.entries(validSelection)) next[gi] = [...new Set([...(next[gi] || []), ...ids])]; return next; }); setSelection({}); };
   async function listRecovery() { try { const items = window.desktop?.listRecovery ? await window.desktop.listRecovery() : await browserRecovery('list'); setRecoveries((items || []).map(({ state, ...item }) => ({ ...item, name: item.name || state?.name }))); setDialog({ type: 'recovery' }); } catch (error) { say(error.message, true); } }
-  async function restoreRecovery(item) { withUnsaved(async () => { try { const envelope = window.desktop?.readRecovery ? await window.desktop.readRecovery(item.id) : await browserRecovery('get', item.id), restored = newSession(EditorDocument.restoreRecoveryState(envelope.state || envelope), envelope.path || null); restored.id = envelope.id || restored.id; restored.checkpoint = envelope.version || 0; restored.animationDrafts = envelope.animationDrafts || {}; restored.paintProject = envelope.paintProject || null; restored.paintOriginalModelBytes = envelope.paintOriginalModelBytes || null; restored.paintWorkingModel = envelope.paintWorkingModel || null;restored.paintAppliedRevision=envelope.paintAppliedRevision;if(restored.paintProject?.materialMode){const original=restored.paintOriginalModelBytes?openDocument(restored.paintOriginalModelBytes,restored.doc.name).model:restored.doc.model;repairPaintMaterials(restored.paintProject,original,restored.paintWorkingModel||restored.doc.model);validatePaintAssignments(restored.paintProject,restored.paintWorkingModel||restored.doc.model);} for(const asset of envelope.forgeAssets||[]){const record={...asset,source:'forge'};restored.assets.set(normalize(asset.name),record);restored.assets.set(normalize(asset.name.split(/[\\/]/).at(-1)),record);} restored.uvPreviews = restoreUVPreviews(restored.doc.model, envelope.uvPreviews); for (const draft of Object.values(restored.uvPreviews)) { restored.assets.set(normalize(draft.asset.name), draft.asset); restored.assets.set(normalize(draft.asset.name.split(/[\\/]/).at(-1)), draft.asset); } install(restored); say(`Recovered ${restored.doc.name} with undo history${restored.paintProject ? ' and paint coats' : ''}.`); } catch (error) { say(error.message, true); } }); }
+  async function restoreRecovery(item) { try { const envelope = window.desktop?.readRecovery ? await window.desktop.readRecovery(item.id) : await browserRecovery('get', item.id), restored = newSession(EditorDocument.restoreRecoveryState(envelope.state || envelope), envelope.path || null); restored.id = envelope.id || restored.id; restored.checkpoint = envelope.version || 0; restored.animationDrafts = envelope.animationDrafts || {}; restored.paintProject = envelope.paintProject || null; restored.paintOriginalModelBytes = envelope.paintOriginalModelBytes || null; restored.paintWorkingModel = envelope.paintWorkingModel || null;restored.paintAppliedRevision=envelope.paintAppliedRevision;if(restored.paintProject?.materialMode){const original=restored.paintOriginalModelBytes?openDocument(restored.paintOriginalModelBytes,restored.doc.name).model:restored.doc.model;repairPaintMaterials(restored.paintProject,original,restored.paintWorkingModel||restored.doc.model);validatePaintAssignments(restored.paintProject,restored.paintWorkingModel||restored.doc.model);} for(const asset of envelope.forgeAssets||[]){const record={...asset,source:'forge'};restored.assets.set(normalize(asset.name),record);restored.assets.set(normalize(asset.name.split(/[\\/]/).at(-1)),record);} restored.uvPreviews = restoreUVPreviews(restored.doc.model, envelope.uvPreviews); for (const draft of Object.values(restored.uvPreviews)) { restored.assets.set(normalize(draft.asset.name), draft.asset); restored.assets.set(normalize(draft.asset.name.split(/[\\/]/).at(-1)), draft.asset); } install(restored); say(`Recovered ${restored.doc.name} with undo history${restored.paintProject ? ' and paint coats' : ''}.`); } catch (error) { say(error.message, true); } }
   async function gameData() {
     if (!window.desktop?.chooseGameData) { say('Choose a Warcraft III installation folder in the desktop application.'); return; }
     try {
@@ -885,7 +951,7 @@ export default function App() {
     setSelectable(new Set(result.geosetIndices));setSelection(Object.fromEntries(result.geosetIndices.map(i=>[i,Array.from({length:doc.model.Geosets[i].Vertices.length/3},(_,v)=>v)])));setActiveGeoset(result.geosetIndices[0]);setSelectedNodeIds([result.boneId]);selectMode('vertices');setRenderMode('textured');setDialog(null);requestAnimationFrame(()=>frame(false));
     say('Part imported and attached to DummyBone.');return result;
   }
-  commands.current = { 'paint:select':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'select'})), 'paint:draw':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'draw'})), open, recent:showRecent, openRecent, clearRecent, save: () => mode==='paint'?savePaintProject():save(), saveAs: () => mode==='paint'?savePaintProject():setDialog({type:'saveFormat'}), new: () => withUnsaved(() => install(newSession(createStarterDocument(preferences.newModelVersion)))), recovery: listRecovery, gameData, undo: () => undo(false), redo: () => undo(true), copy, paste: () => paste(), pasteSpecial: () => { if (clipboard.current) { setAnchor(''); setDialog({ type: 'pasteSpecial' }); } }, selectAll, clear: () => { if (normalsXL) { setNormalsXL(null); return; } if (mode === 'bones' && attachSourceIds.length) { setAttachSourceIds([]); return; } if (mode === 'vertices' && !window.dispatchEvent(new Event('mdlxl-cancel-gesture', { cancelable: true }))) return; if(mode==='uv')return uvAction('select-none');setSelectedNodeIds([]); setSelection({}); }, history: showHistory, grid: () => setShowGrid(v => !v), frame: toggleTextured, frameSelection: () => setViewRenderMode('solid'), fit: () => frame(false), fitSelection: () => frame(true), vertices: () => selectMode('vertices'), bones: () => {setMovementMode('select');selectMode('bones');}, uv: () => selectMode('uv'), paint: () => {setRenderMode('textured');setView('perspective');selectMode('paint');}, animation: () => selectAnimationPanel('movement'), animations: () => selectAnimationPanel('animations'), textureLibrary: () => openLibrary(), help: () => setDialog({ type: 'help' }), diagnostics: () => setDialog({ type: 'diagnostics' }), about: () => setDialog({ type: 'about' }), ...Object.fromEntries(resources.map(kind => [kind, () => setDialog({ type: 'resource', kind })])), ...Object.fromEntries(views.map(name => [name, () => setView(name)])) };
+  commands.current = { 'paint:select':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'select'})), 'paint:draw':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'draw'})), open, recent:showRecent, openRecent, clearRecent, save: () => mode==='paint'?savePaintProject():save(), saveAs: () => mode==='paint'?savePaintProject():setDialog({type:'saveFormat'}), new: () => install(newSession(createStarterDocument(preferences.newModelVersion))), recovery: listRecovery, gameData, undo: () => undo(false), redo: () => undo(true), copy, paste: () => paste(), pasteSpecial: () => { if (clipboard.current?.kind !== 'nodes') { setAnchor(''); setDialog({ type: 'pasteSpecial' }); } }, selectAll, clear: () => { if (normalsXL) { setNormalsXL(null); return; } if (mode === 'bones' && attachSourceIds.length) { setAttachSourceIds([]); return; } if (mode === 'vertices' && !window.dispatchEvent(new Event('mdlxl-cancel-gesture', { cancelable: true }))) return; if(mode==='uv')return uvAction('select-none');setSelectedNodeIds([]); setSelection({}); }, history: showHistory, grid: () => setShowGrid(v => !v), frame: toggleTextured, frameSelection: () => setViewRenderMode('solid'), fit: () => frame(false), fitSelection: () => frame(true), vertices: () => selectMode('vertices'), bones: () => {setMovementMode('select');selectMode('bones');}, uv: () => selectMode('uv'), paint: () => {setRenderMode('textured');setView('perspective');selectMode('paint');}, animation: () => selectAnimationPanel('movement'), animations: () => selectAnimationPanel('animations'), textureLibrary: () => openLibrary(), help: () => setDialog({ type: 'help' }), diagnostics: () => setDialog({ type: 'diagnostics' }), about: () => setDialog({ type: 'about' }), ...Object.fromEntries(resources.map(kind => [kind, () => setDialog({ type: 'resource', kind })])), ...Object.fromEntries(views.map(name => [name, () => setView(name)])) };
   Object.assign(commands.current, {
     forge:()=>setDialog({type:'forge'}), optimizeModel:()=>openOptimizeXL(), bitsAndParts:()=>setDialog({type:'bitsAndParts'}), particles:()=>openParticles(),
     ...Object.fromEntries(SHAPE_TOOLS.map(tool=>['shape:'+tool.toLowerCase(),()=>setDialog({type:'shape',tool})])),
@@ -952,8 +1018,9 @@ export default function App() {
     if(id.startsWith('shape:'))return !doc.readOnly&&!saving&&selectable.size>0;
     if(id.startsWith('keyframe:'))return ['animation','uv'].includes(mode)&&!doc.readOnly&&!saving;
     if(id==='paste'&&mode==='animation')return !doc.readOnly&&!saving;
-    if (['paste','pasteSpecial'].includes(id)) return !!clipboard.current && !doc.readOnly && mode!=='animation';
-    if (id==='copy') return mode==='animation'||selectable.size>0;
+    if (id==='pasteSpecial') return clipboard.current?.kind !== 'nodes' && !doc.readOnly && mode!=='animation';
+    if (id==='paste') return !!clipboard.current && !doc.readOnly && mode!=='animation';
+    if (id==='copy') return mode==='animation'||selectedNodeIds.length>0||selectable.size>0;
     if (id==='hide') return selectionCount>0;
     if (id==='show') return hiddenCount>0;
     if (['play','firstFrame','lastFrame','nextFrame','previousFrame'].includes(id)) return (mode==='animation' || mode==='uv' && sequence>=0);
@@ -981,16 +1048,21 @@ export default function App() {
   useEffect(() => window.desktop?.onMenu(action => { if (action?.action === 'openRecent') { if (!latest.current.dialog && !latest.current.settingsTab) commands.current.openRecent(action.path); return; } if(['exit',...settingsCommands].includes(action) || (!latest.current.dialog && !latest.current.settingsTab)) runLatest.current(action); }), []);
   useEffect(() => { const boot = session.id; window.desktop?.initial?.().then(async initial => { settings.current = initial.settings || {}; setGameDataPath(settings.current.gameData || ''); const persisted=normalizePreferences(settings.current.preferences || preferencesRef.current); savedPreferences.current=JSON.stringify(persisted); changePreferences(persisted); const current = latest.current.session; current.doc.configureHistory({ budgetBytes: settings.current.historyBudgetBytes ?? 512 * 1048576, maxSteps: settings.current.historyMaxSteps ?? 10000 }); setRecoveries(initial.recovery || []); if (initial.model && current.id === boot && !current.doc.dirty) await loadFile(initial.model); else refresh(); setPreferencesReady(true); if(initial.recoveryPrompt && initial.recovery?.length)setDialog({type:'recovery'}); }).catch(error => { setPreferencesReady(true); say(error.message, true); }); }, []);
   const hasUnsavedWork=doc.dirty||hasUVPreview||hasTrackDrafts||hasPaintChanges;
+  const hasAnyUnsavedWork=sessions.some(sessionDirty);
+  async function saveSessionWork(target, includeNeverSaved = false) {
+    const hasModelWork = target.doc.dirty || Object.keys(target.uvPreviews).length > 0 || Object.keys(target.animationDrafts).length > 0;
+    let saved = !target.paintProject?.dirty || await savePaintProject(target.paintProject, target);
+    if (saved && (hasModelWork || includeNeverSaved && !target.path)) saved = await save(false, target.doc.format, target);
+    return saved;
+  }
   saveBeforeCloseRef.current=async()=>{
     window.dispatchEvent(new CustomEvent('mdlxl-paint-flush'));
-    const current=latest.current,hasModelWork=current.doc.dirty||Object.keys(current.session.uvPreviews).length>0||Object.keys(current.session.animationDrafts).length>0;
-    let saved=!current.session.paintProject?.dirty||await savePaintProject();
-    if(saved&&(hasModelWork||!current.session.path))saved=await save();
-    return saved;
+    for (const target of latest.current.sessions) if ((sessionDirty(target) || !target.path) && !await saveSessionWork(target, true)) return false;
+    return true;
   };
-  useEffect(() => { window.desktop?.setDirty({dirty:hasUnsavedWork,saved:!!session.path,name:doc.name}); document.title = `${hasUnsavedWork ? '* ' : ''}${session.path || doc.name} — MDLxL`; }, [doc, tick, session.path, hasUVPreview, hasTrackDrafts, hasPaintChanges]);
+  useEffect(() => { const pending=sessions.filter(item=>sessionDirty(item)||!item.path);window.desktop?.setDirty({dirty:hasAnyUnsavedWork,saved:pending.length===0,name:pending.length>1?`${pending.length} open models`:pending[0]?.doc.name||doc.name}); document.title = `${hasUnsavedWork ? '* ' : ''}${session.path || doc.name} — MDLxL`; }, [doc, tick, sessions, session.path, hasUnsavedWork, hasAnyUnsavedWork]);
   useEffect(() => { applyApplicationTheme(preferences); }, [preferences]);
-  useEffect(() => { const handler = event => { if (latest.current.doc.dirty || Object.keys(latest.current.session.uvPreviews).length || Object.keys(latest.current.session.animationDrafts).length || latest.current.session.paintProject?.dirty) { event.preventDefault(); event.returnValue = ''; } }; window.addEventListener('beforeunload', handler); return () => window.removeEventListener('beforeunload', handler); }, []);
+  useEffect(() => { const handler = event => { if (latest.current.sessions.some(sessionDirty)) { event.preventDefault(); event.returnValue = ''; } }; window.addEventListener('beforeunload', handler); return () => window.removeEventListener('beforeunload', handler); }, []);
   useEffect(() => {
     if (!doc.dirty && doc.revision === 0 && !hasUVPreview && !hasTrackDrafts && session.checkpoint === 0) return;
     const timer = setTimeout(async () => { try { await checkpoint(session); } catch (error) { say(`Recovery checkpoint failed: ${error.message}`, true); } }, 350);
@@ -1135,21 +1207,19 @@ export default function App() {
   // invariant remains strict; malformed models get a choice instead of a crash.
   if (repairBlocked) return <>
     <input ref={files} type="file" accept=".mdl,.mdx,.mdlxlpaint" hidden onChange={event => { if (event.target.files[0]) loadFile(event.target.files[0]); event.target.value = ''; }}/>
+    <div className="repair-model-tabs"><div className="model-tabs" role="tablist" aria-label="Open models">{sessions.map(item => <div className={`model-tab${item === session ? ' active' : ''}`} key={item.id}><button type="button" role="tab" aria-selected={item === session} title={item.path || item.doc.name} onClick={() => activateSession(item)}><span className="model-tab-dirty" aria-hidden="true">{sessionDirty(item) ? '●' : ''}</span><span>{item.doc.name}</span></button><button type="button" className="model-tab-close" aria-label={`Close ${item.doc.name}`} onClick={()=>requestCloseSession(item)}>×</button></div>)}</div></div>
     <GeosetAnimationRepair key={session.id} model={model} name={doc.name} groups={duplicateAnimations} receipt={repairReceipt} busy={saving} status={status}
       unavailable={doc.readOnly ? 'This model is read-only; repair is disabled to preserve unsupported data.' : !window.desktop?.repairGeosetAnimations || !session.path ? 'Save a local copy first. Automatic backup and disk Undo require the desktop build.' : hasUVPreview || hasTrackDrafts || session.paintProject ? 'Pending UV, animation-text or paint work is retained. Repair the original model in a separate model session first.' : ''}
       onRepair={repairDuplicateAnimations} onUndo={undoDuplicateRepair} onAccept={() => setRepairReceipt(null)} onOpen={open} onSave={() => save(true)}/>
-    {dialog?.type === 'unsaved' && <Dialog title="Save changes?" onClose={() => setDialog(null)} footer={<>
-      <button onClick={async () => { const operation = dialog.operation; let saved=!session.paintProject?.dirty||await savePaintProject(); if(saved&&(doc.dirty||hasUVPreview||hasTrackDrafts))saved=await save(); if (saved) { setDialog(null); operation(); } }}>Save</button>
-      <button onClick={() => { const operation = dialog.operation; setDialog(null); operation(); }}>Don't save</button>
-      <button onClick={() => setDialog(null)}>Cancel</button></>}><p>Save changes to {doc.name} before opening another model?</p></Dialog>}
+    {dialog?.type === 'closeTab' && <Dialog title="Close model tab?" onClose={() => setDialog(null)} footer={<><button disabled={saving} onClick={async()=>{const target=dialog.target;if(await saveSessionWork(target)){setDialog(null);removeSession(target);}}}>Save</button><button disabled={saving} onClick={()=>{const target=dialog.target;setDialog(null);removeSession(target);}}>Don't save</button><button disabled={saving} onClick={()=>setDialog(null)}>Cancel</button></>}><p>Save changes to {dialog.target.doc.name} before closing its tab?</p></Dialog>}
   </>;
-  return <WarmKeysProvider preferences={preferences} catalog={commandCatalog} activeScope={settingsTab?'settings':dialog?'dialog':mode==='paint'?'paint':'editor'} onAction={id=>runLatest.current(id)}><div data-vis-ui={visUI || undefined} data-warmkey-scope={mode==='paint'?'paint':'editor'} className={`classic-app${rigWorkspace?' rig-workspace':''}${mode==='bones'?' bones-workspace':''}${activePortrait?' portrait-workspace':''}${mode==='uv'?' uv-mode':''}${mode==='paint'?' paint-mode':''}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const records = [...event.dataTransfer.files], record = records.find(file => /\.(mdl|mdx|mdlxlpaint)$/i.test(file.name)); if(record&&mode==='showcase')loadShowcaseModel(record);else if (record) withUnsaved(async () => { await loadFile(record); }); else loadTextures(records).catch(error => say(error.message, true)); }} onClick={() => context && setContext(null)}>
+  return <WarmKeysProvider preferences={preferences} catalog={commandCatalog} activeScope={settingsTab?'settings':dialog?'dialog':mode==='paint'?'paint':'editor'} onAction={id=>runLatest.current(id)}><div data-vis-ui={visUI || undefined} data-warmkey-scope={mode==='paint'?'paint':'editor'} className={`classic-app${rigWorkspace?' rig-workspace':''}${mode==='bones'?' bones-workspace':''}${activePortrait?' portrait-workspace':''}${mode==='uv'?' uv-mode':''}${mode==='paint'?' paint-mode':''}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const records = [...event.dataTransfer.files], record = records.find(file => /\.(mdl|mdx|mdlxlpaint)$/i.test(file.name)); if(record&&mode==='showcase')loadShowcaseModel(record);else if (record) loadFile(record); else loadTextures(records).catch(error => say(error.message, true)); }} onClick={() => context && setContext(null)}>
     <input hidden ref={files} type="file" accept=".mdl,.mdx,.mdlxlpaint" onChange={event => { const file = event.target.files[0]; event.target.value = ''; if (file) (mode==='showcase'?loadShowcaseModel:loadFile)(file); }}/><input hidden ref={textures} type="file" accept=".blp,.tga,.dds,.png,.jpg,.jpeg,.webp" multiple onChange={event => { loadTextures([...event.target.files]); event.target.value = ''; }}/><input hidden ref={folder} type="file" webkitdirectory="" multiple onChange={event => loadTextures([...event.target.files])}/>
     {!window.desktop && <nav className="classic-menu">{[['File', [['New', 'new'], ['Open...', 'open'], ['Save', 'save'], ['Save as...', 'saveAs'], ['Recovery...', 'recovery']]], ['Edit', [['Undo', 'undo'], ['Redo', 'redo'], ['Copy', 'copy'], ['Paste', 'paste'], ['Special paste...', 'pasteSpecial'], ['Select all', 'selectAll'], ['Clear selection', 'clear'], ['Undo settings...', 'history'], ['Copy keyframes','keyframe:copy'], ['Copy Frame','keyframe:copyPose'], ['Paste keyframes','keyframe:paste'], ['Delete keyframes','keyframe:delete'], ['Clear keyframes','keyframe:clear']]], ['View', VIEW_MENU[displayMode] || []], ['Modules', [['Vertices', 'vertices'], ['Bones', 'bones'], ['UV-maps', 'uv'], ['Movement', 'animation'], ['Animations', 'animations']]], ['Shape', SHAPE_TOOLS.map(tool=>[tool,'shape:'+tool.toLowerCase()])], ['Windows', [['Material & Texture Library', 'textureLibrary'], ['Particle Editor', 'particles'], ...resources.map(v => [v, v])]], ['Settings', [['Mouse and general…', 'settings'], ['Keyboard Shortcuts…', 'warmkeys'], ['Graphical settings…', 'graphics'], ['Recording and screenshots…','captureSettings'], ['Appearance…','appearanceSettings'], ['Configuration…','configurationSettings'], ['Grid…','gridSettings'], ['Warcraft III…','gameDataSettings'], null, ['Undo cache…', 'history'], ['Show pressed keys','pressedKeys'], ['Choose Warcraft III folder…','gameData']]], ['Help', [['Help', 'help'], ['Diagnostics', 'diagnostics'], ['About', 'about']]]].map(([name, items]) => <details key={name}><summary>{name}</summary><div role="menu">{items.map((row,index) => { if(!row)return <hr key={index}/>; const [label,action]=row; return <button data-warmkey={action} role={name==='View' && action!=='clearDisplay'?'menuitemcheckbox':'menuitem'} aria-checked={name==='View' && action!=='clearDisplay'?!!menuChecks[action]:undefined} disabled={!commandEnabled(action)} key={action} onClick={event => { event.currentTarget.closest('details').open = false; runLatest.current(action); }}><span>{name==='View'?(menuChecks[action]?'✓ ':'　 '):''}{label}</span>{['frame','frameSelection','normals'].includes(action)&&<kbd>{(preferences.hotkeys[action]||COMMANDS.find(item=>item.id===action)?.defaultKeys||[]).find(key=>key.length===1)||''}</kbd>}</button>;})}</div></details>)}</nav>}
     <div className="classic-toolbar">
       <div className="classic-toolbar-group"><Tool action="new" icon="new-document" title="New" onClick={() => commands.current.new()}/><Tool action="open" icon="sb_open" title="Open" onClick={open}/><Tool action="save" icon="sb_save" title="Save" onClick={() => save()}/></div>
       <div className="classic-toolbar-group">{[['work', 'sb_cross', 'Work mode'], ['zoom', 'sb_zoom', 'Zoom'], ['rotate', 'sb_rot', 'Camera rotation'], ['move', 'sb_move', 'Move camera']].map(([value, icon, title]) => <Tool action={`camera:${value}`} key={value} icon={icon} title={title} active={cameraMode === value} onClick={() => setCameraMode(value)}/>)}</div>
-      <div className="classic-toolbar-group"><Tool action="undo" icon="sb_undo" title="Undo" disabled={!commandEnabled('undo')} onClick={() => undo(false)}/><Tool action="redo" icon="sb_undo" flip title="Redo" disabled={!commandEnabled('redo')} onClick={() => undo(true)}/><Tool action="copy" icon="sb_copy" title="Copy" disabled={mode!=='animation'&&!selectable.size} onClick={copy}/><Tool action="paste" icon="sb_paste" title="Paste" disabled={mode==='showcase'||doc.readOnly||(mode!=='animation'&&!clipboard.current)} onClick={() => paste()}/></div>
+      <div className="classic-toolbar-group"><Tool action="undo" icon="sb_undo" title="Undo" disabled={!commandEnabled('undo')} onClick={() => undo(false)}/><Tool action="redo" icon="sb_undo" flip title="Redo" disabled={!commandEnabled('redo')} onClick={() => undo(true)}/><Tool action="copy" icon="sb_copy" title="Copy" disabled={!commandEnabled('copy')} onClick={copy}/><Tool action="paste" icon="sb_paste" title="Paste" disabled={!commandEnabled('paste')} onClick={() => paste()}/></div>
       <div className="classic-toolbar-group toolbar-visibility"><button data-warmkey="hide" onClick={hide} disabled={!selectionCount}>Hide</button><button data-warmkey="show" onClick={() => setHidden({})} disabled={!hiddenCount}>Show</button></div>
 
       <Addons onCommand={runCommand} isEnabled={id=>!dialog&&!settingsTab&&commandEnabled(id)}/>
@@ -1159,15 +1229,18 @@ export default function App() {
       {inputStrength}
       <LanguageSwitch language={preferences.language} onChange={language=>changePreferences(previous=>({...previous,language}))}/>
     </div>
-    <div className="classic-modules" role="group" aria-label="Editor modules">
-      <button data-warmkey="vertices" aria-pressed={mode === 'vertices'} onClick={() => selectMode('vertices')}>Vertices</button>
-      <button data-warmkey="bones" aria-pressed={mode === 'bones'} onClick={() => commands.current.bones()}>Bones</button>
-      <button data-warmkey="animation" aria-pressed={mode === 'animation' && animationPanel === 'movement'} onClick={() => selectAnimationPanel('movement')}>Movement</button>
-      <button data-warmkey="animations" aria-pressed={mode === 'animation' && animationPanel === 'animations'} onClick={() => selectAnimationPanel('animations')}>Animations</button>
-
-      <button data-warmkey="paint" aria-pressed={mode === 'paint'} disabled={!commandEnabled('paint')&&mode!=='paint'} onClick={() => commands.current.paint()}>{paintMessage('paint.module')}</button>
-      <button aria-pressed={mode === 'showcase'} onClick={() => selectMode('showcase')}>Showcase</button>
-      {mode === 'vertices' && <><label className="check"><input type="checkbox" aria-label="RGB Preview" checked={rgbPreview} onChange={event=>{setRGBPreview(event.target.checked);if(rgbSequence<0 && model.Sequences.length)setRGBSequence(0);}}/>RGB Preview</label><select aria-label="RGB preview animation" disabled={!rgbPreview} value={rgbSequence} onChange={event=>setRGBSequence(Number(event.target.value))}><option value={-1}>Static RGB</option>{model.Sequences.map((item,index)=><option key={index} value={index}>{item.Name}</option>)}</select></>}
+    <div className="classic-modules" role="group" aria-label="Editors and open models">
+      <div className="editor-modules" role="group" aria-label="Editor modules">
+        <button data-warmkey="vertices" aria-pressed={mode === 'vertices'} onClick={() => selectMode('vertices')}>Vertices</button>
+        <button data-warmkey="bones" aria-pressed={mode === 'bones'} onClick={() => commands.current.bones()}>Bones</button>
+        <button data-warmkey="animation" aria-pressed={mode === 'animation' && animationPanel === 'movement'} onClick={() => selectAnimationPanel('movement')}>Movement</button>
+        <button data-warmkey="animations" aria-pressed={mode === 'animation' && animationPanel === 'animations'} onClick={() => selectAnimationPanel('animations')}>Animations</button>
+        <button data-warmkey="paint" aria-pressed={mode === 'paint'} disabled={!commandEnabled('paint')&&mode!=='paint'} onClick={() => commands.current.paint()}>{paintMessage('paint.module')}</button>
+        <button aria-pressed={mode === 'showcase'} onClick={() => selectMode('showcase')}>Showcase</button>
+        {mode === 'vertices' && <><label className="check"><input type="checkbox" aria-label="RGB Preview" checked={rgbPreview} onChange={event=>{setRGBPreview(event.target.checked);if(rgbSequence<0 && model.Sequences.length)setRGBSequence(0);}}/>RGB Preview</label><select aria-label="RGB preview animation" disabled={!rgbPreview} value={rgbSequence} onChange={event=>setRGBSequence(Number(event.target.value))}><option value={-1}>Static RGB</option>{model.Sequences.map((item,index)=><option key={index} value={index}>{item.Name}</option>)}</select></>}
+      </div>
+      <div className="module-divider" aria-hidden="true"/>
+      <div className="model-tabs" role="tablist" aria-label="Open models">{sessions.map(item => <div className={`model-tab${item === session ? ' active' : ''}`} key={item.id}><button type="button" role="tab" aria-selected={item === session} title={item.path || item.doc.name} onClick={() => activateSession(item)}><span className="model-tab-dirty" aria-hidden="true">{sessionDirty(item) ? '●' : ''}</span><span>{item.doc.name}</span></button><button type="button" className="model-tab-close" aria-label={`Close ${item.doc.name}`} title={`Close ${item.doc.name}`} onClick={event=>{event.stopPropagation();requestCloseSession(item);}}>×</button></div>)}</div>
       <div className="classic-toolbar-group toolbar-modules"><Tool action="textureLibrary" icon="wc3-library" title="Material and Texture Library" onClick={() => openLibrary()}/><Tool action="forge" icon="wc3-forge.gif" title="Forge" disabled={doc.readOnly||saving} onClick={()=>setDialog({type:'forge'})}/><Tool action="bitsAndParts" icon="wc3-bits-and-parts" title="BitsAndParts / Clockwork" disabled={doc.readOnly||saving} onClick={()=>setDialog({type:'bitsAndParts'})}/><Tool action="optimizeModel" icon="wc3-gather-gold" title="OptimizeXL" disabled={!commandEnabled('optimizeModel')} onClick={openOptimizeXL}/><Tool action="particles" className="emitter-tool" icon="btn-mana-flare" badge={<><b>E</b><b>M</b><b>T</b><b>R</b></>} title="Emitter Editor" disabled={!commandEnabled('particles')} onClick={()=>openParticles()}/><PressedKeysTool icon={pressedKeysIcon} active={preferences.showPressedKeys} onClick={()=>commands.current.pressedKeys()}/><Tool className="vis-toggle" icon={visUI ? 'wc3-xl' : 'wc3-vis'} badge={visUI ? 'XL' : 'VIS'} title={visUI ? 'XL' : 'VIS'} active={visUI} onClick={() => setVisUI(value => !value)}/></div>
     </div>
     {mode === 'animation' && animationPanel === 'movement' && <PortraitToolbar model={model} active={activePortrait} cameraIndex={portraitCameraIndex} disabled={doc.readOnly || saving} controlModel={controlsWholeModel(selectedNodeIds)} controlGroups={controlGroups} controlModelGroup={controlModelGroup} onControlModel={() => selectControlModel()} onControlModelGroup={selectControlModel} onToggle={() => activePortrait ? setPortraitEnabled(false) : enablePortrait()} onCameraIndex={value => { setPortraitView('perspective'); setPortraitCameraIndex(value); }} onSetView={updatePortraitCamera} onSnap={() => { setPortraitView('perspective'); setPortraitSnapRevision(value => value + 1); }}/>}
@@ -1220,10 +1293,10 @@ export default function App() {
     {context && <div className="classic-context" role="menu" style={{ position: 'fixed', left: Math.min(context.x, window.innerWidth - 140), top: Math.min(context.y, window.innerHeight - 110) }}>{[['Select all geosets', () => chooseSets(allGeosets(model.Geosets.length))], ['Clear geosets', () => chooseSets(new Set())], ['Invert geosets', () => chooseSets(invertGeosets(selectable, model.Geosets.length))], ['Show all vertices', () => setHidden({})]].map(([label, run]) => <button data-warmkey={({'Select all geosets':'geosetsAll','Clear geosets':'geosetsClear','Invert geosets':'geosetsInvert','Show all vertices':'show'})[label]} role="menuitem" key={label} onClick={run}>{label}</button>)}</div>}
     {dialog?.type === 'resource' && <div className={nodeManagerLive ? 'live-node-manager' : undefined}><Suspense fallback={<div className="classic-modal"><div className="classic-modal-window">Loading resource editor…</div></div>}><ResourceEditor onOpenParticleEditor={openParticles} onViewCamera={(camera,index) => { const evaluated=evaluateModelCamera(model,camera,time,sequence,time); setView('perspective'); setDialog(null); if(evaluated)requestAnimationFrame(()=>window.dispatchEvent(new CustomEvent('mdlxl-view-camera',{detail:evaluated}))); }} selectedNodeId={selectedNodeIds.at(-1)} previewFrame={time} livePreview={nodeManagerLive} onNodeChange={id => setSelectedNodeIds([id])} onWarmKeys={()=>setSettingsTab('warmkeys')} kind={dialog.kind} doc={doc} edit={edit} refresh={refresh} onClose={() => setDialog(null)} onImportTexture={() => openLibrary()} onTextureFolder={textureFolder} selectionByGeoset={validSelection} activeGeoset={activeGeoset} onGeosetChange={index => { setSelectable(previous => new Set([...previous, index])); setActiveGeoset(index); setUvSet(0); }} onVerticesChange={(index, ids) => { if (!doc.model.Geosets[index]) return; setSelection(previous => ({ ...previous, [index]: ids })); setSelectable(previous => new Set([...previous, index])); setActiveGeoset(index); setHidden(previous => ({ ...previous, [index]: [] })); }} onSelectionClear={index => { if (index === undefined) { setSelection({}); setHidden({}); setSelectable(allGeosets(doc.model.Geosets.length)); setActiveGeoset(previous => Math.min(previous, doc.model.Geosets.length - 1)); } else { setSelection(previous => { const next = { ...previous }; delete next[index]; return next; }); setHidden(previous => ({ ...previous, [index]: [] })); } }}/></Suspense></div>}
     {dialog?.type === 'library' && dialog.host !== 'uv' && textureLibraryDialog}
-    {dialog?.type === 'unsaved' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="Save changes?" onClose={() => setDialog(null)} footer={<><button data-warmkey="app:action:3" onClick={async () => { const operation = dialog.operation; let saved=!session.paintProject?.dirty||await savePaintProject(); if(saved&&doc.dirty)saved=await save(); if (saved) { setDialog(null); operation(); } }}>Save</button><button data-warmkey="app:action:4" onClick={() => { const operation = dialog.operation; setDialog(null); operation(); }}>Don't save</button><button data-warmkey="app:action:5" onClick={() => setDialog(null)}>Cancel</button></>}><p>{session.paintProject?.dirty ? <>Save the editable paint preset for {doc.name} before opening another model?{doc.dirty&&<> The model changes will also be saved.</>}</> : <>Save changes to {doc.name} before opening another model?</>}</p></Dialog>}
+    {dialog?.type === 'closeTab' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="Close model tab?" onClose={() => setDialog(null)} footer={<><button data-warmkey="app:action:3" disabled={saving} onClick={async()=>{const target=dialog.target;if(await saveSessionWork(target)){setDialog(null);removeSession(target);}}}>Save</button><button data-warmkey="app:action:4" disabled={saving} onClick={()=>{const target=dialog.target;setDialog(null);removeSession(target);}}>Don't save</button><button data-warmkey="app:action:5" disabled={saving} onClick={()=>setDialog(null)}>Cancel</button></>}><p>Save changes to {dialog.target.doc.name} before closing its tab?</p></Dialog>}
     {dialog?.type === 'history' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="Undo settings" onClose={() => setDialog(null)} footer={<><button data-warmkey="app:action:6" onClick={async () => { try { const options = { budgetBytes: Math.round(historyMB * 1048576), maxSteps: historySteps }; if (!Number.isInteger(historyMB) || historyMB < 64 || historyMB > 4096 || !Number.isInteger(historySteps) || historySteps < 10 || historySteps > 100000) throw new Error("Use 64–4096 MB and 10–100000 steps."); await window.desktop?.configure?.({ historyBudgetBytes: options.budgetBytes, historyMaxSteps: options.maxSteps }); doc.configureHistory(options); settings.current = { ...settings.current, historyBudgetBytes: options.budgetBytes, historyMaxSteps: options.maxSteps }; setDialog(null); refresh(); } catch (error) { say(error.message, true); } }}>Apply</button><button data-warmkey="app:action:7" onClick={() => setDialog(null)}>Close</button></>}><label>Memory limit (MB) <input data-warmkey="app:field:1" aria-label="Undo memory limit MB" type="number" min="64" max="4096" step="1" value={historyMB} onChange={event => setHistoryMB(Number(event.target.value))}/></label><label>Maximum steps <input data-warmkey="app:field:2" aria-label="Maximum undo steps" type="number" min="10" max="100000" step="1" value={historySteps} onChange={event => setHistorySteps(Number(event.target.value))}/></label><p>{doc.historyStats.undoSteps} undo / {doc.historyStats.redoSteps} redo · {(doc.historyStats.usedBytes / 1048576).toFixed(1)} MB used.</p><p>Oldest steps are discarded when a limit is reached. Recovery includes the retained history.</p></Dialog>}
     {dialog?.type === 'recovery' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="Recovery" onClose={() => setDialog(null)}>{recoveries.length ? recoveries.map(item => <button data-warmkey={`restore:${item.id}`} key={item.id} onClick={() => restoreRecovery(item)}>{item.name || item.id} · {item.date ? new Date(item.date).toLocaleString() : 'Saved draft'}</button>) : <p>No recovery drafts.</p>}</Dialog>}
-    {dialog?.type === 'pasteSpecial' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="Special paste" onClose={() => setDialog(null)} footer={<><button data-warmkey="app:action:9" onClick={() => paste(anchor === '' ? null : Number(anchor))}>Paste</button><button data-warmkey="app:action:10" onClick={() => setDialog(null)}>Close</button></>}><label>Parent for imported roots <select data-warmkey="app:field:3" value={anchor} onChange={event => setAnchor(event.target.value)}><option value="">Preserve donor roots</option>{model.Bones.map(node => <option key={node.ObjectId} value={node.ObjectId}>{node.Name}</option>)}</select></label><p>Copies geosets and their dependencies. Animation keys retain their donor frame times.</p></Dialog>}
+    {dialog?.type === 'pasteSpecial' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="Special paste" onClose={() => setDialog(null)} footer={<><button data-warmkey="app:action:9" onClick={() => paste(anchor === '' ? null : Number(anchor), true)}>Paste</button><button data-warmkey="app:action:10" onClick={() => setDialog(null)}>Close</button></>}><label>Parent for imported roots <select data-warmkey="app:field:3" value={anchor} onChange={event => setAnchor(event.target.value)}><option value="">Preserve donor roots</option>{model.Bones.map(node => <option key={node.ObjectId} value={node.ObjectId}>{node.Name}</option>)}</select></label><p>Copies geosets and their dependencies. Animation keys retain their donor frame times.</p></Dialog>}
     {dialog?.type === 'normalRotate' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="Rotate normals" onClose={() => setDialog(null)} footer={<><button data-warmkey="app:action:11" onClick={() => { if (Number.isFinite(normalAngle)) { meshAction('Rotate normals'); setDialog(null); } }}>Apply</button><button data-warmkey="app:action:12" onClick={() => setDialog(null)}>Close</button></>}><label>Angle around workplane normal (degrees) <input data-warmkey="app:field:4" type="number" step="any" value={normalAngle} onChange={event => setNormalAngle(Number(event.target.value))}/></label></Dialog>}
     {dialog?.type === 'diagnostics' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="Model diagnostics" onClose={() => setDialog(null)}>{doc.diagnostics.length ? doc.diagnostics.map((item, i) => <p key={i}><b>{item.severity}: </b>{item.message}</p>) : <p>No model diagnostics.</p>}</Dialog>}
     {dialog?.type === 'help' && <Dialog onWarmKeys={()=>setSettingsTab('warmkeys')} title="MDLxL help" onClose={() => setDialog(null)}><p>Default Hotkeys (customize in Settings): F1 vertices · F2 selected UV maps · F3 Movement. Bones edits the unanimated rig. Animations edits visibility and RGB; BAKE applies current visibility and RGB across the selected animation; ALL applies them across every animation. Bake Text applies edited text tracks. A select · M/Q move · R rotate · Z scale. W switches between work and camera rotation. F toggles Textured View on and off; S selects Surface. Wireframe remains available beside the view direction. Use View / Fit to frame the model.</p><p>Geoset checkboxes control which meshes can be selected. Only checkboxes change selection; Shift checks a range. All, Clear and Invert act on the geoset list. Hide/Show affects editor visibility only.</p><p>T creates a triangle from three selected points. U uncouples, C collapses and B welds points. Welding retains the last selected vertex's UVs and binding. Copy remains available after opening another model.</p><p>Windows opens the material, texture and node managers. Changes can be undone. Untouched saves preserve original bytes; edited sections regenerate through the codec.</p></Dialog>}

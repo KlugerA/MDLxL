@@ -4,6 +4,8 @@
  */
 import { booleanContours, exteriorFrame, triangulateContours } from './forge-geometry.js';
 import { createNode, recalculateNormals, recalculateExtents } from './editor-document.js';
+import { ensureDummyBone } from './dummy-bone.js';
+export { ensureDummyBone } from './dummy-bone.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const finite = (v, name, min = 0) => { if (!Number.isFinite(v) || v < min) throw Error(`${name} is outside the allowed range.`); return v; };
@@ -219,21 +221,6 @@ export function forgeTangents(g) {
   return result;
 }
 /** Resolve the shared role at the moment an operation commits, never in a preview. */
-export function ensureDummyBone(model, { weighted = false } = {}) {
-  const matches = (model.Bones || []).filter(node => node.Name === 'DummyBone' && Number.isInteger(node.ObjectId));
-  if (matches.length > 1) throw Error('More than one DummyBone exists. Rename the extra bone before importing or forging.');
-  let bone = matches[0];
-  if (bone && model.Nodes?.[bone.ObjectId] !== bone) throw Error('DummyBone has an invalid node reference. Repair the model before importing or forging.');
-  if (weighted) {
-    const nextId = Math.max(-1, ...(model.Nodes || []).filter(Boolean).map(node => node.ObjectId), (model.PivotPoints?.length || 0) - 1) + 1;
-    if ((bone?.ObjectId ?? nextId) > (model.Version >= 1400 ? 65535 : 255)) throw Error('DummyBone object ID exceeds this weighted skin format.');
-  }
-  if (!bone) { bone = createNode(model, 'Bone'); bone.Name = 'DummyBone'; }
-  // A shared anchor cannot inherit the visibility of one part.
-  bone.GeosetId = null; bone.GeosetAnimId = null;
-  return bone;
-}
-
 export function commitForge(model, mesh, { texturePath, trimColor = [0.8, 0.65, 0.3] } = {}) {
   if (!texturePath || !String(texturePath).trim()) throw Error('Choose an image before forging.');
   if (!mesh?.geosets?.length || mesh.geosets.some(g => !g.Faces?.length || g.Vertices.length / 3 > 65536)) throw Error('Generate a valid preview before forging.');

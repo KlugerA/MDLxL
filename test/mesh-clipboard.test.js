@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { captureMeshSelection } from '../src/mesh-clipboard.js';
+import { applyMeshClipboardColors, captureMeshSelection } from '../src/mesh-clipboard.js';
 import { createDemoDocument, importGeosets, openDocument } from '../src/editor-document.js';
+import { ensureDummyBone } from '../src/dummy-bone.js';
+import { sampleGeosetAnimation } from '../src/animation.js';
 import { addTriangle, transformVertices } from '../src/editor-commands.js';
 import { SelectionHistory } from '../src/selection-history.js';
 
@@ -133,4 +135,28 @@ test('three copied loose vertices make a valid T triangle and keep imported mate
     assert.deepEqual(reopened.model.Geosets[index].VertexGroup, final.Geosets[index].VertexGroup);
     assert.deepEqual(reopened.model.Geosets[index].Groups, final.Geosets[index].Groups);
   }
+});
+
+test('cross-model paste creates no donor rig nodes, binds every vertex to DummyBone and freezes selected RGB Preview', () => {
+  const source = createDemoDocument();
+  source.model.Sequences = [{ Name: 'Red', Interval: new Uint32Array([100, 200]) }];
+  source.model.GeosetAnims = [{ GeosetId: 0, Flags: 2, Alpha: .5, Color: { LineType: 1, GlobalSeqId: null, Keys: [{ Frame: 100, Vector: new Float32Array([.25, .5, .75]) }] } }];
+  const copied = captureMeshSelection(source.model, { 0: [0, 1, 2] }, new Set([0]), { rgbPreview: true, rgbSequence: 0 });
+  const target = createDemoDocument(), beforeNodes = target.model.Nodes.filter(Boolean).length;
+  const result = target.apply('Paste model tab geometry', sections, model => {
+    const dummy = ensureDummyBone(model, { weighted: copied.indices.some(index => copied.model.Geosets[index].SkinWeights?.length) });
+    const pasted = importGeosets(model, copied.model, copied.indices, null, { rigidNode: dummy.ObjectId });
+    applyMeshClipboardColors(model, pasted.geosetMap, copied.rgbByGeoset);
+    return { ...pasted, dummyId: dummy.ObjectId };
+  });
+  assert.equal(target.model.Nodes.filter(Boolean).length, beforeNodes + 1, 'only DummyBone is added');
+  assert.deepEqual(result.nodeMap, {});
+  for (const gi of result.geosetIndices) {
+    const geoset = target.model.Geosets[gi];
+    assert.deepEqual(geoset.Groups, [[result.dummyId]]);
+    assert.deepEqual([...geoset.VertexGroup], new Array(geoset.Vertices.length / 3).fill(0));
+    assert.deepEqual(sampleGeosetAnimation(target.model, gi, 0, -1).color, [.25, .5, .75]);
+    assert.equal(target.model.GeosetAnims.find(animation => animation.GeosetId === gi).Alpha, .5);
+  }
+  for (const format of ['mdl', 'mdx']) assert.equal(openDocument(target.serialize(format), `tabs.${format}`).diagnostics.some(item => item.severity === 'error'), false);
 });
