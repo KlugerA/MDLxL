@@ -178,13 +178,14 @@ export function movementMarkerRadius(point, helperSize = 6) {
   return Math.max(5, helperSize) + 1;
 }
 
-export function pickMovementNode(nodes, x, y, selectedIds = [], threshold = 13) {
+export function pickMovementNode(nodes, x, y, selectedIds = [], threshold = 13, preferSelected = false) {
   const candidates = nodes.filter(point => point.visible && Math.hypot(point.x - x, point.y - y) <= threshold);
   candidates.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
   // Repeated clicks cycle through coincident nodes, so child and emitter pivots
   // remain selectable even when they occupy the same screen position.
   const close = candidates.filter(point => Math.hypot(point.x - x, point.y - y) <= (candidates[0] ? Math.hypot(candidates[0].x - x, candidates[0].y - y) + 2 : 0));
   const current = close.findIndex(point => selectedIds.includes(point.node.ObjectId));
+  if(preferSelected&&current>=0)return close[current];
   return close.length ? close[(current + 1) % close.length] : null;
 }
 

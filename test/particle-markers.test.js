@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import {PerspectiveCamera,Vector3,Quaternion} from 'three';
 import {markerStyle,rigMarkerGeometry} from '../app/rig-markers-gl.js';
 import {normalizePreferences} from '../src/preferences.js';
+import {pickMovementNode} from '../app/movement-overlay.js';
+test('Move grabs the selected overlapping marker while Select still cycles the stack',()=>{
+ const points=[1,2].map(id=>({node:{ObjectId:id},visible:true,x:20,y:30}));
+ assert.equal(pickMovementNode(points,20,30,[1]).node.ObjectId,2);
+ assert.equal(pickMovementNode(points,20,30,[1],13,true).node.ObjectId,1);
+});
 test('emitters use a camera-facing pentagram ring with normal marker alternatives',()=>{
  const point={node:{ObjectId:0},overlayKind:'particles',visible:true,world:new Vector3(),rotation:new Quaternion(),unitsPerPixel:1};
  const byId=new Map([[0,point]]),shape=markerStyle(point,byId,{}).shape;

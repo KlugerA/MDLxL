@@ -6,7 +6,8 @@ import { viewportCursor } from './viewport-cursors.js';
 import { createPreviewPlatform } from './preview-platform.js';
 import { drawPreviewGeometryOverlay, drawPresentationOverlay } from './preview-overlays.js';
 import { previewPresentationProps, previewOverlaySettings } from './preview-presentation.js';
-import { drawMovementOverlay, projectMovementNodes } from './movement-overlay.js';
+import { drawMovementOverlay, projectMovementNodes, pickMovementNode, movementNodeSelection } from './movement-overlay.js';
+import { visibleMovementPoints } from './preview-overlays.js';
 import { samplePreviewMatrices } from './preview-pose.js';
 import { projectPreviewGeosets, pickPreviewGeoset } from './preview-selection.js';
 import { configureGeosetHighlightMaterial } from './geoset-highlight.js';
@@ -516,6 +517,16 @@ export default function Viewport(inputProps) {
       controls.enabled = false; surface.setPointerCapture(event.pointerId);
       if (action === 'zoom') { down.zoom = camera.zoom; down.cameraPosition = camera.position.clone(); return; }
       if (p.choosingZoomAnchor) { down.action = 'anchor'; state.anchorCandidate = null; return; }
+      if(p.onSelectNodes&&!down.ctrl&&!p.onPickNormalReference){
+        const nodes=visibleMovementPoints(projectMovementNodes(p.model,state.frame,p.sequenceIndex,camera,start.width,start.height,state.globalTime,state.matrices),viewportOverlayOptions(p));
+        const picked=pickMovementNode(nodes,start.x,start.y,p.selectedNodeIds,13,p.transformMode==='translate');
+        if(picked){
+          const ids=movementNodeSelection(p.selectedNodeIds||[],picked.node.ObjectId,{multiple:true,shift:event.shiftKey,ctrl:false});
+          p.onSelectNodes(ids);down.action='node';
+          if(p.onNodeTransform&&p.transformMode==='translate'&&ids.includes(picked.node.ObjectId))state.nodeDrag={ids,pivot:picked.world.clone(),workplane:quad&&boundPane.workplane||p.workplane,workplaneEnabled:!!(quad&&boundPane.workplane)||p.workplaneEnabled!==false,delta:new THREE.Vector3(),moved:false};
+          invalidate();event.preventDefault();event.stopImmediatePropagation();return;
+        }
+      }
       if (p.onPickNormalReference || p.transformMode === 'select' || p.sequenceIndex >= 0 || p.playing || down.ctrl && p.onInspectGeoset) { down.action = 'select'; return; }
       const active = editableGeosets(p), selected = selections(p), snapshots = {}, selectedMap = {}, pivot = new THREE.Vector3(); let count = 0;
       for (const [key, ids] of Object.entries(selected)) {
@@ -564,6 +575,10 @@ export default function Viewport(inputProps) {
         controls.update(); return;
       }
       if (down.action === 'select') { if (Math.hypot(dx, dy) > 5) showBox({ left: Math.min(down.x, end.x), top: Math.min(down.y, end.y), width: Math.abs(dx), height: Math.abs(dy) }); return; }
+      if(down.action==='node'){
+        const drag=state.nodeDrag;if(drag){drag.delta=translateInPlane(down,end,drag,event.shiftKey);drag.moved=Math.hypot(dx,dy)>1;invalidate();}
+        return;
+      }
       const drag = state.drag; if (!drag) return;
       const payload = { selections: drag.selections, geosetIndex: latest.current.selectedGeoset, indices: drag.selections[latest.current.selectedGeoset] || [], pivot: drag.pivot.toArray() };
       const rotation = new THREE.Euler(), scale = new THREE.Vector3(1, 1, 1), translation = new THREE.Vector3();
@@ -602,6 +617,11 @@ export default function Viewport(inputProps) {
       const start = down; down = null; setBox(null); controls.enabled = true;
       if (!start) return;
       if (surface.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
+      if(start.action==='node'){
+        const drag=state.nodeDrag;state.nodeDrag=null;
+        if(event.type!=='pointercancel'&&drag?.moved)latest.current.onNodeTransform?.({nodeIds:drag.ids,mode:'move',space:'world',values:drag.delta.toArray(),restPose:true,workplaneEnabled:drag.workplaneEnabled,workplane:drag.workplane});
+        invalidate();return;
+      }
       const drag = state.drag; state.drag = null;
       if (drag) {
         if (drag.moved && drag.payload) latest.current.onTransform?.(drag.payload);
@@ -664,6 +684,7 @@ export default function Viewport(inputProps) {
       if (hit) p.onSelectGeoset?.(hit.object.userData.geosetIndex);
     }
     function cancelGesture() {
+      state.nodeDrag=null;
       rotating = false; latest.current.onCameraGestureChange?.(false);
       const drag = state.drag;
       if (drag) for (const [key, vertices] of Object.entries(drag.snapshots)) {
@@ -685,7 +706,7 @@ export default function Viewport(inputProps) {
     };
     // WarmKeys consumes Escape before viewport key listeners. Its Clear command
     // gives an in-progress drag first refusal through this cancelable event.
-    const cancelCommand = event => { if (quad && down) { cancelGesture(); event.preventDefault(); } };
+    const cancelCommand = event => { if ((quad||state.nodeDrag) && down) { cancelGesture(); event.preventDefault(); } };
     const contextMenu = event => event.preventDefault();
     const pointerLeave = () => { if (!down) clearHoveredGeoset(); };
     bindInput(singlePane);
@@ -847,6 +868,7 @@ export default function Viewport(inputProps) {
           nodeCanvas.width = Math.round(surface.clientWidth * renderer.getPixelRatio()); nodeCanvas.height = Math.round(surface.clientHeight * renderer.getPixelRatio());
           const width = surface.clientWidth, height = surface.clientHeight;
           const nodes = projectMovementNodes(p.model, state.frame, p.sequenceIndex, camera, width, height, state.globalTime, state.matrices);
+          if(state.nodeDrag)for(const point of nodes)if(state.nodeDrag.ids.includes(point.node.ObjectId)){point.world.add(state.nodeDrag.delta);const projected=point.world.clone().project(camera);point.x=(projected.x+1)*width/2;point.y=(1-projected.y)*height/2;}
           const options = { ...overlays, preferences: p.preferences, glMarkers: true, wireframeMarkers: p.mode === 'wireframe' || p.mode === 'vertices', occludedMarkerEdges: p.mode === 'solid' || p.mode === 'textured' };
           if (!quad) renderer.resetState();
           rigMarkers.draw(camera, nodes, p.selectedNodeIds || [], options); renderer.resetState(); renderer.setScissorTest(quad);
@@ -1000,7 +1022,7 @@ export default function Viewport(inputProps) {
   useEffect(() => { setAdjustingSensitivity(null); }, [props.preferences?.wheelMode]);
   useEffect(() => { const controls = runtime.current?.controls; if (controls) controls.rotateSpeed = controls.panSpeed = pointerSensitivityValue(props.preferences?.pointerSensitivity); }, [props.preferences?.pointerSensitivity]);
   useEffect(() => { runtime.current?.resize(); }, [graphics.pixelRatio, showGrid, props.overlays?.grid, props.preferences?.grid]);
-  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.presentation, props.previewMode, props.previewOverlay, model, revision, props.hoveredGeoset, selectedGeoset, selectedVertices, props.selectionByGeoset, props.selectableGeosets, hiddenGeosets, props.hiddenVertices, mode, showSkeleton, showGrid, props.showAxes, props.showVertices, props.overlays, props.showCameras, props.preferences, props.rgbPreview, props.rgbPreviewSequenceIndex, workplane, transformMode, props.zoomAnchor, props.choosingZoomAnchor, sequenceIndex, time, playing, teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden, graphics.textures, graphics.lighting]);
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.presentation, props.previewMode, props.previewOverlay, props.selectedNodeIds, model, revision, props.hoveredGeoset, selectedGeoset, selectedVertices, props.selectionByGeoset, props.selectableGeosets, hiddenGeosets, props.hiddenVertices, mode, showSkeleton, showGrid, props.showAxes, props.showVertices, props.overlays, props.showCameras, props.preferences, props.rgbPreview, props.rgbPreviewSequenceIndex, workplane, transformMode, props.zoomAnchor, props.choosingZoomAnchor, sequenceIndex, time, playing, teamColor, props.suspended, graphics.maxFps, graphics.pauseWhenHidden, graphics.textures, graphics.lighting]);
   return <div className="viewport" style={{ position: 'relative', width: '100%', height: '100%', minHeight: props.presentation === 'preview' ? 0 : 180, background: '#ccc', overflow: 'hidden' }}>
     <div ref={host} tabIndex={0} aria-label="3D model viewport" style={{ position: 'absolute', inset: 0, outline: 'none', cursor: viewportCursor(cameraMode, transformMode) }} />
     {!props.quadView && props.showOrientationCompass !== false && props.presentation !== 'preview' && <div className="viewport-orientation-compass" aria-label="View orientation" title="View orientation — click an axis to snap the camera" style={{ position: 'absolute', top: 31, left: 4, width: 82, height: 82, zIndex: 3, filter: 'drop-shadow(0 1px 2px #0008)' }}>

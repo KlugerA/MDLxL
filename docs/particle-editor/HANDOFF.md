@@ -2,7 +2,9 @@
 
 Continue on `codex/particle-editor-prototype`, draft PR https://github.com/KlugerA/MDLxL/pull/60. The managed checkout is `C:\Users\PC\.codex\worktrees\particle-editor-prototype\MDLxL`. The base was `c62faa4299a0b44519f992cf3765da7623e72417` (v0.14.1). Keep this work isolated: no main merge, release, version bump or desktop installation has been authorized. The primary checkout has unrelated local changes.
 
-The UX follow-up is ready for another user test: direct library entry, favorites and Picture fixes; independent My work recovery; EMTR and simple markers; chosen Movement intervals; main move/bind/visibility controls; and ribbons fitted to marked weapon polygons. Current tester, asset provenance, exact evidence and remaining boundaries are in [USER-FEEDBACK.md](USER-FEEDBACK.md); these supersede checkpoint-9 status below. Keep test windows independent of source/dist rebuilds. This is prototype evidence, not acceptance of every contract gate or Warcraft fidelity.
+The UX follow-up is ready for another user test: direct library entry, favorites and Picture fixes; independent My work recovery; EMTR and simple markers; chosen Movement intervals; main move/bind/visibility controls; and ribbons fitted to marked weapon polygons. Ribbon creation now follows **Add ribbon → animation checkboxes → Create → visual editor**, with automatic bone binding and no frame or ghost-placement gates. Current tester, asset provenance, exact evidence and remaining boundaries are in [USER-FEEDBACK.md](USER-FEEDBACK.md); these supersede checkpoint-9 status below. Keep test windows independent of source/dist rebuilds. This is prototype evidence, not acceptance of every contract gate or Warcraft fidelity.
+
+Latest feedback adds a ribbon Appearance tab, numeric fields beside visual sliders, Nodes/Emitters in Quick display, direct marker selection/movement/deletion in Vertices and first-grab movement in Bones with existing Attach/Detach. Animation/ingredient switches retain the preview canvas. The user's exact black-screen stall remains unreproduced; do not describe it as conclusively fixed. The latest tester copies their dirty Knight model recovery and portable assets, preserving undo and the original file. See USER-FEEDBACK.md for the 177 focused passes, Electron evidence and two reproduced baseline movement-test failures.
 
 ## Working path
 
@@ -43,6 +45,7 @@ node test/particle-workflow.electron.cjs
 node test/particle-picture.electron.cjs
 node test/particle-main-rig.electron.cjs
 node test/particle-ribbon-fit.electron.cjs
+node test/particle-feedback.electron.cjs
 node test/particle-lifecycle.electron.cjs
 ```
 

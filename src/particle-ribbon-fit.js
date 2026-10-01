@@ -15,7 +15,9 @@ export function ribbonPolygonSelection(model,selection={}){
   }
  }
  const first=bindings[0]||[],rigid=bindings.length>0&&first.length<=1&&bindings.every(group=>group.length===first.length&&group[0]===first[0]);
- return {points,polygons,parent:rigid&&first.length?first[0]:null,needsBone:bindings.length>0&&!rigid};
+ const influence=new Map();for(const group of bindings)for(const id of group)influence.set(id,(influence.get(id)||0)+1/group.length);
+ const parent=[...influence].sort((a,b)=>b[1]-a[1])[0]?.[0]??null;
+ return {points,polygons,parent,needsBone:bindings.length>0&&!rigid};
 }
 
 /** WC3 SD ribbons are straight strips along local Y. Fit that axis to the marked back. */
