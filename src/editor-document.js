@@ -798,12 +798,15 @@ export function appendGeosetGeometry(target, source) {
 }
 
 /** Append selected geometry with its required rig, textures and animation dependencies. */
-export function importGeosets(target, source, selectedIndices = source.Geosets.map((_, i) => i), anchor = null, { sameModel = false, targetGeoset = null } = {}) {
+export function importGeosets(target, source, selectedIndices = source.Geosets.map((_, i) => i), anchor = null, { sameModel = false, targetGeoset = null, rigidNode = null } = {}) {
   if (source.Version !== target.Version) throw new Error('Geoset import currently requires matching format versions to preserve SD/HD data.');
   if (source.BindPoses?.length || target.BindPoses?.length) throw new Error('Geoset import with bind-pose matrices is not supported yet.');
   if (anchor && typeof anchor === 'object') anchor = anchor.ObjectId;
   if (anchor != null && !target.Nodes?.[anchor]) throw new Error('The destination anchor node does not exist.');
-  const reuseExisting = sameModel && anchor == null;
+  if (rigidNode && typeof rigidNode === 'object') rigidNode = rigidNode.ObjectId;
+  if (rigidNode != null && !target.Nodes?.[rigidNode]) throw new Error('The rigid paste anchor node does not exist.');
+  const rigid = rigidNode != null, reuseExisting = sameModel && anchor == null && !rigid;
+  const reuseDependencies = reuseExisting || rigid;
   const indices = [...new Set(selectedIndices)];
   if (!indices.length) return { geosetIndices: [], selection: {}, nodeMap: {}, materialMap: {}, textureMap: {}, warnings: [] };
   for (const index of indices) if (!source.Geosets?.[index]) throw new Error(`Source geoset ${index} does not exist.`);
@@ -818,8 +821,10 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
   }
   for (const index of indices) {
     const g = source.Geosets[index];
-    for (const id of (g.Groups || []).flat()) requireNode(id);
-    for (let i = 0; i < (g.SkinWeights?.length || 0); i += 8) for (let k = 0; k < 4; k++) if (g.SkinWeights[i + 4 + k]) requireNode(g.SkinWeights[i + k]);
+    if (!rigid) {
+      for (const id of (g.Groups || []).flat()) requireNode(id);
+      for (let i = 0; i < (g.SkinWeights?.length || 0); i += 8) for (let k = 0; k < 4; k++) if (g.SkinWeights[i + 4 + k]) requireNode(g.SkinWeights[i + k]);
+    }
   }
   const maps = { textures: new Map(), materials: new Map(), textureAnims: new Map(), globals: new Map(), nodes: new Map(), geosets: new Map(), geosetAnims: new Map() };
   const createdNodes = new Set(), createdGeosets = new Set(), selections = new Map();
@@ -844,7 +849,7 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
   const materialRef = (old) => {
     if (!source.Materials[old]) throw new Error(`Source geoset references missing material ${old}.`);
     if (!maps.materials.has(old)) {
-      if (reuseExisting) {
+      if (reuseDependencies) {
         const original = fingerprint(target.Materials[old]) === fingerprint(source.Materials[old]) ? old : -1;
         const existing = original >= 0 ? original : target.Materials.findIndex((material) => fingerprint(material) === fingerprint(source.Materials[old]));
         if (existing >= 0) { maps.materials.set(old, existing); return existing; }
@@ -887,13 +892,25 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
   for (const index of indices) {
     const g = clone(source.Geosets[index]);
     g.MaterialID = materialRef(g.MaterialID);
-    g.Groups = g.Groups.map((group) => group.map((id) => maps.nodes.get(id)));
-    for (let i = 0; i < (g.SkinWeights?.length || 0); i += 8) for (let k = 0; k < 4; k++) {
-      if (g.SkinWeights[i + 4 + k]) {
-        const mapped = maps.nodes.get(g.SkinWeights[i + k]);
-        if (mapped > (target.Version >= 1400 ? 65535 : 255)) throw new Error('Imported weighted skin would exceed the format bone-index capacity.');
-        g.SkinWeights[i + k] = mapped;
-      } else g.SkinWeights[i + k] = 0;
+    if (!g.Faces.length) { g.PrimitiveTypes = new Uint32Array(); g.PrimitiveCounts = new Uint32Array(); }
+    if (rigid) {
+      const count = g.Vertices.length / 3;
+      g.Groups = [[rigidNode]]; g.TotalGroupsCount = 1; g.VertexGroup = new Uint8Array(count);
+      if (g.SkinWeights?.length) {
+        const maximum = target.Version >= 1400 ? 65535 : 255;
+        if (rigidNode > maximum) throw new Error(`DummyBone must have an object ID from 0 to ${maximum} for weighted geometry.`);
+        g.SkinWeights = new (target.Version >= 1400 ? Uint16Array : Uint8Array)(count * 8);
+        for (let vertex = 0; vertex < count; vertex++) g.SkinWeights.set([rigidNode, 0, 0, 0, 255, 0, 0, 0], vertex * 8);
+      }
+    } else {
+      g.Groups = g.Groups.map((group) => group.map((id) => maps.nodes.get(id)));
+      for (let i = 0; i < (g.SkinWeights?.length || 0); i += 8) for (let k = 0; k < 4; k++) {
+        if (g.SkinWeights[i + 4 + k]) {
+          const mapped = maps.nodes.get(g.SkinWeights[i + k]);
+          if (mapped > (target.Version >= 1400 ? 65535 : 255)) throw new Error('Imported weighted skin would exceed the format bone-index capacity.');
+          g.SkinWeights[i + k] = mapped;
+        } else g.SkinWeights[i + k] = 0;
+      }
     }
     const requestedTarget = indices.length === 1 && Number.isInteger(targetGeoset) && targetGeoset >= 0 ? targetGeoset : index;
     const destination = reuseExisting && target.Geosets[requestedTarget]?.MaterialID === g.MaterialID ? requestedTarget : null;
@@ -919,8 +936,9 @@ export function importGeosets(target, source, selectedIndices = source.Geosets.m
   }
   normalizeModel(target); updateCounts(target); recalculateExtents(target);
   const warnings = reuseExisting && !maps.textureAnims.size ? [] : ['Imported animation keys retain their source frame times. Destination sequence definitions are unchanged; align intervals when needed.'];
-  if (anchor != null) warnings.push('Imported roots are parented to the anchor; its transforms now affect the imported rig.');
-  return { geosetIndices: [...new Set(maps.geosets.values())], selection: Object.fromEntries(selections), nodeMap: Object.fromEntries(maps.nodes), materialMap: Object.fromEntries(maps.materials), textureMap: Object.fromEntries(maps.textures), warnings };
+  if (rigid) warnings.push('Pasted geometry is rigidly attached to DummyBone.');
+  else if (anchor != null) warnings.push('Imported roots are parented to the anchor; its transforms now affect the imported rig.');
+  return { geosetIndices: [...new Set(maps.geosets.values())], geosetMap: Object.fromEntries(maps.geosets), selection: Object.fromEntries(selections), nodeMap: Object.fromEntries(maps.nodes), materialMap: Object.fromEntries(maps.materials), textureMap: Object.fromEntries(maps.textures), warnings };
 }
 
 function makeGeoset(vertices, faces, material, bone = 0) {

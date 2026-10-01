@@ -25,6 +25,7 @@ const {saveOptimizeXLPair}=require('./optimizexl-save.cjs');
 const {BackgroundLibrary}=require('./preview-backgrounds.cjs');
 const {PaintTextureLibrary}=require('./paint-textures.cjs');
 const {BitsAndPartsLibrary}=require('./bits-and-parts.cjs');
+const {modelPathsFromArguments}=require('./external-model-open.cjs');
 let bitsAndPartsLibrary;
 function getBitsAndPartsLibrary() { return bitsAndPartsLibrary ||= new BitsAndPartsLibrary(path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), 'BitsAndParts')); }
 let previewBackgroundLibrary;
@@ -39,7 +40,11 @@ app.setName('MDLxL');
 if (process.platform === 'win32') app.setAppUserModelId('com.mdlxl.editor');
 const profile = process.env.MDLXL_PROFILE || path.resolve(__dirname,'../profile');
 app.setPath('userData',profile);
-let win, modelCloseState={dirty:false,saved:false}, recents=[],settings={},initialModel=null;
+const launchModelPaths=modelPathsFromArguments(process.argv.slice(1),process.cwd());
+const singleInstanceLock=app.requestSingleInstanceLock({modelPaths:launchModelPaths});
+if(!singleInstanceLock)app.quit();
+let win, modelCloseState={dirty:false,saved:false}, recents=[],settings={},initialModel=null,initialModels=[];
+let externalModelsReady=false,externalModelQueue=[],externalOpenChain=Promise.resolve();
 let settingsStore,preferenceApi,commandCatalog;
 let nativeEditorState={readOnly:true,saving:false};
 let translateText=value=>value;
@@ -117,6 +122,29 @@ async function readModel(file,remember=true){
   if(remember){await persistRecents(file);initialModel=result;}
   return result;
 }
+function focusMainWindow(){
+  if(!win||win.isDestroyed()||process.env.MDLVIS_HEADLESS==='1')return;
+  if(win.isMinimized())win.restore();
+  win.show();win.focus();
+}
+function flushExternalModels(){
+  if(!externalModelsReady||!externalModelQueue.length||!win||win.isDestroyed())return;
+  const records=externalModelQueue.splice(0);win.webContents.send('model:externalOpen',records);
+}
+function enqueueExternalModels(files){
+  focusMainWindow();
+  if(!files.length)return;
+  externalOpenChain=externalOpenChain.then(async()=>{
+    const records=[];
+    for(const file of files)try{records.push(await readModel(file));}catch(error){console.error(`Could not open ${file}: ${error.message}`);}
+    externalModelQueue.push(...records);flushExternalModels();
+  });
+}
+ipcMain.on('model:externalReady',(event,ready)=>{if(event.sender!==win?.webContents)return;externalModelsReady=ready===true;if(externalModelsReady)flushExternalModels();});
+if(singleInstanceLock)app.on('second-instance',(_event,commandLine,workingDirectory,additionalData)=>{
+  const supplied=Array.isArray(additionalData?.modelPaths)?additionalData.modelPaths:commandLine.slice(1);
+  enqueueExternalModels(modelPathsFromArguments(supplied,workingDirectory||process.cwd()));
+});
 async function selectOpen(){const result=await dialog.showOpenDialog(win,{filters,properties:['openFile']});if(result.canceled)return [];return Promise.all(result.filePaths.map(file=>readModel(file)));}
 ipcMain.handle('model:open',selectOpen);
 ipcMain.handle('preview:openModel',async event=>{
@@ -300,7 +328,7 @@ ipcMain.handle('recovery:read',async(_,id)=>{const payload=await recoveryStore.r
 const publicSettings=()=>({...settings,gameData:settings.gameData||null,gameDataDiscovery:gameDataDiscovery?.result});
 // Historical drafts are only needed for a crash prompt or the Recovery command.
 // A normal launch must not wait on every saved draft before starting the viewport.
-ipcMain.handle('app:initial',async()=>({settings:publicSettings(),model:initialModel,recoveryPrompt,recovery:recoveryPrompt?(await recoveryStore.list()).filter(r=>r.dirty!==false):[]}));
+ipcMain.handle('app:initial',async()=>({settings:publicSettings(),model:initialModel,models:initialModels,recoveryPrompt,recovery:recoveryPrompt?(await recoveryStore.list()).filter(r=>r.dirty!==false):[]}));
 ipcMain.handle('settings:get',publicSettings);
 ipcMain.handle('settings:configure',(_,value)=>{
   if(value&&Object.prototype.hasOwnProperty.call(value,'gameData'))throw Error('Use the game data folder picker to change the asset folder.');
@@ -392,7 +420,7 @@ ipcMain.handle('texture:folder',async(_,requested)=>{
   }
   return loaded;
 });
-app.whenReady().then(async()=>{
+if(singleInstanceLock)app.whenReady().then(async()=>{
   const [preferences,commands,localization]=await Promise.all([import('../src/preferences.js'),import('../src/commands.js'),import('../src/localization.js')]);
   translateText=localization.translate;
   // Localize native dialog presentation while retaining paths, extensions and IDs.
@@ -413,12 +441,14 @@ app.whenReady().then(async()=>{
   if(process.env.MDLVIS_GAME_DATA)settings.gameData=process.env.MDLVIS_GAME_DATA;
   try{recoveryPrompt=await sessionJournal.begin();}catch(error){console.warn('Session journal: '+error.message);}
   gameDataDiscovery=new GameDataDiscovery({cacheFile:path.join(profile,'game-data-discovery.json'),appFolders:[path.dirname(process.execPath),app.getAppPath()]});
-  const argument=process.argv.slice(1).find(p=>/\.(mdl|mdx|mdlxlpaint)$/i.test(p));if(argument)try{initialModel=await readModel(argument);}catch(e){console.error(e.message);}
+  for(const file of launchModelPaths)try{initialModels.push(await readModel(file));}catch(e){console.error(e.message);}
+  initialModel=initialModels[0]||null;
   // Discover game data only when textures are requested or the user rescans.
   // A blank editor starts without registry queries or a drive-search process.
   await createWindow();
 });
 async function createWindow(bounds={}){
+  externalModelsReady=false;
   const current=new BrowserWindow({width:1100,height:760,...bounds,minWidth:720,minHeight:480,show:process.env.MDLVIS_HEADLESS!=='1',backgroundColor:(APPLICATION_THEMES[settings.preferences?.theme] || APPLICATION_THEMES.light).colors.panel,title:'MDLxL',icon:path.join(__dirname,'../dist/branding/MDLxL.ico'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   if(process.env.MDLVIS_HEADLESS!=='1')current.maximize();
   win=current;nativeEditorState={readOnly:true,saving:false};

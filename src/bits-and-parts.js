@@ -1,4 +1,4 @@
-import { ensureDummyBone } from './forge.js';
+import { ensureDummyBone } from './dummy-bone.js';
 import { recalculateExtents } from './editor-document.js';
 import { sampleTrack } from './animation.js';
 
