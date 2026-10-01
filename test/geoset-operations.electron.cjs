@@ -45,7 +45,7 @@ async function waitFor(cdp, expression) {
   const fixture = path.join(output, 'loose-parts.mdx'), doc = createDemoDocument();
   doc.apply('Prepare loose parts', ['Geosets'], model => {
     const g = model.Geosets[0];
-    Object.assign(g, gather(g, [0, 1, 2, 3, 4, 5]));
+    Object.assign(g, gather(g, [0, 1, 2, 3, 4, 5, 6]));
     g.Faces = Uint16Array.of(0, 1, 2, 3, 4, 5);
     g.PrimitiveTypes = Uint32Array.of(4); g.PrimitiveCounts = Uint32Array.of(6);
     updateBounds(g);
@@ -58,31 +58,34 @@ async function waitFor(cdp, expression) {
     cdp = await connect((await target(port)).webSocketDebuggerUrl);
     await waitFor(cdp, `document.querySelectorAll('.classic-geoset-list [role="option"]').length === 5`);
     const controls = await evaluate(cdp, `(() => { const buttons = [...document.querySelectorAll('.classic-geoset-operations button')]; const list = document.querySelector('.classic-geosets'); return { labels: buttons.map(button => button.textContent.trim()), beforeList: buttons.every(button => !!(button.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING)), sidebarWidth: getComputedStyle(document.querySelector('.classic-sidebar')).width }; })()`);
-    assert.deepEqual(controls.labels, ['Seperate by Loose parts', 'Nuclear Seperation', 'Merge Geosets']);
+    assert.deepEqual(controls.labels, ['Seperate by Loose parts', 'Nuclear Seperation', 'Merge Geosets', 'NormalsXL', 'Delete free vertices']);
     assert.equal(controls.beforeList, true);
-    assert.deepEqual(await evaluate(cdp, `[...document.querySelectorAll('.classic-geoset-operations button')].map(button => button.disabled)`), [true, true, true]);
+    assert.deepEqual(await evaluate(cdp, `[...document.querySelectorAll('.classic-geoset-operations button')].map(button => button.disabled)`), [true, true, true, true, false]);
     await evaluate(cdp, `document.querySelector('[data-warmkey="geosetsClear"]').click()`);
+    assert.deepEqual(await evaluate(cdp, `[...document.querySelectorAll('.classic-geoset-operations button')].map(button => button.disabled)`), [true, true, true, true, true]);
     await evaluate(cdp, `document.querySelector('[aria-label="Select geoset 0"]').click()`);
-    assert.deepEqual(await evaluate(cdp, `[...document.querySelectorAll('.classic-geoset-operations button')].map(button => button.disabled)`), [true, true, true]);
+    assert.deepEqual(await evaluate(cdp, `[...document.querySelectorAll('.classic-geoset-operations button')].map(button => button.disabled)`), [true, true, true, true, false]);
+    await evaluate(cdp, `document.querySelector('.classic-geoset-operations button:last-child').click()`);
+    await waitFor(cdp, `document.querySelector('.classic-status span').textContent === 'Deleted 1 free vertex from selected geosets.'`);
     const selectAll = async () => {
       await evaluate(cdp, `document.querySelector('[aria-label="3D model viewport"]').focus()`);
       const data = { key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65, modifiers: 2 };
       await cdp.send('Input.dispatchKeyEvent', { ...data, type: 'rawKeyDown' });
       await cdp.send('Input.dispatchKeyEvent', { ...data, type: 'keyUp' });
       await waitFor(cdp, `!document.querySelector('.classic-geoset-operations button:first-child').disabled`);
-      assert.deepEqual(await evaluate(cdp, `[...document.querySelectorAll('.classic-geoset-operations button')].map(button => button.disabled)`), [false, false, false]);
+      assert.deepEqual(await evaluate(cdp, `[...document.querySelectorAll('.classic-geoset-operations button')].map(button => button.disabled)`), [false, false, false, false, false]);
     };
     await selectAll();
     await evaluate(cdp, `document.querySelector('.classic-geoset-operations button:first-child').click()`);
     await waitFor(cdp, `document.querySelectorAll('.classic-geoset-list [role="option"]').length === 6`);
-    await evaluate(cdp, `document.querySelector('.classic-geoset-operations button:last-child').click()`);
+    await evaluate(cdp, `document.querySelector('.classic-geoset-operations button:nth-child(3)').click()`);
     await waitFor(cdp, `document.querySelectorAll('.classic-geoset-list [role="option"]').length === 5`);
-    assert.deepEqual(await evaluate(cdp, `[...document.querySelectorAll('.classic-geoset-operations button')].map(button => button.disabled)`), [false, false, false]);
+    assert.deepEqual(await evaluate(cdp, `[...document.querySelectorAll('.classic-geoset-operations button')].map(button => button.disabled)`), [false, false, false, false, false]);
     await selectAll();
     await evaluate(cdp, `document.querySelector('.classic-geoset-operations button:nth-child(2)').click()`);
     await waitFor(cdp, `document.querySelectorAll('.classic-geoset-list [role="option"]').length === 6`);
     assert.equal(await evaluate(cdp, `getComputedStyle(document.querySelector('.classic-sidebar')).width`), controls.sidebarWidth);
     assert.ok(fs.readFileSync(fixture).equals(original));
-    console.log('PASS rebuilt Electron: selection required, refined and nuclear split, merge, sidebar width and input file preserved');
+    console.log('PASS rebuilt Electron: selected-geoset free-vertex deletion, refined and nuclear split, merge, sidebar width and input file preserved');
   } finally { cdp?.close(); electron.kill(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
