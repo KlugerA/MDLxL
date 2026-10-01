@@ -1,0 +1,731 @@
+{
+  "wc3-36c27f3f36f86e4cd78ec84b": {
+    "name": "Orange ember patch",
+    "categories": [
+      "Fire"
+    ],
+    "tags": [
+      "orange",
+      "embers",
+      "small",
+      "patch"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "ff8be81cda5942c3cc620aa64fb9e76b165247b79c4c8449b925292ca8c5a4ff"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 592.8888888888889
+    }
+  },
+  "wc3-84bfc51951bbdb498a0e06ae": {
+    "name": "Low black smoke",
+    "categories": [
+      "Smoke"
+    ],
+    "tags": [
+      "dark",
+      "black",
+      "low",
+      "smoke"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "ff8be81cda5942c3cc620aa64fb9e76b165247b79c4c8449b925292ca8c5a4ff"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 592.8888888888889
+    }
+  },
+  "wc3-7e9456278c033c9f05c8922e": {
+    "name": "Red pointed burst",
+    "categories": [
+      "Bursts",
+      "Sparks"
+    ],
+    "tags": [
+      "red",
+      "sharp",
+      "spiky",
+      "burst"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "54a1745d8e2b6c05982ee170f8a56e18b78119391c69c4d516b061fe8027a663"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 766.3333333333334
+    }
+  },
+  "wc3-5026d69b598d0325292d673a": {
+    "name": "Orange fire bloom",
+    "categories": [
+      "Fire",
+      "Bursts"
+    ],
+    "tags": [
+      "orange",
+      "yellow",
+      "bright",
+      "cloud"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "54a1745d8e2b6c05982ee170f8a56e18b78119391c69c4d516b061fe8027a663"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 1133
+    }
+  },
+  "wc3-ed4931734010fbc22cfaf16f": {
+    "name": "Narrow flame column",
+    "categories": [
+      "Fire"
+    ],
+    "tags": [
+      "orange",
+      "yellow",
+      "vertical",
+      "flame"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "1f6d72e4914f6e5c7e6456f56ccffe12ba3bf23261d999f8375ef043ffd4ee9d"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 1592.6666666666667
+    }
+  },
+  "wc3-ef401066f00c970a0336138c": {
+    "name": "Dark smoke column",
+    "categories": [
+      "Smoke"
+    ],
+    "tags": [
+      "black",
+      "dark",
+      "vertical",
+      "smoke"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "1f6d72e4914f6e5c7e6456f56ccffe12ba3bf23261d999f8375ef043ffd4ee9d"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 1592.6666666666667
+    }
+  },
+  "wc3-292a55895a123e48ca3d0237": {
+    "name": "Layered dark smoke",
+    "categories": [
+      "Smoke"
+    ],
+    "tags": [
+      "black",
+      "dark",
+      "stacked",
+      "smoke"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "467f82436f162cc236ba58366fba34ac5bef898414ce1e523def5721d494a739"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 1592.6666666666667
+    }
+  },
+  "wc3-3540bb584dab009ee1a21451": {
+    "name": "White steam puff",
+    "categories": [
+      "Smoke"
+    ],
+    "tags": [
+      "white",
+      "gray",
+      "soft",
+      "steam"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "4447ab290f45862f5c841485177932c4854a57fc01ca5dd85806649674587b47"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 333.3333333333333
+    }
+  },
+  "wc3-3d01165deed4bee22e35bc57": {
+    "name": "Bright white cloud",
+    "categories": [
+      "Smoke",
+      "Glows"
+    ],
+    "tags": [
+      "white",
+      "bright",
+      "cloud"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "4447ab290f45862f5c841485177932c4854a57fc01ca5dd85806649674587b47"
+    },
+    "previewSample": {
+      "sequence": 2,
+      "time": 833.6666666666666
+    }
+  },
+  "wc3-d6544670a0b2a7ad491e4602": {
+    "name": "Icy blue streak",
+    "categories": [
+      "Trails"
+    ],
+    "tags": [
+      "blue",
+      "cyan",
+      "ice",
+      "streak"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "4dcc6ac7dcb31b3ee98af43d1307ddcc08051b9289b509c28c5631e005d68744"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 766.3333333333334
+    }
+  },
+  "wc3-7ca9ff4b23e6104e6d926d03": {
+    "name": "Fine blue streaks",
+    "categories": [
+      "Trails"
+    ],
+    "tags": [
+      "blue",
+      "thin",
+      "faint",
+      "streak"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "4dcc6ac7dcb31b3ee98af43d1307ddcc08051b9289b509c28c5631e005d68744"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 766.3333333333334
+    }
+  },
+  "wc3-12bb6842d8470078c7636076": {
+    "name": "Cyan frost bloom",
+    "categories": [
+      "Bursts",
+      "Glows"
+    ],
+    "tags": [
+      "cyan",
+      "blue",
+      "bright",
+      "frost"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "ecc348cb4f2f5f1fd7905184701352cfd199ade35ef3e987c98e44e194d06de9"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 166.66666666666666
+    }
+  },
+  "wc3-27267a4bd1764751581fe669": {
+    "name": "Blue mist ring",
+    "categories": [
+      "Smoke",
+      "Magic"
+    ],
+    "tags": [
+      "blue",
+      "ring",
+      "mist"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "ecc348cb4f2f5f1fd7905184701352cfd199ade35ef3e987c98e44e194d06de9"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 333.3333333333333
+    }
+  },
+  "wc3-06e3f6ea70a801344a69d627": {
+    "name": "Curved violet ribbon",
+    "categories": [
+      "Trails"
+    ],
+    "tags": [
+      "purple",
+      "violet",
+      "thin",
+      "curve",
+      "ribbon"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "64c8c749e738a939715112486a02d9475ad5d766d566b18b10c04365dcb03941"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 474
+    }
+  },
+  "wc3-ba229c2838b0b257600283ef": {
+    "name": "Forked violet ribbon",
+    "categories": [
+      "Trails"
+    ],
+    "tags": [
+      "purple",
+      "violet",
+      "fork",
+      "ribbon"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "64c8c749e738a939715112486a02d9475ad5d766d566b18b10c04365dcb03941"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 474
+    }
+  },
+  "wc3-a28e9a07002485432b188464": {
+    "name": "Small golden stars",
+    "categories": [
+      "Sparks",
+      "Magic"
+    ],
+    "tags": [
+      "gold",
+      "yellow",
+      "stars",
+      "sparkles"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "4f05505ad6aefbaa13df2f9538345f9bec56589b97eaa6de60f4946e015e277e"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 611
+    }
+  },
+  "wc3-0f369ae7474568f8255e097e": {
+    "name": "Golden light shafts",
+    "categories": [
+      "Glows",
+      "Trails"
+    ],
+    "tags": [
+      "gold",
+      "white",
+      "vertical",
+      "beams"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "4f05505ad6aefbaa13df2f9538345f9bec56589b97eaa6de60f4946e015e277e"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 407.3333333333333
+    }
+  },
+  "wc3-39600c5b2eecd95f87471610": {
+    "name": "Blue beams and motes",
+    "categories": [
+      "Magic",
+      "Glows"
+    ],
+    "tags": [
+      "blue",
+      "vertical",
+      "beams",
+      "dots"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "ed8af451f2a7b0c0557cfc415c2bdfc9272ff3d6fce1e1e2fac124ab5de59a2f"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 1099.6666666666665
+    }
+  },
+  "wc3-2430c1305fefba06952a6bf0": {
+    "name": "Blue light shafts",
+    "categories": [
+      "Magic",
+      "Glows"
+    ],
+    "tags": [
+      "blue",
+      "vertical",
+      "beams"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "a375d3e761ca9f3f1fe2e639a82c137e2b1c260f5ced02dbd111eeb691f6d08d"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 1292.5555555555557
+    }
+  },
+  "wc3-61290219d41d1f18371624ab": {
+    "name": "Scattered ochre dust",
+    "categories": [
+      "Smoke",
+      "Bursts"
+    ],
+    "tags": [
+      "brown",
+      "yellow",
+      "dust",
+      "puffs"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "cb281648332612d071e11000b270ba0c590f52137c332a72ba5a08717273907f"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 46044.77777777778
+    }
+  },
+  "wc3-ecfdfe5020141bcceac8d179": {
+    "name": "Thick tan dust cloud",
+    "categories": [
+      "Smoke"
+    ],
+    "tags": [
+      "tan",
+      "brown",
+      "dust",
+      "cloud"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "ccc7740df15247ae927b20ed986142395b5821ea5f5c1b4b6f5c9469c65656cd"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 45600.333333333336
+    }
+  },
+  "wc3-ff5d7f4abb575fa9e0ab169f": {
+    "name": "Curved blue filament",
+    "categories": [
+      "Trails"
+    ],
+    "tags": [
+      "blue",
+      "thin",
+      "curved",
+      "ribbon"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "c7332c8e0e25d4aa4869705de8fd16269e05c28600e56387d8cafdcaa501b537"
+    },
+    "previewSample": {
+      "sequence": 1,
+      "time": 1633.6666666666667
+    }
+  },
+  "wc3-832b1486de5f28fa3ad32b04": {
+    "name": "Fine blue filament",
+    "categories": [
+      "Trails"
+    ],
+    "tags": [
+      "blue",
+      "thin",
+      "ribbon"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "c7332c8e0e25d4aa4869705de8fd16269e05c28600e56387d8cafdcaa501b537"
+    },
+    "previewSample": {
+      "sequence": 1,
+      "time": 1633.6666666666667
+    }
+  },
+  "wc3-f0e148b8f08a36daa1facfd6": {
+    "name": "Green luminous cloud",
+    "categories": [
+      "Glows",
+      "Magic"
+    ],
+    "tags": [
+      "green",
+      "bright",
+      "cloud"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "625e60a594867b2bbd4d391c96e173aef2dfa5ac0efffc4cfbec646e43373919"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 740.6666666666666
+    }
+  },
+  "wc3-24c497f6f1d64cac21ac2a30": {
+    "name": "Golden rune ring",
+    "categories": [
+      "Magic",
+      "Glows"
+    ],
+    "tags": [
+      "gold",
+      "yellow",
+      "ring",
+      "rune"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "374f7a0d4136138fcd968e9b7aa65a8da0a9bde8ea20efa1479236cda6b77359"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 407.1111111111111
+    }
+  },
+  "wc3-bccaa486e36ed86994053c3a": {
+    "name": "Red and gold starburst",
+    "categories": [
+      "Bursts",
+      "Sparks"
+    ],
+    "tags": [
+      "red",
+      "gold",
+      "star",
+      "burst"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "374f7a0d4136138fcd968e9b7aa65a8da0a9bde8ea20efa1479236cda6b77359"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 777.6666666666667
+    }
+  },
+  "wc3-a74d47f53bdbd60ed33734b8": {
+    "name": "Lime green starburst",
+    "categories": [
+      "Bursts",
+      "Sparks"
+    ],
+    "tags": [
+      "green",
+      "lime",
+      "star",
+      "burst"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "af4d2247b1c64fca53551e3d43d9d022c94fb92bc919f3cc1e34b4839b144eb1"
+    },
+    "previewSample": {
+      "sequence": 1,
+      "time": 303.44444444444446
+    }
+  },
+  "wc3-d84fc314568b430afbae8a46": {
+    "name": "Overlapping green rings",
+    "categories": [
+      "Magic"
+    ],
+    "tags": [
+      "green",
+      "rings",
+      "outline"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "af4d2247b1c64fca53551e3d43d9d022c94fb92bc919f3cc1e34b4839b144eb1"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 29.333333333333332
+    }
+  },
+  "wc3-3e2c9dccfe2ad904fb00c6f8": {
+    "name": "White-hot orange flare",
+    "categories": [
+      "Fire",
+      "Glows"
+    ],
+    "tags": [
+      "orange",
+      "white",
+      "bright",
+      "flare"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "085be753f2ee5eaa3660c4ce9054de48512174675f1e5e828dbd8ecd2f165284"
+    },
+    "previewSample": {
+      "sequence": 1,
+      "time": 2310.777777777778
+    }
+  },
+  "wc3-1777f75b555ec605b2d8d8c9": {
+    "name": "Soft golden ring",
+    "categories": [
+      "Magic"
+    ],
+    "tags": [
+      "gold",
+      "brown",
+      "soft",
+      "ring"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "085be753f2ee5eaa3660c4ce9054de48512174675f1e5e828dbd8ecd2f165284"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 555.6666666666666
+    }
+  },
+  "wc3-ababf6b623f2e1656d5bc9cd": {
+    "name": "Wispy green streaks",
+    "categories": [
+      "Trails",
+      "Smoke"
+    ],
+    "tags": [
+      "green",
+      "thin",
+      "wispy",
+      "streaks"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "cd5468c40eed8c50148612f35ee79fb026787f2bbe7ad826fa2b6cdf319cf146"
+    },
+    "previewSample": {
+      "sequence": 0,
+      "time": 444.44444444444446
+    }
+  },
+  "wc3-838fc48f5ca1aa51639306d7": {
+    "name": "Drifting gray dust",
+    "categories": [
+      "Smoke"
+    ],
+    "tags": [
+      "gray",
+      "dust",
+      "cloud",
+      "burst"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native lifecycle preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "dabb861e694c907d35bff72135961054fc93cb71131544365854fffe7bc47689"
+    },
+    "previewSample": {
+      "sequence": 10,
+      "time": 31900
+    }
+  },
+  "wc3-b77c9b1c56c50dec1ffcfd04": {
+    "name": "Twin blue sweeping ribbons",
+    "categories": [
+      "Trails"
+    ],
+    "tags": [
+      "blue",
+      "twin",
+      "ribbon",
+      "sweep",
+      "weapon"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native lifecycle preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "bbc7dc3d2a5b9b1b234b96e0f9dcadd3d4b8551e73179c73656071ec1c90d44c"
+    },
+    "previewSample": {
+      "sequence": 8,
+      "time": 68766.5
+    }
+  },
+  "wc3-eb436de856fa4d1e5ddf2d62": {
+    "name": "Golden slash and spark burst",
+    "categories": [
+      "Trails",
+      "Bursts"
+    ],
+    "tags": [
+      "golden",
+      "orange",
+      "slash",
+      "spark",
+      "weapon",
+      "burst"
+    ],
+    "naming": {
+      "state": "reviewed",
+      "basis": "Observed native lifecycle preview, 2026-09-30; not Warcraft validation",
+      "sourceContentHash": "0464bc7095533aad067439d9e47cda341209b70456f1e24906099ada8547a961"
+    },
+    "previewSample": {
+      "sequence": 3,
+      "time": 18019.7
+    }
+  }
+}

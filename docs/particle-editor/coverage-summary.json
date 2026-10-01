@@ -1,0 +1,46 @@
+{
+  "build": "3.0.0.24268",
+  "buildKey": "3a9d8f26806936764d2d9ad526a65e04",
+  "sourceKey": "6d608eb1d5ea6a375afbb253c7679d4fcd82d545712358382cbe01cb8534ea60",
+  "run": "2026-09-30T21:37:23.893Z",
+  "totalEnumerated": 14984,
+  "namespaces": {
+    "war3.w3mod:_de.w3mod:_teen.w3mod": 1,
+    "war3.w3mod:_de.w3mod": 5965,
+    "war3.w3mod:_hd.w3mod:_teen.w3mod": 498,
+    "war3.w3mod:_hd.w3mod": 5034,
+    "war3.w3mod:_teen.w3mod": 22,
+    "war3.w3mod:_tilesets\\g.w3mod": 6,
+    "war3.w3mod": 3458
+  },
+  "candidateAssets": 3486,
+  "parsedAssets": 3485,
+  "emitterCounts": {
+    "ParticleEmitters2": 3777,
+    "RibbonEmitters": 357,
+    "ParticleEmitters": 67,
+    "ParticleEmitterPopcorns": 88
+  },
+  "recipes": 4581,
+  "extractionComplete": true,
+  "recipeExceptions": 437,
+  "missingDependencies": 112,
+  "unsupported": 128,
+  "exactDuplicateMappings": 144,
+  "fullyPreviewableRecipes": 0,
+  "insertableRecipes": 0,
+  "reviewedNames": 34,
+  "note": "Schema-3 real CASC extraction completed. Catalogue includes source-model particle groups and explicitly unavailable identities. Dependencies retain physical namespace and content hashes; PE1 external references are followed in the local inventory. Invalid globals, bind-pose graphs, PE1 simulation and Popcorn still limit usable coverage. Preview, placement and naming remain partial; no complete-library claim.",
+  "cacheSchema": 3,
+  "catalogEntries": 5018,
+  "sourceGroups": 751,
+  "blockedEntries": 437,
+  "reviewNeededNames": 4984,
+  "namingReview": {
+    "inspected": 35,
+    "named": 34,
+    "basis": "Thirty-two initial native effect captures plus three real-source lifecycle recipes. Names and sample times are tied to exact source hashes; one ambiguous empty ribbon remains unreviewed.",
+    "metadata": "src/particle-reviewed-names.json",
+    "gameValidation": false
+  }
+}

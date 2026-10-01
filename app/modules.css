@@ -38,6 +38,9 @@
 .classic-modules>.toolbar-modules>button>img{width:28px;height:28px;max-width:28px;max-height:28px;object-fit:contain}
 .classic-modules .pressed-keys-tool>span,.classic-modules .module-icon-badge{position:absolute;left:1px;right:1px;bottom:1px;height:50%;display:flex;align-items:center;justify-content:center;background:transparent;font:900 12px/1 Tahoma,Arial,sans-serif;text-shadow:0 1px #000}
 .classic-modules .module-icon-badge{color:#39ff14}
+.classic-modules .emitter-tool .module-icon-badge{font-size:10px;text-shadow:-1px -1px #000,1px -1px #000,-1px 1px #000,1px 1px #000}
+.classic-modules .emitter-tool b:nth-child(odd){color:#38a9ff}
+.classic-modules .emitter-tool b:nth-child(even){color:#32e449}
 
 .classic-modules .vis-toggle>.module-icon-badge{left:4px;right:4px;bottom:4px;height:12px;color:#ff3df2}
 .classic-modules .vis-toggle[aria-pressed=true]>.module-icon-badge{top:4px;bottom:4px;height:auto;background:transparent;font-size:14px}

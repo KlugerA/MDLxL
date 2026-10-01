@@ -33,8 +33,8 @@ class CascReader {
     if (line.startsWith('!')) throw Error(Buffer.from(line.slice(1),'base64').toString());
     return line === '-' ? null : Buffer.from(line,'base64');
   }
-  async list() {
-    const records=(await this.read('@textures'))?.toString('utf8').split('\n').filter(Boolean)||[],names=[],keys={};
+  async list(kind = "textures") {
+    const records=(await this.read(kind === 'models' ? '@models' : '@textures'))?.toString('utf8').split('\n').filter(Boolean)||[],names=[],keys={};
     for(const record of records){const [name,key]=record.split('\t');names.push(name);if(/^[a-f0-9]{32}$/i.test(key))keys[name.toLowerCase()]=key;}
     return {names,keys};
   }

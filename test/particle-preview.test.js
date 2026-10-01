@@ -1,0 +1,149 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createNode} from '../src/editor-document.js';
+import {createStarterRecipe} from '../src/particle-starters.js';
+import {NativeParticleSimulation,particleTimelineAt,particlePreviewBounds} from '../app/particle-preview-adapter.js';
+import {addParticleDemonstration,particleSweepPath} from '../src/particle-sweep.js';
+import {PerspectiveCamera,Vector3} from 'three';
+const v=(...n)=>new Float32Array(n);
+const track=keys=>({LineType:0,GlobalSeqId:null,Keys:keys.map(([Frame,value])=>({Frame,Vector:v(value)}))});
+const make=()=>structuredClone(createStarterRecipe().native);
+const particles=sim=>sim.snapshot().particles;
+
+test('a new ribbon preview frames its full demonstration swing before playback',()=>{
+ const model=createStarterRecipe('ribbon').native;addParticleDemonstration(model,[0,5000]);
+ const sim=new NativeParticleSimulation(model);sim.advance(800);const camera=new PerspectiveCamera(),id=model.RibbonEmitters[0].ObjectId;
+ const bounds=particlePreviewBounds(sim.native,{selectedId:id,camera});assert.ok(bounds);
+ for(const point of particleSweepPath(model,id,0,[0,5000],camera))assert.ok(new Vector3(...point.world).distanceTo(new Vector3(...bounds.center))<bounds.radius);
+ assert.ok(bounds.radius>70,'Framing includes the swing, not just its short current trail');
+});
+test('pinned native simulation gives identical particles across display rates and repeated seek replay',()=>{
+  const model=make(),a=new NativeParticleSimulation(model),b=new NativeParticleSimulation(model);
+  a.advance(1500);
+  for(let time=7;time<1500;time+=7)b.advance(time);
+  b.advance(1500);
+  assert.deepEqual(particles(a),particles(b));assert.equal(a.random.state,b.random.state);
+  const replay=new NativeParticleSimulation(model);replay.advance(1500);
+  assert.deepEqual(particles(a),particles(replay));
+  const snapshot=a.snapshot();a.advance(1750);a.restore(snapshot);a.advance(1750);
+  replay.advance(1750);assert.deepEqual(particles(a),particles(replay));
+});
+test('a one-millisecond emission window and exact Squirt key survive one long display frame',()=>{
+  const model=make(),p=model.ParticleEmitters2[0];p.Visibility=track([[0,0],[105,1],[106,0]]);p.EmissionRate=1000;p.LifeSpan=10;
+  const continuous=new NativeParticleSimulation(model);continuous.advance(200);
+  assert.equal(continuous.native.particlesController.emitters[0].particles.length,1);
+  p.Squirt=true;p.EmissionRate=track([[0,0],[105,7],[106,0]]);
+  const burst=new NativeParticleSimulation(model);burst.advance(104);assert.equal(burst.native.particlesController.emitters[0].particles.length,0);
+  burst.advance(105);assert.equal(burst.native.particlesController.emitters[0].particles.length,7);
+  burst.advance(200);assert.equal(burst.native.particlesController.emitters[0].particles.length,7);
+});
+test('global emission events repeat at their authored phases without replaying a future first key',()=>{
+  const model=make(),p=model.ParticleEmitters2[0];model.GlobalSequences=[1000];p.Visibility=1;p.LifeSpan=10;p.Squirt=true;p.EmissionRate={...track([[100,2],[101,0]]),GlobalSeqId:0};
+  const sim=new NativeParticleSimulation(model);assert.equal(sim.native.particlesController.emitters[0].particles.length,0);
+  sim.advance(2100);assert.equal(sim.native.particlesController.emitters[0].particles.length,6);
+  assert.equal(sim.native.rendererData.globalSequencesFrames[0],100);
+});
+test('FX pause discards crossed burst triggers and resume does not release a queued burst',()=>{
+  const model=make(),p=model.ParticleEmitters2[0];p.LifeSpan=10;p.Squirt=true;p.EmissionRate=track([[100,9],[101,0],[350,4],[351,0]]);
+  const timeline=[{at:0,frame:0,global:0,fx:0,poseRate:1,fxRate:0},{at:300,frame:300,global:300,fx:0,poseRate:1,fxRate:1}];
+  const sim=new NativeParticleSimulation(model,0,{timeline});sim.advance(349);assert.equal(sim.native.particlesController.emitters[0].particles.length,0);
+  sim.advance(350);assert.equal(sim.native.particlesController.emitters[0].particles.length,4);
+  assert.equal(particleTimelineAt(timeline,350).fx,50);
+});
+test('independent FX progression ages and emits at a fixed model pose without moving model tracks',()=>{
+  const model=make(),p=model.ParticleEmitters2[0];p.EmissionRate=20;p.LifeSpan=2;
+  const sim=new NativeParticleSimulation(model,0,{timeline:[{at:0,frame:700,global:700,fx:0,poseRate:0,fxRate:1}]});
+  sim.advance(1000);assert.equal(sim.native.getFrame(),700);assert.equal(sim.native.particlesController.emitters[0].particles.length,20);
+  assert.equal(sim.native.particlesController.emitters[0].particles[0].lifeSpan<2,true);
+});
+test('native ribbon history and RNG restore independently of wall-clock time',()=>{
+  const model=make();model.Materials=[{PriorityPlane:0,Layers:[{FilterMode:3,Shading:16,TextureID:0,CoordId:0,Alpha:1}]}];
+  const ribbon=createNode(model,'RibbonEmitter');ribbon.MaterialID=0;ribbon.Visibility=1;ribbon.EmissionRate=50;ribbon.LifeSpan=1;ribbon.Translation={LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(0,0,0)},{Frame:5000,Vector:v(100,0,0)}]};
+  const a=new NativeParticleSimulation(model);a.advance(500);const saved=a.snapshot();a.advance(1000);const first=a.snapshot();
+  a.restore(saved);a.advance(1000);const second=a.snapshot();assert.deepEqual(second,first);
+  assert.ok(second.ribbons[0].creationTimes.length>2);assert.ok(second.ribbons[0].vertices.some(n=>n>0));
+});
+
+test('preview recipe updates retain the native renderer and last valid particles until newest replay completes',async()=>{
+  const {ModelRenderer}=await import('war3-model'),{ParticleAuthoringPreview}=await import('../app/particle-preview-adapter.js');
+  const model=make(),native=new ModelRenderer(structuredClone(model)),preview=new ParticleAuthoringPreview(native);
+  const options={sequence:0,frame:1500,playing:false,animationRate:1,fxRate:1,budgetMs:Infinity};
+  preview.advance(options);const original=native.particlesController.emitters[0].particles.map(p=>({pos:Array.from(p.pos),speed:Array.from(p.speed)})),count=original.length;
+  const edited=structuredClone(model);edited.ParticleEmitters2[0].Speed=90;preview.updateSource(edited,'Speed',0);
+  preview.advance({...options,budgetMs:0});assert.equal(preview.status.busy,true);assert.equal(native.particlesController.emitters[0].particles.length,count);
+  assert.deepEqual(native.particlesController.emitters[0].particles.map(p=>({pos:Array.from(p.pos),speed:Array.from(p.speed)})),original);
+  edited.ParticleEmitters2[0].Speed=135;preview.updateSource(edited,'Speed',0);preview.advance(options);
+  assert.equal(preview.status.busy,false);assert.equal(preview.native,native);assert.equal(native.getFrame(),1500);
+  const speeds=native.particlesController.emitters[0].particles.map(p=>Array.from(p.speed));
+  for(let i=0;i<speeds.length;i++)for(let axis=0;axis<3;axis++)assert.ok(Math.abs(speeds[i][axis]-original[i].speed[axis]*3)<.0001);
+});
+test('restoring an earlier checkpoint after a partial display step cannot jump to a future state',()=>{
+  const sim=new NativeParticleSimulation(make());sim.advance(500);const before=sim.snapshot();sim.advance(1573);sim.restore(before);sim.advance(900);
+  const reference=new NativeParticleSimulation(make());reference.advance(900);assert.deepEqual(particles(sim),particles(reference));assert.equal(sim.time,900);
+});
+
+test('excessive native bursts stop at an explicit preview budget without changing the recipe',async()=>{
+ const model=make(),p=model.ParticleEmitters2[0];p.Squirt=true;p.EmissionRate=track([[0,1e8]]);const before=structuredClone(model);
+ const {ModelRenderer}=await import('war3-model'),{ParticleAuthoringPreview}=await import('../app/particle-preview-adapter.js');
+ const native=new ModelRenderer(structuredClone(model)),preview=new ParticleAuthoringPreview(native);
+ const state=preview.advance({sequence:0,frame:0,playing:false,budgetMs:Infinity});
+ assert.match(state.error,/12,000/);assert.equal(state.ended,true);assert.deepEqual(model,before);assert.equal(native.model.ParticleEmitters2[0].EmissionRate.Keys[0].Vector[0],1e8);
+ model.ParticleEmitters2[0].EmissionRate=track([[0,7]]);preview.updateSource(model,'EmissionRate',0);
+ const resumed=preview.advance({sequence:0,frame:0,playing:false,budgetMs:Infinity});assert.equal(resumed.error,undefined);assert.equal(resumed.liveParticles,7);
+});
+
+test('ModelSpace carries live particles with source motion while world-space particles stay behind',()=>{
+ const model=make(),p=model.ParticleEmitters2[0];p.Speed=0;p.Width=0;p.Length=0;p.Gravity=0;p.EmissionRate=10;p.LifeSpan=10;
+ p.Translation={LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(0,0,0)},{Frame:5000,Vector:v(100,0,0)}]};
+ p.Flags|=524288;const carried=new NativeParticleSimulation(model);carried.advance(1000);
+ const moving=carried.native.particlesController.emitters[0],center=(moving.headVertices[0]+moving.headVertices[3]+moving.headVertices[6]+moving.headVertices[9])/4;
+ assert.ok(Math.abs(center-20)<1e-5);assert.equal(moving.particles[0].pos[0],0,'Native particle remains local during integration');
+ p.Flags&=~524288;const world=new NativeParticleSimulation(model);world.advance(1000);
+ const fixed=world.native.particlesController.emitters[0],fixedCenter=(fixed.headVertices[0]+fixed.headVertices[3]+fixed.headVertices[6]+fixed.headVertices[9])/4;
+ assert.ok(fixedCenter<3,'Particles born early remain at their birth position');
+});
+test('four atlas ranges repeat independently and non-square sheets use columns for their row index',async()=>{
+ const {particleAtlasFrame}=await import('../app/particle-preview-adapter.js');
+ assert.equal(particleAtlasFrame([8,12,2],.25,4,4),10);
+ assert.equal(particleAtlasFrame([8,12,2],.75,4,4),10);
+ assert.equal(particleAtlasFrame([8,12,0],.75,4,4),8);
+ const model=make(),p=model.ParticleEmitters2[0];p.Rows=2;p.Columns=4;p.FrameFlags=3;p.Time=.5;
+ p.LifeSpanUVAnim=new Uint32Array([5,5,1]);p.TailUVAnim=new Uint32Array([6,6,1]);
+ const sim=new NativeParticleSimulation(model);sim.advance(100);
+ const e=sim.native.particlesController.emitters[0];assert.ok(e.particles.length>0);
+ assert.equal(e.headTexCoords[0],.25);assert.equal(e.headTexCoords[1],.5);assert.equal(e.tailTexCoords[0],.5);assert.equal(e.tailTexCoords[1],.5);
+});
+
+test('native PE2 replacement overrides only that emitter while retaining the shared texture resource',()=>{
+ const model=make(),p=model.ParticleEmitters2[0];p.ReplaceableId=2;const sim=new NativeParticleSimulation(model),controller=sim.native.particlesController,calls=[];
+ const before=structuredClone(sim.native.model.Textures);controller.shaderProgramLocations={replaceableTypeUniform:'replacement'};controller.gl=new Proxy({}, {get:(_,name)=>name.toUpperCase()===name?name:(...args)=>calls.push([name,...args])});
+ controller.setLayerProps(controller.emitters[0]);assert.ok(calls.some(c=>c[0]==='uniform1f'&&c[1]==='replacement'&&c[2]===2));assert.deepEqual(sim.native.model.Textures,before);
+ controller.emitters[0].props.ReplaceableId=0;calls.length=0;controller.setLayerProps(controller.emitters[0]);assert.ok(calls.some(c=>c[0]==='uniform1f'&&c[1]==='replacement'&&c[2]===0));
+});
+
+test('ribbon history grows beyond the initial native allocation and animated color reaches the draw',()=>{
+ const model=structuredClone(createStarterRecipe('ribbon').native),r=model.RibbonEmitters[0];r.EmissionRate=100;r.LifeSpan=10;model.Sequences[0].Interval=new Uint32Array([0,10000]);r.Color={LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(1,0,0)},{Frame:10000,Vector:v(0,0,1)}]};
+ const sim=new NativeParticleSimulation(model);sim.advance(6000);const controller=sim.native.ribbonsController,emitter=controller.emitters[0];assert.ok(emitter.creationTimes.length>256);assert.ok(emitter.vertices.length>=emitter.creationTimes.length*6);assert.ok(emitter.texCoords.length>=emitter.creationTimes.length*4);
+ const calls=[],before=structuredClone(sim.native.model.RibbonEmitters[0].Color);controller.shaderProgramLocations={colorUniform:'color'};controller.gl=new Proxy({}, {get:(_,name)=>name.toUpperCase()===name?name:(...args)=>calls.push([name,...args])});sim.native.rendererData.materialLayerTextureID=[[0]];controller.render(new Float32Array(16),new Float32Array(16));const color=calls.find(c=>c[0]==='uniform4f'&&c[1]==='color');assert.ok(Math.abs(color[2]-.4)<1e-6);assert.ok(Math.abs(color[4]-.6)<1e-6);assert.deepEqual(sim.native.model.RibbonEmitters[0].Color,before);
+});
+
+
+test('effect picking uses posed mesh alpha holes, UV animation, depth flags and front-face culling',async()=>{
+ const {particleOpaqueDepth,rememberParticlePicture}=await import('../app/particle-preview-adapter.js'),{PerspectiveCamera}=await import('three');
+ const model=make();model.ParticleEmitters2=[];model.Nodes=[];model.PivotPoints=[];
+ const parent=createNode(model,'Bone');parent.Translation={LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(0,0,0)},{Frame:5000,Vector:v(1,0,0)}]};
+ const layer={FilterMode:1,Shading:0,TextureID:0,Alpha:1};model.Materials=[{Layers:[layer]}];
+ const geo={MaterialID:0,Vertices:v(-2,-2,0,2,-2,0,2,2,0,-2,2,0),Normals:v(0,0,1,0,0,1,0,0,1,0,0,1),Faces:new Uint16Array([0,1,2,0,2,3]),VertexGroup:new Uint8Array(4),Groups:[[parent.ObjectId]],TVertices:[v(0,0,1,0,1,1,0,1)]};model.Geosets=[geo];
+ const sim=new NativeParticleSimulation(model);sim.advance(500);const native=sim.native,camera=new PerspectiveCamera(60,1,.1,100);camera.position.set(0,0,5);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+ const picture=new Uint8Array(8*8*4).fill(255);for(let y=2;y<6;y++)for(let x=2;x<6;x++)picture[(y*8+x)*4+3]=0;
+ rememberParticlePicture(native,0,{image:{width:8,height:8,data:picture}});
+ const depth=(x=100,hidden=new Set())=>particleOpaqueDepth(native,camera,200,200,x,100,hidden);
+ assert.equal(depth(),Infinity,'A real transparent hole leaves the effect pickable');assert.ok(Number.isFinite(depth(145)),'Opaque portion writes depth');
+ assert.equal(depth(145,new Set([0])),Infinity,'Hidden geoset does not block');
+ const activeLayer=native.model.Materials[0].Layers[0],activeGeo=native.model.Geosets[0];
+ activeLayer.TVertexAnimId=0;native.model.TextureAnims=[{Translation:{LineType:1,GlobalSeqId:null,Keys:[{Frame:0,Vector:v(.5,0,0)}]}}];assert.ok(Number.isFinite(depth()),'Native UV translation moves the opaque region over the hit');delete activeLayer.TVertexAnimId;
+ for(const flag of [64,128]){activeLayer.Shading=flag;assert.equal(depth(145),Infinity,'Non-depth-writing layer does not occlude');}activeLayer.Shading=0;
+ activeLayer.FilterMode=0;assert.ok(Number.isFinite(depth()),'Opaque material ignores picture alpha');activeLayer.Alpha=.5;assert.equal(depth(),Infinity,'Preview fractional alpha disables depth writes');activeLayer.Alpha=1;
+ activeGeo.Faces=new Uint16Array([0,2,1,0,3,2]);assert.equal(depth(),Infinity,'Culled back face does not block');activeLayer.Shading=16;assert.ok(Number.isFinite(depth()),'TwoSided surface does block');
+ const saved=structuredClone(native.model);depth();assert.deepEqual(native.model,saved,'Picking never changes authored data');
+});

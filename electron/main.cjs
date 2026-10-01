@@ -9,6 +9,8 @@ const {buildMenuTemplate,normalizeMenuChecks}=require('./menu.cjs');
 const {GameDataDiscovery,selectedGameDataSources}=require('./game-data.cjs');
 const {TextureResolver,IMAGE_EXTENSIONS}=require('./texture-resolver.cjs');
 const {CascTextures}=require('./casc.cjs');
+const {ParticleLibrary}=require('./particle-library.cjs');
+const {resolveParticleSourceAssets,resolveParticleSourceContext}=require('./particle-source.cjs');
 const {HUMAN_PORTRAIT_RESOURCES,validateHumanPortraitResources}=require('./human-portrait-frame.cjs');
 const {TextureLibrary,previewCatalog}=require('./texture-library.cjs');
 const {TexturePreviewCache}=require('./texture-preview-cache.cjs');
@@ -42,6 +44,32 @@ let settingsStore,preferenceApi,commandCatalog;
 let nativeEditorState={readOnly:true,saving:false};
 let translateText=value=>value;
 let gameDataDiscovery,recoveryPrompt=false,crashedWithEdits=false;
+const particleLibrary=new ParticleLibrary({directory:path.join(profile,'particles'),discover:()=>gameDataDiscovery.discover({explicitFolder:settings.gameData}),onProgress:status=>{if(win&&!win.isDestroyed())win.webContents.send('particles:progress',status);}});
+ipcMain.handle('particles:workingCopy',(_,payload)=>particleLibrary.workingCopy(payload));
+
+ipcMain.handle('particles:assets',(_,payload)=>resolveParticleSourceAssets(payload,{discover:()=>gameDataDiscovery.discover({explicitFolder:settings.gameData}),casc:textureResolver.casc}));
+ipcMain.handle('particles:sourceContext',async(_,payload)=>{if(!payload||!Number.isInteger(payload.sourceIndex)||payload.sourceIndex<0)throw Error('Choose an indexed source.');const {parseParticleData}=await import('../src/particle-data.js'),recipe=parseParticleData(await particleLibrary.read(payload.id));return resolveParticleSourceContext(recipe.sources[payload.sourceIndex],{discover:()=>gameDataDiscovery.discover({explicitFolder:settings.gameData}),casc:textureResolver.casc});});
+ipcMain.handle('particles:thumbnails',(_,ids)=>particleLibrary.thumbnails(ids));
+ipcMain.handle('particles:duplicate',(_,id)=>particleLibrary.duplicate(id));
+ipcMain.handle('particles:import',async()=>{
+ const result=await dialog.showOpenDialog(win,{title:'Import particle preset',filters:[{name:'MDLxL particle preset',extensions:['mdlxl-particle','json']}],properties:['openFile']});
+ if(result.canceled)return null;const file=result.filePaths[0],info=await fs.stat(file);if(info.size>16*1024*1024)throw Error('Preset exceeds 16 MiB.');
+ return particleLibrary.save({data:await fs.readFile(file,'utf8')});
+});
+ipcMain.handle('particles:export',async(_,id)=>{
+ const data=await particleLibrary.exportData(id),{parseParticleData}=await import('../src/particle-data.js'),recipe=parseParticleData(data);
+ const result=await dialog.showSaveDialog(win,{title:'Export particle preset',defaultPath:recipe.name.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_')+'.mdlxl-particle',filters:[{name:'MDLxL particle preset',extensions:['mdlxl-particle']}]});
+ if(result.canceled)return null;await fs.writeFile(result.filePath,data,'utf8');return {path:result.filePath};
+});
+ipcMain.handle('particles:thumbnail',(_,data)=>particleLibrary.thumbnail(data));
+ipcMain.handle('particles:catalog',()=>particleLibrary.catalog());
+ipcMain.handle('particles:read',(_,id)=>particleLibrary.read(id));
+ipcMain.handle('particles:save',(_,data)=>particleLibrary.save(data));
+ipcMain.handle('particles:annotate',(_,data)=>particleLibrary.annotate(data));
+ipcMain.handle('particles:remove',(_,id)=>particleLibrary.remove(id));
+ipcMain.handle('particles:draft',(_,data)=>particleLibrary.draft(data));
+ipcMain.handle('particles:scan',()=>particleLibrary.scan());
+ipcMain.handle('particles:cancel',()=>particleLibrary.cancel());
 let saveQueue=Promise.resolve();
 let artifactSaveQueue=Promise.resolve();
 let captureBusy=false;
@@ -420,6 +448,7 @@ async function createWindow(bounds={}){
   await current.loadFile(path.join(__dirname,'../dist/index.html'));
 }
 app.on('window-all-closed',async()=>{
+  await particleLibrary.close();
   textureDecoder=null;rejectThumbnailRequests('Editor closed.');await texturePreviews.close();
   await Promise.allSettled([settingsStore?.flush(),recoveryStore.flush(),...textureOperations,...captureOperations]);
   for(const owner of new Set([...previewRecordings.jobs.values()].map(job=>job.owner)))await previewRecordings.closeOwner(owner);
