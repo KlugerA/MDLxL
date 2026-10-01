@@ -71,6 +71,7 @@ test('depth overlays distinguish front points and occluded rear points', () => {
   assert.equal(depth.isOccluded({x:20,y:20,z:0}),false);
   assert.equal(depth.isOccluded({x:20,y:20,z:-.5}),false);
   assert.equal(depth.isOccluded({x:90,y:90,z:.5}),false);
+  assert.equal(depth.isOccludedForSelection({x:20,y:20,z:.5}),true);
 });
 
 test('shared grid honors planes, axes, spacing, extent and distinct theme colors', () => {

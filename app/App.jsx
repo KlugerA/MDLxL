@@ -168,7 +168,8 @@ export default function App() {
   useEffect(() => { setControlModelGroup('all'); setControlModelIds([]); }, [session.id]);
   const [portraitSnapRevision, setPortraitSnapRevision] = useState(0);
   const receiveCameraAngles = useCallback(value => setCameraAngles(previous => ['x','y','z'].some(axis=>Math.abs(previous[axis]-value[axis])>.001)?value:previous), []);
-  const cameraProps = {onCameraAnglesChange:receiveCameraAngles,cameraAnglesRequest,onCameraGestureChange:setCameraGesture,onSensitivityIndicator:setAdjustingInput};
+  const [grabThrough, setGrabThrough] = useState(false);
+  const cameraProps = {onCameraAnglesChange:receiveCameraAngles,cameraAnglesRequest,onCameraGestureChange:setCameraGesture,onSensitivityIndicator:setAdjustingInput,grabThrough};
   useEffect(()=>setCameraGesture(false),[mode,session.id]);
   const [tool, setTool] = useState('select'), [teamColor, setTeamColor] = useState('#ff0303'), [renderMode, setRenderMode] = useState('wireframe');
   const [previewRenderModes, setPreviewRenderModes] = useState({});
@@ -1021,6 +1022,7 @@ export default function App() {
   const highlightAppearance = preferences.viewportAppearance.geosetHighlight;
   const highlightedFromSelection = !cleanView && preferences.highlightSelection && highlightAppearance.viaSelection ? selectionHoveredGeoset : null;
   const inputStrength = <div className="compact-input-strength" aria-label="Input strengths" title="Adjust in Settings → Mouse, or use the existing input hotkeys"><span className={adjustingInput?.kind === 'pointer' ? 'adjusting' : ''}>DPI {preferences.pointerSensitivity}×</span><span className={adjustingInput?.kind === 'scroll' ? 'adjusting' : ''}>Scroll {preferences.scrollSensitivity}×</span></div>;
+  const grabThroughToggle = <label className="check grabthrough-option"><input aria-label="Grabthrough" type="checkbox" checked={grabThrough} onChange={event => setGrabThrough(event.target.checked)}/>Grabthrough</label>;
   const geosetPicker = <SidebarSection title="Geosets" className="classic-geosets" onContextMenu={event => { event.preventDefault(); setContext({ x: event.clientX, y: event.clientY }); }}><div className="geoset-options"><label className="check"><input data-warmkey="showAllGeosets" aria-label="Show all geosets" type="checkbox" checked={showAllGeosets} onChange={event => setShowAllGeosets(event.target.checked)}/>Show all</label><label className="check"><input data-warmkey="highlightSelection" aria-label={geosetHighlightLabel} type="checkbox" checked={preferences.highlightSelection} onChange={event => changePreferences(previous => ({ ...previous, highlightSelection: event.target.checked }))}/>{geosetHighlightLabel}</label></div><div className="classic-selection-actions"><button data-warmkey="geosetsAll" onClick={() => chooseSets(allGeosets(model.Geosets.length))}>All</button><button data-warmkey="geosetsClear" onClick={() => chooseSets(new Set())}>Clear</button><button data-warmkey="geosetsInvert" onClick={() => chooseSets(invertGeosets(selectable, model.Geosets.length))}>Invert</button></div><div className="classic-geoset-list" style={{ '--geoset-rows': Math.max(1, Math.ceil(model.Geosets.length / 4)) }} role="listbox" aria-label="Geosets" aria-multiselectable="true">{model.Geosets.map((g, i) => <div key={i} className={`geoset-row${activeGeoset === i ? ' selected' : ''}${!cleanView && preferences.highlightSelection && highlightAppearance.viaView && viewHoveredGeoset === i ? ' hovered' : ''}`} role="option" aria-selected={selectable.has(i)} ><span className="geoset-hover-target" onMouseEnter={() => setSelectionHoveredGeoset(i)} onMouseLeave={() => setSelectionHoveredGeoset(null)}><input data-warmkey={`geoset:${i}`} type="checkbox" aria-label={`Select geoset ${i}`} checked={selectable.has(i)} onChange={event => chooseSet(i, event, event.target.checked)}/><span>{i + 1}</span></span></div>)}</div></SidebarSection>;
   const changeGeosetStructure = (label, sections, operation) => {
     let result;
@@ -1201,6 +1203,7 @@ export default function App() {
         </>}
       </Suspense>}
       {mode === 'vertices' && !cameraRotating && <div className="classic-geoset-operations"><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(false)}>Seperate by Loose parts</button><button disabled={!editable || !selectionCount} onClick={() => separateSelectedGeosets(true)}>Nuclear Seperation</button><button disabled={!editable || !selectionCount} onClick={() => changeGeosetStructure('Merge geosets', ['Geosets', 'GeosetAnims', 'Bones', 'Gliders', 'Info'], current => mergeSimilarGeosets(current, validSelection))}>Merge Geosets</button><button disabled={!editable || !selectionCount || !!normalsXL} onClick={beginNormalsXL}>NormalsXL</button><button disabled={!editable || !selectable.size} onClick={deleteSelectedGeosetFreeVertices}>Delete free vertices</button></div>}
+      {(mode === 'vertices' || mode === 'bones') && grabThroughToggle}
       {(mode !== 'animation' || animationPanel === 'movement' || cameraRotating) && geosetPicker}
       {rigWorkspace && bindingPanel}
     </aside>}</main>
