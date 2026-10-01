@@ -1,5 +1,6 @@
 import { createNode, NODE_TYPES } from './editor-document.js';
 import { ensureDummyBone } from './dummy-bone.js';
+import { canonicalizeSerializedNodeOrder } from './node-id-order.js';
 
 const TEXTURE_SLOTS = ['TextureID', 'NormalTextureID', 'ORMTextureID', 'EmissiveTextureID', 'TeamColorTextureID', 'ReflectionsTextureID'];
 const clone = value => structuredClone(value);
@@ -21,7 +22,7 @@ export function pasteNodesToDummy(target, clipboard) {
   for (const id of selected) if (!source.Nodes?.[id] || !nodeType(source, id)) throw Error(`Copied node ${id} no longer exists.`);
   const dummy = ensureDummyBone(target);
   target.Textures ||= []; target.Materials ||= []; target.TextureAnims ||= []; target.GlobalSequences ||= [];
-  const maps = { nodes: new Map(), textures: new Map(), materials: new Map(), textureAnims: new Map(), globals: new Map() };
+  const maps = { nodes: new Map(), textures: new Map(), materials: new Map(), textureAnims: new Map(), globals: new Map() }, createdNodes = new Map();
   const reuse = (collection, value) => { const key = fingerprint(value), index = collection.findIndex(item => fingerprint(item) === key); return index < 0 ? collection.push(value) - 1 : index; };
   const remapGlobals = value => {
     if (!value || typeof value !== 'object' || ArrayBuffer.isView(value)) return;
@@ -78,13 +79,15 @@ export function pasteNodesToDummy(target, clipboard) {
   for (const old of ordered) {
     const original = source.Nodes[old], type = nodeType(source, old), created = createNode(target, type);
     const newId = created.ObjectId, attachmentId = created.AttachmentID;
-    Object.assign(created, clone(original), { ObjectId: newId, Parent: selected.has(original.Parent) ? maps.nodes.get(original.Parent) : dummy.ObjectId, Name: uniqueName(original.Name) });
+    Object.assign(created, clone(original), { ObjectId: newId, Parent: selected.has(original.Parent) ? createdNodes.get(original.Parent).ObjectId : dummy.ObjectId, Name: uniqueName(original.Name) });
     created.PivotPoint = clone(source.PivotPoints?.[old] || original.PivotPoint || new Float32Array(3)); target.PivotPoints[newId] = created.PivotPoint;
     if (type === 'Attachment') created.AttachmentID = attachmentId;
     if (type === 'Bone') { created.GeosetId = null; created.GeosetAnimId = null; }
     if (type === 'ParticleEmitter2') created.TextureID = textureRef(created.TextureID);
     if (type === 'RibbonEmitter') created.MaterialID = materialRef(created.MaterialID);
-    remapGlobals(created); maps.nodes.set(old, newId);
+    remapGlobals(created); createdNodes.set(old, created);
   }
+  canonicalizeSerializedNodeOrder(target);
+  for (const [old, node] of createdNodes) maps.nodes.set(old, node.ObjectId);
   return { nodeIds: ordered.map(id => maps.nodes.get(id)), nodeMap: Object.fromEntries(maps.nodes), dummyId: dummy.ObjectId };
 }

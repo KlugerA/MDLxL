@@ -30,7 +30,8 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
         let fiber = host?.[Object.keys(host).find(key => key.startsWith('__reactFiber'))];
         for (; fiber; fiber = fiber.return) if (fiber.memoizedProps?.model?.Geosets && fiber.memoizedProps?.model?.Nodes) {
           const model = fiber.memoizedProps.model, nodes = model.Nodes.filter(Boolean);
-          return { geosets: model.Geosets.length, nodes: nodes.length, dummy: model.Bones.filter(node => node.Name === 'DummyBone').length, lastGroups: model.Geosets.at(-1)?.Groups };
+          const dummy = model.Bones.find(node => node.Name === 'DummyBone');
+          return { geosets: model.Geosets.length, nodes: nodes.length, dummy: dummy ? 1 : 0, dummyId: dummy?.ObjectId ?? null, lastGroups: model.Geosets.at(-1)?.Groups };
         }
         throw Error('Active model props were not found.');
       };
@@ -58,7 +59,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     const afterGeometry = await page.evaluate(() => modelTabSummary());
     assert.equal(afterGeometry.nodes, secondBefore.nodes + 1, 'ordinary paste adds only DummyBone, not the donor rig');
     assert.equal(afterGeometry.dummy, 1);
-    assert.deepEqual(afterGeometry.lastGroups, [[afterGeometry.nodes - 1]]);
+    assert.deepEqual(afterGeometry.lastGroups, [[afterGeometry.dummyId]]);
 
     await page.getByRole('tab', { name: 'demo.mdx' }).click();
     assert.deepEqual(await page.evaluate(() => modelTabSummary()), firstBefore, 'inactive source model remains unchanged');
