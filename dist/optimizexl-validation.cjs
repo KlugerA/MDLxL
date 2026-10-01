@@ -5787,35 +5787,47 @@ function retainedBytes(value, seen = /* @__PURE__ */ new Set()) {
 function createChanges(before, after, { ignore = () => false } = {}) {
   const changes = [];
   const active = /* @__PURE__ */ new Set();
-  function same(left, right, path) {
-    if (ignore(path) || Object.is(left, right)) return true;
+  const path = [];
+  function same(left, right, path2) {
+    if (ignore(path2) || Object.is(left, right)) return true;
     if (!left || !right || typeof left !== "object" || typeof right !== "object" || left.constructor !== right.constructor) return false;
     if (ArrayBuffer.isView(left) || left instanceof ArrayBuffer) {
       if (left.byteLength !== right.byteLength) return false;
+      if (equalTypedValues(left, right)) return true;
       const a = byteView(left), b = byteView(right);
       for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
       return true;
     }
     if (Array.isArray(left) && left.length !== right.length) return false;
     const keys = Object.keys(left);
-    return keys.length === Object.keys(right).length && keys.every((key) => own(right, key) && same(left[key], right[key], [...path, key]));
+    return keys.length === Object.keys(right).length && keys.every((key) => own(right, key) && same(left[key], right[key], [...path2, key]));
   }
-  function visit(left, right, path, leftExists = true, rightExists = true) {
+  function replace2(left, right, leftExists, rightExists) {
+    changes.push({ kind: "value", path: [...path], beforeExists: leftExists, afterExists: rightExists, before: copy(left), after: copy(right) });
+  }
+  function child(left, right, key, existsBefore, existsAfter) {
+    if (forbidden.has(key)) throw new Error(`Unsafe document property: ${key}.`);
+    if (existsBefore === existsAfter && Object.is(left[key], right[key])) return;
+    path.push(key);
+    visit(left[key], right[key], existsBefore, existsAfter);
+    path.pop();
+  }
+  function visit(left, right, leftExists = true, rightExists = true) {
     if (ignore(path) || leftExists === rightExists && Object.is(left, right)) return;
-    const replace2 = () => changes.push({ kind: "value", path, beforeExists: leftExists, afterExists: rightExists, before: copy(left), after: copy(right) });
     if (!leftExists || !rightExists || !left || !right || typeof left !== "object" || typeof right !== "object" || left.constructor !== right.constructor) {
-      replace2();
+      replace2(left, right, leftExists, rightExists);
       return;
     }
     if (ArrayBuffer.isView(left) || left instanceof ArrayBuffer) {
       if (left.byteLength !== right.byteLength) {
-        replace2();
+        replace2(left, right, leftExists, rightExists);
         return;
       }
+      if (equalTypedValues(left, right)) return;
       const a = byteView(left), b = byteView(right);
       let start = -1, last = -1;
       const flush = () => {
-        if (start >= 0) changes.push({ kind: "bytes", path, offset: start, before: a.slice(start, last + 1), after: b.slice(start, last + 1) });
+        if (start >= 0) changes.push({ kind: "bytes", path: [...path], offset: start, before: a.slice(start, last + 1), after: b.slice(start, last + 1) });
       };
       for (let i = 0; i < a.length; i++) {
         if (a[i] !== b[i]) {
@@ -5833,22 +5845,45 @@ function createChanges(before, after, { ignore = () => false } = {}) {
       let start = 0, end = 0;
       while (start < Math.min(left.length, right.length) && same(left[start], right[start], [...path, String(start)])) start++;
       while (end < Math.min(left.length, right.length) - start && same(left[left.length - end - 1], right[right.length - end - 1], [...path, String(left.length - end - 1)])) end++;
-      changes.push({ kind: "splice", path, index: start, before: copy(left.slice(start, left.length - end)), after: copy(right.slice(start, right.length - end)) });
+      changes.push({ kind: "splice", path: [...path], index: start, before: copy(left.slice(start, left.length - end)), after: copy(right.slice(start, right.length - end)) });
       return;
     }
+    if (path.at(-1) === "Keys" && Array.isArray(left) && equalAnimationKeys(left, right)) return;
     if (active.has(right)) throw new Error("Document history cannot store a cyclic model value.");
     active.add(right);
-    for (const key of /* @__PURE__ */ new Set([...Object.keys(left), ...Object.keys(right)])) {
-      if (forbidden.has(key)) throw new Error(`Unsafe document property: ${key}.`);
-      visit(left[key], right[key], [...path, key], own(left, key), own(right, key));
-    }
+    for (const key in left) if (own(left, key)) child(left, right, key, true, own(right, key));
+    for (const key in right) if (own(right, key) && !own(left, key)) child(left, right, key, false, true);
     active.delete(right);
   }
   for (const key of /* @__PURE__ */ new Set([...Object.keys(before), ...Object.keys(after)])) {
     if (forbidden.has(key)) throw new Error(`Unsafe document property: ${key}.`);
-    visit(before[key], after[key], [key], own(before, key), own(after, key));
+    path.push(key);
+    visit(before[key], after[key], own(before, key), own(after, key));
+    path.pop();
   }
   return changes;
+}
+function equalTypedValues(left, right) {
+  if (left.length === void 0 || left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i++) if (!Object.is(left[i], right[i]) || left[i] !== left[i]) return false;
+  return true;
+}
+function equalAnimationKeys(left, right) {
+  let present = 0;
+  for (let i = 0; i < left.length; i++) {
+    if (own(left, i) !== own(right, i)) return false;
+    if (own(left, i)) present++;
+    const a = left[i], b = right[i];
+    if (Object.is(a, b)) continue;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object" || a.constructor !== b.constructor) return false;
+    for (const key in a) if (own(a, key)) {
+      if (forbidden.has(key) || !own(b, key)) return false;
+      if (Object.is(a[key], b[key])) continue;
+      if (!ArrayBuffer.isView(a[key]) || a[key].constructor !== b[key]?.constructor || !equalTypedValues(a[key], b[key])) return false;
+    }
+    for (const key in b) if (own(b, key) && !own(a, key)) return false;
+  }
+  return Object.keys(left).length === present && Object.keys(right).length === present;
 }
 function validateChange(change) {
   if (!change || !Array.isArray(change.path) || !change.path.length || change.path.length > 128 || change.path.some((key) => typeof key !== "string" || forbidden.has(key))) throw new Error("Invalid recovery history path.");
@@ -6224,15 +6259,9 @@ var fingerprint2 = (value) => JSON.stringify(value, (key, val) => {
   if (typeof val === "number" && !Number.isFinite(val)) return { $number: String(val) };
   return val;
 });
-function sectionFingerprint(model, key) {
-  if (Object.values(NODE_TYPES).some(([collection]) => collection === key)) {
-    return fingerprint2((model[key] || []).map(({ PivotPoint, ...node }) => node));
-  }
-  return fingerprint2(model[key]);
-}
-var changedKeys = (before, after) => Object.keys(SECTION_TYPES).filter((key) => sectionFingerprint(before, key) !== sectionFingerprint(after, key));
 var nodeCollectionKeys = new Set(Object.values(NODE_TYPES).map(([key]) => key));
 var ignoreHistoryAlias = (path) => path[0] === "Nodes" || path.length === 3 && nodeCollectionKeys.has(path[0]) && path[2] === "PivotPoint";
+var pickSections = (model, keys) => Object.fromEntries([...keys].filter((key) => key !== "Nodes").map((key) => [key, model[key]]));
 function emptyModel(version = 800, name = "Untitled") {
   const model = {
     Version: version,
@@ -6333,7 +6362,10 @@ function normalizeModel(model, previous) {
   function normalizeTracks(value) {
     if (!value || typeof value !== "object" || ArrayBuffer.isView(value) || visited.has(value)) return;
     visited.add(value);
-    if (Array.isArray(value.Keys) && value.GlobalSeqId === void 0) value.GlobalSeqId = null;
+    if (Array.isArray(value.Keys)) {
+      if (value.GlobalSeqId === void 0) value.GlobalSeqId = null;
+      return;
+    }
     for (const child of Object.values(value)) normalizeTracks(child);
   }
   normalizeTracks(model);
@@ -6450,6 +6482,9 @@ var EditorDocument = class _EditorDocument {
     }
     this._savedModel = clone(this.model);
     this._committedModel = clone(this.model);
+    this._dirtyCandidates = new Set(Object.keys(this.model));
+    this._trackedModel = this.model;
+    this._recoverySavedChanges = [];
   }
   _loadSource(input) {
     this._original = typeof input === "string" ? import_buffer9.Buffer.from(input, "utf8") : import_buffer9.Buffer.from(input instanceof ArrayBuffer ? new Uint8Array(input) : input);
@@ -6470,8 +6505,21 @@ var EditorDocument = class _EditorDocument {
   get originalBytes() {
     return new Uint8Array(this._original);
   }
+  _candidateKeys() {
+    if (this.model !== this._trackedModel) {
+      this._dirtyCandidates = /* @__PURE__ */ new Set([...Object.keys(this._savedModel), ...Object.keys(this.model)]);
+      this._trackedModel = this.model;
+      this._changeCache = null;
+    }
+    return this._dirtyCandidates;
+  }
   _changedKeys() {
-    if (this._changeCache?.revision !== this.revision) this._changeCache = { revision: this.revision, keys: changedKeys(this._savedModel, this.model) };
+    const candidates = this._candidateKeys();
+    if (this._changeCache?.revision !== this.revision) {
+      const changes = createChanges(pickSections(this._savedModel, candidates), pickSections(this.model, candidates), { ignore: ignoreHistoryAlias });
+      this._dirtyCandidates = new Set(changes.map((change) => change.path[0]));
+      this._changeCache = { revision: this.revision, keys: [...new Set(changes.map((change) => change.path[0]).filter((key) => key in SECTION_TYPES))] };
+    }
     return this._changeCache.keys;
   }
   get dirty() {
@@ -6532,6 +6580,7 @@ var EditorDocument = class _EditorDocument {
     if (typeof mutator !== "function") throw new TypeError("apply requires a model mutator function.");
     if (this._applying) throw new Error("Nested document edits are not supported.");
     const before = this._committedModel, next = this.model;
+    this._candidateKeys();
     let result, changes, changed, historyEntry;
     this._applying = true;
     try {
@@ -6539,18 +6588,26 @@ var EditorDocument = class _EditorDocument {
       if (result && typeof result.then === "function") throw new Error("Document edits must be synchronous.");
       if (next.Version !== before.Version && !this._versionConversion) throw new Error("Changing the model version is not supported; no automatic downgrades are performed.");
       normalizeModel(next, before);
-      const existingErrors = this._committedErrors ||= new Set(validateModel(before).filter((d) => d.severity === "error").map((d) => `${d.code}:${d.path}`));
-      const nextDiagnostics = validateModel(next);
-      const errors = nextDiagnostics.filter((d) => d.severity === "error" && !existingErrors.has(`${d.code}:${d.path}`));
-      if (errors.length) throw new Error(errors.slice(0, 4).map((d) => d.message).join("\n"));
       changes = createChanges(before, next, { ignore: ignoreHistoryAlias });
       changed = [...new Set(changes.map((change) => change.path[0]).filter((key) => key in SECTION_TYPES))];
+      const previousDiagnostics = this._committedDiagnostics ||= validateModel(before);
+      const existingErrors = this._committedErrors ||= new Set(previousDiagnostics.filter((d) => d.severity === "error").map((d) => `${d.code}:${d.path}`));
+      const numericSections = changed.includes("GlobalSequences") ? null : new Set(changes.map((change) => change.path[0]));
+      if (numericSections && (numericSections.has("PivotPoints") || changed.some((key) => nodeCollectionKeys.has(key)))) {
+        numericSections.add("PivotPoints");
+        for (const key of nodeCollectionKeys) numericSections.add(key);
+      }
+      const nextDiagnostics = validateModel(next, { numericSections, previousDiagnostics });
+      const errors = nextDiagnostics.filter((d) => d.severity === "error" && !existingErrors.has(`${d.code}:${d.path}`));
+      if (errors.length) throw new Error(errors.slice(0, 4).map((d) => d.message).join("\n"));
       if (changes.length) historyEntry = this._historyStore.prepare({ label, sections: changed, changes });
       applyChanges(before, changes);
       normalizeModel(before);
       this._committedErrors = new Set(nextDiagnostics.filter((d) => d.severity === "error").map((d) => `${d.code}:${d.path}`));
+      this._committedDiagnostics = nextDiagnostics;
     } catch (error) {
       this.model = clone(before);
+      this._trackedModel = this.model;
       throw error;
     } finally {
       this._applying = false;
@@ -6558,6 +6615,7 @@ var EditorDocument = class _EditorDocument {
     if (!changes.length) return false;
     this._historyStore.commit(historyEntry);
     this.model = next;
+    for (const change of changes) this._dirtyCandidates.add(change.path[0]);
     this.version = this.model.Version;
     this.revision++;
     this._recordHistory({ label, sections: changed, requestedSections: [...sections || []], revision: this.revision });
@@ -6590,9 +6648,28 @@ var EditorDocument = class _EditorDocument {
     }
     this.version = this.model.Version;
     this._committedErrors = null;
+    this._committedDiagnostics = null;
+    for (const change of changes) this._dirtyCandidates.add(change.path[0]);
+    this._trackedModel = this.model;
   }
-  captureRecoveryState({ includeHistory = true } = {}) {
+  captureRecoveryState({ includeHistory = true, compact = false } = {}) {
     if (this._applying) throw new Error("Cannot capture recovery inside a document edit.");
+    if (compact) {
+      this._candidateKeys();
+      return clone({
+        schema: "mdlvis-document-recovery",
+        version: 2,
+        name: this.name,
+        originalBytes: new Uint8Array(this._original.buffer, this._original.byteOffset, this._original.byteLength),
+        savedChanges: this._recoverySavedChanges,
+        // Checkpoints also capture direct in-place draft changes, even when
+        // no document transaction or revision has been committed yet.
+        modelChanges: createChanges(this._savedModel, this.model, { ignore: ignoreHistoryAlias }),
+        revision: this.revision,
+        history: includeHistory ? this._historyStore._recoveryState() : null,
+        activity: this.history
+      });
+    }
     return clone({
       schema: "mdlvis-document-recovery",
       version: 1,
@@ -6606,10 +6683,20 @@ var EditorDocument = class _EditorDocument {
     });
   }
   static restoreRecoveryState(state) {
-    if (state?.schema !== "mdlvis-document-recovery" || state.version !== 1 || !(state.originalBytes instanceof Uint8Array) || typeof state.name !== "string" || !state.model) throw new Error("Invalid document recovery data.");
+    if (state?.schema !== "mdlvis-document-recovery" || ![1, 2].includes(state.version) || !(state.originalBytes instanceof Uint8Array) || typeof state.name !== "string" || (state.version === 1 ? !state.model : !Array.isArray(state.savedChanges) || !Array.isArray(state.modelChanges))) throw new Error("Invalid document recovery data.");
     const doc = new _EditorDocument(state.originalBytes, state.name);
-    if (!state.savedModel || state.savedModel.Version !== doc.version || ![800, 1e3, doc.version].includes(state.model.Version)) throw new Error("Recovery model version does not match its original file.");
-    const recovered = clone(state.model);
+    let savedModel, recovered;
+    if (state.version === 2) {
+      savedModel = clone(doc.model);
+      applyChanges(savedModel, state.savedChanges);
+      normalizeModel(savedModel);
+      recovered = clone(savedModel);
+      applyChanges(recovered, state.modelChanges);
+    } else {
+      savedModel = state.savedModel;
+      recovered = clone(state.model);
+    }
+    if (!savedModel || savedModel.Version !== doc.version || ![800, 1e3, doc.version].includes(recovered.Version)) throw new Error("Recovery model version does not match its original file.");
     normalizeModel(recovered);
     const existingErrors = new Set(validateModel(doc.model).filter((d) => d.severity === "error").map((d) => `${d.code}:${d.path}`));
     const errors = validateModel(recovered).filter((d) => d.severity === "error" && !existingErrors.has(`${d.code}:${d.path}`));
@@ -6617,8 +6704,11 @@ var EditorDocument = class _EditorDocument {
     doc.model = recovered;
     doc.version = recovered.Version;
     doc._committedModel = clone(recovered);
-    doc._savedModel = clone(state.savedModel);
+    doc._recoverySavedChanges = state.version === 2 ? clone(state.savedChanges) : createChanges(doc._savedModel, savedModel, { ignore: ignoreHistoryAlias });
+    doc._savedModel = clone(savedModel);
     normalizeModel(doc._savedModel);
+    doc._dirtyCandidates = new Set(Object.keys(recovered));
+    doc._trackedModel = recovered;
     if (state.history) doc._historyStore = HistoryStore.restore(state.history);
     doc.revision = Number.isSafeInteger(state.revision) && state.revision >= 0 ? state.revision : 0;
     doc.history = Array.isArray(state.activity) ? clone(state.activity.slice(-Math.max(1, doc.historyStats.maxSteps))) : [];
@@ -6708,6 +6798,9 @@ var EditorDocument = class _EditorDocument {
     this._loadSource(savedBytes);
     this.version = this.model.Version;
     this._savedModel = clone(savedModel);
+    this._recoverySavedChanges = createChanges(openDocument(savedBytes, name).model, savedModel, { ignore: ignoreHistoryAlias });
+    this._dirtyCandidates = /* @__PURE__ */ new Set([...Object.keys(this._savedModel), ...Object.keys(this.model)]);
+    this._trackedModel = this.model;
     this.revision++;
   }
 };
@@ -6733,7 +6826,7 @@ function serializationStringIssues(model, format, keys) {
   for (const key of keys) walk(model[key], key, key);
   return issues;
 }
-function validateModel(model) {
+function validateModel(model, { numericSections = null, previousDiagnostics = [] } = {}) {
   const diagnostics = [];
   const add = (severity, code, message, path) => diagnostics.push({ severity, code, message, path });
   if (!model) return [{ severity: "error", code: "NO_MODEL", message: "No model is loaded." }];
@@ -6820,23 +6913,33 @@ function validateModel(model) {
   for (const [i, duration] of (model.GlobalSequences || []).entries()) if (!Number.isInteger(duration) || duration <= 0) add("error", "GLOBAL_SEQUENCE_DURATION", `Global sequence ${i} needs a positive integer duration.`, `GlobalSequences[${i}]`);
   for (const event of model.EventObjects || []) if (event.GlobalSeqId != null && event.GlobalSeqId !== -1 && (!Number.isInteger(event.GlobalSeqId) || event.GlobalSeqId < 0 || model.GlobalSequences?.[event.GlobalSeqId] === void 0)) add("error", "GLOBAL_SEQUENCE_REFERENCE", `Event ${event.Name} references missing global sequence ${event.GlobalSeqId}.`, `Nodes[${event.ObjectId}].GlobalSeqId`);
   const visited = /* @__PURE__ */ new Set();
-  function walk(value, path) {
+  const valuePath = ["Model"];
+  const location = () => valuePath.join(".");
+  function walk(value) {
     if (typeof value === "number") {
-      if (!Number.isFinite(value)) add("error", "NON_FINITE_NUMBER", `${path} contains a non-finite number.`, path);
+      if (!Number.isFinite(value)) {
+        const path = location();
+        add("error", "NON_FINITE_NUMBER", `${path} contains a non-finite number.`, path);
+      }
       return;
     }
     if (!value || typeof value !== "object" || visited.has(value)) return;
     visited.add(value);
     if (ArrayBuffer.isView(value)) {
-      if (value.some((n) => !Number.isFinite(n))) add("error", "NON_FINITE_NUMBER", `${path} contains a non-finite coordinate.`, path);
+      for (let i = 0; i < value.length; i++) if (!Number.isFinite(value[i])) {
+        const path = location();
+        add("error", "NON_FINITE_NUMBER", `${path} contains a non-finite coordinate.`, path);
+        break;
+      }
       return;
     }
     if (value.Keys) {
+      const path = location();
       if (!Number.isInteger(value.LineType) || value.LineType < 0 || value.LineType > 3) add("error", "KEYFRAME_INTERPOLATION", `${path} has an invalid interpolation mode.`, path);
       if (value.GlobalSeqId != null && value.GlobalSeqId !== -1 && model.GlobalSequences?.[value.GlobalSeqId] === void 0) add("error", "GLOBAL_SEQUENCE_REFERENCE", `${path} references missing global sequence ${value.GlobalSeqId}.`, path);
       let previous = -Infinity;
-      const property2 = path.split(".").at(-1);
-      const width = property2 === "Rotation" ? path.includes(".Cameras.") ? 1 : 4 : ["Translation", "Scaling", "Color", "AmbColor", "FresnelColor", "TargetTranslation"].includes(property2) ? 3 : 1;
+      const property2 = valuePath.at(-1);
+      const width = property2 === "Rotation" ? valuePath.includes("Cameras") ? 1 : 4 : ["Translation", "Scaling", "Color", "AmbColor", "FresnelColor", "TargetTranslation"].includes(property2) ? 3 : 1;
       for (const key of value.Keys) {
         if (!Number.isInteger(key.Frame) || key.Frame < -2147483648 || key.Frame > 2147483647 || key.Frame < previous) add("error", "KEYFRAME_ORDER", `${path} keyframes must use signed 32-bit integer frames in increasing order.`, path);
         previous = key.Frame;
@@ -6845,9 +6948,20 @@ function validateModel(model) {
         if (value.LineType >= 2 && (!key.InTan || !key.OutTan || key.InTan.length !== key.Vector?.length || key.OutTan.length !== key.Vector?.length)) add("error", "KEYFRAME_TANGENTS", `${path} spline keyframes need matching in/out tangents.`, path);
       }
     }
-    for (const [key, val] of Object.entries(value)) if (key !== "Nodes") walk(val, `${path}.${key}`);
+    for (const key in value) if (key !== "Nodes" && Object.prototype.hasOwnProperty.call(value, key)) {
+      valuePath.push(key);
+      walk(value[key]);
+      valuePath.pop();
+    }
   }
-  walk(model, "Model");
+  if (numericSections) {
+    for (const key of Object.keys(model)) if (key !== "Nodes" && numericSections.has(key)) {
+      valuePath.push(key);
+      walk(model[key]);
+      valuePath.pop();
+    }
+    diagnostics.push(...previousDiagnostics.filter((issue) => issue.path?.startsWith("Model.") && !numericSections.has(issue.path.split(".")[1])));
+  } else walk(model);
   return diagnostics;
 }
 function updateCounts(model) {
