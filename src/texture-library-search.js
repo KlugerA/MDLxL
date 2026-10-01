@@ -58,10 +58,18 @@ export function prepareTextureLibrary(items) {
   // appearance inference pass. Never infer an HD surface from its SD counterpart.
   return prepare(items.map(item=>item.searchIndex?item:{...item,searchIndex:{version:4,traits:[]}}));
 }
-/** The empty search has the same order before the full search index is prepared. */
+function literalTextureLibraryResults(source,query,limit) {
+  const q=norm(query),parts=q.split(/\s+/).filter(Boolean);
+  const items=source.filter(item=>parts.every(part=>norm(item.name+' '+item.path+' '+item.sourcePath).includes(part))).sort((a,b)=>{
+    const score=t=>norm(t.name)===q?4:norm(t.path.split(/[\\/]/).at(-1).replace(/\.[^.]+$/,''))===q?3:norm(t.name).startsWith(q)?2:1;
+    return score(b)-score(a)||(b.priority||0)-(a.priority||0)||a.name.localeCompare(b.name);
+  });
+  return {items:items.slice(0,limit),total:items.length,meanings:[],unknown:[],notice:'',hasMore:items.length>limit};
+}
+/** Empty and literal searches work before the richer Vibe index is prepared. */
 export function initialTextureLibraryResults(items,{query='',folder='',variant='all',kind='all',format='all',limit=120}={}) {
-  if(query.trim())return null;
   const matches=items.filter(item=>(variant==='all'||item.variant===variant)&&(kind==='all'||item.kinds.includes(kind))&&textureFormatMatches(item,format)&&(item.source==='custom'?(!folder||folder==='Model folder'):folderContains(item.sourcePath,folder)));
+  if(query.trim())return literalTextureLibraryResults(matches,query,limit);
   matches.sort((a,b)=>(b.priority||0)-(a.priority||0)||a.name.localeCompare(b.name));
   return {items:matches.slice(0,limit),total:matches.length,meanings:[],unknown:[],notice:'',hasMore:matches.length>limit};
 }
@@ -84,14 +92,8 @@ function inspirationScore(item,definition) {
 export function searchTextureLibrary(prepared,{query='',vibe=true,folder='',variant='all',kind='all',format='all',limit=120}={}) {
   let source=prepared.filter(item=>(variant==='all'||item.variant===variant)&&(kind==='all'||item.kinds.includes(kind))&&textureFormatMatches(item,format)&&(item.source==='custom'?(!folder||folder==='Model folder'):folderContains(item.sourcePath,folder)));
   source.vocabulary=prepared.vocabulary;
-  const q=norm(query),parts=q.split(/\s+/).filter(Boolean);
-  if(!vibe) {
-    const items=source.filter(item=>parts.every(part=>norm(item.name+' '+item.path+' '+item.sourcePath).includes(part))).sort((a,b)=>{
-      const score=t=>norm(t.name)===q?4:norm(t.path.split(/[\\/]/).at(-1).replace(/\.[^.]+$/,''))===q?3:norm(t.name).startsWith(q)?2:1;
-      return score(b)-score(a)||(b.priority||0)-(a.priority||0)||a.name.localeCompare(b.name);
-    });
-    return {items:items.slice(0,limit),total:items.length,meanings:[],unknown:[],notice:'',hasMore:items.length>limit};
-  }
+  if(!vibe)return literalTextureLibraryResults(source,query,limit);
+  const q=norm(query);
   const descriptionQuery=russianTextureQuery(query),inspiration=inspirationFor(descriptionQuery);
   let searchQuery=inspiration?.remaining??descriptionQuery,notice=inspiration?'Native Warcraft textures suggested for '+inspiration.definition.name+' kitbashing.':'';
   const nail=/\bnails?\b/i.test(searchQuery);

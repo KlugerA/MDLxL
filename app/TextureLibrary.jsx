@@ -109,7 +109,10 @@ export default function TextureLibrary({model,modelPath,onClose,onAddTexture,onP
   useEffect(()=>{setLimit(120);},[query,vibe,folder,variant,kind,format]);
   useEffect(()=>{
     const options={query,vibe,folder,variant,kind,format,limit};
-    if(!ready){if(catalog){const first=initialTextureLibraryResults(catalog.items,options);if(first){setResult(first);setLoading(false);setSearching(false);}else{setResult({items:[],total:0});setSearching(true);}}else if(previewFilters.current&&(query.trim()||folder||kind!=='all'||variant!==previewFilters.current.variant||format!==previewFilters.current.format)){setResult({items:[],total:0});setSearching(true);}return;}
+    const first=catalog?initialTextureLibraryResults(catalog.items,options):null;
+    if(first){setResult(first);setLoading(false);}
+    if(!ready){requestId.current=++searchSerial;if(first)setSearching(Boolean(query.trim()&&vibe));else if(previewFilters.current&&(query.trim()||folder||kind!=='all'||variant!==previewFilters.current.variant||format!==previewFilters.current.format)){setResult({items:[],total:0});setSearching(true);}return;}
+    if(!query.trim()||!vibe){requestId.current=++searchSerial;setSearching(false);return;}
     const id=++searchSerial;requestId.current=id;requestOptions.current=options;
     const cached=librarySessions.result(modelPath,catalog?.signature,options);if(cached){setResult(cached);setSearching(false);return;}
     setSearching(true);const timer=setTimeout(()=>worker.current?.postMessage({type:'search',id,signature:catalog?.signature,options}),query?100:0);return()=>clearTimeout(timer);

@@ -26,7 +26,11 @@ test('first Library page matches completed empty search before indexing',()=>{
     assert.equal(first.total,complete.total);
     assert.deepEqual(first.items.map(item=>item.id),complete.items.map(item=>item.id));
   }
-  assert.equal(initialTextureLibraryResults(annotated,{query:'rusty metal'}),null);
+  assert.equal(initialTextureLibraryResults(annotated,{query:'rusty metal'}).total,0);
+  const initialName=initialTextureLibraryResults(annotated,{query:'Footman',variant:'classic',limit:12});
+  const literalName=searchTextureLibrary(prepared,{query:'Footman',vibe:false,variant:'classic',limit:12});
+  assert.equal(initialName.total,literalName.total);
+  assert.deepEqual(initialName.items.map(item=>item.id),literalName.items.map(item=>item.id));
   for(const format of ['all','blp']){
     const preview=previewCatalog({signature:'fixture',items:annotated},format);
     const complete=searchTextureLibrary(prepared,{query:'',variant:preview.variant,format,limit:120});
