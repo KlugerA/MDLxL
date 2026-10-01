@@ -43,7 +43,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     };
     await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]; window.webContents.setBackgroundThrottling(false); window.setPosition(-3000, 0); window.showInactive(); });
     await page.getByRole('button', { name: 'Quad View', exact: true }).waitFor({ timeout: 60000 });
-    const vertexToggle = page.getByLabel('Grabthrough');
+    const vertexToggle = page.getByLabel('Grabthrough', { exact: true });
     assert.equal(await vertexToggle.isChecked(), false, 'Vertex Grabthrough defaults off');
     await page.getByLabel('View direction', { exact: true }).selectOption('front');
     await page.getByLabel('Render mode', { exact: true }).selectOption('textured');
@@ -62,7 +62,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
 
     await page.getByRole('button', { name: 'Bones', exact: true }).click();
     await page.getByLabel('Bones controller').waitFor({ timeout: 60000 });
-    const bonesToggle = page.getByLabel('Grabthrough');
+    const bonesToggle = page.getByLabel('Grabthrough', { exact: true });
     assert.equal(await bonesToggle.isChecked(), false, 'Bones Grabthrough defaults off');
     await marqueeAll(page.locator('.game-preview-surface canvas').first());
     await page.getByRole('button', { name: 'Vertices', exact: true }).click();
@@ -71,7 +71,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
 
     await page.getByRole('button', { name: 'Bones', exact: true }).click();
     await page.getByLabel('Bones controller').waitFor();
-    await page.getByLabel('Grabthrough').check();
+    await page.getByLabel('Grabthrough', { exact: true }).check();
     await marqueeAll(page.locator('.game-preview-surface canvas').first());
     await page.getByRole('button', { name: 'Vertices', exact: true }).click();
     await page.getByLabel('3D model viewport').waitFor();
@@ -79,7 +79,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
 
     await page.getByRole('button', { name: 'Bones', exact: true }).click();
     await page.getByLabel('Bones controller').waitFor();
-    await page.getByLabel('Grabthrough').uncheck();
+    await page.getByLabel('Grabthrough', { exact: true }).uncheck();
     const previewState = () => page.locator('.game-preview-root').evaluate(element => {
       let fiber = element[Object.keys(element).find(key => key.startsWith('__reactFiber'))], top = fiber;
       while (top.return) top = top.return;
@@ -92,14 +92,14 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     });
     assert.deepEqual(await previewState(), { mode: 'textured', grabThrough: false, xrayVertices: false });
     const bonesOccluded = await selectedPixels(page.locator('.game-preview-root'), 'bones-grabthrough-off.png');
-    await page.getByLabel('Grabthrough').check();
+    await page.getByLabel('Grabthrough', { exact: true }).check();
     assert.deepEqual(await previewState(), { mode: 'textured', grabThrough: true, xrayVertices: false });
     const bonesDrawThrough = await selectedPixels(page.locator('.game-preview-root'), 'bones-grabthrough-on.png');
     assert.ok(bonesDrawThrough > bonesOccluded, `Bones Grabthrough draws the occluded selected vertices through Textured View (${bonesOccluded} -> ${bonesDrawThrough} red pixels)`);
     await page.screenshot({ path: path.join(output, 'bones-grabthrough.png') });
 
     await page.getByRole('button', { name: 'Movement', exact: true }).click();
-    assert.equal(await page.getByLabel('Grabthrough').count(), 0, 'Grabthrough stays scoped to Vertex and Bones');
+    assert.equal(await page.getByLabel('Grabthrough', { exact: true }).count(), 0, 'Grabthrough stays scoped to Vertex and Bones');
     console.log('Grabthrough is visible in Vertex and Bones, defaults off, toggles on, and stays out of Movement.');
   } finally { await app.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
