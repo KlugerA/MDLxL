@@ -1,4 +1,4 @@
-/** Small software depth surface for canvas-only editor overlays. NDC depth is
+/** Small software depth surface for editor overlays and visible-only selection. NDC depth is
  * affine across a projected triangle, including perspective projections. */
 export const needsSolidDepthPrepass = mode => mode === 'wireframe' || mode === 'vertices';
 
@@ -34,6 +34,16 @@ export function createOverlayDepth(geosets, width, height, resolution = 384) {
         if (Number.isFinite(z)) { covered++; if (point.z > z + .002) behind++; }
       }
       return covered >= 2 && behind === covered;
+    },
+    isOccludedForSelection(point) {
+      const x = Math.floor(point.x * scale), y = Math.floor(point.y * scale);
+      if (x < 0 || x >= w || y < 0 || y >= h) return false;
+      let behind = 0, covered = 0;
+      for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) {
+        const xx = Math.max(0, Math.min(w - 1, x + ox)), yy = Math.max(0, Math.min(h - 1, y + oy)), z = depth[yy * w + xx];
+        if (Number.isFinite(z)) { covered++; if (point.z > z + .002) behind++; }
+      }
+      return covered > 0 && behind === covered;
     },
   };
 }

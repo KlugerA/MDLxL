@@ -24,14 +24,15 @@ export function pickPreviewGeoset(geosets, x, y) {
   return result;
 }
 
-export function selectPreviewVertices(geosets, previous, start, end, selectable) {
+export function selectPreviewVertices(geosets, previous, start, end, selectable, options = {}) {
   const active = selectable == null ? new Set(geosets.map(geo => geo.index)) : new Set(selectable);
   const permitted = geosets.filter(geo => active.has(geo.index));
   const found = Object.fromEntries([...active].map(index => [index, []]));
   const marquee = Math.hypot(end.x - start.x, end.y - start.y) > 5;
+  const depth = options.visibleOnly ? createOverlayDepth(geosets, options.width, options.height) : null;
   let closest = 7, nearest = null;
   for (const geo of permitted) geo.points.forEach((p, index) => {
-    if (!p.visible) return;
+    if (!p.visible || depth?.isOccludedForSelection(p)) return;
     if (marquee) { if (p.x >= Math.min(start.x, end.x) && p.x <= Math.max(start.x, end.x) && p.y >= Math.min(start.y, end.y) && p.y <= Math.max(start.y, end.y)) found[geo.index].push(index); }
     else { const d = Math.hypot(p.x - end.x, p.y - end.y); if (d < closest) { closest = d; nearest = [geo.index, index]; } }
   });

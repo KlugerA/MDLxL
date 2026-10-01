@@ -494,7 +494,11 @@ export default function GamePreview(inputProps) {
         } else if (start.ctrl && p.onInspectGeoset && Math.hypot(end.x - start.x, end.y - start.y) <= 5) {
           const hit = pickPreviewGeoset(geometry, end.x, end.y); if (hit) p.onInspectGeoset(hit.index);
         } else {
-          p.onSelectionChange?.(selectPreviewVertices(geometry, p.selectionByGeoset || {}, start, end, p.selectableGeosets));
+          p.onSelectionChange?.(selectPreviewVertices(geometry, p.selectionByGeoset || {}, start, end, p.selectableGeosets, {
+            visibleOnly: p.restPose && p.mode === 'textured' && p.grabThrough === false,
+            width: rect.width,
+            height: rect.height,
+          }));
         }
         invalidate(); return;
       }

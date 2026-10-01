@@ -115,6 +115,8 @@ test('preview marquee spans selectable geosets; empty clicks clear and Ctrl insp
   const geosets = projectPreviewGeosets([{ ...geo(0), index: 0 }, { ...geo(5), index: 1 }], camera(), 400, 400);
   assert.equal(pickPreviewGeoset(geosets, 200, 200).index, 1);
   assert.deepEqual(selectPreviewVertices(geosets, {}, { x: 140, y: 140 }, { x: 260, y: 260 }), { 0: [0, 1, 2], 1: [0, 1, 2] });
+  assert.deepEqual(selectPreviewVertices(geosets, {}, { x: 140, y: 140 }, { x: 260, y: 260 }, undefined, { visibleOnly: true, width: 400, height: 400 }), { 0: [], 1: [0, 1, 2] });
+  assert.deepEqual(selectPreviewVertices(geosets, {}, { x: 160, y: 240 }, { x: 160, y: 240 }, undefined, { visibleOnly: true, width: 400, height: 400 }), { 0: [], 1: [0] });
   assert.deepEqual(selectPreviewVertices(geosets, {}, { x: 140, y: 140 }, { x: 260, y: 260 }, [1]), { 1: [0, 1, 2] });
   assert.deepEqual(selectPreviewVertices(geosets, { 0: [0], 1: [1] }, { x: 5, y: 5 }, { x: 5, y: 5 }), { 0: [], 1: [] });
   assert.deepEqual(selectPreviewVertices(geosets, { 0: [0] }, { x: 5, y: 5, shift: true }, { x: 5, y: 5 }), { 0: [0], 1: [] });
