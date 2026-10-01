@@ -65,10 +65,24 @@ test('UV Uncouple separates selected coincident points by their own faces withou
   assert.deepEqual(geo.Vertices, beforeGeometry, 'uncoupling never moves the 3D mesh');
 });
 
-test('view projection writes Warcraft top-down UV coordinates only for selected vertices', () => {
+test('view projection keeps the selected UV center and uses the user view for orientation and scale', () => {
   const geo = { Vertices: new Float32Array([-1,-1,0, 1,1,0, 0,0,0]), TVertices: [new Float32Array([.4,.4, .4,.4, .8,.8])] };
   const identity = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
-  assert.deepEqual([...projectUVFromView(geo, [0,1], identity, identity)], [0,1, 1,0, .800000011920929,.800000011920929]);
+  const projected = projectUVFromView(geo, [0,1], identity, identity);
+  assert.ok(Math.abs(projected[0] + .1) < 1e-6); assert.ok(Math.abs(projected[1] - .9) < 1e-6);
+  assert.ok(Math.abs(projected[2] - .9) < 1e-6); assert.ok(Math.abs(projected[3] + .1) < 1e-6);
+  assert.deepEqual([...projected.slice(4)], [.800000011920929,.800000011920929], 'unselected UVs stay unchanged');
+  assert.ok(Math.abs((projected[0] + projected[2]) / 2 - .4) < 1e-6);
+  assert.ok(Math.abs((projected[1] + projected[3]) / 2 - .4) < 1e-6);
+
+  const quarterScale = [.25,0,0,0, 0,.25,0,0, 0,0,1,0, 0,0,0,1];
+  const scaled = projectUVFromView(geo, [0,1], identity, quarterScale);
+  assert.ok(Math.abs(scaled[2] - scaled[0] - .25) < 1e-6, 'camera zoom controls projected width');
+  assert.ok(Math.abs(scaled[1] - scaled[3] - .25) < 1e-6, 'camera zoom controls projected height');
+  assert.ok(Math.abs((scaled[0] + scaled[2]) / 2 - .4) < 1e-6, 'camera framing does not move the UV island');
+
+  const pannedView = [1,0,0,0, 0,1,0,0, 0,0,1,0, .6,-.4,0,1];
+  assert.deepEqual(projectUVFromView(geo, [0,1], pannedView, identity), projected, 'camera panning cannot teleport the UV island');
 });
 
 test('material compositor combines opaque team colour and alpha image layers and supports modulate 2x', () => {
