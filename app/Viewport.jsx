@@ -18,7 +18,7 @@ import { TGALoader } from 'three/addons/loaders/TGALoader.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
-import { needsSolidDepthPrepass } from './preview-depth.js';
+import { createOverlayDepth, needsSolidDepthPrepass } from './preview-depth.js';
 import { vertexRgbPreviewState } from './vertex-rgb-preview.js';
 import { decodeBLP, getBLPImageData } from 'war3-model';
 import { advanceSequence, allNodes, sampleGeosetAnimation, sampleNodeMatrices, sampleTrack, skinGeoset, skinGeosetNormals } from '../src/animation.js';
@@ -640,9 +640,11 @@ export default function Viewport(inputProps) {
         if (hit) p.onInspectGeoset(hit.index);
         return;
       }
-      // Source N15/N16 only change rendering: Work still selects vertices in every view.
+      // Every render mode stays editable; textured mode can reject vertices hidden by the surface.
       if (p.vertexSelection !== false) {
         const editable = editableGeosets(p), previousSelection = selections(p), found = {}, screen = new THREE.Vector3(), marqueeRadius = Math.max(3, visualOptions(p.preferences).vertexSize / 2); let closest = 5, nearest = null;
+        const visibleOnly = p.mode === 'textured' && p.grabThrough === false;
+        const selectionDepth = visibleOnly ? createOverlayDepth(projectPreviewGeosets(state.entries.flatMap((entry, index) => entry?.group.visible ? [{ index, faces: entry.geometry.index.array, vertices: entry.geometry.attributes.position.array }] : []), camera, end.width, end.height), end.width, end.height) : null;
         for (const geosetIndex of editable) {
           const entry = state.entries[geosetIndex], hidden = new Set(p.hiddenVertices?.[geosetIndex] || []); if (!entry?.group.visible) continue;
           const position = entry.geometry.attributes.position; found[geosetIndex] = [];
@@ -650,6 +652,7 @@ export default function Viewport(inputProps) {
             if (hidden.has(i)) continue;
             screen.fromBufferAttribute(position, i).project(camera); if (screen.z < -1 || screen.z > 1) continue;
             const x = (screen.x + 1) * end.width / 2, y = (1 - screen.y) * end.height / 2;
+            if (selectionDepth?.isOccludedForSelection({ x, y, z: screen.z })) continue;
             if (distance > 5) { if (marqueeContainsPoint([x, y], start, end, marqueeRadius)) found[geosetIndex].push(i); }
             else { const d = Math.abs(x - end.x) + Math.abs(y - end.y); if (d < closest) { closest = d; nearest = [geosetIndex, i]; } }
           }
