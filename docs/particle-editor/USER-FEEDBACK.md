@@ -1,6 +1,6 @@
 # User feedback pass — 1 October 2026
 
-This pass remains on `codex/particle-editor-prototype` and draft PR #60. No release, version bump, merge or desktop installation is authorized. The account-wide weekly counter was 26% at this pass's baseline; the user assigned 38 additional percentage points to UX (ceiling 64%) within a 45-point total allocation. Latest observed counter: 48%. Percentages are account-wide and rounded, not a measurement attributable only to this chat.
+This feedback pass was developed on `codex/particle-editor-prototype`; PR #60 merged into online `main` at `8097f79e78441e47195c57429a5396eea4e79fb0` for the 0.15.0 release. The account-wide weekly counter was 26% at this pass's baseline; the user assigned 38 additional percentage points to UX (ceiling 64%) within a 45-point total allocation. Latest observed counter during the pass: 48%. Percentages are account-wide and rounded, not a measurement attributable only to this chat.
 
 ## Latest feedback: appearance, numeric values and main-editor markers
 

@@ -1,4 +1,4 @@
-# Particle Editor prototype — isolated, unmerged
+# Particle Editor prototype progress
 
 Contract: [CONTRACT.md](CONTRACT.md). Prototype for later 5.6 refinement; no merge or release without new explicit authorization.
 
@@ -36,7 +36,7 @@ Do not interpret extractionComplete as preview or insertion completion. No user 
 
 ## Checkpoint 2 — 2026-09-30, before user reset
 
-PR: https://github.com/KlugerA/MDLxL/pull/60 (draft, unmerged). Online main does not contain this prototype. Version remains 0.14.1 because this is unreleased work.
+PR: https://github.com/KlugerA/MDLxL/pull/60 merged into online main at `8097f79e78441e47195c57429a5396eea4e79fb0`. The release branch advances the project to 0.15.0.
 Usage counter reached 100% from 93%; approximately 7 of the allocated 40 percentage points have been consumed. After the user applies the reset, at most approximately 33 points remain. The counter is rounded and shared by the account.
 
 Implemented and exercised:
