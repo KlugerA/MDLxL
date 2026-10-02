@@ -200,3 +200,67 @@ test('a genuinely non-orientable sheet still rejects atomically',()=>{
   assert.throws(()=>correctNormalsXL(model,{0:all(regular),1:all(g)},refs()),/conflicting winding/);
   assert.deepEqual(model,before);
 });
+
+test('zero-area faces do not abort repair or constrain a usable reference',()=>{
+  const g=tetra(),accepted=structuredClone(g);
+  g.Vertices=new Float32Array([...g.Vertices,5,5,5,5,5,5,5,5,5,6,6,6]);
+  g.Normals=new Float32Array([...g.Normals,0,0,1,0,0,1,0,0,1,0,0,1]);
+  // Include a degenerate face sharing a valid surface vertex as well as an
+  // isolated collapsed triangle and a free vertex.
+  g.Faces=new Uint16Array([...g.Faces,0,0,1,4,5,6]);
+  reverseNormal(g,3);reverseFace(g,3);
+  const before=structuredClone(g),result=repair(g);
+  assert.equal(result.reversedNormals,1);assert.equal(result.reversedFaces,1);
+  assert.deepEqual(g.Normals.slice(0,12),accepted.Normals);
+  assert.deepEqual(g.Normals.slice(12),before.Normals.slice(12));
+  assert.deepEqual(g.Faces.slice(12),before.Faces.slice(12));
+  assert.deepEqual(g.Vertices,before.Vertices);
+  assert.deepEqual(repair(g),{reversedNormals:0,recalculatedNormals:0,reversedFaces:0});
+  for(const id of [4,7])assert.throws(()=>repair(g,refs([id])),/reference surface/);
+});
+
+test('a curved field collapsed onto one axis is rebuilt without welding or changing magnitude',()=>{
+  const g=tetra(),accepted=structuredClone(g),axis=at(g.Normals,0);
+  for(const id of all(g))g.Normals.set(axis.map(n=>n*(id===2?-2:2)),id*3);
+  reverseFace(g,3);
+  const before=structuredClone(g),result=repair(g);
+  assert.equal(result.recalculatedNormals,3);assert.equal(result.reversedFaces,1);
+  for(const id of all(g))close(at(g.Normals,id),at(accepted.Normals,id).map(n=>n*2));
+  for(const key of ['Vertices','TVertices','VertexGroup','Groups'])assert.deepEqual(g[key],before[key]);
+  assert.deepEqual(repair(g),{reversedNormals:0,recalculatedNormals:0,reversedFaces:0});
+});
+
+test('partial collapsed-field repair preserves unselected normals and boundary faces',()=>{
+  const g=tetra(),axis=at(g.Normals,0),accepted=structuredClone(g);
+  for(const id of all(g))g.Normals.set(axis,id*3);
+  reverseFace(g,3);
+  const before=structuredClone(g),result=repair(g,refs(),[3]);
+  assert.equal(result.recalculatedNormals,1);assert.equal(result.reversedFaces,0);
+  close(at(g.Normals,3),at(accepted.Normals,3));
+  assert.deepEqual(g.Normals.slice(0,9),before.Normals.slice(0,9));assert.deepEqual(g.Faces,before.Faces);
+  const after=structuredClone(g);repair(g,refs(),[3]);assert.deepEqual(g,after);
+  repair(g);close(Array.from(g.Normals),Array.from(accepted.Normals));
+  assert.deepEqual(g.Faces,accepted.Faces);
+});
+
+test('collapsed curved lighting does not replace flat custom normals sharing its axis',()=>{
+  const g=tetra(),axis=at(g.Normals,0);
+  for(const id of all(g))g.Normals.set(axis,id*3);
+  g.Vertices=new Float32Array([...g.Vertices,10,0,0,11,0,0,10,1,0]);
+  g.Normals=new Float32Array([...g.Normals,...axis,...axis,...axis]);
+  g.Faces=new Uint16Array([...g.Faces,4,5,6]);
+  const before=g.Normals.slice(12);repair(g);assert.deepEqual(g.Normals.slice(12),before);
+});
+
+test('collapsed lighting on one piece does not overwrite a matching custom slope on another',()=>{
+  const g=tetra(),other=tetra(),axis=at(g.Normals,0);
+  for(const id of all(g))g.Normals.set(axis,id*3);
+  other.Normals.set(axis,3);other.Vertices=other.Vertices.map((n,i)=>n+(i%3===0?10:0));
+  g.Vertices=new Float32Array([...g.Vertices,...other.Vertices]);
+  g.Normals=new Float32Array([...g.Normals,...other.Normals]);
+  g.Faces=new Uint16Array([...g.Faces,...Array.from(other.Faces,n=>n+4)]);
+  const result=repair(g);assert.equal(result.recalculatedNormals,3);
+  // The existing direction correction may reverse this custom slope, but it
+  // must not replace it with the vertex's geometric direction.
+  close(at(g.Normals,5),axis.map(n=>-n));
+});

@@ -12,7 +12,19 @@ This is not a general inside/outside proof for arbitrary open, intersecting, nes
 
 Positions, UVs, materials, rigging, animations, other geosets, unselected normals, and boundary triangles remain unchanged. The existing Reverse normals command remains unchanged. The temporary reference prompt and overlay disappear after correction or cancellation. Picking references does not replace the target selection or add selection-history entries.
 
+Zero-area triangles do not contribute orientation constraints. Their winding is retained, and vertices without a usable incident face keep their stored normals. They cannot serve as a direction reference, but no longer prevent usable selected surfaces from being repaired.
+
+When a curved connected piece's normals share one unsigned axis across different local surface directions, local shading has collapsed: sign reversal alone cannot restore it. NormalsXL reconstructs selected normals carrying that axis from their oriented incident faces, retaining their magnitude and existing vertex splits. Already geometric normals may coexist with that field after a partial repair. Detection stays within each piece; flat pieces, isolated custom slopes, branching vertices, and coincident front/back copies retain their authored slopes. This reconstruction cannot recover smoothing that was already erased from the source normals.
+
 ## Acceptance evidence
+
+### Collapsed-field reproduction
+
+`ffs.mdx` (SHA-256 `37d20e0b889f3da6014bda77d9e94fd8069e0ae62206ddae77d73731b654dbb8`) has 709 vertices and 235 triangles. Every stored normal shares one unsigned axis. One triangle collapses to a single position, and four vertices are free. Previously, all 709 possible reference picks rejected a whole-model repair: the zero-area piece had no usable direction.
+
+With outward reference vertex 21 on geoset index 0, repair reconstructs 702 normals and reverses 185 triangles. The collapsed triangle and its three normals, the four free normals, and all unrelated model fields remain unchanged. Non-GEOS MDX chunks remain byte-identical. Partial selection followed by whole repair reaches the same result; undo/redo, repeat no-op, and MDX save/reopen pass. The input is read only and is not committed.
+
+The rebuilt Electron editor was exercised with Ctrl+A, the actual NormalsXL button, and one actual viewport click on reference vertex 21. Selection preservation, matching repaired streams, undo/redo, save/reopen, repeat no-op, and Escape cancellation pass without page errors. Reconstruction keeps the existing split vertices and cannot recover erased smoothing. Warcraft runtime and human acceptance remain untested.
 
 The initial acceptance runs below used the original three-reference interaction. The current single-reference check is recorded at the end of this document.
 
