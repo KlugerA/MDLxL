@@ -1,75 +1,61 @@
 # Citadel Paint working lane
 
-Status: the **new Paint editor** has a verified review checkpoint, ready for
-user testing; await the direct reset/resume before the next phase.
-The previous Autoaim iteration is superseded. User acceptance remains pending.
-[PR #73](https://github.com/KlugerA/MDLxL/pull/73) is the attached review lane.
+Status: feedback-driven redesign is verified and ready for user testing.
+User acceptance remains pending. Review lane: [PR #73](https://github.com/KlugerA/MDLxL/pull/73).
+No merge or release is authorized.
 
 ## Authority and workspace
 
-- User authorizes a remake: a powerful, approachable toy-like model painter for
-  WC3 SD, with five starter textures, a personal library, native/file images,
-  cutting/stamping, color painting/blending, and selection within Paint.
-- Use the remaining current allowance while the user is AFK. Latest request:
-  finish the remaining 10%, then await their reset in about four hours. After
-  direct reset/resume, another **50 percentage points** are authorized. The old
-  40-point/reserve split is superseded. Do not switch models or spawn agents.
-- Initial lane baseline was 69% used; remake began around 86%. Latest observed
-  shared meter is **99% used / 1% remaining**, 2 October 2026. This rounded
-  account-wide meter is not precise per-chat attribution. Recheck before stop.
-- Earlier 19:00 Amsterdam boundary remains unless the user changes it.
-- No scheduled wake-up or automatic continuation after a reset. Await the
-  user's direct reset/resume message. Preserve progress before exhaustion.
-- **Opening the latest built program for the user is the last operational
-  action before waiting.** Complete checks, documents, push, PR and quota work
-  first. Use a fresh profile; open the saved Footman study for testing, retaining
-  the unchanged original Footman file. Do not close prior
-  user tester windows or overwrite their files.
-- Managed worktree: `C:\Users\PC\.codex\worktrees\citadel-native-paint\MDLxL`.
-  Branch: `codex/citadel-native-paint`; base main `9e9a41c` (v0.16.0).
-- Primary checkout remains on unrelated `codex/model-tabs` at `85b7cec`.
-  Preserve its state and this worktree's user-owned untracked `Textures/`.
-- No merge, release, version bump, offline installation change or announcement
-  is authorized. Push this feature branch and attach the PR; do not merge.
+- Build an approachable WC3 SD model painter around brushwork, colors, exact
+  cutouts, game/image sources, five starters, a personal library and in-editor
+  part selection/UV adjustment. Follow the user's latest workflow feedback;
+  held-stamp confirmations and the earlier Autoaim design are superseded.
+- The user explicitly resumed with “Go ahead” after the reset. This phase began
+  at 0 percent used; the latest observed shared meter is 7 percent used on
+  3 October 2026. Another 50 percentage points were authorized, not a requirement
+  to waste the entire allowance. The earlier 19:00 boundary/reset wait belonged
+  to the exhausted phase and was superseded by this direct later resume.
+- Do not switch models, spawn agents, or schedule automatic continuation.
+- Open the latest built program visibly as the **last operational action** before
+  yielding for testing. Finish checks, docs, push, PR and quota work first. Use a
+  fresh profile and the saved Footman study. Preserve prior tester windows,
+  original models, personal library files and the untracked Textures folder.
+- Worktree: `C:/Users/PC/.codex/worktrees/citadel-native-paint/MDLxL`.
+  Branch: `codex/citadel-native-paint`. Original base: 9e9a41c, v0.16.0.
+- Main advanced to 386453a (EMTR ribbon attachment fix) during this phase.
+  Integrate it into this feature branch and regenerate hashed dist to resolve
+  the generated bundle conflict; do not change the main checkout or branch.
+- No merge of the Paint PR, release, version bump, offline install replacement,
+  deletion of personal files, or announcement is authorized.
 
 ## Current implementation
 
-See [DESIGN.md](DESIGN.md) for the accepted direction, current mechanics and
-honest limits. The new layout is `app/PaintStudioLayout.jsx`; the existing
-workspace owns paint state, projection and persistence. The old Autoaim UI and
-helper are removed. Its obsolete Electron harness and the superseded native
-workflow harness are replaced by studio, library, brushes and surface coverage.
+[DESIGN.md](DESIGN.md) documents the workflow. Paint/Stamp/Erase are the main
+modes, with Blend and Pick as brush options. Selection works in any tool;
+Shift adds and Ctrl subtracts across parts. Stamps commit on release and can be
+repeated. Palette ramps, five brushes, tiny-brush crosshairs, image ghosts,
+view-only shading/outlines/Colorfy, direct borrow buttons, wheel zoom/pan,
+copy/mirror/paste, protected pixels and in-place selected-face UV edits are in.
+Green key labels and a dismissible guide support learning the shortcuts.
 
-Current features: simultaneous model/texture views; paint, held adjustable
-stamps, blending and erasing; full-image/texture/highlight borrowing; native
-starters and a user library; enlarged cutouts; exact PNG reuse; whole-geoset,
-connected-piece, face and texture selection; view isolation; explicit
-independent selection pixels without splitting geosets, local detail for
-compressed/constant UVs, reusable private UVs and empty texture space; undo, portable project,
-Warcraft archive and ordinary MDX save/reopen.
+Global mesh shortcuts no longer intercept Paint's copy/paste. Blend strength
+caps an entire stroke instead of accumulating to full strength. Real Colorfy
+pixels and selection are checked, not just its toggle state. Camera roundoff no
+longer discards projection caches between stamps. The first uncached stamp is
+still noticeably slower; retain that limit in any performance claim.
 
-Meaningful corrections found during actual UI checks include source coordinates
-being displaced by filter footprints, transparent PNG rounding, and selected
-base-coat colors receiving incorrect alpha. The final pass also corrected
-wrapped color picking, destination switching, pixel-selection fill, eager flat
-texture allocation and one outlier UV sliver inflating the whole selection.
-All have targeted verification. The last usability pass resets tool-panel
-scroll on tool/source changes and aligns Main and Paint Undo for held stamps.
-The saved Footman study and its reproducible UI harness are in VERIFICATION.
+## Verification and next boundary
 
-## Evidence and next work
+[VERIFICATION.md](VERIFICATION.md) records 141 Paint tests, 62 compatibility/
+WarmKeys checks, seven Electron workflows, build and package checks. Both supplied
+MDX800 models keep their original file hashes and exported rig/animation data.
+The editable study is `out/citadel-audit/demo-1790979188839/Gold-footman-study.mdlxlpaint`.
 
-[VERIFICATION.md](VERIFICATION.md) lists the latest runs. Original Footman
-SHA-256 remains `7ee255776a6e757bd89766354df763201cd0519c488585b7c30151d5e313fc13`.
-Native installed Footman/Grunt/Blacksmith model files are MDX1800 and were not
-converted to manufacture compatibility evidence. Use actual MDX800 fixtures.
+Before handoff: integrate current main, rebuild/check the final bundle, inspect
+only intended changes, push the feature branch and refresh the existing PR.
+Verify its actual merge state and main containment; do not call this merged or
+user-accepted while the PR is open. Open the latest tester last.
 
-Final checks: repeat affected UI flows after any final edits, rebuild tracked
-dist, retain only intended source/dist changes, push the review branch, refresh
-PR title/body around the remake, inspect its open/unmerged state and main,
-record the final quota reading, then launch the latest editor visibly LAST.
-Do not call this user-accepted or complete integration while the PR is open.
-
-Prioritize remaining work from actual visual results: mixed/line-degenerate
-mapping, a representative finished reskin, and cold-gesture responsiveness.
-Do not spend the remaining allowance only repeating already-passing tests.
+Prioritize further work from the user's actual test: first-use projection delay,
+any confusing selection/UV behavior, and a representative finished reskin. Avoid
+returning to automatic global UV repacking or adding another Autoaim control.

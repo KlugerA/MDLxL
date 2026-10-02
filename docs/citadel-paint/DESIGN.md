@@ -2,91 +2,104 @@
 
 ## Product direction
 
-The current request replaces the earlier Autoaim direction. Build a compact,
-responsive model-painting editor for Warcraft III SD: easy enough to understand
-by playing, capable enough to reskin an entire model with imagery, cutouts,
-brushwork and colors. The emitter editor is the usability benchmark. Keep the
-existing main editor and shared camera conventions.
+A compact, responsive model-painting editor for Warcraft III SD: easy to learn
+by playing, capable of reskinning a model through images, cutouts, brushwork and
+colors. The emitter editor is the usability benchmark. The user explicitly
+requested a Paint UX redesign; other editors and their camera conventions stay.
+The prior Autoaim controls and automatic whole-model repacking were rejected.
 
-The reference video is the local Longbowman Blacksmith speedpaint,
-`C:\Users\PC\Downloads\videoplayback (1).mp4`, 20:56.97 at 1280x720/30fps.
-Viewed sequences show short strokes followed by blending, painting in either
-model or texture view, fast orbit/zoom, and persistent sources and layers.
-The feedback recording `electron_21lGSOeZ8X.mp4` shows the shield's small UV
-allocation producing poor direct stamps. The automatic whole-skin atlas and
-later Autoaim UI were both rejected; neither is the new workflow.
+Reference: `C:/Users/PC/Downloads/videoplayback (1).mp4`, the 20:56 Longbowman
+Blacksmith speedpaint. The four latest ShareX videos (ZuTXTPtO4l, Za6T1klWuK,
+qUUB52hElS, z3ENpFEnAs) show the user's real brush, basecoat, blend, cutout,
+shared-UV and navigation problems. Their feedback supersedes held-stamp Apply
+and the old five-tool toolbar.
 
 ## Current interaction
 
-1. Open Paint; choose **Edit the texture** or **New base coat** and its color.
-2. Paint, Stamp, Blend, Erase, and Select are the five main tools. The model and
-   live texture remain together, with an adjustable divider. Changing tools or
-   sources returns the contextual panel to its first controls.
-3. Color painting has size, opacity, softness, swatches and an eyedropper.
-   Blend carries pigment between visible selected pixels. Erase removes marks
-   from the active paint layer, retaining the original skin beneath it.
-4. Choose one of five native starter sources, open the Warcraft library, or
-   import an image. Cut rectangle/ellipse/lasso/polygon/wand selections. Small
-   images open enlarged. Keep saves a PNG to the user's own library; Copy a
-   patch grabs the current painted texture for another stamp.
-5. Stamp holds a real mapped preview until Apply/Enter or Cancel/Escape.
-   Drag to move; adjust size, opacity, rotation and horizontal flip. Main-editor
-   and Paint Undo use the same held-preview transaction; Redo restores it. Full image
-   borrows source colors, Texture only borrows light/dark detail while retaining
-   the painted color, and Highlights only adds the bright source detail.
-6. Select a connected piece, a whole geoset, faces by dragging, or pixels on the
-   texture. Shift subtracts faces. Selection survives switching tools; isolate
-   and color-fill remain in the same editor.
-7. Shared texture pixels can be deliberately made independent. Copy the
-   selection's existing strip beside the complete original skin, with gutters;
-   do not pack the entire model into new charts. Duplicate boundary vertices
-   through the mesh editor's stream copier; preserve positions, normals,
-   binding streams, other UV sets and geoset count. Compressed axes gain exact
-   nearest-copy pixels, using the area-weighted median so a small sliver cannot
-   inflate the whole selection. A selection mapped to one identical UV point
-   gets local charts from the existing atlas builder, filled with its previous
-   constant color. Reuse empty canvas space and the private generated UV set.
-   Undo restores the old state.
-8. Layer and destination controls are collapsed. UV adjustment is a deliberate
-   toggle. Resize texture preserves layout and aspect ratio. Save project,
-   Export, and Use paint remain separate existing persistence paths.
+1. Open Paint and choose **Edit the texture** or **New base coat**. The model,
+   live texture and image shelf remain together. The divider resizes the views.
+2. Main tools are **Paint B**, **Stamp T**, and **Erase E**. Blend D and the
+   eyedropper I are brush options. Part selection remains available in every
+   tool: Shift adds, Ctrl subtracts; Q temporarily selects without a brush.
+3. Pick a color and press **Related colors C** for nine shades with the exact
+   chosen midtone, warm shadows and pale highlights, plus a continuous gradient.
+   Round, Soft, Pencil, Chisel and Speckle have visible shape previews and keys
+   4-8. Even a one-pixel brush retains a black/white crosshair.
+4. Blend has its own strength, initially 15 percent. A stroke blends from its
+   initial pixels and caps accumulated coverage at that strength. Overlapping
+   dabs cannot silently build to full strength. Shift+[ / Shift+] adjusts
+   softness or Blend strength; plain brackets adjust brush/stamp size.
+5. Blank coats start with **Shade H**, a view-only camera-relative light that
+   reveals form even on unshaded Warcraft materials. **Outlines O** and
+   **Colorfy Y** distinguish connected parts without altering model or pixels.
+   Colorfy still permits picking. Original F6 and Frame Home remain immediate.
+6. Choose one of five native starter sources, WC3 library J, From file
+   Ctrl+Shift+O, or the user's own library. Cut rectangle/ellipse/lasso/polygon/
+   wand selections. Wheel zoom and middle/right-drag pan work while selecting.
+   Keep saves a PNG to the user's library; imported cutouts retain exact RGBA.
+7. **Click to stamp, repeat immediately.** The cursor shows an image ghost;
+   while pressed, the real mapped preview can be dragged. Release commits one
+   undo step. Escape cancels a pressed stamp. There is no Apply confirmation or
+   held-placement instruction panel. R / Shift+R rotates 15 degrees; M mirrors.
+   Full image 1, Texture 2 and Highlights 3 are direct buttons. Texture borrows
+   light/dark detail into the painted color; Highlights adds bright detail.
+8. Select connected Part P, Geoset G, or Faces F by clicking/dragging across
+   geosets. Shift adds and Ctrl subtracts. Selection survives tool changes.
+   Isolate L, Clear Ctrl+D, Invert Ctrl+I and Fill Shift+F stay in Paint.
+   **Protect pixels X** supplies detailed destination masks; Pixels S selects
+   rectangles directly in the bottom texture. Shift/Ctrl modify those masks.
+9. **Copy Ctrl+C / Paste Ctrl+V / Mirror M** reuses painted selections as
+   stamps. With no selection, Copy opens the patch cutter. Ctrl+Shift+C always
+   opens it. Ctrl+X copies the composite and erases the active coat only, leaving
+   the original skin beneath it. Global editor clipboard buttons route to Paint.
+10. **UVs U** enables in-place movement, scaling, rotation and mirroring of the
+    selected faces. Shared boundary vertices are duplicated through the mesh
+    stream copier, preserving unselected UVs and every rig/vertex stream. UV
+    edits are undoable and survive portable-project and model save/reopen.
+11. **Separate this part Ctrl+J** gives the active selected part independent
+    texture pixels without splitting geosets. Copy its current strip beside
+    the complete original skin, with gutters. Reuse empty canvas/private UVs.
+    Compressed axes gain nearest-copy pixels; the area-weighted median prevents
+    a tiny sliver from inflating the whole selection. Constant-point UVs get
+    local charts filled with their previous color. Undo restores the old state.
+12. Wheel zoom follows the pointer in both image views. Right/middle drag pans;
+    0 fits the destination. Alt-drag rotates the model using the shared camera
+    controls. Green key labels accompany commands; ? opens a dismissible guide.
+    Layers and destination controls remain collapsed. Save project, Export,
+    and Use paint keep their separate persistence paths.
 
 ## Pixel and performance rules
 
-- Existing skins default to a 512-pixel working copy, nearest scaled only when
-  smaller. The authored arrangement, aspect ratio and source files remain.
-  Hidden corpse targets stay native. Texture detail offers Native for exact
-  pixel work and 1024 for finer work. This is a working-copy resolution choice,
-  not a per-stamp camera compensation or automatic UV repack.
-- Blank base coats use the existing fresh paint mapping and explicit solid RGBA
-  color. That mode intentionally creates a new paintable skin.
-- Stamp source coordinates come from destination texel centers. Seam gutters
-  and magnified screen footprints are fallback samples; they must not pull
-  source imagery toward the stamp center. Preview and Apply use the same code.
-- Compatible RGBA8 PNGs use the lossless project decoder. Browser canvas
-  premultiplication must not round feathered cutout colors during reuse.
-- UV seam coverage clips each scanline to the edge's actual filter footprint.
-  Exact depth lookup uses small screen bins. The cache is bounded by current
-  pose/selection, and screen tiles are generated only near a gesture. Flat
-  texture painting also allocates tiles lazily; region selection avoids the
-  obsolete wash/drybrush mask work.
+- Existing skins default to a 512-pixel working copy, nearest-scaled only when
+  smaller. Authored layout, aspect ratio and source files remain. Hidden corpse
+  targets stay native. Native and 1024 working resolutions remain available.
+- Blank base coats intentionally create a fresh paint mapping and solid RGBA
+  color. View shading is never baked into the texture.
+- Stamp source coordinates come from destination texel centers. Filter and
+  magnified-screen samples are fallbacks and must not drag source imagery
+  toward the stamp center. Pressed preview and release use the same projector.
+- Compatible RGBA8 PNGs use the lossless project decoder; browser canvas
+  premultiplication must not round feathered cutout colors on reuse.
+- Hover moves only the visible cursor. It performs no per-texel projection.
+  Projection caches tolerate floating-point camera roundoff while real camera,
+  viewport, model, UV or selection changes invalidate them. Geometry visibility
+  still uses exact depth, not an approximate low-resolution depth image.
+- UV triangles and seam footprints are clipped conservatively per scanline;
+  exact barycentric/distance tests decide coverage. Parity tests compare every
+  sample against the previous rectangle scan, including wrapping and padding.
+  Screen tiles are lazy and reused across gestures. Dirty rows limit compositing
+  and upload work. Transparent preview allocation avoids redundant zero fills.
 
-## Limits and remaining design work
+## Evidence boundaries
 
-Automated UI coverage is not the user's acceptance. A collapsed UV or a subpixel-wide strip cannot encode a detailed picture
-while retaining that mapping. The explicit independent-selection action gives
-compressed axes more pixels and a fully constant UV selection fresh local
-charts. Mixed or line-collapsed mappings are not generally unwrapped. Shared pixels still share paint unless explicitly separated.
-The synthetic tests now prove unchanged before/after rendering and detailed
-stamps after separation for horizontal, vertical and single-point mappings.
-They do not establish the quality of a finished reskin. Do not claim arbitrary UV fidelity from
-those tests. The independently selected Footman shield has a visibly usable
-chainmail preview; unrestricted stamping can still affect shared authored UVs.
+Shared authored pixels still share paint until explicitly separated. A collapsed
+UV or subpixel strip cannot encode a rich image while retaining that mapping.
+The local selection-space action handles compressed axes and constant points;
+it does not promise arbitrary mixed/line-degenerate unwrapping. Exact preservation
+is tested with nearest filtering. General linear-filter parity is unestablished.
 
-Continue improving these limits based on actual images and model preservation,
-without bringing back the rejected global atlas or adding Autoaim controls.
-Exact preservation is checked with the default nearest filtering. Linear
-filtering, arbitrary degenerate maps and a complete Ghoul reskin remain
-unexercised. No native Warcraft runtime playtest has been performed. New visible strings
-are currently English. Other existing scene/view data is retained when opening
-projects, but the remake intentionally focuses its visible controls on painting.
+The saved Footman study is a reproducible quick reskin exercise, not a polished
+asset or a novice completion-time claim. A complete Ghoul/Abomination-skin reskin,
+user acceptance and native Warcraft runtime playtest remain unexercised.
+New visible text is currently English. Existing scene/view data remains readable;
+the visible editor focuses on painting.

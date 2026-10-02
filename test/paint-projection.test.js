@@ -1,11 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSmartPaintMasks, fillPaintMask, interpolatePaintStroke, preparePaintProjection, prepareTexturePaintProjection, paintSurfaceTile, projectPaintVertex, samplePaintSource, stampProjectedBrush } from '../src/paint-projection.js';
+import { buildSmartPaintMasks, fillPaintMask, interpolatePaintStroke, preparePaintProjection, prepareTexturePaintProjection, paintSurfaceTile, projectPaintVertex, samplePaintSource, stampProjectedBrush,samePaintProjectionView } from '../src/paint-projection.js';
 import { createPaintRaster } from '../src/paint-raster.js';
 import { IDENTITY_MATRIX, paintFixtureModel, paintTarget, squareSeamGeoset, triangleGeoset } from './fixtures/paint-fixtures.js';
 
 const brush={id:'round',name:'Round',mode:'paint',size:10,hardness:1,opacity:1,flow:1,spacing:.2,strength:1,color:'#ff3010'};
 const painted=raster=>{let count=0;for(let i=3;i<raster.data.length;i+=4)if(raster.data[i])count++;return count;};
+
+test('projection reuse ignores camera roundoff but tracks navigation and viewport changes',()=>{
+  const matrix=[1.032511012767605,-.5451038144783996,-.5298721229072012,-.5293545279075431,.7148153165314217,.7873721764687959,.7653708441992875,.7646232069775591,3.4855521349024397e-17,2.422683619903993,-.3679667520188884,-.36760731104690364,-10.889867600380162,-114.18856139055634,200.97236149511187,201.39739542610585];
+  const view={matrix,width:836,height:402.59375};
+  assert.equal(samePaintProjectionView(view,matrix.map(v=>v+Math.max(1,Math.abs(v))*1e-15),836,402.59375),true);
+  for(const axis of [0,5,12,13]){const moved=[...matrix];moved[axis]+=1e-7;assert.equal(samePaintProjectionView(view,moved,836,402.59375),false);}
+  assert.equal(samePaintProjectionView(view,matrix,837,402.59375),false);
+});
 
 test('large texture views allocate only requested tiles, including partial rectangular edges',()=>{
   const projection=prepareTexturePaintProjection(2051,1025),raster={width:2051,height:1025};

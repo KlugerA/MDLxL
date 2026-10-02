@@ -3,6 +3,12 @@ import { blendPaintPixel, rgbaColor } from './paint-raster.js';
 
 const positionKey = (value, offset) => `${Math.round(value[offset] * 1000)}:${Math.round(value[offset + 1] * 1000)}:${Math.round(value[offset + 2] * 1000)}`;
 
+/** OrbitControls can round the unchanged camera differently on each update.
+ * Ignore floating-point noise, but invalidate for actual camera/viewport edits. */
+export function samePaintProjectionView(view,matrix,width,height){
+  return !!view&&view.width===width&&view.height===height&&view.matrix.length===matrix.length&&view.matrix.every((value,i)=>Math.abs(value-matrix[i])<=64*Number.EPSILON*Math.max(1,Math.abs(value),Math.abs(matrix[i])));
+}
+
 export function projectPaintVertex(matrix, position, offset, width, height) {
   const x = position[offset], y = position[offset + 1], z = position[offset + 2];
   const clipX = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
@@ -282,7 +288,16 @@ export function stampProjectedBrush(raster, projection, center, brush, options =
   }
   for(const pixel of touched){
     const appliedColor=material?.data?.length?scratch.source.subarray(pixel*4,pixel*4+4):color;
-    if(blendPaintPixel(raster.data,pixel*4,appliedColor,scratch.amount[pixel],brush.mode==='erase'?'erase':'paint')){
+    let amount=scratch.amount[pixel];
+    if(options.strokeCoverage){
+      const prior=options.strokeCoverage[pixel],next=Math.min(options.strokeLimit,prior+(1-prior)*amount);
+      if(next<=prior){scratch.amount[pixel]=0;continue;}
+      options.strokeCoverage[pixel]=next;amount=next;
+      // Recompose from the start of the stroke. Quantizing every overlapping
+      // dab can otherwise accumulate beyond the requested low strength.
+      raster.data.set(options.strokeBase.subarray(pixel*4,pixel*4+4),pixel*4);
+    }
+    if(blendPaintPixel(raster.data,pixel*4,appliedColor,amount,brush.mode==='erase'?'erase':'paint')){
       changed++;if(options.dirtyRows){const x=pixel%raster.width,row=Math.floor(pixel/raster.width)*2;options.dirtyRows[row]=Math.min(options.dirtyRows[row],x);options.dirtyRows[row+1]=Math.max(options.dirtyRows[row+1],x);}
     }
     scratch.amount[pixel]=0;

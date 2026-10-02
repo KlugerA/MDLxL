@@ -2,13 +2,15 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {shapeSelection,magicSelection,combineSelection,featherSelection,extractPaintCutout} from '../src/paint-selection.js';
 import {flattenPaintRasterAlpha} from '../src/paint-raster.js';
 import {paintRasterCanvas} from './paint-raster.js';
+import {usePaintImageNavigation} from './usePaintImageNavigation.js';
 import {paintMessage as msg} from '../src/paint-messages.js';
 
 /** Selection tools operate on a copyable mask. Closing never changes the source asset. */
 export default function PaintCutoutEditor({source,onClose,onUse,onSave,onMask,initialMask}) {
-  const {name}=source,raster=useMemo(()=>source.nativeSource?flattenPaintRasterAlpha(source.raster):source.raster,[source]),canvas=useRef(),maskCanvas=useRef(),drag=useRef(null);
+  const {name}=source,raster=useMemo(()=>source.nativeSource?flattenPaintRasterAlpha(source.raster):source.raster,[source]),canvas=useRef(),maskCanvas=useRef(),drag=useRef(null),scroll=useRef(),image=useRef();
   const [tool,setTool]=useState('rectangle'),[operation,setOperation]=useState('replace'),[tolerance,setTolerance]=useState(32),[contiguous,setContiguous]=useState(true),[feather,setFeather]=useState(0),[zoom,setZoom]=useState(()=>[8,4,2,1,.5,.25].find(v=>raster.width*v<window.innerWidth-160&&raster.height*v<window.innerHeight-300)||.25);
   const [mask,setMask]=useState(()=>initialMask?new Uint8ClampedArray(initialMask):new Uint8ClampedArray(raster.width*raster.height).fill(255)),[points,setPoints]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const navigation=usePaintImageNavigation(scroll,image,zoom,setZoom);
   const history=useRef([]),redo=useRef([]),[square,setSquare]=useState(false);
   useEffect(()=>{paintRasterCanvas(raster,canvas.current);},[raster]);
   const softened=useMemo(()=>featherSelection(mask,raster.width,raster.height,feather),[mask,feather,raster]);
@@ -37,27 +39,38 @@ export default function PaintCutoutEditor({source,onClose,onUse,onSave,onMask,in
   function polygon(){if(points.length<3)return;select(shapeSelection(raster.width,raster.height,'polygon',points));setPoints([]);}
   async function act(callback,whole=false){if(busy)return;setBusy(true);setError('');try{await callback({name,raster:whole?raster:extractPaintCutout(raster,softened),whole});}catch(e){setError(e.message);}finally{setBusy(false);}}
   const a=points[0],b=points.at(-1);
-  return <div className="paint-modal-shade" onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){if(points.length)setPoints([]);else if(!busy)onClose();}if(event.key==='Enter'&&tool==='polygon')polygon();}}>
+  const keyHint=keys=><kbd className="paint-key" aria-hidden="true">{keys}</kbd>;
+  function keydown(event){
+    event.stopPropagation();if(event.key!=='Escape'&&(event.target.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(event.target.tagName)))return;
+    const key=event.key.toLowerCase(),ctrl=event.ctrlKey||event.metaKey;let action;
+    if(key==='escape')action=()=>{if(points.length)setPoints([]);else if(!busy)onClose();};
+    else if(ctrl)action=({z:()=>{if(history.current.length){redo.current.push(mask);setMask(history.current.pop());}},y:()=>{if(redo.current.length){history.current.push(mask);setMask(redo.current.pop());}},enter:()=>onMask?onMask(softened):act(onUse),s:()=>onSave&&act(onSave),t:()=>onUse&&act(onUse,true)})[key];
+    else if(['r','e','l','p','w'].includes(key))action=()=>{setTool(({r:'rectangle',e:'ellipse',l:'lasso',p:'polygon',w:'wand'})[key]);setPoints([]);};
+    else action=({a:()=>commit(new Uint8ClampedArray(mask.length).fill(255)),n:()=>commit(new Uint8ClampedArray(mask.length)),i:()=>commit(Uint8ClampedArray.from(mask,v=>255-v)),o:()=>setOperation(v=>{const a=['replace','add','subtract','intersect'];return a[(a.indexOf(v)+1)%a.length];}),s:()=>setSquare(v=>!v),c:()=>setContiguous(v=>!v),f:()=>document.querySelector('[aria-label="Selection feather"]')?.focus(),t:()=>document.querySelector('[aria-label="Selection tolerance"]')?.focus(),'=':()=>setZoom(v=>Math.min(32,v*1.25)),'+':()=>setZoom(v=>Math.min(32,v*1.25)),'-':()=>setZoom(v=>Math.max(.05,v/1.25)),'0':()=>setZoom([8,4,2,1,.5,.25].find(v=>raster.width*v<window.innerWidth-160&&raster.height*v<window.innerHeight-300)||.25),enter:()=>{if(tool==='polygon')polygon();else if(onMask)onMask(softened);else act(onUse);}})[key];
+    if(action){event.preventDefault();action();}
+  }
+
+  return <div className="paint-modal-shade" tabIndex={-1} onKeyDown={keydown}>
     <section className="paint-cutout-dialog" role="dialog" aria-modal="true" aria-label={onMask?'Paint region':msg('paint.cutout')}>
-      <header><strong>{onMask?'Paint region · Destination':msg('paint.cutout')} · {name}</strong><button disabled={busy} onClick={onClose}>{msg('paint.close')}</button></header>
-      <div className="paint-cutout-toolbar">{['rectangle','ellipse','lasso','polygon','wand'].map(id=><button key={id} aria-pressed={tool===id} onClick={()=>{setTool(id);setPoints([]);}}>{msg('paint.select.'+id)}</button>)}
-        <select aria-label={msg('paint.selectionMode')} value={operation} onChange={e=>setOperation(e.target.value)}>{['replace','add','subtract','intersect'].map(id=><option key={id} value={id}>{msg('paint.select.'+id)}</option>)}</select>
-        <button onClick={()=>commit(new Uint8ClampedArray(mask.length).fill(255))}>{msg('paint.select.all')}</button><button onClick={()=>commit(new Uint8ClampedArray(mask.length))}>{msg('paint.select.none')}</button><button onClick={()=>commit(Uint8ClampedArray.from(mask,v=>255-v))}>{msg('paint.select.invert')}</button>
-        <button disabled={!history.current.length} onClick={()=>{redo.current.push(mask);setMask(history.current.pop());}}>{msg('paint.undo')}</button><button disabled={!redo.current.length} onClick={()=>{history.current.push(mask);setMask(redo.current.pop());}}>{msg('paint.redo')}</button>
+      <header><strong>{onMask?'Paint region · Destination':msg('paint.cutout')} · {name}</strong><button autoFocus disabled={busy} onClick={onClose}>{msg('paint.close')}{keyHint('Esc')}</button></header>
+      <div className="paint-cutout-toolbar">{['rectangle','ellipse','lasso','polygon','wand'].map(id=><button key={id} aria-pressed={tool===id} onClick={()=>{setTool(id);setPoints([]);}}>{msg('paint.select.'+id)}{keyHint(({rectangle:'R',ellipse:'E',lasso:'L',polygon:'P',wand:'W'})[id])}</button>)}
+        {keyHint('O')}<select aria-label={msg('paint.selectionMode')} value={operation} onChange={e=>setOperation(e.target.value)}>{['replace','add','subtract','intersect'].map(id=><option key={id} value={id}>{msg('paint.select.'+id)}</option>)}</select>
+        <button onClick={()=>commit(new Uint8ClampedArray(mask.length).fill(255))}>{msg('paint.select.all')}{keyHint('A')}</button><button onClick={()=>commit(new Uint8ClampedArray(mask.length))}>{msg('paint.select.none')}{keyHint('N')}</button><button onClick={()=>commit(Uint8ClampedArray.from(mask,v=>255-v))}>{msg('paint.select.invert')}{keyHint('I')}</button>
+        <button disabled={!history.current.length} onClick={()=>{redo.current.push(mask);setMask(history.current.pop());}}>{msg('paint.undo')}{keyHint('Ctrl+Z')}</button><button disabled={!redo.current.length} onClick={()=>{history.current.push(mask);setMask(redo.current.pop());}}>{msg('paint.redo')}{keyHint('Ctrl+Y')}</button>
       </div>
       <div className="paint-cutout-toolbar">
-        {(tool==='rectangle'||tool==='ellipse')&&<label><input type="checkbox" checked={square} onChange={e=>setSquare(e.target.checked)}/>{msg('paint.select.square')}</label>}
-        {tool==='wand'&&<><label>{msg('paint.tolerance')} <input type="range" min="0" max="255" value={tolerance} onChange={e=>setTolerance(+e.target.value)}/>{tolerance}</label><label><input type="checkbox" checked={contiguous} onChange={e=>setContiguous(e.target.checked)}/>{msg('paint.contiguous')}</label></>}
-        <label>{msg('paint.feather')} <input type="number" min="0" max="32" value={feather} onChange={e=>setFeather(Math.max(0,Math.min(32,+e.target.value)))}/></label>
-        <label>{msg('paint.zoom')} <select value={zoom} onChange={e=>setZoom(+e.target.value)}>{[.25,.5,1,2,4,8].map(v=><option key={v} value={v}>{v*100}%</option>)}</select></label>
-        {tool==='polygon'&&<button disabled={points.length<3} onClick={polygon}>{msg('paint.finishSelection')}</button>}
-        <small>{raster.width} × {raster.height} · {msg(tool==='polygon'?'paint.polygonHelp':'paint.selectionHelp')}</small>
+        {(tool==='rectangle'||tool==='ellipse')&&<label><input type="checkbox" checked={square} onChange={e=>setSquare(e.target.checked)}/>{msg('paint.select.square')}{keyHint('S')}</label>}
+        {tool==='wand'&&<><label>{msg('paint.tolerance')} {keyHint('T')}<input aria-label="Selection tolerance" type="range" min="0" max="255" value={tolerance} onChange={e=>setTolerance(+e.target.value)}/>{tolerance}</label><label><input type="checkbox" checked={contiguous} onChange={e=>setContiguous(e.target.checked)}/>{msg('paint.contiguous')}{keyHint('C')}</label></>}
+        <label>{msg('paint.feather')} {keyHint('F')}<input aria-label="Selection feather" type="number" min="0" max="32" value={feather} onChange={e=>setFeather(Math.max(0,Math.min(32,+e.target.value)))}/></label>
+        <label>{msg('paint.zoom')} {keyHint('− + / 0')}<select value={zoom} onChange={e=>setZoom(+e.target.value)}>{[...new Set([.25,.5,1,2,4,8,zoom])].sort((a,b)=>a-b).map(v=><option key={v} value={v}>{Math.round(v*100)}%</option>)}</select></label>
+        {tool==='polygon'&&<button disabled={points.length<3} onClick={polygon}>{msg('paint.finishSelection')}{keyHint('Enter')}</button>}
+        <small>{raster.width} × {raster.height} · Wheel zoom / Right-drag pan · {msg(tool==='polygon'?'paint.polygonHelp':'paint.selectionHelp')}</small>
       </div>
-      <div className="paint-cutout-scroll"><div className="paint-cutout-image" style={{width:raster.width*zoom,height:raster.height*zoom}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={()=>{drag.current=null;setPoints([]);}} onDoubleClick={()=>{if(tool==='polygon')polygon();}}>
+      <div ref={scroll} className="paint-cutout-scroll" {...navigation}><div ref={image} className="paint-cutout-image" style={{width:raster.width*zoom,height:raster.height*zoom}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={()=>{drag.current=null;setPoints([]);}} onDoubleClick={()=>{if(tool==='polygon')polygon();}}>
         <canvas ref={canvas}/><canvas ref={maskCanvas}/><svg viewBox={`0 0 ${raster.width} ${raster.height}`}>{a&&b&&(tool==='rectangle'?<rect x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)}/>:tool==='ellipse'?<ellipse cx={(a.x+b.x)/2} cy={(a.y+b.y)/2} rx={Math.abs(b.x-a.x)/2} ry={Math.abs(b.y-a.y)/2}/>:<polyline points={points.map(p=>p.x+','+p.y).join(' ')}/>)}</svg>
       </div></div>
       {error&&<p role="alert">{error}</p>}
-      <footer>{onMask?<><button onClick={()=>onMask(softened)}>Use paint region</button><span>Only the selected destination pixels can receive paint. Subtract around details to protect them.</span></>:<><button disabled={busy} onClick={()=>act(onUse)}>{msg('paint.useCutout')}</button><button disabled={busy} onClick={()=>act(onUse,true)}>{msg('paint.useTexture')}</button><button disabled={busy} onClick={()=>act(onSave)}>{msg('paint.saveTexture')}</button><span>{msg('paint.cutoutHelp')}</span></>}</footer>
+      <footer>{onMask?<><button onClick={()=>onMask(softened)}>Use paint region{keyHint('Enter')}</button><span>Only the selected destination pixels can receive paint. Subtract around details to protect them.</span></>:<><button disabled={busy} onClick={()=>act(onUse)}>{msg('paint.useCutout')}{keyHint('Ctrl+Enter')}</button><button disabled={busy} onClick={()=>act(onUse,true)}>{msg('paint.useTexture')}{keyHint('Ctrl+T')}</button><button disabled={busy} onClick={()=>act(onSave)}>{msg('paint.saveTexture')}{keyHint('Ctrl+S')}</button><span>{msg('paint.cutoutHelp')}</span></>}</footer>
     </section>
   </div>;
 }

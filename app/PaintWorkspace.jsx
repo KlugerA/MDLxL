@@ -17,17 +17,20 @@ import {blendProjectedPaint} from '../src/paint-blend.js';
 import PaintStudioLayout from './PaintStudioLayout.jsx';
 import {paintMessage as msg} from '../src/paint-messages.js';
 import {addPaintProjectTarget,compositePaintTarget,createPaintProject,paintProjectCoat,paintProjectTarget,recordPaintStroke,recordPaintStrokeGroup,recordPaintUV,recordPaintSurfaceChange,travelPaintHistory} from '../src/paint-project.js';
-import {fillPaintMask,interpolatePaintStroke,preparePaintProjection,prepareTexturePaintProjection,stampProjectedBrush} from '../src/paint-projection.js';
+import {fillPaintMask,interpolatePaintStroke,preparePaintProjection,prepareTexturePaintProjection,stampProjectedBrush,samePaintProjectionView} from '../src/paint-projection.js';
 import {paintGeosetMask,paintProjectModel,paintStandHidden} from '../src/paint-view.js';
 import {rgbaColor,clonePaintRaster,resizePaintRaster,compositePaintRasters,createPaintRaster,samplePaintRaster} from '../src/paint-raster.js';
 import {enumeratePaintTargets,findTextureAsset,preferredPaintTarget} from '../src/paint-targets.js';
 import {preparePaintSurfaceChange} from '../src/paint-surface.js';
-import {preparePaintSelectionSpace} from '../src/paint-selection-space.js';
-import {regionPaintTarget,connectedPaintFaces,isolatePaintRegion} from '../src/paint-region.js';
+import {preparePaintSelectionSpace,preparePaintUVSelectionChange} from '../src/paint-selection-space.js';
+import {regionPaintTarget,connectedPaintFaces,isolatePaintRegion,paintRegionEntries,paintRegionFaces,changePaintRegion} from '../src/paint-region.js';
 import {createFreshPaintAtlas} from '../src/paint-uv-atlas.js';
 import {PAINT_COATS,normalizeBrushSettings} from '../src/paint-types.js';
 import {readWarcraftDnc,sampleWarcraftDnc,wc3DncPath} from '../src/warcraft-dnc.js';
 import {decodePaintImage,paintBaseRaster,paintRasterCanvas} from './paint-raster.js';
+import {PAINT_BRUSH_SHAPES,paintBrushTip} from '../src/paint-brush-shapes.js';
+import {relatedPaintColors} from '../src/paint-palette.js';
+import {extractPaintCutout} from '../src/paint-selection.js';
 import './paint-workspace.css';
 import './paint-studio.css';
 
@@ -49,23 +52,27 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   const [region,setRegion]=useState(null),[textureRegion,setTextureRegion]=useState(null),[regionTool,setRegionTool]=useState(false),[surfaceSize,setSurfaceSize]=useState(1024),[split,setSplit]=useState(60);
   const hover=useRef(null),hoverFrame=useRef(0),hoverHit=useRef(null);
   const [studioTool,setStudioTool]=useState('paint'),[borrowMode,setBorrowMode]=useState('image'),[stampAngle,setStampAngle]=useState(0),[stampFlip,setStampFlip]=useState(false),[placing,setPlacing]=useState(false),[selectionKind,setSelectionKind]=useState('piece');
-  const placement=useRef(null);
+  const placement=useRef(null),clipboard=useRef(null);
+  const [shape,setShape]=useState('round'),[palette,setPalette]=useState(null),[shading,setShading]=useState(false),[outlines,setOutlines]=useState(false),[colorfy,setColorfy]=useState(false),[clipboardVersion,setClipboardVersion]=useState(0);
+  const tip=useMemo(()=>paintBrushTip(shape),[shape]);
   const stroke=useRef(null),frame=useRef(0),projectionCache=useRef(null),regionMaskCache=useRef(null),canvasCache=useRef(new Map()),dirtyTargets=useRef(new Map()),mounted=useRef(true),cameraAPI=useRef(null),imageInput=useRef(null),dncCache=useRef(new Map());
   const shelfAPI=useRef();
   const endCurrentStroke=useRef(null);endCurrentStroke.current=()=>{endStroke();commitPlacement();};
   const toolCommand=useRef(null);toolCommand.current=chooseTool;
+  const clipboardCommand=useRef();clipboardCommand.current=id=>{if(!project||busy||readOnly||dialog)return;if(id==='copy')copySelection();if(id==='paste')pasteSelection();if(id==='clear')clearSelection();if(id==='all')selectAllParts();};
+  useEffect(()=>{const fn=e=>clipboardCommand.current(e.detail);window.addEventListener('mdlxl-paint-command',fn);return()=>window.removeEventListener('mdlxl-paint-command',fn);},[]);
   const baseModel=useMemo(()=>paintProjectModel(model,project,originalModel),[model,originalModel,revision,project,project?.uvRevision,project?.materialRevision]);
   const catalog=useMemo(()=>enumeratePaintTargets(baseModel),[baseModel,revision]),allGeosets=useMemo(()=>new Set(baseModel.Geosets.map((_,i)=>i)),[baseModel]);
   const freshMapping=project?!!project.paintAtlasVersion:sourceMode==='primer';
   const paintable=useMemo(()=>new Set(paintableGeosets(originalModel,{requireUV:!freshMapping})),[originalModel,freshMapping]);
   const standHidden=useMemo(()=>paintStandHidden(originalModel),[originalModel]);
-  const hiddenGeosets=useMemo(()=>new Set([...allGeosets].filter(i=>(isolate&&i!==activeGeoset)||(!showHelpers&&(!paintable.has(i)||(standHidden.has(i)&&i!==activeGeoset))))),[isolate,showHelpers,allGeosets,activeGeoset,paintable,standHidden]);
+  const hiddenGeosets=useMemo(()=>new Set([...allGeosets].filter(i=>(isolate&&(region?!paintRegionFaces(region,i)?.size:i!==activeGeoset))||(!showHelpers&&(!paintable.has(i)||(standHidden.has(i)&&i!==activeGeoset))))),[isolate,region,showHelpers,allGeosets,activeGeoset,paintable,standHidden]);
   const viewModel=showOriginal?originalModel:baseModel;
   const displayModel=useMemo(()=>isolate?isolatePaintRegion(viewModel,region):viewModel,[viewModel,isolate,region]);
   // Navigation belongs to the shared editor preferences, including MDLVis's
   // middle-click Rotation/Work toggle. Citadel never reverses those bindings.
   const viewportPreferences=useMemo(()=>({...preferences,graphics:{...preferences?.graphics,...(lowPower?{pixelRatio:1,antialias:false}:{})}}),[preferences,lowPower]);
-  const navigation=cameraBindings(preferences),navigationHint=`Right-drag: ${navigation.right} · ${navigation.middle==='toggle'?'Middle-click: rotation / work':'Middle-drag: '+navigation.middle} · Wheel: zoom`;
+  const navigation=cameraBindings(preferences),navigationHint=`Alt-drag: rotate · Right-drag: ${navigation.right} · Wheel: zoom · Shift add / Ctrl subtract`;
   const paintAppearance=useMemo(()=>normalizePaintAppearance(preferences?.citadelPaint),[preferences?.citadelPaint]);
   const activeTarget=project?paintProjectTarget(project):null,activeCoat=project?paintProjectCoat(project):null;
   const coordId=activeTarget?.bindings.find(b=>b.geosetIndex===activeGeoset)?.coordId||0;
@@ -73,7 +80,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   const ready=!!project&&(targetMode==='free'?project.targets.some(target=>target.bindings?.length):geosetReady)&&!busy&&!readOnly&&!showOriginal;
   const imageZoom=hover.current?.brush?.zoom??stroke.current?.brush.zoom??brush.zoom;
   const decal=useMemo(()=>material?.exactStamp&&brush.materialId&&brush.mode!=='erase'?{...paintDecalTransform(material.raster,{...brush,zoom:imageZoom}),angle:stampAngle,flipX:stampFlip,url:material.preview}:null,[material,brush.materialId,brush.mode,brush.size,imageZoom,brush.opacity,brush.strength,stampAngle,stampFlip]);
-  const footprint=useMemo(()=>paintBrushPreview(brush,null,brush.materialId&&brush.mode!=='erase'?materialRaster:null,paintAppearance.brushCursor),[brush.id,brush.size,brush.materialId,brush.zoom,materialRaster,paintAppearance.brushCursor]);
+  const footprint=useMemo(()=>paintBrushPreview(brush,tip,brush.materialId&&brush.mode!=='erase'?materialRaster:null,paintAppearance.brushCursor),[brush.id,brush.size,brush.materialId,brush.zoom,tip,materialRaster,paintAppearance.brushCursor]);
   const flatProjection=useMemo(()=>activeTarget?prepareTexturePaintProjection(activeTarget.base.width,activeTarget.base.height):null,[activeTarget?.base.width,activeTarget?.base.height]);
   const backgrounds=usePreviewBackgrounds(true,scene.background,value=>updateScene({...scene,background:value}),onStatus);
   const background=useMemo(()=>({type:scene.customBackground||backgrounds.url?'image':'color',color:scene.backgroundColor,imageData:scene.customBackground||backgrounds.url||'',display:scene.backgroundDisplay,opacity:1}),[scene.customBackground,scene.backgroundColor,scene.backgroundDisplay,backgrounds.url]);
@@ -82,14 +89,14 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
     if(scene.lighting!=='flat')for(const lamp of scene.lamps.filter(l=>l.enabled)){
       values.push(paintLampLight(lamp));
     }
-    return {flat:scene.lighting==='flat',lights:values,markers:scene.showLamps?scene.lamps:[]};
-  },[scene,dncModel]);
+    return {flat:scene.lighting==='flat',sculpt:shading,lights:values,markers:scene.showLamps?scene.lamps:[]};
+  },[scene,dncModel,shading]);
   function notify(){onProjectChange?.(project);setPaintRevision(n=>n+1);}
   function refreshTarget(target,rows=null){const cached=canvasCache.current.get(target.id);if(cached?.target===target){updatePaintPreview(cached,rows);cached.canvas=paintRasterCanvas(cached.raster,cached.canvas,rows?paintRowsBounds(rows,target.base.width,target.base.height):null);}else dirtyTargets.current.set(target.id,null);setPaintRevision(n=>n+1);}
   function updateScene(next){if(scene.lamps.length&&!next.lamps.length&&next.lighting==='lamps')next={...next,lighting:'flat'};if(!Array.isArray(next.lamps)||next.lamps.length>4||next.lamps.some(l=>![...(l.position||[]),...(l.target||[])].every(Number.isFinite)||l.position?.length!==3||l.target?.length!==3)){onStatus?.('Enter valid lamp coordinates.',true);return;}setScene(next);if(project){project.viewSettings=next;project.dirty=true;project.revision++;onProjectChange?.(project);}}
   useEffect(()=>setOutline(v=>({...v,color:paintAppearance.geosetBorder,thickness:paintAppearance.borderThickness})),[paintAppearance.geosetBorder,paintAppearance.borderThickness]);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;cancelAnimationFrame(frame.current);cancelAnimationFrame(hoverFrame.current);};},[]);
-  useEffect(()=>{projectionCache.current=null;regionMaskCache.current=null;setMaterial(null);setCutoutSource(null);setSaveSource(null);setTargetMode('free');setBrush(value=>({...value,materialId:null,filterColor:'#ffffff'}));},[project?.id]);
+  useEffect(()=>{projectionCache.current=null;regionMaskCache.current=null;setMaterial(null);setCutoutSource(null);setSaveSource(null);setTargetMode('free');setStudioTool('paint');setStampAngle(0);setStampFlip(false);setRegion(null);setTextureRegion(null);setIsolate(false);setPickPart(false);setRegionTool(false);setShading(project?.sourceMode==='primer');setBrush(value=>({...value,mode:'paint',materialId:null,filterColor:'#ffffff'}));},[project?.id]);
   useEffect(()=>{const flush=()=>endCurrentStroke.current?.();window.addEventListener('mdlxl-paint-flush',flush);window.addEventListener('beforeunload',flush,true);return()=>{window.removeEventListener('mdlxl-paint-flush',flush);window.removeEventListener('beforeunload',flush,true);};},[]);
   function chooseTool(tool){if(!project||busy||readOnly)return;chooseStudioTool(tool==='select'?'select':'paint');}
   useEffect(()=>{projectionCache.current=null;regionMaskCache.current=null;},[baseModel,project?.activeTargetId,region]);
@@ -166,35 +173,35 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   function paintScope(target,scope){return regionPaintTarget(target,region,scope);}
   function projectionFor(hit,target,geosetIndex=null){
     if(hit.textureView)return flatProjection;
-    const scoped=paintScope(target,geosetIndex),pose=hit.viewport.width+':'+hit.viewport.height+':'+hit.viewProjectionMatrix.join(','),key=target.id+':'+(geosetIndex??'free')+':'+[...hiddenGeosets]+':'+(region?[...region.faces]:'');
+    const scoped=paintScope(target,geosetIndex),key=target.id+':'+(geosetIndex??'free')+':'+[...hiddenGeosets]+':'+(region?paintRegionEntries(region).map(([id,f])=>id+':'+[...f]).join(';'):'');
     let cache=projectionCache.current;
-    if(!cache||cache.pose!==pose||cache.model!==displayModel||cache.revision!==revision)projectionCache.current=cache={pose,model:displayModel,revision,entries:new Map()};
+    if(!cache||!samePaintProjectionView(cache.pose,hit.viewProjectionMatrix,hit.viewport.width,hit.viewport.height)||cache.model!==displayModel||cache.revision!==revision)projectionCache.current=cache={pose:{...hit.viewport,matrix:Array.from(hit.viewProjectionMatrix)},model:displayModel,revision,entries:new Map()};
     if(!cache.entries.has(key))cache.entries.set(key,preparePaintProjection(displayModel,scoped,hit.viewProjectionMatrix,hit.viewport.width,hit.viewport.height,384,hiddenGeosets));
     return cache.entries.get(key);
   }
   function brushOptions(target,scope,texture=false){
     let mask=null;
     if(region||texture&&scope!=null){
-      const key=target.id+':'+(scope??'free')+':'+target.base.width+'x'+target.base.height+':'+(region?[...region.faces]:'');let cache=regionMaskCache.current;if(!(cache instanceof Map))regionMaskCache.current=cache=new Map();let cached=cache.get(key);
+      const key=target.id+':'+(scope??'free')+':'+target.base.width+'x'+target.base.height+':'+(region?paintRegionEntries(region).map(([id,f])=>id+':'+[...f]).join(';'):'');let cache=regionMaskCache.current;if(!(cache instanceof Map))regionMaskCache.current=cache=new Map();let cached=cache.get(key);
       if(!cached||cached.model!==baseModel){const paintTarget=paintScope(target,scope);cached={model:baseModel,region:paintGeosetMask(baseModel,paintTarget,target.base.width,target.base.height)};cache.set(key,cached);if(cache.size>16)cache.delete(cache.keys().next().value);}
       mask=cached.region;
     }
     if(textureRegion?.targetId===target.id)mask=mask?Uint8Array.from(mask,(v,i)=>Math.round(v*textureRegion.data[i]/255)):textureRegion.data;
-    return {flags:texture?0:target.flags,mask,sourceOrigin:{x:0,y:0},materialRaster:brush.materialId&&brush.mode!=='erase'?materialRaster:null,decalRaster:material?.exactStamp&&brush.materialId&&brush.mode!=='erase'?materialRaster:null};
+    return {flags:texture?0:target.flags,mask,tipRaster:tip,sourceOrigin:{x:0,y:0},materialRaster:brush.materialId&&brush.mode!=='erase'?materialRaster:null,decalRaster:material?.exactStamp&&brush.materialId&&brush.mode!=='erase'?materialRaster:null};
   }
   function strokeParts(hit,preview=false){
-    const scope=targetMode==='geoset'?activeGeoset:null;
+    const scope=!region&&targetMode==='geoset'?activeGeoset:null;
     // Free painting chooses one image layer for each part. Additional authored
     // layers are retained and can be selected explicitly as the destination.
     const choices=new Map();
     for(const target of project.targets)for(const binding of target.bindings){const prior=choices.get(binding.geosetIndex);if(!prior||target===activeTarget||prior.target!==activeTarget&&binding.layerIndex<prior.binding.layerIndex)choices.set(binding.geosetIndex,{target,binding});}
-    const targets=hit.textureView||targetMode==='geoset'?[activeTarget]:project.targets;
+    const targets=hit.textureView||!region&&targetMode==='geoset'?[activeTarget]:project.targets;
     return targets.filter(target=>target&&(!textureRegion||textureRegion.targetId===target.id)).map(target=>{
       const coat=paintProjectCoat(project,target.id,project.activeCoatId);if(!coat||coat.visible===false)return null;
       const scoped=scope==null?{...target,bindings:target.bindings.filter(b=>choices.get(b.geosetIndex)?.binding===b)}:target;
       if(!paintScope(scoped,scope).bindings.length)return null;
       const before=clonePaintRaster(coat.raster),editable=preview?{...coat,raster:clonePaintRaster(before)}:coat;
-      return {target,coat:editable,coatId:coat.id,before,projection:projectionFor(hit,scoped,scope),options:{...brushOptions(scoped,scope,hit.textureView),reference:compositePaintTarget(project,target.id)},blend:{},changed:0};
+      return {target,coat:editable,coatId:coat.id,before,projection:projectionFor(hit,scoped,scope),options:{...brushOptions(scoped,scope,hit.textureView),reference:compositePaintTarget(project,target.id),strokeBase:before.data},blend:{},changed:0};
     }).filter(Boolean);
   }
   function applyPoint(part,point,settings,dragging=false){
@@ -209,15 +216,9 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
     cancelAnimationFrame(hoverFrame.current);hoverFrame.current=0;hoverHit.current=null;
     if(hover.current){hover.current=null;if(mounted.current)setPaintRevision(n=>n+1);}
   }
-  function previewHover(hit){
-    if(placement.current)return;
-    if(!hit||!ready||pickPart||regionTool||stroke.current||dialog||!brush.materialId){clearHover();return;}
-    if(targetMode==='geoset'&&!hit.textureView&&hit.geosetIndex!==activeGeoset){clearHover();return;}
-    hoverHit.current=hit;if(hoverFrame.current)return;
-    hoverFrame.current=requestAnimationFrame(()=>{
-      hoverFrame.current=0;const value=hoverHit.current;if(!value)return;renderHover(value);
-    });
-  }
+  // The floating cursor is cheap and immediate. Project pixels only while a
+  // stamp is being pressed/dragged, then commit once on release.
+  function previewHover(hit){if(!placement.current)clearHover();}
   function renderHover(value){
       const key=value.textureView?'texture':value.viewProjectionMatrix.join(',')+':'+value.viewport.width+':'+value.viewport.height;
       if(!hover.current||hover.current.key!==key){
@@ -245,17 +246,45 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
     cancelPlacement();
   }
   function chooseStudioTool(tool){
-    endStroke();cancelPlacement();cameraProps.onWorkMode?.();setStudioTool(tool);setPickPart(tool==='select');setRegionTool(tool==='select');setShowOriginal(false);
+    endStroke();cancelPlacement();cameraProps.onWorkMode?.();setShowOriginal(false);
+    if(tool==='select'){setPickPart(v=>!v);setRegionTool(v=>!v);return;}
+    setStudioTool(tool);setPickPart(false);setRegionTool(false);window.dispatchEvent(new CustomEvent('paint-texture-action',{detail:'paint'}));
     setBrush(value=>({...value,mode:tool==='erase'?'erase':'paint',materialId:tool==='stamp'?material?.id||null:null}));
   }
+  function chooseShape(id){const value=PAINT_BRUSH_SHAPES.find(s=>s.id===id);if(!value)return;endStroke();setShape(id);setBrush(b=>({...b,hardness:value.hardness,flow:value.flow,spacing:value.spacing}));}
   function studioHistory(redo=false){endStroke();commitPlacement();if(travelPaintHistory(project,redo))notify();}
   function studioPick(hit){
-    if(selectionKind==='geoset'){setRegion(null);setTargetMode('geoset');selectGeoset(hit.geosetIndex);return;}
-    if(selectionKind==='piece'){setRegion({geosetIndex:hit.geosetIndex,faces:connectedPaintFaces(baseModel.Geosets[hit.geosetIndex],hit.triangle),seed:hit.triangle});setTargetMode('geoset');selectGeoset(hit.geosetIndex);return;}
-    pick(hit);setTargetMode('geoset');
+    endStroke();clearHover();
+    const geo=baseModel.Geosets[hit.geosetIndex];
+    const faces=selectionKind==='geoset'?new Set(Array.from({length:geo.Faces.length/3},(_,i)=>i)):selectionKind==='piece'?connectedPaintFaces(geo,hit.triangle):new Set([hit.triangle]);
+    const next=changePaintRegion(region,hit.geosetIndex,faces,hit.subtract?'subtract':hit.add||hit.continueSelection?'add':'replace');
+    setRegion(next);setTargetMode('free');selectGeoset(next.geosetIndex);
   }
+  function clearSelection(){endStroke();setRegion(null);setTextureRegion(null);setTargetMode('free');setIsolate(false);}
+  function selectAllParts(){
+    endStroke();let next=null;for(const index of paintable){if(standHidden.has(index))continue;next=changePaintRegion(next,index,new Set(Array.from({length:baseModel.Geosets[index].Faces.length/3},(_,i)=>i)),'add');}setRegion(next);setTextureRegion(null);setTargetMode('free');
+  }
+  function invertSelection(){
+    endStroke();
+    if(textureRegion){setTextureRegion(v=>({...v,data:Uint8ClampedArray.from(v.data,n=>255-n)}));return;}
+    let next=null;
+    for(const index of paintable){if(standHidden.has(index))continue;const geo=baseModel.Geosets[index],faces=new Set();for(let f=0;f<geo.Faces.length/3;f++)if(!paintRegionFaces(region,index)?.has(f))faces.add(f);next=changePaintRegion(next,index,faces,'add');}
+    setRegion(next);setTargetMode('free');
+  }
+  function grabPatch(){if(!activeTarget)return;endStroke();setCutoutSource({name:textureName,raster:compositePaintTarget(project)});setDialog('cutout');}
+  function copySelection(cut=false){
+    if(!activeTarget)return;endStroke();
+    const mask=brushOptions(activeTarget,region?null:targetMode==='geoset'?activeGeoset:null,true).mask;
+    if(!mask){grabPatch();return;}
+    try{
+      const source={name:'Painted patch',raster:extractPaintCutout(compositePaintTarget(project),mask)};clipboard.current=source;setClipboardVersion(v=>v+1);
+      if(cut===true&&activeCoat){const before=clonePaintRaster(activeCoat.raster);fillPaintMask(activeCoat.raster,mask,{...brush,mode:'erase',opacity:1,strength:1});if(recordPaintStroke(project,activeTarget.id,activeCoat.id,before,'Cut painted patch',brush)){markPaintMaterialEdited(project,activeTarget);notify();}}
+      onStatus?.('Copied painted pixels. Select a destination or Ctrl+D to clear, then Ctrl+V to stamp.');
+    }catch(e){onStatus?.(e.message,true);}
+  }
+  function pasteSelection(){if(clipboard.current)chooseMaterial(clipboard.current);else onStatus?.('Copy a painted selection or cut a texture patch first.');}
   function startStroke(hit){
-    if(!ready)return;if(targetMode==='geoset'&&!hit.textureView&&hit.geosetIndex!==activeGeoset){onStatus?.(msg('paint.locked'));return;}
+    if(!ready)return;if(!region&&targetMode==='geoset'&&!hit.textureView&&hit.geosetIndex!==activeGeoset){onStatus?.(msg('paint.locked'));return;}
     if(studioTool==='sample'){
       const target=hit.textureView?activeTarget:project.targets.find(t=>t.bindings.some(b=>b.geosetIndex===hit.geosetIndex&&b.layerIndex===hit.layerIndex))||preferredPaintTarget(project.targets,hit.geosetIndex,project.activeTargetId),raster=target&&compositePaintTarget(project,target.id);
       if(raster){
@@ -291,7 +320,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
     current.pending=[];for(const part of current.parts)if(part.changed){if(!detail)refreshTarget(part.target,part.rows);part.changed=0;}
   }
   function moveStroke(hit){if(placement.current){placement.current.hit={...placement.current.hit,screen:hit.screen};hoverHit.current=placement.current.hit;if(!hoverFrame.current)hoverFrame.current=requestAnimationFrame(()=>{hoverFrame.current=0;if(placement.current)renderHover(placement.current.hit);});return;}const current=stroke.current;if(!current)return;current.pending.push(hit);if(!frame.current)frame.current=requestAnimationFrame(flushStroke);}
-  function endStroke(){if(placement.current)return;clearHover();onInteractionChange?.(false);cancelAnimationFrame(frame.current);flushStroke();const current=stroke.current;stroke.current=null;if(current&&project){
+  function endStroke(){if(placement.current){commitPlacement();onInteractionChange?.(false);return;}clearHover();onInteractionChange?.(false);cancelAnimationFrame(frame.current);flushStroke();const current=stroke.current;stroke.current=null;if(current&&project){
     const revisions=new Map(current.parts.map(part=>[part.target.id,part.target.revision]));if(recordPaintStrokeGroup(project,current.parts.map(part=>({targetId:part.target.id,coatId:part.coatId,before:part.before})),current.brush.name+' stroke',current.brush)){for(const part of current.parts){if(revisions.get(part.target.id)!==part.target.revision)markPaintMaterialEdited(project,part.target);const cached=canvasCache.current.get(part.target.id);if(cached)cached.version=part.target.revision;}notify();}}}
   function cancelStroke(){cancelPlacement();clearHover();onInteractionChange?.(false);cancelAnimationFrame(frame.current);frame.current=0;const current=stroke.current;stroke.current=null;if(!current)return;for(const part of current.parts){if(part.coatId==='__alpha')part.target.alphaMask=part.before;else part.coat.raster=part.before;refreshTarget(part.target);}}
   async function prepareSurface(){
@@ -302,14 +331,14 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   function separateSelection(){
     endStroke();cancelPlacement();
     try{
-      const selected=region||{geosetIndex:activeGeoset,faces:new Set(Array.from({length:baseModel.Geosets[activeGeoset].Faces.length/3},(_,i)=>i))},staged=preparePaintSelectionSpace(baseModel,project,activeTarget,selected);
+      const selected=region?{geosetIndex:activeGeoset,faces:paintRegionFaces(region,activeGeoset)}:{geosetIndex:activeGeoset,faces:new Set(Array.from({length:baseModel.Geosets[activeGeoset].Faces.length/3},(_,i)=>i))},staged=preparePaintSelectionSpace(baseModel,project,activeTarget,selected);
       markPaintMaterialEdited({...project,targets:project.targets.map(t=>t===activeTarget?staged.target:t)},staged.target);
       recordPaintSurfaceChange(project,activeTarget.id,staged,'Make selection independent');notify();onStatus?.('Selection has its own paint pixels. The skin layout and geosets stay together. Undo restores shared painting.');
     }catch(e){onStatus?.(e.message,true);}
   }
-  function chooseMaterial(source){endStroke();cancelPlacement();setShowOriginal(false);cameraProps.onWorkMode?.();const id=crypto.randomUUID(),preview=paintRasterCanvas(source.raster).toDataURL();setMaterial({...source,exactStamp:true,id,thumbnail:preview,preview});setStudioTool('stamp');setPickPart(false);setRegionTool(false);setStampAngle(0);setStampFlip(false);setBrush(value=>normalizeBrushSettings({...value,id:'normal',size:Math.max(80,Math.min(220,Math.max(source.raster.width,source.raster.height))),zoom:1,opacity:1,strength:1,materialId:id,filterColor:'#ffffff',tipId:null}));onStatus?.('Click the model to place a preview. Adjust it, then Apply stamp.');}
+  function chooseMaterial(source){window.dispatchEvent(new CustomEvent('paint-texture-action',{detail:'paint'}));endStroke();cancelPlacement();setShowOriginal(false);cameraProps.onWorkMode?.();const id=crypto.randomUUID(),preview=paintRasterCanvas(source.raster).toDataURL();setMaterial({...source,exactStamp:true,id,thumbnail:preview,preview});setStudioTool('stamp');setPickPart(false);setRegionTool(false);setStampAngle(0);setStampFlip(false);setBrush(value=>normalizeBrushSettings({...value,id:'normal',size:Math.max(80,Math.min(220,Math.max(source.raster.width,source.raster.height))),zoom:1,opacity:1,strength:1,materialId:id,filterColor:'#ffffff',tipId:null}));onStatus?.('Click to stamp; drag while pressed to position. R rotates, M mirrors, [ ] changes size.');}
   function useCutout(source){
-    chooseMaterial({...cutoutSource,...source});setShowOriginal(false);setDialog(null);
+    const next={...cutoutSource,...source};clipboard.current=next;setClipboardVersion(v=>v+1);chooseMaterial(next);setShowOriginal(false);setDialog(null);
   }
   function pick(hit){
     if(regionTool){setRegion(value=>{const faces=new Set(value?.geosetIndex===hit.geosetIndex?value.faces:[]);if(hit.subtract)faces.delete(hit.triangle);else faces.add(hit.triangle);return {geosetIndex:hit.geosetIndex,faces,seed:hit.triangle};});if(activeGeoset!==hit.geosetIndex)selectGeoset(hit.geosetIndex);return;}
@@ -318,32 +347,35 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
     selectGeoset(hit.geosetIndex);
   }
   function fillGeoset(){
-    if(!geosetReady||!activeCoat)return;endStroke();const layer=brush.mode==='erase'?paintProjectCoat(project,activeTarget.id,'__alpha'):activeCoat;
-    if(layer.visible===false){onStatus?.(msg('paint.hiddenCoat'));return;}
-    const textureOnly=targetMode==='free'&&textureRegion?.targetId===activeTarget.id;
-    const before=clonePaintRaster(layer.raster),mask=textureOnly?textureRegion.data:paintGeosetMask(displayModel,paintScope(activeTarget,activeGeoset),activeTarget.base.width,activeTarget.base.height),options=textureOnly?{}:brushOptions(activeTarget,activeGeoset);
-    fillPaintMask(layer.raster,mask,brush,options);
-    if(recordPaintStroke(project,activeTarget.id,layer.id,before,textureOnly?'Fill texture selection':msg('paint.fillPart'),brush)){markPaintMaterialEdited(project,activeTarget);notify();onStatus?.(textureOnly?'Filled the texture selection.':msg('paint.filled',{number:activeGeoset+1}));}
+    if(!ready)return;endStroke();
+    const parts=[];
+    for(const target of region&&!textureRegion?project.targets:[activeTarget]){
+      if(!target)continue;const layer=paintProjectCoat(project,target.id,project.activeCoatId);if(!layer||layer.visible===false)continue;
+      const textureOnly=!region&&targetMode==='free'&&textureRegion?.targetId===target.id;
+      const scope=region?null:activeGeoset,mask=textureOnly?textureRegion.data:paintGeosetMask(baseModel,paintScope(target,scope),target.base.width,target.base.height),options=textureOnly?{}:brushOptions(target,scope,true);
+      const before=clonePaintRaster(layer.raster);fillPaintMask(layer.raster,options.mask||mask,{...brush,mode:'paint',materialId:null});parts.push({targetId:target.id,coatId:layer.id,before});
+    }
+    if(recordPaintStrokeGroup(project,parts,'Fill selected pixels',brush)){for(const part of parts)markPaintMaterialEdited(project,paintProjectTarget(project,part.targetId));notify();onStatus?.('Filled the selection with color.');}
   }
   function mutateCoat(change){if(!ready||!activeCoat)return;const target=paintProjectTarget(project),coat=paintProjectCoat(project);change(coat);target.revision=(target.revision||0)+1;project.dirty=true;project.revision++;notify();}
-  function editUV(next){if(!geosetReady)return;endStroke();const key=activeGeoset+':'+coordId,before=baseModel.Geosets[activeGeoset].TVertices[coordId];if(recordPaintUV(project,key,before,next))notify();}
+  function editUV(next){if(!geosetReady)return;endStroke();try{const selected=paintRegionFaces(region,activeGeoset);if(selected?.size){const staged=preparePaintUVSelectionChange(baseModel,project,activeTarget,activeGeoset,selected,next);recordPaintSurfaceChange(project,activeTarget.id,staged,'Move selected UVs');notify();}else{const key=activeGeoset+':'+coordId,before=baseModel.Geosets[activeGeoset].TVertices[coordId];if(recordPaintUV(project,key,before,next))notify();}}catch(e){onStatus?.(e.message,true);}}
   async function importFile(file){try{const raster=await decodePaintImage(new Uint8Array(await file.arrayBuffer()),file.name);setCutoutSource({name:file.name,raster});setDialog('cutout');}catch(e){onStatus?.(e.message,true);}}
   function saveTexture(source){setSaveSource(source);setDialog('saveTexture');}
   const activeCanvas=activeTarget?textureOverrides.get(activeTarget.textureId)?.canvas:null;
   const textureName=activeTarget?.paintName??activeTarget?.label??'';
   shelfAPI.current={onUse:chooseMaterial,onCut:source=>{setCutoutSource(source);setDialog('cutout');},onNative:()=>{setDialog('native');},onImport:()=>{imageInput.current.click();},onStatus};
   const shelfCallbacks=useMemo(()=>Object.fromEntries(['onUse','onCut','onNative','onImport','onStatus'].map(key=>[key,(...args)=>shelfAPI.current[key]?.(...args)])),[]);
-  const viewport=<PaintViewport {...cameraProps} key="paint-viewport" model={displayModel} revision={revision} selectedGeoset={activeGeoset} selectedVertices={emptyVertices} selectableGeosets={allGeosets} selectionByGeoset={emptySelection} hiddenVertices={emptySelection} hiddenGeosets={hiddenGeosets} mode="textured" overlays={emptyOverlays} showVertices={false} showSkeleton={false} showGrid={false} showAxes={false} shaded view={view} cameraMode={cameraMode} workplane="xy" transformMode="select" sequenceIndex={-1} time={0} playing={false} teamColor={teamColor} textureAssets={textureAssets} preferences={viewportPreferences} paintWorkspace paintMode={!!project} paintSelectOnly={studioTool==='select'} paintRegion={studioTool==='select'?region:null} paintDisabled={!ready} paintOutline={{...outline,visible:outline.visible&&targetMode==='geoset'}} paintBrushSize={brush.size} paintBrushPreview={footprint} paintDecal={decal} paintLights={lights} paintLampPickingDisabled={!!lampAction||regionTool} onPaintInteractionChange={onInteractionChange} paintSelectedLamp={selectedLamp} paintLampTransform={lampTransform} paintLampColor={paintAppearance.lampSelection} onPaintLampSelect={id=>{setSelectedLamp(id);if(id)setPickPart(true);}} onPaintLampChange={changeLamp} paintBackground={background} paintTextureOverrides={showOriginal?noOverrides:textureOverrides} paintTextureSmoothing={scene.textureSmoothing} paintTextureRevision={paintRevision+Number(project?.revision||0)} onPaintCameraReady={api=>{cameraAPI.current=api;}} onPaintPick={studioPick} paintSelectFaces={selectionKind==='faces'} onPaintStart={startStroke} onPaintMove={moveStroke} onPaintEnd={endStroke} onPaintCancel={cancelStroke} onPaintHover={previewHover} onPaintCameraChange={()=>clearHover()}/>;
+  const viewport=<PaintViewport {...cameraProps} key="paint-viewport" model={displayModel} revision={revision} selectedGeoset={activeGeoset} selectedVertices={emptyVertices} selectableGeosets={allGeosets} selectionByGeoset={emptySelection} hiddenVertices={emptySelection} hiddenGeosets={hiddenGeosets} mode="textured" overlays={emptyOverlays} showVertices={false} showSkeleton={false} showGrid={false} showAxes={false} shaded view={view} cameraMode={cameraMode} workplane="xy" transformMode="select" sequenceIndex={-1} time={0} playing={false} teamColor={teamColor} textureAssets={textureAssets} preferences={viewportPreferences} paintWorkspace paintMode={!!project} paintSelectOnly={pickPart} paintRegion={region} paintColorfy={colorfy&&!showOriginal} paintPartOutlines={outlines} paintDisabled={!ready} paintOutline={{...outline,visible:outline.visible&&targetMode==='geoset'}} paintBrushSize={brush.size} paintBrushPreview={footprint} paintDecal={decal} paintLights={lights} paintLampPickingDisabled={true} onPaintInteractionChange={onInteractionChange} paintSelectedLamp={selectedLamp} paintLampTransform={lampTransform} paintLampColor={paintAppearance.lampSelection} onPaintLampSelect={id=>{setSelectedLamp(id);if(id)setPickPart(true);}} onPaintLampChange={changeLamp} paintBackground={background} paintTextureOverrides={showOriginal?noOverrides:textureOverrides} paintTextureSmoothing={scene.textureSmoothing} paintTextureRevision={paintRevision+Number(project?.revision||0)} onPaintCameraReady={api=>{cameraAPI.current=api;}} onPaintPick={studioPick} paintSelectFaces={selectionKind==='faces'} onPaintStart={startStroke} onPaintMove={moveStroke} onPaintEnd={endStroke} onPaintCancel={cancelStroke} onPaintHover={previewHover} onPaintCameraChange={()=>clearHover()}/>;
   return <PaintStudioLayout project={project} tool={studioTool} onTool={chooseStudioTool} brush={brush} onBrush={patch=>setBrush(v=>({...v,...patch}))} material={material} borrowMode={borrowMode} onBorrowMode={setBorrowMode} stampAngle={stampAngle} onStampAngle={setStampAngle} stampFlip={stampFlip} onFlip={()=>setStampFlip(v=>!v)} placing={placing} onCommit={commitPlacement} onCancel={cancelStroke}
     style={{'--paint-tip':APPLICATION_THEMES[preferences?.theme]?.scheme!=='dark'?paintAppearance.brushTipLight:paintAppearance.brushTipDark,'--paint-selection':paintAppearance.geosetSelection}}
     disabled={busy||readOnly} busy={busy} dialog={dialog} viewport={viewport} original={showOriginal} onOriginal={()=>{endStroke();cancelPlacement();setShowOriginal(v=>!v);}} onFrame={()=>window.dispatchEvent(new CustomEvent('mdlvis-frame'))} navigationHint={navigationHint}
     sourceMode={sourceMode} onSourceMode={value=>{setSourceMode(value);if(value==='primer'&&!resolution)setResolution(512);}} resolution={resolution} onResolution={setResolution} onBegin={begin} onOpen={onOpenProject} split={split} onSplit={value=>{cancelPlacement();setSplit(Math.max(30,Math.min(78,value)));}}
-    region={region} textureRegion={textureRegion} targetMode={targetMode} activeGeoset={activeGeoset} selectionKind={selectionKind} onSelectionKind={setSelectionKind} isolate={isolate} onIsolate={setIsolate} onClearSelection={()=>{cancelPlacement();setRegion(null);setTextureRegion(null);setTargetMode('free');setIsolate(false);}} onFill={fillGeoset} onSeparate={separateSelection} onTextureMask={()=>setDialog('region')}
-    onCrop={()=>{cancelPlacement();setCutoutSource(material);setDialog('cutout');}} onSaveSource={()=>saveTexture({...material,shelfOnly:true})} onSurface={()=>{cancelPlacement();setDialog('surface');}}
+    selecting={pickPart} onSelectToggle={()=>chooseStudioTool('select')} shape={shape} onShape={chooseShape} palette={palette} onPalette={()=>setPalette(relatedPaintColors(brush.color))} shading={shading} onShading={()=>setShading(v=>!v)} outlines={outlines} onOutlines={()=>setOutlines(v=>!v)} colorfy={colorfy} onColorfy={()=>setColorfy(v=>!v)} onCopy={copySelection} onPaste={pasteSelection} canPaste={!!clipboard.current} onGrab={grabPatch} onInvertSelection={invertSelection} onSelectAll={selectAllParts} onTextureAction={action=>window.dispatchEvent(new CustomEvent('paint-texture-action',{detail:action}))} onNative={()=>setDialog('native')} onImport={()=>imageInput.current.click()} region={region} textureRegion={textureRegion} targetMode={targetMode} activeGeoset={activeGeoset} selectionKind={selectionKind} onSelectionKind={kind=>{endStroke();setSelectionKind(kind);setPickPart(true);setRegionTool(true);cameraProps.onWorkMode?.();}} isolate={isolate} onIsolate={setIsolate} onClearSelection={clearSelection} onFill={fillGeoset} onSeparate={separateSelection} onTextureMask={()=>setDialog('region')}
+    onCrop={()=>{if(material){endStroke();setCutoutSource(material);setDialog('cutout');}}} onSaveSource={()=>{if(material)saveTexture({...material,shelfOnly:true});}} onSurface={()=>{cancelPlacement();setDialog('surface');}}
     coat={activeCoat} coats={PAINT_COATS} onCoat={id=>{cancelPlacement();endStroke();project.activeCoatId=id;notify();}} onCoatVisible={visible=>mutateCoat(c=>{c.visible=visible;})} onTarget={id=>{cancelPlacement();selectMaterial(id);}}
     textureName={textureName} width={activeTarget?.base.width} height={activeTarget?.base.height} onHistory={studioHistory} onNew={()=>{endStroke();cancelPlacement();setDialog('new');}} onSave={()=>{endStroke();commitPlacement();onSaveProject?.(project);}} onExport={()=>{endStroke();commitPlacement();onExport?.(project);}} onDone={()=>{endStroke();commitPlacement();onExit?.();}}
     shelf={<PaintTextureShelf key={project?.id} epoch={shelfEpoch} {...shelfCallbacks} onFolderChange={setFolders}/>}
-    texture={project&&activeCanvas&&<PaintTextureCanvas title={textureName+' · '+activeTarget.base.width+' × '+activeTarget.base.height} onHover={previewHover} regionMask={textureRegion?.targetId===activeTarget.id?textureRegion.data:null} version={textureOverrides.get(activeTarget.textureId)?.revision} canvas={activeCanvas} geoset={baseModel.Geosets[activeGeoset]} coordId={coordId} brush={brush} brushPreview={footprint} decal={decal} textureSmoothing={scene.textureSmoothing} disabled={!geosetReady||studioTool==='select'} onStart={startStroke} onMove={moveStroke} onEnd={endStroke} onCancel={cancelStroke} onUVChange={editUV} onGrab={()=>{cancelPlacement();setCutoutSource({name:textureName,raster:compositePaintTarget(project)});setDialog('cutout');}} />}
+    texture={project&&activeCanvas&&<PaintTextureCanvas title={textureName+' · '+activeTarget.base.width+' × '+activeTarget.base.height} onHover={previewHover} regionMask={textureRegion?.targetId===activeTarget.id?textureRegion.data:null} version={textureOverrides.get(activeTarget.textureId)?.revision} canvas={activeCanvas} geoset={baseModel.Geosets[activeGeoset]} coordId={coordId} brush={brush} brushPreview={footprint} decal={decal} textureSmoothing={scene.textureSmoothing} disabled={!geosetReady} onStart={startStroke} onMove={moveStroke} onEnd={endStroke} onCancel={cancelStroke} onUVChange={editUV} onGrab={grabPatch} onCopy={copySelection} onPaste={pasteSelection} selectedFaces={paintRegionFaces(region,activeGeoset)} onSeparate={separateSelection} onMask={data=>setTextureRegion({targetId:activeTarget.id,width:activeTarget.base.width,height:activeTarget.base.height,data})} />}
   >
     <input hidden ref={imageInput} type="file" accept=".blp,.dds,.tga,.png,.jpg,.jpeg,.webp" onChange={async e=>{const file=e.target.files[0];if(file)await importFile(file);e.target.value='';}}/>
     {dialog==='surface'&&<div className="paint-modal-shade"><section className="paint-save-dialog" role="dialog" aria-modal="true" aria-label="Resize texture"><header><strong>Resize texture</strong><button disabled={busy} onClick={()=>setDialog(null)}>Close</button></header><p>{textureName} · {activeTarget.base.width} × {activeTarget.base.height}</p><label>Longest side<select value={surfaceSize} onChange={e=>setSurfaceSize(+e.target.value)}>{[256,512,1024,2048].map(size=><option key={size} value={size}>{size} px</option>)}</select></label><p>Keeps the current layout. More pixels allow finer new brushwork; your existing artwork stays intact.</p><p>This changes the working copy and can be undone.</p><button disabled={busy} onClick={prepareSurface}>{busy?'Resizing…':'Resize'}</button></section></div>}

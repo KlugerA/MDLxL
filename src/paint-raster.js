@@ -9,7 +9,7 @@ export function rgbaColor(value, alpha = 255) {
 export function createPaintRaster(width, height = width, fill = [0, 0, 0, 0]) {
   width = Math.max(1, Math.round(width)); height = Math.max(1, Math.round(height));
   const data = new Uint8ClampedArray(width * height * 4), color = rgbaColor(fill, fill?.[3] ?? 0);
-  for (let index = 0; index < data.length; index += 4) data.set(color, index);
+  if(color.some(channel=>channel!==0))for (let index = 0; index < data.length; index += 4) data.set(color, index);
   return { width, height, data };
 }
 

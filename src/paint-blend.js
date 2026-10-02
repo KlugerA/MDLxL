@@ -3,6 +3,7 @@ import {preparePaintSurface,paintSurfaceTile,stampProjectedBrush} from './paint-
 /** A soft mixing brush carries pigment along a stroke. It samples only visible,
  * selected texels, so a nearby unselected part cannot contaminate the mixture. */
 export function blendProjectedPaint(raster,projection,center,brush,options,state){
+  const strength=Math.max(0,Math.min(1,brush.blendStrength??.15));if(!strength||!brush.opacity)return 0;
   const radius=Math.max(1,brush.size/2),{tileSize,columns}=preparePaintSurface(projection,raster,options.flags);
   const pixels=new Set(),sum=[0,0,0];let weight=0;
   for(let ty=Math.max(0,Math.floor((center.y-radius)/tileSize));ty<=Math.min(Math.ceil(projection.height/tileSize)-1,Math.floor((center.y+radius)/tileSize));ty++)for(let tx=Math.max(0,Math.floor((center.x-radius)/tileSize));tx<=Math.min(columns-1,Math.floor((center.x+radius)/tileSize));tx++){
@@ -18,5 +19,7 @@ export function blendProjectedPaint(raster,projection,center,brush,options,state
   const picked=sum.map(value=>value/weight);
   state.color=state.color?state.color.map((value,c)=>value*.8+picked[c]*.2):picked;
   const color='#'+state.color.map(value=>Math.round(value).toString(16).padStart(2,'0')).join('');
-  return stampProjectedBrush(raster,projection,center,{...brush,color,mode:'paint',hardness:0,flow:.2},{...options,materialRaster:null,decalRaster:null,dragging:true});
+  state.coverage||=new Float32Array(raster.width*raster.height);
+  state.base||=options.strokeBase||raster.data.slice();
+  return stampProjectedBrush(raster,projection,center,{...brush,color,mode:'paint',hardness:0,flow:.12,strength},{...options,materialRaster:null,decalRaster:null,dragging:true,strokeCoverage:state.coverage,strokeBase:state.base,strokeLimit:strength*brush.opacity});
 }

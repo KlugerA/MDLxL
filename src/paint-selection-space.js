@@ -2,6 +2,29 @@ import {gather} from './mesh-tools.js';
 import {createPaintRaster,samplePaintRaster} from './paint-raster.js';
 import {createFreshPaintAtlas} from './paint-uv-atlas.js';
 
+/** Move only the chosen faces' UVs. Shared boundary vertices are duplicated
+ * with their complete rig streams; other faces and texture layers stay put. */
+export function preparePaintUVSelectionChange(model,project,target,index,selected,next){
+  const geo=model.Geosets[index],binding=target.bindings.find(b=>b.geosetIndex===index),coord=binding?.coordId||0,uv=geo.TVertices[coord];
+  if(!selected?.size||next.length!==uv.length||[...next].some(v=>!Number.isFinite(v)))throw Error('Select faces with valid UV coordinates first.');
+  const count=geo.Vertices.length/3,sources=Array.from({length:count},(_,i)=>i),faces=new geo.Faces.constructor(geo.Faces),outside=new Set(),moved=new Map();
+  for(let f=0;f<faces.length/3;f++)if(!selected.has(f))for(let c=0;c<3;c++)outside.add(faces[f*3+c]);
+  for(const f of selected){if(!Number.isInteger(f)||f<0||f>=faces.length/3)throw Error('The selected face is unavailable.');for(let c=0;c<3;c++){const offset=f*3+c,id=faces[offset];if(!moved.has(id)){const dest=outside.has(id)?sources.length:id;if(dest===sources.length)sources.push(id);moved.set(id,dest);}faces[offset]=moved.get(id);}}
+  if(sources.length>65536)throw Error('This UV edit would exceed the Warcraft vertex limit.');
+  for(const [key,stride] of [['Vertices',3],['Normals',3],['VertexGroup',1],['Tangents',4],['SkinWeights',8]])if(geo[key]!=null&&(!ArrayBuffer.isView(geo[key])||geo[key].length!==count*stride))throw Error('The '+key+' stream does not match the vertices.');
+  for(const values of geo.TVertices)if(!ArrayBuffer.isView(values)||values.length!==count*2)throw Error('A UV stream does not match the vertices.');
+  const layers=model.Materials[geo.MaterialID]?.Layers||[],owners=new Set(target.bindings.filter(b=>b.geosetIndex===index&&b.coordId===coord).map(b=>b.layerIndex));
+  if([...owners].some(i=>Number.isInteger(layers[i]?.TVertexAnimId)&&layers[i].TVertexAnimId>=0))throw Error('This part has animated UVs.');
+  const shared=layers.some((l,i)=>!owners.has(i)&&(l.CoordId||0)===coord),destCoord=shared?geo.TVertices.length:coord;
+  if(destCoord>=16)throw Error('This geoset has no free UV set.');
+  const copied=sources.length===count?geo:{...geo,...gather({...geo,VertexGroup:geo.VertexGroup||new Uint8Array(count)},sources)},TVertices=[...copied.TVertices],mapped=new Float32Array(sources.length*2);
+  for(let i=0;i<sources.length;i++){mapped[i*2]=uv[sources[i]*2];mapped[i*2+1]=uv[sources[i]*2+1];}
+  for(const [from,to] of moved){mapped[to*2]=next[from*2];mapped[to*2+1]=next[from*2+1];}
+  TVertices[destCoord]=mapped;
+  const uvEdits={...project.uvEdits};for(const key of Object.keys(uvEdits))if(key.startsWith(index+':'))delete uvEdits[key];
+  return {target:{...target,revision:(target.revision||0)+1,bindings:target.bindings.map(b=>b.geosetIndex===index&&b.coordId===coord?{...b,coordId:destCoord}:b)},geometry:{[index]:{...copied,Faces:faces,TVertices}},previousGeometry:{[index]:geo},uvEdits,generatedUVSets:{...project.generatedUVSets,...(shared?{[index]:destCoord}:{})}};
+}
+
 function selectionScale(geo,uv,faces,width,height){
   const ratios=[];let totalArea=0;
   for(const face of faces){
