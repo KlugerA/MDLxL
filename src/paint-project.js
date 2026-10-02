@@ -103,22 +103,6 @@ function applySurfaceState(project,state){
   project.uvEdits=structuredClone(state.uvEdits);project.generatedUVSets={...state.generatedUVSets};
   project.materialRevision=(project.materialRevision||0)+1;project.uvRevision=(project.uvRevision||0)+1;project.revision++;project.dirty=true;project.updatedAt=new Date().toISOString();
 }
-/** A texture gesture may also allocate its working UV space. Both belong to
- * one undo step; a hover or cancelled gesture never changes the real project. */
-export function recordPreparedPaintStroke(project,prepared,label,brush=null){
-  const ids=new Set(prepared.targets.filter(t=>t!==project.targets.find(p=>p.id===t.id)).map(t=>t.id));
-  const geometry=prepared.geometryEdits||{},beforeGeometry={};
-  for(const index of Object.keys(geometry))beforeGeometry[index]=project.geometryEdits?.[index]||prepared.paintPreparationOriginalGeometry?.[index]||null;
-  const before={targets:project.targets.filter(t=>ids.has(t.id)),geometry:beforeGeometry,uvEdits:project.uvEdits||{},generatedUVSets:project.generatedUVSets||{}},after={targets:prepared.targets.filter(t=>ids.has(t.id)),geometry,uvEdits:prepared.uvEdits,generatedUVSets:prepared.generatedUVSets};
-  const byteLength=surfaceBytes(before)+surfaceBytes(after),history=project.history;
-  if(byteLength>history.budgetBytes)throw Error('This texture placement exceeds the undo budget. Prepare a smaller destination before painting.');
-  const entry={kind:'surface',label,before:structuredClone(before),after:structuredClone(after),delta:{byteLength},date:Date.now()};
-  for(const discarded of history.redo)history.usedBytes-=discarded.delta.byteLength;history.redo=[];history.undo.push(entry);history.usedBytes+=byteLength;
-  while(history.undo.length>history.maxSteps||history.usedBytes>history.budgetBytes)history.usedBytes-=history.undo.shift().delta.byteLength;
-  const brushRef=brush?{presetId:String(brush.id||'normal'),tipId:brush.tipId||null,materialId:brush.materialId||null}:null;
-  if(brushRef&&!project.brushReferences.some(item=>item.presetId===brushRef.presetId&&item.tipId===brushRef.tipId&&item.materialId===brushRef.materialId))project.brushReferences.push(brushRef);
-  entry.brush=brushRef;applySurfaceState(project,after);return entry;
-}
 export function recordPaintSurfaceChange(project,targetId,staged,label){
   const target=paintProjectTarget(project,targetId);if(!target)throw Error('The destination is unavailable.');
   const {previousGeometry,...after}=staged;

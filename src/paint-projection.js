@@ -36,7 +36,7 @@ function projectedTriangles(model, bindings, matrix, width, height, requireUV = 
       if(binding.faceIndices&&!binding.faceIndices.has(geoset.paintFaceIndices?.[faceOffset/3]??faceOffset/3))continue;
       const ids = [faces[faceOffset], faces[faceOffset + 1], faces[faceOffset + 2]], screen = ids.map(id => projectPaintVertex(matrix, vertices, id * 3, width, height));
       if (screen.some(value => !value) || screen.every(value => value.z < -1 || value.z > 1)) continue;
-      result.push({ geosetIndex: binding.geosetIndex, materialId: binding.materialId, layerIndex: binding.layerIndex, coordId: binding.coordId, faceIndex: faceOffset / 3, ids, screen, uv: uv?.length ? ids.map(id => ({ x: uv[id * 2], y: uv[id * 2 + 1] })) : null, normal: faceNormal(vertices, ...ids) });
+      result.push({ geosetIndex: binding.geosetIndex, materialId: binding.materialId, layerIndex: binding.layerIndex, coordId: binding.coordId, faceIndex: geoset.paintFaceIndices?.[faceOffset / 3]??faceOffset / 3, ids, screen, uv: uv?.length ? ids.map(id => ({ x: uv[id * 2], y: uv[id * 2 + 1] })) : null, normal: faceNormal(vertices, ...ids) });
     }
   }
   return result;

@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createPaintProject,addPaintProjectTarget,compositePaintTarget,recordPaintSurfaceChange,travelPaintHistory,restorePaintProject,paintProjectArchive,recordPaintStroke,encodePaintPng,decodePaintPng,recordPreparedPaintStroke} from '../src/paint-project.js';
-import {prepareTexturePaintSpace} from '../src/paint-source-surface.js';
+import {createPaintProject,addPaintProjectTarget,compositePaintTarget,recordPaintSurfaceChange,travelPaintHistory,restorePaintProject,paintProjectArchive,recordPaintStroke,encodePaintPng,decodePaintPng} from '../src/paint-project.js';
 import {createPaintRaster,clonePaintRaster} from '../src/paint-raster.js';
 import {enablePaintMaterials,validatePaintAssignments,createPaintMaterial} from '../src/paint-materials.js';
 import {enumeratePaintTargets} from '../src/paint-targets.js';
@@ -51,16 +50,6 @@ test('rectangular destination resize is one reversible operation including every
   travelPaintHistory(project);const coat=project.targets[0].coats[0],raster=clonePaintRaster(coat.raster);coat.raster.data.set([1,2,3,255],0);recordPaintStroke(project,target.id,coat.id,raster);assert.equal(project.history.redo.length,0);assert.ok(project.history.usedBytes>=0);
 });
 
-test('texture placement stages independent space without mutations and commits pixels plus mapping as one undo',()=>{
-  const model=paintFixtureModel([triangleGeoset()]),project=preserved(model),before=structuredClone(project),beforeModel=structuredClone(model);
-  const data=new Uint8Array(128*64);for(let y=0;y<64;y++)for(let x=64;x<128;x++)data[y*128+x]=255;
-  const proposal=prepareTexturePaintSpace(model,project,{targetId:project.targets[0].id,width:128,height:64,data});
-  assert.deepEqual(project,before);assert.deepEqual(model,beforeModel);assert.equal(proposal.project.targets[0].base.width,1024);assert.equal(proposal.textureRegion.width,1024);assert.ok(proposal.textureRegion.data.some(v=>v===0));assert.ok(proposal.textureRegion.data.some(v=>v===255));
-  proposal.project.targets[0].coats[0].raster.data.set([220,40,80,255],100);
-  recordPreparedPaintStroke(project,proposal.project,'Texture placement');assert.equal(project.history.undo.length,1);const after=structuredClone(project.targets[0]);
-  travelPaintHistory(project);assert.deepEqual(project.targets,before.targets);assert.deepEqual(paintProjectModel(model,project).Geosets,paintProjectModel(model,before).Geosets);
-  travelPaintHistory(project,true);assert.deepEqual(project.targets[0],after);assert.equal(project.targets[0].coats[0].raster.data[103],255);
-});
 
 test('unique surface rebakes skin, coats and alpha while splitting shared UVs and retaining rig streams',()=>{
   const model=paintFixtureModel([triangleGeoset(),triangleGeoset()]);model.Geosets[1].Vertices=Float32Array.from(model.Geosets[1].Vertices,(v,i)=>v+(i%3===0?3:0));
@@ -75,13 +64,6 @@ test('unique surface rebakes skin, coats and alpha while splitting shared UVs an
   travelPaintHistory(project);assert.deepEqual(paintProjectModel(model,project).Geosets.map(g=>g.TVertices),before.Geosets.map(g=>g.TVertices));travelPaintHistory(project,true);assert.deepEqual(paintProjectModel(model,project),changed);
 });
 
-test('automatic preparation of multiple image layers restores the original geometry in one undo',()=>{
-  const model=paintFixtureModel([triangleGeoset()]);model.Textures.push({Image:'Overlay.blp',Flags:0,ReplaceableId:0});model.Materials[0].Layers.push({...model.Materials[0].Layers[0],TextureID:1});
-  const project=preserved(model),before=paintProjectModel(model,project),proposal=prepareTexturePaintSpace(model,project);
-  assert.equal(proposal.project.targets.length,2);assert.notEqual(proposal.project.targets[0].bindings[0].coordId,proposal.project.targets[1].bindings[0].coordId);
-  recordPreparedPaintStroke(project,proposal.project,'Place layered texture',{id:'normal',materialId:'native-chainmail'});assert.equal(project.brushReferences[0].materialId,'native-chainmail');travelPaintHistory(project);
-  assert.deepEqual(paintProjectModel(model,project).Geosets,before.Geosets);
-});
 
 test('unsupported rig streams and animated UV mapping reject unique mapping atomically',()=>{
   const model=paintFixtureModel([triangleGeoset()]),project=preserved(model),target=project.targets[0],working=paintProjectModel(model,project);

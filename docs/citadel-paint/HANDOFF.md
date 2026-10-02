@@ -1,6 +1,6 @@
 # Citadel native Paint working lane
 
-Status: phase one ready for user testing. [PR #73](https://github.com/KlugerA/MDLxL/pull/73) is pushed, open and attached to the task. User acceptance and merge are pending; online main remains the base release.
+Status: first tester rejected for lag and chopped-up destination layout; the correction restores original mapping and adds optional **Autoaim**. Ready for the next user test. [PR #73](https://github.com/KlugerA/MDLxL/pull/73) remains the open, attached review branch. User acceptance and merge are pending.
 
 ## Authority and baseline
 
@@ -9,7 +9,7 @@ Status: phase one ready for user testing. [PR #73](https://github.com/KlugerA/MD
 - Managed attached worktree: `C:\Users\PC\.codex\worktrees\citadel-native-paint\MDLxL`.
 - Feature branch: `codex/citadel-native-paint`; base online main `9e9a41cc3aa7ac6dfda2277ba5c578ad556340f8` (v0.16.0).
 - Primary checkout remains on unrelated `codex/model-tabs` at `85b7cec04aa31c1a676b4d54eefd1feccc834fa1`. No open PRs at startup.
-- No merge, release/version bump, offline upgrade, or announcements authorized. User acceptance remains pending while AFK.
+- No merge, release/version bump, offline upgrade, or announcements authorized. User has returned with feedback; make one visible correction and await their result.
 
 ## Mandatory allowance and stop boundaries
 
@@ -29,7 +29,7 @@ Status: phase one ready for user testing. [PR #73](https://github.com/KlugerA/MD
 - Current-skin setup preserves native dimensions and complete authored materials, including team colour and extra image layers. Missing skin data reports an error.
 - Twelve native source recipes, including cinematic Footman chainmail. Game pixels resolve from the configured installation; none are bundled. Old stock runtime/seeding and 180 shipped texture/variant PNGs are retired. Disk deletion requires both exact historical path and SHA-256; personal, renamed or modified files survive.
 - Anchored repeated texture coverage and one-placement Detail gestures. The held result runs through the actual texel projection, compositor and texture upload path.
-- Automatic temporary 1024 detail mapping for initial 3D imagery placement, committed with its pigment in one undo step. Camera-distance detail floor; explicit surface preparation remains available. Face and texture masks protect regions.
+- **Autoaim** is off by default. Off retains the literal selected zoom; on adds local source zoom compensation for the hit face. Shield and sword use different compensation. Original destination size/layout, geometry and UVs remain unchanged during hover/painting. The rejected automatic atlas/rebake and its history path were removed. Explicit surface preparation remains available as a separate user action.
 - Lossless editable layer persistence, native-size/rectangular destinations, rig-stream-preserving mapping changes and source-preserving model export. Ordinary MDX save and desktop reopen exercised.
 - [VERIFICATION.md](VERIFICATION.md) records commands, captures, hashes, timing boundaries and limitations. [DESIGN.md](DESIGN.md) records why the user's direct shield-painting feedback changed the first-placement mechanism.
 
@@ -37,5 +37,6 @@ Status: phase one ready for user testing. [PR #73](https://github.com/KlugerA/MD
 
 - Final handoff allowance observation: **83% used / 17% remaining**, 11:56 Amsterdam, 2 October. That is 14 rounded shared points above the phase baseline of 69%; it is not exact per-thread consumption. Phase one stops at its reviewable checkpoint, before quota exhaustion.
 - Implementation commit: `aba23fe`; final handoff notes follow on the same branch. PR #73 remains open; do not merge without user authorization. No release/version or offline installation changes are part of this phase.
-- The user is AFK. Opening the final built program for testing must be the last operational action after checks/handoff. Use a separate test profile, the unchanged supplied Footman and an unsaved chainmail example; keep any earlier user preview open.
-- Await direct user feedback/resume. Do not schedule continuation after a reset. Visible user acceptance and native Warcraft runtime acceptance remain open.
+- Feedback continuation allowance: **85% used / 15% remaining**, 12:22 Amsterdam, 2 October; 16 rounded shared points above the initial 69% baseline. No reset or second phase was invoked.
+- Open the corrected build as the last operational action after checks/handoff. Use a separate profile and the unchanged original Footman, with chainmail selected and Autoaim off. Keep earlier windows/user edits intact.
+- Await the user's next visible result. Do not schedule continuation after a reset. User acceptance and native Warcraft runtime acceptance remain open.

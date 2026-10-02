@@ -16,11 +16,10 @@ import {usePreviewBackgrounds} from './usePreviewBackgrounds.js';
 import {paintBrushPreview} from './paint-brush-preview.js';
 import {paintDecalTransform,projectPaintDecal,paintSourcePixelScale} from '../src/paint-decal.js';
 import {paintMessage as msg} from '../src/paint-messages.js';
-import {addPaintProjectTarget,compositePaintTarget,createPaintProject,paintProjectCoat,paintProjectTarget,recordPaintStroke,recordPaintStrokeGroup,recordPaintUV,recordPaintSurfaceChange,recordPreparedPaintStroke} from '../src/paint-project.js';
+import {addPaintProjectTarget,compositePaintTarget,createPaintProject,paintProjectCoat,paintProjectTarget,recordPaintStroke,recordPaintStrokeGroup,recordPaintUV,recordPaintSurfaceChange} from '../src/paint-project.js';
 import {buildSmartPaintMasks,fillPaintMask,interpolatePaintStroke,preparePaintProjection,prepareTexturePaintProjection,stampProjectedBrush} from '../src/paint-projection.js';
 import {paintGeosetMask,paintGeosetTarget,paintHalfModel,paintPartCenter,paintProjectModel,paintStandHidden} from '../src/paint-view.js';
-import {clonePaintRaster,resizePaintRaster,rasterRegionDelta} from '../src/paint-raster.js';
-import {needsTexturePaintSpace,prepareTexturePaintSpace} from '../src/paint-source-surface.js';
+import {clonePaintRaster,resizePaintRaster} from '../src/paint-raster.js';
 import {enumeratePaintTargets,findTextureAsset,preferredPaintTarget} from '../src/paint-targets.js';
 import {preparePaintSurfaceChange} from '../src/paint-surface.js';
 import {regionPaintTarget,connectedPaintFaces} from '../src/paint-region.js';
@@ -53,15 +52,12 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   const [scene,setScene]=useState(()=>({...DEFAULT_PAINT_SCENE,...project?.viewSettings})),[dncModel,setDncModel]=useState(null),[dncStatus,setDncStatus]=useState(''),[lampAction,setLampAction]=useState(null),[shelfEpoch,setShelfEpoch]=useState(0),[folders,setFolders]=useState(['']);
   const [region,setRegion]=useState(null),[textureRegion,setTextureRegion]=useState(null),[regionTool,setRegionTool]=useState(false),[surfaceSize,setSurfaceSize]=useState(1024),[uniqueSurface,setUniqueSurface]=useState(false),[split,setSplit]=useState(60);
   const hover=useRef(null),hoverFrame=useRef(0),hoverHit=useRef(null);
-  const [preparedPreview,setPreparedPreview]=useState(null),pendingPreparedHit=useRef(null),preparationError=useRef(null);
-  const preparationKey=project?.id+':'+project?.revision+':'+revision+':'+project?.activeTargetId+':'+project?.activeCoatId;
-  const prepared=preparedPreview?.key===preparationKey?preparedPreview:null,renderProject=prepared?.project||project;
-  const paintTextureRegion=prepared?.textureRegion||textureRegion;
+  const [autoaim,setAutoaim]=useState(false);
   const stroke=useRef(null),frame=useRef(0),projectionCache=useRef(null),smartMaskCache=useRef(null),canvasCache=useRef(new Map()),dirtyTargets=useRef(new Map()),mounted=useRef(true),cameraAPI=useRef(null),imageInput=useRef(null),dncCache=useRef(new Map());
   const currentProject=useRef(project);currentProject.current=project;const shelfAPI=useRef();
   const endCurrentStroke=useRef(null);endCurrentStroke.current=endStroke;
   const toolCommand=useRef(null);toolCommand.current=chooseTool;
-  const baseModel=useMemo(()=>paintProjectModel(model,renderProject,originalModel),[model,originalModel,revision,renderProject,renderProject?.uvRevision,renderProject?.materialRevision]);
+  const baseModel=useMemo(()=>paintProjectModel(model,project,originalModel),[model,originalModel,revision,project,project?.uvRevision,project?.materialRevision]);
   const catalog=useMemo(()=>enumeratePaintTargets(baseModel),[baseModel,revision]),allGeosets=useMemo(()=>new Set(baseModel.Geosets.map((_,i)=>i)),[baseModel]);
   const freshMapping=project?!!project.paintAtlasVersion:sourceMode==='primer';
   const paintable=useMemo(()=>new Set(paintableGeosets(originalModel,{requireUV:!freshMapping})),[originalModel,freshMapping]);
@@ -74,7 +70,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   const viewportPreferences=useMemo(()=>({...preferences,graphics:{...preferences?.graphics,...(lowPower?{pixelRatio:1,antialias:false}:{})}}),[preferences,lowPower]);
   const navigation=cameraBindings(preferences),navigationHint=`Right-drag: ${navigation.right} · ${navigation.middle==='toggle'?'Middle-click: rotation / work':'Middle-drag: '+navigation.middle} · Wheel: zoom`;
   const paintAppearance=useMemo(()=>normalizePaintAppearance(preferences?.citadelPaint),[preferences?.citadelPaint]);
-  const activeTarget=renderProject?paintProjectTarget(renderProject):null,activeCoat=renderProject?paintProjectCoat(renderProject):null;
+  const activeTarget=project?paintProjectTarget(project):null,activeCoat=project?paintProjectCoat(project):null;
   const coordId=activeTarget?.bindings.find(b=>b.geosetIndex===activeGeoset)?.coordId||0;
   const targetOptions=catalog.filter(target=>target.geosetIndices.includes(activeGeoset));
   const materialRaster=material?.raster||null,geosetReady=!!project&&activeTarget?.geosetIndices.includes(activeGeoset)&&!busy&&!readOnly&&!showOriginal;
@@ -102,9 +98,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   function chooseTool(tool){if(!project||busy||readOnly)return;endStroke();setRegionTool(false);cameraProps.onWorkMode?.();setTextureView(false);setPickPart(tool==='select');setLampAction(null);if(tool==='draw'){setSelectedLamp(null);setShowOriginal(false);}}
   function chooseTargetMode(mode){endStroke();setTargetMode(mode);setPickPart(false);setSelectedLamp(null);setShowOriginal(false);if(mode==='free')setIsolate(false);}
   useEffect(()=>{projectionCache.current=null;smartMaskCache.current=null;},[baseModel,project?.activeTargetId,region]);
-  useEffect(()=>{clearHover();},[brush,material,activeGeoset,project?.activeTargetId,project?.activeCoatId,project?.revision,targetMode,dialog,showOriginal,pickPart,region,textureRegion,regionTool]);
-  useEffect(()=>{if(!brush.materialId||brush.mode==='erase'||dialog||showOriginal){pendingPreparedHit.current=null;setPreparedPreview(null);}},[brush.materialId,brush.mode,dialog,showOriginal]);
-  useEffect(()=>{const pending=pendingPreparedHit.current;if(prepared&&pending){pendingPreparedHit.current=null;if(pending.start){startStroke(pending.hit);if(pending.released)endStroke();}else previewHover(pending.hit);}},[prepared]);
+  useEffect(()=>{clearHover();},[brush,material,autoaim,activeGeoset,project?.activeTargetId,project?.activeCoatId,project?.revision,targetMode,dialog,showOriginal,pickPart,region,textureRegion,regionTool]);
   useEffect(()=>{const target=project&&paintProjectTarget(project);if(textureRegion&&(textureRegion.targetId!==target?.id||textureRegion.width!==target?.base.width||textureRegion.height!==target?.base.height))setTextureRegion(null);},[project,project?.activeTargetId,project?.revision,textureRegion]);
   useEffect(()=>{cameraProps.onWorkMode?.();const select=event=>toolCommand.current?.(event.detail);window.addEventListener('mdlxl-paint-tool',select);return()=>window.removeEventListener('mdlxl-paint-tool',select);},[]);
   useEffect(()=>{
@@ -127,7 +121,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   const textureOverrides=useMemo(()=>{
     const result=new Map(),liveIds=new Set((project?.targets||[]).map(t=>t.id));
     for(const id of canvasCache.current.keys())if(!liveIds.has(id)){canvasCache.current.delete(id);dirtyTargets.current.delete(id);}
-    for(const target of renderProject?.targets||[]){
+    for(const target of project?.targets||[]){
       let entry=canvasCache.current.get(target.id);
       if(!entry||entry.target!==target){entry=createPaintPreview(target);updatePaintPreview(entry);entry.canvas=paintRasterCanvas(entry.raster);canvasCache.current.set(target.id,entry);}
       else if(entry.version!==(target.revision||0)||dirtyTargets.current.has(target.id)){updatePaintPreview(entry);entry.canvas=paintRasterCanvas(entry.raster,entry.canvas);}
@@ -135,7 +129,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
       result.set(target.textureId,hover.current?.entries.get(target.id)||entry);
     }
     return result;
-  },[renderProject,renderProject?.revision,paintRevision]);
+  },[project,project?.revision,paintRevision]);
   async function initializeTarget(value,next){
     const existing=paintProjectTarget(next,value.id);if(existing)return existing;
     let asset=findTextureAsset(textureAssets,value.texturePath);
@@ -202,7 +196,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
       mask=cached.masks[brush.mode]||null;
       if(region||texture&&scope!=null)mask=mask?Uint8Array.from(mask,(value,i)=>Math.round(value*cached.region[i]/255)):cached.region;
     }
-    if(paintTextureRegion?.targetId===target.id)mask=mask?Uint8Array.from(mask,(v,i)=>Math.round(v*paintTextureRegion.data[i]/255)):paintTextureRegion.data;
+    if(textureRegion?.targetId===target.id)mask=mask?Uint8Array.from(mask,(v,i)=>Math.round(v*textureRegion.data[i]/255)):textureRegion.data;
     return {flags:texture?0:target.flags,mask,sourceOrigin:{x:0,y:0},materialRaster:brush.materialId&&brush.mode!=='erase'?materialRaster:null,decalRaster:material?.exactStamp&&brush.materialId&&brush.mode!=='erase'?materialRaster:null};
   }
   function strokeParts(hit,preview=false){
@@ -210,10 +204,10 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
     // Free painting chooses one image layer for each part. Additional authored
     // layers are retained and can be selected explicitly as the destination.
     const choices=new Map();
-    for(const target of renderProject.targets)for(const binding of target.bindings){const prior=choices.get(binding.geosetIndex);if(!prior||target===activeTarget||prior.target!==activeTarget&&binding.layerIndex<prior.binding.layerIndex)choices.set(binding.geosetIndex,{target,binding});}
-    const targets=hit.textureView||targetMode==='geoset'?[activeTarget]:renderProject.targets;
-    return targets.filter(target=>target&&(!paintTextureRegion||paintTextureRegion.targetId===target.id)).map(target=>{
-      const coat=paintProjectCoat(renderProject,target.id,brush.mode==='erase'?'__alpha':project.activeCoatId);if(!coat||brush.mode!=='erase'&&coat.visible===false)return null;
+    for(const target of project.targets)for(const binding of target.bindings){const prior=choices.get(binding.geosetIndex);if(!prior||target===activeTarget||prior.target!==activeTarget&&binding.layerIndex<prior.binding.layerIndex)choices.set(binding.geosetIndex,{target,binding});}
+    const targets=hit.textureView||targetMode==='geoset'?[activeTarget]:project.targets;
+    return targets.filter(target=>target&&(!textureRegion||textureRegion.targetId===target.id)).map(target=>{
+      const coat=paintProjectCoat(project,target.id,brush.mode==='erase'?'__alpha':project.activeCoatId);if(!coat||brush.mode!=='erase'&&coat.visible===false)return null;
       const scoped=scope==null?{...target,bindings:target.bindings.filter(b=>choices.get(b.geosetIndex)?.binding===b)}:target;
       if(!paintScope(scoped,scope).bindings.length)return null;
       const before=clonePaintRaster(coat.raster),editable=preview?{...coat,raster:clonePaintRaster(before)}:coat;
@@ -223,27 +217,20 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   function applyPoint(part,point,settings,dragging=false){
     return part.options.decalRaster?projectPaintDecal(part.coat.raster,part.projection,part.options.decalRaster,point,paintDecalTransform(part.options.decalRaster,settings),{...part.options,mode:settings.mode,filterColor:settings.filterColor}):stampProjectedBrush(part.coat.raster,part.projection,point,settings,{...part.options,dragging});
   }
-  function sourceBrush(parts,settings,textureView){
-    if(textureView||!settings.materialId||!materialRaster||settings.mode==='erase')return {...settings};
-    const density=Math.max(0,...parts.map(p=>paintSourcePixelScale(p.projection,p.coat.raster)));
-    const minimumZoom=material?.exactStamp?density*Math.max(materialRaster.width,materialRaster.height)/settings.size:density;
-    return {...settings,zoom:Math.max(settings.zoom,minimumZoom)};
+  function sourceBrush(parts,settings,hit){
+    if(!autoaim||hit.textureView||!settings.materialId||!materialRaster||settings.mode==='erase')return settings;
+    const part=parts.find(p=>p.target.bindings.some(b=>b.geosetIndex===hit.geosetIndex));
+    const density=part?paintSourcePixelScale(part.projection,part.coat.raster,hit):0;
+    const sourceScale=material?.exactStamp?settings.size/Math.max(materialRaster.width,materialRaster.height):1;
+    return {...settings,zoom:settings.zoom*Math.max(1,density/sourceScale)};
   }
   function clearHover(){
     cancelAnimationFrame(hoverFrame.current);hoverFrame.current=0;hoverHit.current=null;
     if(hover.current){hover.current=null;if(mounted.current)setPaintRevision(n=>n+1);}
   }
-  function stageTexturePlacement(hit,start=false){
-    if(hit.textureView||prepared||!brush.materialId||brush.mode==='erase')return false;
-    const ids=new Set(project.targets.filter(t=>(!textureRegion||textureRegion.targetId===t.id)&&paintScope(t,targetMode==='geoset'?activeGeoset:null).bindings.some(b=>!hiddenGeosets.has(b.geosetIndex))).map(t=>t.id));
-    if(!project.targets.some(t=>ids.has(t.id)&&needsTexturePaintSpace(t)))return false;
-    try{if(preparationError.current===preparationKey)return true;const proposal=prepareTexturePaintSpace(model,project,textureRegion,ids);pendingPreparedHit.current={hit,start};setPreparedPreview({...proposal,key:preparationKey});}
-    catch(e){preparationError.current=preparationKey;onStatus?.(e.message,true);}return true;
-  }
   function previewHover(hit){
     if(!hit||!ready||pickPart||regionTool||stroke.current||dialog||!brush.materialId){clearHover();return;}
     if(targetMode==='geoset'&&!hit.textureView&&hit.geosetIndex!==activeGeoset){clearHover();return;}
-    if(stageTexturePlacement(hit))return;
     hoverHit.current=hit;if(hoverFrame.current)return;
     hoverFrame.current=requestAnimationFrame(()=>{
       hoverFrame.current=0;const value=hoverHit.current;if(!value)return;
@@ -251,8 +238,9 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
       if(!hover.current||hover.current.key!==key){
         const parts=strokeParts(value,true),entries=new Map();
         for(const part of parts){const target={...part.target,coats:part.target.coats.map(c=>c.id===part.coatId?part.coat:c),alphaMask:part.coatId==='__alpha'?part.coat.raster:part.target.alphaMask},entry=createPaintPreview(target);updatePaintPreview(entry);entry.canvas=paintRasterCanvas(entry.raster);entries.set(target.id,entry);}
-        hover.current={key,parts,entries,brush:sourceBrush(parts,brush,value.textureView)};
+        hover.current={key,parts,entries};
       }
+      hover.current.brush=sourceBrush(hover.current.parts,brush,value);
       for(const part of hover.current.parts){
         part.coat.raster.data.set(part.before.data);const rows=createPaintDirtyRows(part.target.base.width,part.target.base.height);part.options.dirtyRows=rows;applyPoint(part,value.screen,hover.current.brush);
         const currentRows=rows.slice();if(part.rows)mergePaintRows(rows,part.rows);part.rows=currentRows;
@@ -263,29 +251,28 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   }
   function startStroke(hit){
     if(!ready)return;if(targetMode==='geoset'&&!hit.textureView&&hit.geosetIndex!==activeGeoset){onStatus?.(msg('paint.locked'));return;}
-    if(stageTexturePlacement(hit,true))return;
     clearHover();const parts=strokeParts(hit);
     if(!parts.length){onStatus?.(region?'Choose a face inside the paint region.':msg('paint.hiddenCoat'));return;}
     if(!hit.textureView&&hit.geosetIndex!==activeGeoset){const target=parts.find(p=>p.target.bindings.some(b=>b.geosetIndex===hit.geosetIndex))?.target;if(target)project.activeTargetId=target.id;onGeosetChange?.(hit.geosetIndex);}
-    onInteractionChange?.(true);stroke.current={parts,last:null,lastStamp:null,pending:[],brush:sourceBrush(parts,brush,hit.textureView),prepared};moveStroke(hit);
+    onInteractionChange?.(true);stroke.current={parts,last:null,lastStamp:null,pending:[],settings:brush,brush:sourceBrush(parts,brush,hit)};moveStroke(hit);
   }
   function flushStroke(){
     frame.current=0;const current=stroke.current;if(!current)return;
     const detail=!!current.parts[0]?.options.decalRaster;
     for(const part of current.parts){part.rows=createPaintDirtyRows(part.target.base.width,part.target.base.height);part.options.dirtyRows=part.rows;}
     if(detail&&current.pending.length){
-      const point=current.pending.at(-1);
+      const hit=current.pending.at(-1),point=hit.screen;current.brush=sourceBrush(current.parts,current.settings,hit);
       for(const part of current.parts){part.coat.raster.data.set(part.before.data);part.changed=applyPoint(part,point,current.brush);refreshTarget(part.target);}
       current.last=point;
-    }else for(const next of current.pending){
+    }else for(const hit of current.pending){
+      const next=hit.screen;current.brush=sourceBrush(current.parts,current.settings,hit);
       if(current.last&&next.x===current.last.x&&next.y===current.last.y)continue;
       for(const point of interpolatePaintStroke(current.last,next,current.brush)){for(const part of current.parts)part.changed+=applyPoint(part,point,current.brush,!!current.lastStamp);current.lastStamp=point;}current.last=next;
     }
     current.pending=[];for(const part of current.parts)if(part.changed){if(!detail)refreshTarget(part.target,part.rows);part.changed=0;}
   }
-  function moveStroke(hit){const current=stroke.current;if(!current)return;current.pending.push(hit.screen);if(!frame.current)frame.current=requestAnimationFrame(flushStroke);}
-  function endStroke(){if(pendingPreparedHit.current?.start)pendingPreparedHit.current.released=true;clearHover();onInteractionChange?.(false);cancelAnimationFrame(frame.current);flushStroke();const current=stroke.current;stroke.current=null;if(current&&project){
-    if(current.prepared){try{const changed=current.parts.filter(p=>rasterRegionDelta(p.before,p.coat.raster));if(changed.length){for(const p of changed)markPaintMaterialEdited(current.prepared.project,p.target);recordPreparedPaintStroke(project,current.prepared.project,'Place texture with detail mapping',current.brush);setTextureRegion(current.prepared.textureRegion);onStatus?.('Texture placed with independent detail space. Undo restores the previous skin and mapping.');notify();}}catch(e){onStatus?.(e.message,true);}finally{setPreparedPreview(null);}return;}
+  function moveStroke(hit){const current=stroke.current;if(!current)return;current.pending.push(hit);if(!frame.current)frame.current=requestAnimationFrame(flushStroke);}
+  function endStroke(){clearHover();onInteractionChange?.(false);cancelAnimationFrame(frame.current);flushStroke();const current=stroke.current;stroke.current=null;if(current&&project){
     const revisions=new Map(current.parts.map(part=>[part.target.id,part.target.revision]));if(recordPaintStrokeGroup(project,current.parts.map(part=>({targetId:part.target.id,coatId:part.coatId,before:part.before})),current.brush.name+' stroke',current.brush)){for(const part of current.parts){if(revisions.get(part.target.id)!==part.target.revision)markPaintMaterialEdited(project,part.target);const cached=canvasCache.current.get(part.target.id);if(cached)cached.version=part.target.revision;}notify();}}}
   function cancelStroke(){clearHover();onInteractionChange?.(false);cancelAnimationFrame(frame.current);frame.current=0;const current=stroke.current;stroke.current=null;if(!current)return;for(const part of current.parts){if(part.coatId==='__alpha')part.target.alphaMask=part.before;else part.coat.raster=part.before;refreshTarget(part.target);}}
   async function prepareSurface(){
@@ -305,15 +292,14 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
     selectGeoset(hit.geosetIndex);
   }
   function fillGeoset(){
-    if(!geosetReady||!activeCoat)return;endStroke();const layer=brush.mode==='erase'?paintProjectCoat(renderProject,activeTarget.id,'__alpha'):activeCoat;
+    if(!geosetReady||!activeCoat)return;endStroke();const layer=brush.mode==='erase'?paintProjectCoat(project,activeTarget.id,'__alpha'):activeCoat;
     if(layer.visible===false){onStatus?.(msg('paint.hiddenCoat'));return;}
     const before=clonePaintRaster(layer.raster),mask=paintGeosetMask(displayModel,paintScope(activeTarget,activeGeoset),activeTarget.base.width,activeTarget.base.height),options=brushOptions(activeTarget,activeGeoset);
     fillPaintMask(layer.raster,mask,brush,options);
-    if(prepared){if(rasterRegionDelta(before,layer.raster)){markPaintMaterialEdited(renderProject,activeTarget);try{recordPreparedPaintStroke(project,renderProject,msg('paint.fillPart'));setTextureRegion(prepared.textureRegion);notify();}catch(e){onStatus?.(e.message,true);}finally{setPreparedPreview(null);}}}
-    else if(recordPaintStroke(project,activeTarget.id,layer.id,before,msg('paint.fillPart'),brush)){markPaintMaterialEdited(project,activeTarget);notify();onStatus?.(msg('paint.filled',{number:activeGeoset+1}));}
+    if(recordPaintStroke(project,activeTarget.id,layer.id,before,msg('paint.fillPart'),brush)){markPaintMaterialEdited(project,activeTarget);notify();onStatus?.(msg('paint.filled',{number:activeGeoset+1}));}
   }
   function mutateCoat(change){if(!ready||!activeCoat)return;const target=paintProjectTarget(project),coat=paintProjectCoat(project);change(coat);target.revision=(target.revision||0)+1;project.dirty=true;project.revision++;notify();}
-  function editUV(next){if(!geosetReady)return;endStroke();const key=activeGeoset+':'+coordId,before=baseModel.Geosets[activeGeoset].TVertices[coordId];if(prepared){try{if(!Array.from(next).every(Number.isFinite)||next.length!==before.length)throw Error('Invalid UV coordinates.');renderProject.uvEdits[key]=Array.from(next);recordPreparedPaintStroke(project,renderProject,'Edit prepared paint mapping');setTextureRegion(prepared.textureRegion);notify();}catch(e){onStatus?.(e.message,true);}finally{setPreparedPreview(null);}}else if(recordPaintUV(project,key,before,next))notify();}
+  function editUV(next){if(!geosetReady)return;endStroke();const key=activeGeoset+':'+coordId,before=baseModel.Geosets[activeGeoset].TVertices[coordId];if(recordPaintUV(project,key,before,next))notify();}
   function hideHalf(){endStroke();setHalfHidden(value=>!value);}
   async function importFile(file){try{const raster=await decodePaintImage(new Uint8Array(await file.arrayBuffer()),file.name);if(importIntent==='texture')await createTexture({name:file.name,raster});else{setCutoutSource({name:file.name,raster});setDialog('cutout');}}catch(e){onStatus?.(e.message,true);}}
   function saveTexture(source){setSaveSource(source);setDialog('saveTexture');}
@@ -353,7 +339,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
         {brush.materialId&&brush.filterColor!=='#ffffff'&&<button onClick={()=>setBrush(v=>({...v,filterColor:'#ffffff'}))}>{msg('paint.resetFilter')}</button>}
       </section>
       <section><h3>{msg('paint.technique')}</h3><div className="paint-brush-grid">{BRUSH_PRESETS.map(brushButton)}</div>
-        <Range id="size" min={1} max={2048} step={1} editable value={brush.size} percent={false} onChange={size=>setBrush(v=>({...v,size}))}/>{brush.materialId&&<Range id="brushZoom" min={.01} max={64} step={.01} editable value={brush.zoom} onChange={zoom=>setBrush(v=>({...v,zoom}))}/>}<Range id="opacity" value={brush.opacity} onChange={opacity=>setBrush(v=>({...v,opacity}))}/>
+        <Range id="size" min={1} max={2048} step={1} editable value={brush.size} percent={false} onChange={size=>setBrush(v=>({...v,size}))}/>{brush.materialId&&<><Range id="brushZoom" min={.01} max={64} step={.01} editable value={brush.zoom} onChange={zoom=>setBrush(v=>({...v,zoom}))}/><label className="paint-check" title="Adjust texture zoom to the surface under the brush. Keeps the original texture layout."><input type="checkbox" checked={autoaim} onChange={e=>{endStroke();setAutoaim(e.target.checked);}}/>Autoaim</label></>}<Range id="opacity" value={brush.opacity} onChange={opacity=>setBrush(v=>({...v,opacity}))}/>
         <label className="paint-check" title={msg('paint.bleedHelp')}><input type="checkbox" checked={scene.textureSmoothing} onChange={e=>{endStroke();updateScene({...scene,textureSmoothing:e.target.checked});}}/>{msg('paint.bleed')}</label>
         <p className="paint-help">{msg('paint.brushHelp')}</p>
       </section>
@@ -368,7 +354,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
       </details>
     </fieldset></aside>}
     <section key="stage" className={'paint-stage'+(project?' paint-stage-split':'')} style={{'--paint-split':(textureView?35:split)+'%'}}>{selectedLamp&&pickPart&&!textureView&&<div className="paint-lamp-tools" role="group" aria-label="Selected lamp"><span>Lamp {scene.lamps.findIndex(l=>l.id===selectedLamp)+1}</span><PaintTool icon="move" label="Move lamp" active={lampTransform==='move'} onClick={()=>setLampTransform('move')}/><button aria-pressed={lampTransform==='depth'} onClick={()=>setLampTransform('depth')}>Near / far</button><PaintTool icon="rotate" label="Around model" active={lampTransform==='rotate'} onClick={()=>setLampTransform('rotate')}/><PaintTool icon="delete" label="Delete lamp" onClick={deleteLamp}/><small>Drag lamp · Arrows move · Page Up/Down: depth · Shift: fine</small></div>}<div className="paint-model-view">{viewport}</div>
-      {project&&activeCanvas&&<><div className="paint-view-divider" role="separator" aria-label="Resize paint views" aria-orientation="horizontal" tabIndex={0} onKeyDown={e=>{if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();setTextureView(false);setSplit(v=>Math.max(30,Math.min(78,v+(e.key==='ArrowUp'?-5:5))));}}} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);endStroke();setTextureView(false);}} onPointerMove={e=>{if(e.buttons===1){const rect=e.currentTarget.parentElement.getBoundingClientRect();setSplit(Math.max(30,Math.min(78,(e.clientY-rect.top)/rect.height*100)));}}}/><PaintTextureCanvas title={textureName+' · '+activeTarget.base.width+' × '+activeTarget.base.height} onHover={previewHover} regionMask={paintTextureRegion?.targetId===activeTarget.id?paintTextureRegion.data:null} version={textureOverrides.get(activeTarget.textureId)?.revision} canvas={activeCanvas} geoset={baseModel.Geosets[activeGeoset]} coordId={coordId} brush={brush} brushPreview={footprint} decal={decal} textureSmoothing={scene.textureSmoothing} disabled={!geosetReady} onStart={startStroke} onMove={moveStroke} onEnd={endStroke} onCancel={cancelStroke} onUVChange={editUV} /></>}
+      {project&&activeCanvas&&<><div className="paint-view-divider" role="separator" aria-label="Resize paint views" aria-orientation="horizontal" tabIndex={0} onKeyDown={e=>{if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();setTextureView(false);setSplit(v=>Math.max(30,Math.min(78,v+(e.key==='ArrowUp'?-5:5))));}}} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);endStroke();setTextureView(false);}} onPointerMove={e=>{if(e.buttons===1){const rect=e.currentTarget.parentElement.getBoundingClientRect();setSplit(Math.max(30,Math.min(78,(e.clientY-rect.top)/rect.height*100)));}}}/><PaintTextureCanvas title={textureName+' · '+activeTarget.base.width+' × '+activeTarget.base.height} onHover={previewHover} regionMask={textureRegion?.targetId===activeTarget.id?textureRegion.data:null} version={textureOverrides.get(activeTarget.textureId)?.revision} canvas={activeCanvas} geoset={baseModel.Geosets[activeGeoset]} coordId={coordId} brush={brush} brushPreview={footprint} decal={decal} textureSmoothing={scene.textureSmoothing} disabled={!geosetReady} onStart={startStroke} onMove={moveStroke} onEnd={endStroke} onCancel={cancelStroke} onUVChange={editUV} /></>}
       {!project?<section className="paint-start-card"><img className="paint-start-logo" src="./branding/citadel-paint.svg" alt="Citadel Paint"/><h2>{msg('paint.start.title')}</h2><div className="paint-start-options">{['current','primer'].map(id=><button key={id} disabled={busy||readOnly} aria-pressed={sourceMode===id} onClick={()=>setSourceMode(id)}><strong>{msg('paint.start.'+id)}</strong><span>{msg('paint.start.'+id+'Help')}</span></button>)}</div>{sourceMode==='primer'&&<label className="paint-resolution">{msg('paint.resolution')}<select value={resolution} onChange={e=>setResolution(+e.target.value)}><option value="256">{msg('paint.size256')}</option><option value="512">512 × 512</option></select></label>}<p>{sourceMode==='current'?'Each skin keeps its original dimensions. You can prepare more painting space later.':msg('paint.presetHelp')}</p><div className="paint-button-row"><button onClick={onOpenProject}>{msg('paint.openPreset')}</button><button disabled={busy||readOnly} onClick={begin}>{msg(busy?'paint.loading':'paint.start.begin')}</button></div></section>:
         <><div className="paint-stage-label">{showOriginal?msg('paint.viewingOriginal'):lampAction?msg('paint.lampPickHelp'):regionTool?'Choose faces for the paint region':pickPart?msg('paint.pickHelp'):targetMode==='free'?msg('paint.mode.free'):msg('paint.paintingPart',{number:activeGeoset+1})}{halfHidden&&<span>{msg('paint.mirrorHidden')}</span>}</div><div className="paint-orbit-hint">{navigationHint}</div></>}
     </section>

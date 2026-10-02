@@ -1,12 +1,13 @@
 import { blendPaintPixel, rgbaColor } from './paint-raster.js';
 import { preparePaintSurface, paintSurfaceTile } from './paint-projection.js';
 
-/** Largest screen footprint of a destination texel. Native detail must not be
- * sampled more finely than the destination can store when the camera zooms in.
- * Use the largest singular value, including oblique and anisotropic mappings. */
-export function paintSourcePixelScale(projection,raster){
+/** Screen footprint of one destination texel on the face under the pointer.
+ * Autoaim changes only source zoom, never the UV layout or destination raster.
+ * The largest singular value also accounts for stretched/oblique mappings. */
+export function paintSourcePixelScale(projection,raster,hit=null){
   let scale=0;
   for(const triangle of projection.triangles||[]){
+    if(hit&&(triangle.geosetIndex!==hit.geosetIndex||triangle.faceIndex!==hit.triangle))continue;
     const [a,b,c]=triangle.screen,[u,v,w]=triangle.uv;
     const points=[a,b,c];
     if(points.some(p=>p.w<=0)||points.every(p=>p.x<0)||points.every(p=>p.x>projection.width)||points.every(p=>p.y<0)||points.every(p=>p.y>projection.height))continue;

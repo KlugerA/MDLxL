@@ -66,3 +66,12 @@ test('texture detail scale follows destination capacity at camera zoom and obliq
   const enclosing=structuredClone(projection);enclosing.width=100;enclosing.height=100;enclosing.triangles[0].screen=[{x:-100,y:-100,w:1},{x:300,y:-100,w:1},{x:-100,y:300,w:1}];
   assert.ok(paintSourcePixelScale(enclosing,{width:128,height:64})>0,'a zoomed triangle enclosing the viewport still constrains detail');
 });
+
+test('Autoaim measures only the hit face, so a stretched shield cannot enlarge a sword stamp',()=>{
+  const triangle=(geosetIndex,faceIndex,uvSize)=>({geosetIndex,faceIndex,screen:[{x:100,y:100,w:1},{x:356,y:100,w:1},{x:100,y:356,w:1}],uv:[{x:0,y:0},{x:uvSize,y:0},{x:0,y:uvSize}]});
+  const projection={width:1000,height:1000,triangles:[triangle(0,0,1),triangle(0,1,.5),triangle(1,0,.125)]},raster={width:256,height:256};
+  assert.equal(paintSourcePixelScale(projection,raster,{geosetIndex:0,triangle:0}),1);
+  assert.equal(paintSourcePixelScale(projection,raster,{geosetIndex:0,triangle:1}),2);
+  assert.equal(paintSourcePixelScale(projection,raster,{geosetIndex:1,triangle:0}),8);
+  assert.equal(paintSourcePixelScale(projection,raster,{geosetIndex:3,triangle:0}),0);
+});
