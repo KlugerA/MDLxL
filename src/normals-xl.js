@@ -28,6 +28,9 @@ function surface(geoset) {
     const normal = cross(subtract(b, a), subtract(c, a)), index = faces.length;
     faces.push({ ids, normal: unit(normal), area: Math.hypot(...normal), offset });
     neighbors.push([]);
+    // A collapsed triangle has no orientation and must not constrain nearby
+    // surfaces. Keep its vertices and winding intact in the repair plan.
+    if (!faces[index].area) continue;
     const triangleKey = ids.map(id => vertexKeys[id]).sort((a, b) => a - b).join(':');
     if (!triangles.has(triangleKey)) triangles.set(triangleKey, []);
     triangles.get(triangleKey).push(index);
@@ -73,7 +76,7 @@ function surface(geoset) {
     for (let cursor = 0; cursor < part.faces.length; cursor++) {
       const index = part.faces[cursor], face = faces[index];
       face.part = parts.length;
-      face.ids.forEach(id => part.vertices.add(id));
+      if (face.area) face.ids.forEach(id => part.vertices.add(id));
       for (const [next, relative] of neighbors[index]) {
         const wanted = signs[index] * relative;
         if (!signs[next]) { signs[next] = wanted; part.faces.push(next); }
@@ -83,7 +86,7 @@ function surface(geoset) {
     // A local center makes the signed volume independent of model translation.
     // For open curved pieces this estimates the outward side; it is not a
     // general inside/outside test for arbitrary open or intersecting geometry.
-    const center = scale([...part.vertices].reduce((sum, id) => add(sum, positions[id]), [0,0,0]), 1 / part.vertices.size);
+    const center = part.vertices.size ? scale([...part.vertices].reduce((sum, id) => add(sum, positions[id]), [0,0,0]), 1 / part.vertices.size) : [0,0,0];
     let volume = 0, volumeScale = 0;
     for (const index of part.faces) {
       const face = faces[index], [a, b, c] = face.ids.map(id => subtract(positions[id], center));
@@ -154,6 +157,27 @@ function orientationsFor(mesh, selected, guide) {
     if (Math.abs(agreement) <= EPSILON) fail('pick reference vertices on the flat surface to choose its side.');
     return Math.sign(agreement);
   });
+}
+
+function collapsedNormals(mesh, geometric) {
+  const collapsed = new Set(), parallel = (a, b) => Math.abs(dot(a, b)) > 1 - 1e-10;
+  for (const part of mesh.parts) {
+    if (!part.outward || part.twoSided || !part.valid) continue;
+    const ids = [...part.vertices];
+    if (ids.some(id => mesh.vertexParts[id].size !== 1)) continue;
+    const authored = new Map(ids.map(id => [id, unit(vector(mesh.g.Normals, id))]));
+    const unexplained = ids.filter(id => !parallel(authored.get(id), geometric[id]));
+    if (unexplained.length < 2) continue;
+    const axis = authored.get(unexplained[0]), first = geometric[unexplained[0]];
+    // Infer a collapsed field only within this piece, across different local
+    // surface directions. Already geometric normals may come from an earlier
+    // partial repair. Flat fields and isolated custom slopes stay authored.
+    if (Math.hypot(...axis) < EPSILON || !unexplained.every(id => parallel(authored.get(id), axis)) ||
+        !unexplained.some(id => Math.abs(dot(first, geometric[id])) < 1 - EPSILON)) continue;
+    ids.filter(id => parallel(authored.get(id), axis) && Math.hypot(...geometric[id]) > EPSILON)
+      .forEach(id => collapsed.add(id));
+  }
+  return collapsed;
 }
 
 function isGeometricSmoothing(axis, contributions) {
@@ -230,10 +254,11 @@ export function correctNormalsXL(model, selection, references) {
     if ([...selected].some(id => !Number.isInteger(id) || id < 0 || id >= mesh.count))
       fail('the target selection is no longer available.');
     const orientations = orientationsFor(mesh, selected, guide), geometric = mesh.normalsFor(orientations);
-    const smoothed = smoothingNormals(mesh, geometric), normals = [], faces = [];
+    const collapsed = collapsedNormals(mesh, geometric), smoothed = smoothingNormals(mesh, geometric), normals = [], faces = [];
     for (const id of selected) {
       const old = vector(mesh.g.Normals, id), length = Math.hypot(...old);
-      const target = smoothed.has(id) ? scale(smoothed.get(id), length)
+      const target = collapsed.has(id) ? scale(geometric[id], length)
+        : smoothed.has(id) ? scale(smoothed.get(id), length)
         : dot(old, geometric[id]) < -EPSILON * length ? scale(old, -1) : old;
       if (Math.hypot(...subtract(old, target)) <= EPSILON * Math.max(1, length)) continue;
       const reversed = Math.hypot(...add(old, target)) <= EPSILON * Math.max(1, length);
@@ -243,7 +268,7 @@ export function correctNormalsXL(model, selection, references) {
     }
     for (let index = 0; index < mesh.faces.length; index++) {
       const face = mesh.faces[index];
-      if (mesh.signs[index] * orientations[face.part] < 0 && face.ids.every(id => selected.has(id))) faces.push(face.offset);
+      if (face.area && mesh.signs[index] * orientations[face.part] < 0 && face.ids.every(id => selected.has(id))) faces.push(face.offset);
     }
     reversedFaces += faces.length;
     plans.push({ g: mesh.g, normals, faces });

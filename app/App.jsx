@@ -826,7 +826,7 @@ export default function App() {
     } catch { setNormalsXL({ ...normalsXL, references: [] }); return; }
     setNormalsXL(null);
     say(result.reversedNormals || result.recalculatedNormals || result.reversedFaces
-      ? 'NormalsXL: reversed ' + result.reversedNormals + ' normals and ' + result.reversedFaces + ' triangles; adjusted ' + result.recalculatedNormals + ' shared normals.'
+      ? 'NormalsXL: reversed ' + result.reversedNormals + ' normals and ' + result.reversedFaces + ' triangles; adjusted ' + result.recalculatedNormals + ' normals.'
       : 'NormalsXL: selected normals and triangles already face the chosen direction.');
   };
   const normalsXLSelection = {};
