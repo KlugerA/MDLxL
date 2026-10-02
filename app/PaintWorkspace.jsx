@@ -247,9 +247,10 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   }
   function chooseStudioTool(tool){
     endStroke();cancelPlacement();cameraProps.onWorkMode?.();setShowOriginal(false);
-    if(tool==='select'){setPickPart(v=>!v);setRegionTool(v=>!v);return;}
+    if(tool==='select'){setPickPart(v=>!v);setRegionTool(v=>!v);onStatus?.(pickPart?'Brush ready. Shift adds to selection; Ctrl subtracts.':'Click parts to select. Shift adds; Ctrl subtracts. Q returns to the brush.');return;}
     setStudioTool(tool);setPickPart(false);setRegionTool(false);window.dispatchEvent(new CustomEvent('paint-texture-action',{detail:'paint'}));
     setBrush(value=>({...value,mode:tool==='erase'?'erase':'paint',materialId:tool==='stamp'?material?.id||null:null}));
+    onStatus?.(({paint:'Paint on the model or texture. Shift adds to selection; Ctrl subtracts.',blend:'Blend the colors under the brush. Strength limits the whole stroke.',sample:'Click the model or texture to pick its color.',erase:'Erase the active paint layer to reveal the skin beneath.',stamp:'Click to stamp; drag while pressed to position. R rotates, M mirrors, [ ] changes size.'})[tool]);
   }
   function chooseShape(id){const value=PAINT_BRUSH_SHAPES.find(s=>s.id===id);if(!value)return;endStroke();setShape(id);setBrush(b=>({...b,hardness:value.hardness,flow:value.flow,spacing:value.spacing}));}
   function studioHistory(redo=false){endStroke();commitPlacement();if(travelPaintHistory(project,redo))notify();}

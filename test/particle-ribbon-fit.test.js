@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Vector3,Quaternion} from 'three';
-import {createDemoDocument,openDocument} from '../src/editor-document.js';
+import {createDemoDocument,openDocument,createNode} from '../src/editor-document.js';
 import {ribbonPolygonSelection,fitRibbonToPolygons} from '../src/particle-ribbon-fit.js';
 import {placeTimedParticleRecipe} from '../src/particle-placement.js';
 import {sampleNodeMatrices,sampleTrack} from '../src/animation.js';
+import {hasCanonicalSerializedNodeOrder,serializedNodes} from '../src/node-id-order.js';
 
 function fixture(){
  const doc=createDemoDocument();doc.apply('Make test weapon',['Geosets','Nodes'],m=>{
@@ -63,4 +64,16 @@ test('ribbons can be created with no checked animations or on a static model',()
   const r=doc.model.Nodes[result.ids[0]];
   if(animated)assert.ok(r.Visibility.Keys.every(key=>key.Vector[0]===0));else assert.equal(r.Visibility,1);
  }
+});
+
+test('fitted ribbons attach directly and keep later event pivots and references aligned when saved',()=>{
+ const doc=fixture();doc.apply('Event after the weapon',['Nodes','PivotPoints'],m=>{const e=createNode(m,'EventObject');e.Name='Sound event';e.Parent=0;e.PivotPoint=new Float32Array([8,9,10]);m.PivotPoints[e.ObjectId]=e.PivotPoint;});
+ const before=structuredClone(doc.model),fit=fitRibbonToPolygons(doc.model,{0:[0,1,2,3]});let placed;
+ doc.apply('Create fitted ribbon',['Nodes','PivotPoints','Materials','Textures','GlobalSequences'],m=>{placed=placeTimedParticleRecipe(m,fit.recipe,{ribbon:fit,sequences:[0],sequence:0,parent:'0',position:[0,0,0],motion:'target',fit:true});});
+ const ribbon=doc.model.Nodes[placed.ids[0]],event=doc.model.EventObjects[0];
+ assert.equal(ribbon.Parent,0);assert.equal(doc.model.Helpers.length,before.Helpers.length);assert.equal(doc.model.Materials[ribbon.MaterialID].Layers[0].Shading,17);
+ assert.ok(hasCanonicalSerializedNodeOrder(doc.model));assert.equal(event.ObjectId,ribbon.ObjectId+1);assert.deepEqual(event.PivotPoint,before.EventObjects[0].PivotPoint);
+ assert.deepEqual(doc.model.Geosets,before.Geosets);assert.deepEqual(doc.model.Bones,before.Bones);
+ for(const format of ['mdx','mdl']){const reopened=openDocument(doc.serialize(format),'created.'+format).model;assert.ok(hasCanonicalSerializedNodeOrder(reopened));for(const node of serializedNodes(reopened))assert.deepEqual(node.PivotPoint,doc.model.PivotPoints[node.ObjectId]);assert.equal(reopened.RibbonEmitters[0].Parent,0);assert.equal(reopened.EventObjects[0].Parent,0);}
+ doc.undo();assert.deepEqual(doc.model,before);
 });

@@ -15,6 +15,7 @@ const shortcuts=[['B / T / E','Paint / Stamp / Erase'],['D / I','Blend brush / P
 export default function PaintStudioLayout(p){
   const {project,brush,material,tool}=p,controls=useRef(),keys=useRef(),[help,setHelp]=useState(false);
   const limited=!!p.region||p.targetMode==='geoset'||!!p.textureRegion;
+  const selectedParts=paintRegionEntries(p.region),faceCount=selectedParts.reduce((n,[,faces])=>n+faces.size,0);
   useLayoutEffect(()=>{if(controls.current)controls.current.scrollTop=0;},[tool,material?.id]);
   keys.current=e=>{
     if(!project||p.disabled||p.dialog)return;
@@ -47,7 +48,7 @@ export default function PaintStudioLayout(p){
           <div className="studio-section-title"><strong>Where to work</strong><Action label="Select" keys="Q" aria-pressed={p.selecting} onClick={p.onSelectToggle}/></div>
           <div className="studio-segments">{[['piece','Part','P'],['geoset','Geoset','G'],['faces','Faces','F']].map(([id,label,key])=><Action key={id} label={label} keys={key} aria-pressed={p.selectionKind===id} onClick={()=>p.onSelectionKind(id)}/>)}</div>
           <small><PaintKey>Shift</PaintKey> add · <PaintKey>Ctrl</PaintKey> subtract</small>
-          {limited?<><span className="studio-selection-count">{p.region?`${paintRegionEntries(p.region).reduce((n,[,f])=>n+f.size,0)} faces · ${paintRegionEntries(p.region).length} geosets`:p.textureRegion?'Texture selection':`Geoset ${p.activeGeoset+1}`}</span><div className="studio-segments"><Action label="Isolate" keys="L" aria-pressed={p.isolate} onClick={()=>p.onIsolate(!p.isolate)}/><Action label="Clear selection" keys="Ctrl+D" onClick={p.onClearSelection}/></div><Action label="Invert selection" keys="Ctrl+I" onClick={p.onInvertSelection}/></>:<small>Whole model</small>}
+          {limited?<><span className="studio-selection-count">{p.region?`${faceCount} face${faceCount===1?'':'s'} · ${selectedParts.length} geoset${selectedParts.length===1?'':'s'}`:p.textureRegion?'Texture selection':`Geoset ${p.activeGeoset+1}`}</span><div className="studio-segments"><Action label="Isolate" keys="L" aria-pressed={p.isolate} onClick={()=>p.onIsolate(!p.isolate)}/><Action label="Clear selection" keys="Ctrl+D" onClick={p.onClearSelection}/></div><Action label="Invert selection" keys="Ctrl+I" onClick={p.onInvertSelection}/></>:<small>Whole model</small>}
           <Action label="Protect pixels" keys="X" onClick={p.onTextureMask}/>
         </section>
         {tool==='stamp'?<>
