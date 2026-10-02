@@ -155,7 +155,7 @@ export const PAINT_MESSAGES = Object.freeze({
   'paint.useCutout': 'Use cutout as source',
   'paint.useTexture': 'Use full texture as source',
   'paint.saveTexture': 'Save as texture…',
-  'paint.cutoutHelp': 'A cutout and a full texture are the same kind of brush source.',
+  'paint.cutoutHelp': 'Cut out the part you want, then place it as a stamp. Keep it in your library to use it again.',
   'paint.textureFolder': 'Texture folder',
   'paint.allFolders': 'All texture folders',
   'paint.searchTextures': 'Search your textures',

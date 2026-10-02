@@ -17,9 +17,9 @@ import {blendProjectedPaint} from '../src/paint-blend.js';
 import PaintStudioLayout from './PaintStudioLayout.jsx';
 import {paintMessage as msg} from '../src/paint-messages.js';
 import {addPaintProjectTarget,compositePaintTarget,createPaintProject,paintProjectCoat,paintProjectTarget,recordPaintStroke,recordPaintStrokeGroup,recordPaintUV,recordPaintSurfaceChange,travelPaintHistory} from '../src/paint-project.js';
-import {buildSmartPaintMasks,fillPaintMask,interpolatePaintStroke,preparePaintProjection,prepareTexturePaintProjection,stampProjectedBrush} from '../src/paint-projection.js';
+import {fillPaintMask,interpolatePaintStroke,preparePaintProjection,prepareTexturePaintProjection,stampProjectedBrush} from '../src/paint-projection.js';
 import {paintGeosetMask,paintProjectModel,paintStandHidden} from '../src/paint-view.js';
-import {rgbaColor,clonePaintRaster,resizePaintRaster,compositePaintRasters,createPaintRaster} from '../src/paint-raster.js';
+import {rgbaColor,clonePaintRaster,resizePaintRaster,compositePaintRasters,createPaintRaster,samplePaintRaster} from '../src/paint-raster.js';
 import {enumeratePaintTargets,findTextureAsset,preferredPaintTarget} from '../src/paint-targets.js';
 import {preparePaintSurfaceChange} from '../src/paint-surface.js';
 import {preparePaintSelectionSpace} from '../src/paint-selection-space.js';
@@ -50,7 +50,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   const hover=useRef(null),hoverFrame=useRef(0),hoverHit=useRef(null);
   const [studioTool,setStudioTool]=useState('paint'),[borrowMode,setBorrowMode]=useState('image'),[stampAngle,setStampAngle]=useState(0),[stampFlip,setStampFlip]=useState(false),[placing,setPlacing]=useState(false),[selectionKind,setSelectionKind]=useState('piece');
   const placement=useRef(null);
-  const stroke=useRef(null),frame=useRef(0),projectionCache=useRef(null),smartMaskCache=useRef(null),canvasCache=useRef(new Map()),dirtyTargets=useRef(new Map()),mounted=useRef(true),cameraAPI=useRef(null),imageInput=useRef(null),dncCache=useRef(new Map());
+  const stroke=useRef(null),frame=useRef(0),projectionCache=useRef(null),regionMaskCache=useRef(null),canvasCache=useRef(new Map()),dirtyTargets=useRef(new Map()),mounted=useRef(true),cameraAPI=useRef(null),imageInput=useRef(null),dncCache=useRef(new Map());
   const shelfAPI=useRef();
   const endCurrentStroke=useRef(null);endCurrentStroke.current=()=>{endStroke();commitPlacement();};
   const toolCommand=useRef(null);toolCommand.current=chooseTool;
@@ -89,10 +89,10 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   function updateScene(next){if(scene.lamps.length&&!next.lamps.length&&next.lighting==='lamps')next={...next,lighting:'flat'};if(!Array.isArray(next.lamps)||next.lamps.length>4||next.lamps.some(l=>![...(l.position||[]),...(l.target||[])].every(Number.isFinite)||l.position?.length!==3||l.target?.length!==3)){onStatus?.('Enter valid lamp coordinates.',true);return;}setScene(next);if(project){project.viewSettings=next;project.dirty=true;project.revision++;onProjectChange?.(project);}}
   useEffect(()=>setOutline(v=>({...v,color:paintAppearance.geosetBorder,thickness:paintAppearance.borderThickness})),[paintAppearance.geosetBorder,paintAppearance.borderThickness]);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;cancelAnimationFrame(frame.current);cancelAnimationFrame(hoverFrame.current);};},[]);
-  useEffect(()=>{projectionCache.current=null;smartMaskCache.current=null;setMaterial(null);setCutoutSource(null);setSaveSource(null);setTargetMode('free');setBrush(value=>({...value,materialId:null,filterColor:'#ffffff'}));},[project?.id]);
+  useEffect(()=>{projectionCache.current=null;regionMaskCache.current=null;setMaterial(null);setCutoutSource(null);setSaveSource(null);setTargetMode('free');setBrush(value=>({...value,materialId:null,filterColor:'#ffffff'}));},[project?.id]);
   useEffect(()=>{const flush=()=>endCurrentStroke.current?.();window.addEventListener('mdlxl-paint-flush',flush);window.addEventListener('beforeunload',flush,true);return()=>{window.removeEventListener('mdlxl-paint-flush',flush);window.removeEventListener('beforeunload',flush,true);};},[]);
   function chooseTool(tool){if(!project||busy||readOnly)return;chooseStudioTool(tool==='select'?'select':'paint');}
-  useEffect(()=>{projectionCache.current=null;smartMaskCache.current=null;},[baseModel,project?.activeTargetId,region]);
+  useEffect(()=>{projectionCache.current=null;regionMaskCache.current=null;},[baseModel,project?.activeTargetId,region]);
   useEffect(()=>{clearHover(true);if(placement.current)renderHover(placement.current.hit);},[brush,material,borrowMode,stampAngle,stampFlip,activeGeoset,project?.activeTargetId,project?.activeCoatId,project?.revision,targetMode,dialog,showOriginal,pickPart,region,textureRegion,regionTool]);
   useEffect(()=>{const target=project&&paintProjectTarget(project);if(textureRegion&&(textureRegion.targetId!==target?.id||textureRegion.width!==target?.base.width||textureRegion.height!==target?.base.height))setTextureRegion(null);},[project,project?.activeTargetId,project?.revision,textureRegion]);
   useEffect(()=>{cameraProps.onWorkMode?.();const select=event=>toolCommand.current?.(event.detail);window.addEventListener('mdlxl-paint-tool',select);return()=>window.removeEventListener('mdlxl-paint-tool',select);},[]);
@@ -174,11 +174,10 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   }
   function brushOptions(target,scope,texture=false){
     let mask=null;
-    if(brush.mode==='wash'||brush.mode==='drybrush'||region||texture&&scope!=null){
-      const key=target.id+':'+(scope??'free')+':'+target.base.width+'x'+target.base.height+':'+(region?[...region.faces]:'');let cache=smartMaskCache.current;if(!(cache instanceof Map))smartMaskCache.current=cache=new Map();let cached=cache.get(key);
-      if(!cached||cached.model!==baseModel){const paintTarget=paintScope(target,scope);cached={model:baseModel,masks:buildSmartPaintMasks(baseModel,paintTarget,target.base.width,target.base.height),region:paintGeosetMask(baseModel,paintTarget,target.base.width,target.base.height)};cache.set(key,cached);if(cache.size>16)cache.delete(cache.keys().next().value);}
-      mask=cached.masks[brush.mode]||null;
-      if(region||texture&&scope!=null)mask=mask?Uint8Array.from(mask,(value,i)=>Math.round(value*cached.region[i]/255)):cached.region;
+    if(region||texture&&scope!=null){
+      const key=target.id+':'+(scope??'free')+':'+target.base.width+'x'+target.base.height+':'+(region?[...region.faces]:'');let cache=regionMaskCache.current;if(!(cache instanceof Map))regionMaskCache.current=cache=new Map();let cached=cache.get(key);
+      if(!cached||cached.model!==baseModel){const paintTarget=paintScope(target,scope);cached={model:baseModel,region:paintGeosetMask(baseModel,paintTarget,target.base.width,target.base.height)};cache.set(key,cached);if(cache.size>16)cache.delete(cache.keys().next().value);}
+      mask=cached.region;
     }
     if(textureRegion?.targetId===target.id)mask=mask?Uint8Array.from(mask,(v,i)=>Math.round(v*textureRegion.data[i]/255)):textureRegion.data;
     return {flags:texture?0:target.flags,mask,sourceOrigin:{x:0,y:0},materialRaster:brush.materialId&&brush.mode!=='erase'?materialRaster:null,decalRaster:material?.exactStamp&&brush.materialId&&brush.mode!=='erase'?materialRaster:null};
@@ -258,11 +257,17 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   function startStroke(hit){
     if(!ready)return;if(targetMode==='geoset'&&!hit.textureView&&hit.geosetIndex!==activeGeoset){onStatus?.(msg('paint.locked'));return;}
     if(studioTool==='sample'){
-      const target=hit.textureView?activeTarget:project.targets.find(t=>t.bindings.some(b=>b.geosetIndex===hit.geosetIndex)),raster=target&&compositePaintTarget(project,target.id);
-      if(raster){const x=hit.textureView?hit.screen.x:hit.uv[0]*raster.width,y=hit.textureView?hit.screen.y:hit.uv[1]*raster.height,offset=(Math.max(0,Math.min(raster.height-1,Math.floor(y)))*raster.width+Math.max(0,Math.min(raster.width-1,Math.floor(x))))*4,color='#'+[...raster.data.slice(offset,offset+3)].map(v=>v.toString(16).padStart(2,'0')).join('');chooseStudioTool('paint');setBrush(v=>({...v,color}));}return;
+      const target=hit.textureView?activeTarget:project.targets.find(t=>t.bindings.some(b=>b.geosetIndex===hit.geosetIndex&&b.layerIndex===hit.layerIndex))||preferredPaintTarget(project.targets,hit.geosetIndex,project.activeTargetId),raster=target&&compositePaintTarget(project,target.id);
+      if(raster){
+        let uv=hit.textureView?[hit.screen.x/raster.width,hit.screen.y/raster.height]:hit.uv;
+        const binding=!hit.textureView&&(target.bindings.find(b=>b.geosetIndex===hit.geosetIndex&&b.layerIndex===hit.layerIndex)||target.bindings.find(b=>b.geosetIndex===hit.geosetIndex));
+        if(binding&&binding.coordId!==hit.coordId){const values=baseModel.Geosets[hit.geosetIndex].TVertices[binding.coordId];uv=[0,1].map(axis=>hit.vertexIds.reduce((sum,id,i)=>sum+values[id*2+axis]*hit.barycentric[i],0));}
+        const color='#'+samplePaintRaster(raster,...uv,hit.textureView?0:target.flags).slice(0,3).map(v=>v.toString(16).padStart(2,'0')).join('');chooseStudioTool('paint');setBrush(v=>({...v,color}));
+      }return;
     }
     if(studioTool==='stamp'){
       if(!material){onStatus?.('Choose a texture from the shelf first.');return;}
+      if(!hit.textureView){const target=preferredPaintTarget(project.targets,hit.geosetIndex,project.activeTargetId);if(target)project.activeTargetId=target.id;if(hit.geosetIndex!==activeGeoset)onGeosetChange?.(hit.geosetIndex);}
       clearHover(true);placement.current={hit};setPlacing(true);renderHover(hit);return;
     }
     clearHover();const parts=strokeParts(hit);
@@ -302,7 +307,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
       recordPaintSurfaceChange(project,activeTarget.id,staged,'Make selection independent');notify();onStatus?.('Selection has its own paint pixels. The skin layout and geosets stay together. Undo restores shared painting.');
     }catch(e){onStatus?.(e.message,true);}
   }
-  function chooseMaterial(source){endStroke();cancelPlacement();cameraProps.onWorkMode?.();const id=crypto.randomUUID(),preview=paintRasterCanvas(source.raster).toDataURL();setMaterial({...source,exactStamp:true,id,thumbnail:preview,preview});setStudioTool('stamp');setPickPart(false);setRegionTool(false);setStampAngle(0);setStampFlip(false);setBrush(value=>normalizeBrushSettings({...value,id:'normal',size:Math.max(80,Math.min(220,Math.max(source.raster.width,source.raster.height))),zoom:1,opacity:1,strength:1,materialId:id,filterColor:'#ffffff',tipId:null}));onStatus?.('Click the model to place a preview. Adjust it, then Apply stamp.');}
+  function chooseMaterial(source){endStroke();cancelPlacement();setShowOriginal(false);cameraProps.onWorkMode?.();const id=crypto.randomUUID(),preview=paintRasterCanvas(source.raster).toDataURL();setMaterial({...source,exactStamp:true,id,thumbnail:preview,preview});setStudioTool('stamp');setPickPart(false);setRegionTool(false);setStampAngle(0);setStampFlip(false);setBrush(value=>normalizeBrushSettings({...value,id:'normal',size:Math.max(80,Math.min(220,Math.max(source.raster.width,source.raster.height))),zoom:1,opacity:1,strength:1,materialId:id,filterColor:'#ffffff',tipId:null}));onStatus?.('Click the model to place a preview. Adjust it, then Apply stamp.');}
   function useCutout(source){
     chooseMaterial({...cutoutSource,...source});setShowOriginal(false);setDialog(null);
   }
@@ -315,9 +320,10 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
   function fillGeoset(){
     if(!geosetReady||!activeCoat)return;endStroke();const layer=brush.mode==='erase'?paintProjectCoat(project,activeTarget.id,'__alpha'):activeCoat;
     if(layer.visible===false){onStatus?.(msg('paint.hiddenCoat'));return;}
-    const before=clonePaintRaster(layer.raster),mask=paintGeosetMask(displayModel,paintScope(activeTarget,activeGeoset),activeTarget.base.width,activeTarget.base.height),options=brushOptions(activeTarget,activeGeoset);
+    const textureOnly=targetMode==='free'&&textureRegion?.targetId===activeTarget.id;
+    const before=clonePaintRaster(layer.raster),mask=textureOnly?textureRegion.data:paintGeosetMask(displayModel,paintScope(activeTarget,activeGeoset),activeTarget.base.width,activeTarget.base.height),options=textureOnly?{}:brushOptions(activeTarget,activeGeoset);
     fillPaintMask(layer.raster,mask,brush,options);
-    if(recordPaintStroke(project,activeTarget.id,layer.id,before,msg('paint.fillPart'),brush)){markPaintMaterialEdited(project,activeTarget);notify();onStatus?.(msg('paint.filled',{number:activeGeoset+1}));}
+    if(recordPaintStroke(project,activeTarget.id,layer.id,before,textureOnly?'Fill texture selection':msg('paint.fillPart'),brush)){markPaintMaterialEdited(project,activeTarget);notify();onStatus?.(textureOnly?'Filled the texture selection.':msg('paint.filled',{number:activeGeoset+1}));}
   }
   function mutateCoat(change){if(!ready||!activeCoat)return;const target=paintProjectTarget(project),coat=paintProjectCoat(project);change(coat);target.revision=(target.revision||0)+1;project.dirty=true;project.revision++;notify();}
   function editUV(next){if(!geosetReady)return;endStroke();const key=activeGeoset+':'+coordId,before=baseModel.Geosets[activeGeoset].TVertices[coordId];if(recordPaintUV(project,key,before,next))notify();}

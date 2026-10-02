@@ -196,7 +196,13 @@ export function paintSurfaceTile(projection,raster,flags,tx,ty){
   const surface=preparePaintSurface(projection,raster,flags),{tileSize,columns,bins,sampledTiles}=surface,key=ty*columns+tx;
   if(!sampledTiles||sampledTiles.has(key))return bins.get(key);
   sampledTiles.add(key);
-  const x0=tx*tileSize,y0=ty*tileSize,x1=Math.min(projection.width,x0+tileSize),y1=Math.min(projection.height,y0+tileSize),points=Array.from(bins.get(key)||[]),cellSamples=Array.from(surface.cellSamples.get(key)||[]),sampleRanks=Array.from(surface.sampleRanks.get(key)||[]);
+  const x0=tx*tileSize,y0=ty*tileSize,x1=Math.min(projection.width,x0+tileSize),y1=Math.min(projection.height,y0+tileSize);
+  if(projection.textureSpace){
+    const points=new Float32Array((x1-x0)*(y1-y0)*3);let offset=0;
+    for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){points[offset++]=x+.5;points[offset++]=y+.5;points[offset++]=y*raster.width+x;}
+    bins.set(key,points);return points;
+  }
+  const points=Array.from(bins.get(key)||[]),cellSamples=Array.from(surface.cellSamples.get(key)||[]),sampleRanks=Array.from(surface.sampleRanks.get(key)||[]);
   const address=(value,size,wrap)=>wrap?(value%size+size)%size:Math.max(0,Math.min(size-1,value));
   for(const triangle of projection.triangles){
     const [a,b,c]=triangle.screen,denominator=(b.y-c.y)*(a.x-c.x)+(c.x-b.x)*(a.y-c.y);
@@ -230,9 +236,9 @@ export function paintSurfaceTile(projection,raster,flags,tx,ty){
 /** Texture view uses image-pixel coordinates, so there is no geometry/depth work. */
 export function prepareTexturePaintProjection(width,height=width) {
   const tileSize=32,columns=Math.ceil(width/tileSize),bins=new Map();
-  for(let y=0;y<height;y++)for(let x=0;x<width;x++){const key=Math.floor(y/tileSize)*columns+Math.floor(x/tileSize);let list=bins.get(key);if(!list){list=[];bins.set(key,list);}list.push(x+.5,y+.5,y*width+x);}
-  for(const [key,list] of bins)bins.set(key,new Float32Array(list));
-  return {width,height,surface:{key:`${width}:${height}:0`,tileSize,columns,bins}};
+  // The texture view needs no samples until a brush actually reaches a tile.
+  // Opening or resizing a large skin should not enumerate every image pixel.
+  return {width,height,textureSpace:true,surface:{key:`${width}:${height}:0`,tileSize,columns,bins,sampledTiles:new Set()}};
 }
 
 export function stampProjectedBrush(raster, projection, center, brush, options = {}) {

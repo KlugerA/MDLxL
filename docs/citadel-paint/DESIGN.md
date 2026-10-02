@@ -39,7 +39,12 @@ later Autoaim UI were both rejected; neither is the new workflow.
    selection's existing strip beside the complete original skin, with gutters;
    do not pack the entire model into new charts. Duplicate boundary vertices
    through the mesh editor's stream copier; preserve positions, normals,
-   binding streams, other UV sets and geoset count. Undo restores the old state.
+   binding streams, other UV sets and geoset count. Compressed axes gain exact
+   nearest-copy pixels, using the area-weighted median so a small sliver cannot
+   inflate the whole selection. A selection mapped to one identical UV point
+   gets local charts from the existing atlas builder, filled with its previous
+   constant color. Reuse empty canvas space and the private generated UV set.
+   Undo restores the old state.
 8. Layer and destination controls are collapsed. UV adjustment is a deliberate
    toggle. Resize texture preserves layout and aspect ratio. Save project,
    Export, and Use paint remain separate existing persistence paths.
@@ -60,20 +65,26 @@ later Autoaim UI were both rejected; neither is the new workflow.
   premultiplication must not round feathered cutout colors during reuse.
 - UV seam coverage clips each scanline to the edge's actual filter footprint.
   Exact depth lookup uses small screen bins. The cache is bounded by current
-  pose/selection, and screen tiles are generated only near a gesture.
+  pose/selection, and screen tiles are generated only near a gesture. Flat
+  texture painting also allocates tiles lazily; region selection avoids the
+  obsolete wash/drybrush mask work.
 
 ## Limits and remaining design work
 
-Automated UI coverage is not the user's acceptance. A mathematically collapsed
-UV or a subpixel-wide strip cannot encode a detailed picture while retaining
-that mapping. Shared pixels still share paint unless explicitly separated.
-The synthetic stretched/collapsed tests prove coverage and preview/history
-consistency, not attractive artwork. Do not claim arbitrary UV fidelity from
+Automated UI coverage is not the user's acceptance. A collapsed UV or a subpixel-wide strip cannot encode a detailed picture
+while retaining that mapping. The explicit independent-selection action gives
+compressed axes more pixels and a fully constant UV selection fresh local
+charts. Mixed or line-collapsed mappings are not generally unwrapped. Shared pixels still share paint unless explicitly separated.
+The synthetic tests now prove unchanged before/after rendering and detailed
+stamps after separation for horizontal, vertical and single-point mappings.
+They do not establish the quality of a finished reskin. Do not claim arbitrary UV fidelity from
 those tests. The independently selected Footman shield has a visibly usable
 chainmail preview; unrestricted stamping can still affect shared authored UVs.
 
 Continue improving these limits based on actual images and model preservation,
 without bringing back the rejected global atlas or adding Autoaim controls.
-No native Warcraft runtime playtest has been performed. New visible strings
+Exact preservation is checked with the default nearest filtering. Linear
+filtering, arbitrary degenerate maps and a complete Ghoul reskin remain
+unexercised. No native Warcraft runtime playtest has been performed. New visible strings
 are currently English. Other existing scene/view data is retained when opening
 projects, but the remake intentionally focuses its visible controls on painting.

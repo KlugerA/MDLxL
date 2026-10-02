@@ -17,6 +17,16 @@ export function clonePaintRaster(raster) {
   return { width: raster.width, height: raster.height, data: new Uint8ClampedArray(raster.data) };
 }
 
+/** Read an authored texel, using the same repeat flags as the model texture. */
+export function samplePaintRaster(raster, u, v, flags = 0) {
+  const address = (coordinate, size, repeat) => {
+    const pixel = Math.floor(coordinate * size);
+    return repeat ? (pixel % size + size) % size : Math.max(0, Math.min(size - 1, pixel));
+  };
+  const offset = (address(v, raster.height, flags & 2) * raster.width + address(u, raster.width, flags & 1)) * 4;
+  return Array.from(raster.data.subarray(offset, offset + 4));
+}
+
 /** Paint sources created from Warcraft textures are colour swatches, not model
  * material layers. Keep every decoded RGB pixel, but discard the source
  * material's cutout/team-colour alpha before applying the user's own crop. */

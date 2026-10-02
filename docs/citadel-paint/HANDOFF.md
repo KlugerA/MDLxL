@@ -14,7 +14,7 @@ The previous Autoaim iteration is superseded. User acceptance remains pending.
   direct reset/resume, another **50 percentage points** are authorized. The old
   40-point/reserve split is superseded. Do not switch models or spawn agents.
 - Initial lane baseline was 69% used; remake began around 86%. Latest observed
-  shared meter is **92% used / 8% remaining**, 2 October 2026. This rounded
+  shared meter is **97% used / 3% remaining**, 2 October 2026. This rounded
   account-wide meter is not precise per-chat attribution. Recheck before stop.
 - Earlier 19:00 Amsterdam boundary remains unless the user changes it.
 - No scheduled wake-up or automatic continuation after a reset. Await the
@@ -42,12 +42,16 @@ Current features: simultaneous model/texture views; paint, held adjustable
 stamps, blending and erasing; full-image/texture/highlight borrowing; native
 starters and a user library; enlarged cutouts; exact PNG reuse; whole-geoset,
 connected-piece, face and texture selection; view isolation; explicit
-independent selection pixels without splitting geosets; undo, portable project,
+independent selection pixels without splitting geosets, local detail for
+compressed/constant UVs, reusable private UVs and empty texture space; undo, portable project,
 Warcraft archive and ordinary MDX save/reopen.
 
 Meaningful corrections found during actual UI checks include source coordinates
 being displaced by filter footprints, transparent PNG rounding, and selected
-base-coat colors receiving incorrect alpha. All have targeted verification.
+base-coat colors receiving incorrect alpha. The final pass also corrected
+wrapped color picking, destination switching, pixel-selection fill, eager flat
+texture allocation and one outlier UV sliver inflating the whole selection.
+All have targeted verification.
 
 ## Evidence and next work
 
@@ -62,6 +66,6 @@ PR title/body around the remake, inspect its open/unmerged state and main,
 record the final quota reading, then launch the latest editor visibly LAST.
 Do not call this user-accepted or complete integration while the PR is open.
 
-Prioritize remaining work from actual visual results: compressed/shared mapping
-behavior, a representative finished reskin, and cold-gesture responsiveness.
+Prioritize remaining work from actual visual results: mixed/line-degenerate
+mapping, a representative finished reskin, and cold-gesture responsiveness.
 Do not spend the remaining allowance only repeating already-passing tests.

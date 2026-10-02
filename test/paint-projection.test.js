@@ -1,11 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSmartPaintMasks, fillPaintMask, interpolatePaintStroke, preparePaintProjection, prepareTexturePaintProjection, projectPaintVertex, samplePaintSource, stampProjectedBrush } from '../src/paint-projection.js';
+import { buildSmartPaintMasks, fillPaintMask, interpolatePaintStroke, preparePaintProjection, prepareTexturePaintProjection, paintSurfaceTile, projectPaintVertex, samplePaintSource, stampProjectedBrush } from '../src/paint-projection.js';
 import { createPaintRaster } from '../src/paint-raster.js';
 import { IDENTITY_MATRIX, paintFixtureModel, paintTarget, squareSeamGeoset, triangleGeoset } from './fixtures/paint-fixtures.js';
 
 const brush={id:'round',name:'Round',mode:'paint',size:10,hardness:1,opacity:1,flow:1,spacing:.2,strength:1,color:'#ff3010'};
 const painted=raster=>{let count=0;for(let i=3;i<raster.data.length;i+=4)if(raster.data[i])count++;return count;};
+
+test('large texture views allocate only requested tiles, including partial rectangular edges',()=>{
+  const projection=prepareTexturePaintProjection(2051,1025),raster={width:2051,height:1025};
+  assert.equal(projection.surface.bins.size,0);
+  const edge=paintSurfaceTile(projection,raster,0,64,32);
+  assert.deepEqual([...edge],[2048.5,1024.5,1024*2051+2048,2049.5,1024.5,1024*2051+2049,2050.5,1024.5,1024*2051+2050]);
+  assert.equal(projection.surface.bins.size,1);assert.equal(paintSurfaceTile(projection,raster,0,64,32),edge);
+});
 
 test('screen projection maps rest-pose vertices and interpolates fast strokes without gaps',()=>{
   assert.deepEqual(projectPaintVertex(IDENTITY_MATRIX,new Float32Array([-1,1,0]),0,100,80),{x:0,y:0,z:0,w:1});
