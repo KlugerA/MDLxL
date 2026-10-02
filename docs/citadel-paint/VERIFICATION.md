@@ -16,16 +16,18 @@ uses the real PaintTextureLibrary with a separate test root.
 - Package runtime whitelist and complete bundled dependency licenses: passed.
 - Electron runs the rebuilt tracked dist. Source fixtures remain unchanged.
 
-Current main at 386453a is integrated. Its source changes were confined to the
-emitter paths and were retained exactly; all generated bundle conflicts were
-resolved by rebuilding. The final merged bundle passed the flow/studio checks
-below, and all six incoming ribbon regression tests passed.
+Current main at 1273cf3 (v0.16.1) is integrated. Incoming emitter/NormalsXL
+source and release metadata were retained exactly; generated bundle conflicts
+were resolved by rebuilding. The merged bundle passed the flow/studio checks
+below. Six incoming ribbon tests and all 24 NormalsXL tests passed. The final
+flow run includes the v0.16.1 baseline; the studio run predates that integration
+and exercises the identical Paint persistence code.
 
 ## Running-app evidence
 
 | Harness | Evidence folder | Exercised |
 | --- | --- | --- |
-| `test/citadel-flow.electron.cjs` | `flow-1790979686587` | Repeated stamps, one undo per stamp, shortcut rotation/mirror/borrow, Shift add/Ctrl subtract, actual Colorfy and outline pixels, picking while Colorfy is enabled, view-only preservation, nine shades, five brushes, 1px cursor, Blend strength keys, both wheel-zoom views, cutout shortcuts, copy/mirror/paste, Help isolation, fresh shaded basecoat |
+| `test/citadel-flow.electron.cjs` | `flow-1790979936502` | Repeated stamps, one undo per stamp, shortcut rotation/mirror/borrow, Shift add/Ctrl subtract, actual Colorfy and outline pixels, picking while Colorfy is enabled, view-only preservation, nine shades, five brushes, 1px cursor, Blend strength keys, both wheel-zoom views, cutout shortcuts, copy/mirror/paste, Help isolation, fresh shaded basecoat |
 | `test/citadel-studio.electron.cjs` | `studio-1790979552364` | Pixel-mask protection, selected-face UV moves and exact Undo/Redo, separation after UV moves with identical rendered appearance, Alt orbit, private UV-set reuse, portable project and ordinary MDX/BLP save/reopen, valid MDX800 ZIP export |
 | `test/citadel-brushes.electron.cjs` | `brushes-1790979189905` | Exact brush color/eyedropper, eraser source/alpha preservation, protected texture painting and fill, face click/drag/Ctrl subtract, chosen gold basecoat |
 | `test/citadel-surfaces.electron.cjs` | `surfaces-1790979182795` | Wrapped sampler, flat/shared, seam, curved, stretched/collapsed UV stamps; pressed preview equals committed pixels; orbit/repeat; explicit local independence preserves appearance and gives detail on compressed or point UVs; active texture follows destination |

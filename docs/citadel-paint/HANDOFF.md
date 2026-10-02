@@ -23,7 +23,8 @@ No merge or release is authorized.
 - Worktree: `C:/Users/PC/.codex/worktrees/citadel-native-paint/MDLxL`.
   Branch: `codex/citadel-native-paint`. Original base: 9e9a41c, v0.16.0.
 - Main advanced to 386453a (EMTR ribbon attachment fix) during this phase.
-  Its fix is integrated into this feature branch with regenerated hashed dist.
+  Its fix and the subsequent v0.16.1 main (1273cf3) are integrated with
+  regenerated hashed dist; existing release metadata is retained.
   The main checkout remains on codex/model-tabs at 85b7cec, untouched.
 - No merge of the Paint PR, release, version bump, offline install replacement,
   deletion of personal files, or announcement is authorized.
@@ -52,7 +53,7 @@ MDX800 models keep their original file hashes and exported rig/animation data.
 The editable study is `out/citadel-audit/demo-1790979188839/Gold-footman-study.mdlxlpaint`.
 
 Current main is integrated; the regenerated bundle passed the Paint interaction
-and save/reopen flows and six emitter regression tests. The feature branch and
+and save/reopen flows, six emitter tests and 24 NormalsXL tests. The feature branch and
 existing PR are the review handoff.
 Verify its actual merge state and main containment; do not call this merged or
 user-accepted while the PR is open. Open the latest tester last.
