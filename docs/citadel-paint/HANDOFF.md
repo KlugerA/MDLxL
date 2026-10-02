@@ -1,6 +1,7 @@
 # Citadel Paint working lane
 
-Status: the **new Paint editor** is implemented and undergoing AFK verification.
+Status: the **new Paint editor** has a verified review checkpoint, ready for
+user testing; await the direct reset/resume before the next phase.
 The previous Autoaim iteration is superseded. User acceptance remains pending.
 [PR #73](https://github.com/KlugerA/MDLxL/pull/73) is the attached review lane.
 
@@ -14,14 +15,15 @@ The previous Autoaim iteration is superseded. User acceptance remains pending.
   direct reset/resume, another **50 percentage points** are authorized. The old
   40-point/reserve split is superseded. Do not switch models or spawn agents.
 - Initial lane baseline was 69% used; remake began around 86%. Latest observed
-  shared meter is **97% used / 3% remaining**, 2 October 2026. This rounded
+  shared meter is **99% used / 1% remaining**, 2 October 2026. This rounded
   account-wide meter is not precise per-chat attribution. Recheck before stop.
 - Earlier 19:00 Amsterdam boundary remains unless the user changes it.
 - No scheduled wake-up or automatic continuation after a reset. Await the
   user's direct reset/resume message. Preserve progress before exhaustion.
 - **Opening the latest built program for the user is the last operational
   action before waiting.** Complete checks, documents, push, PR and quota work
-  first. Use a fresh profile and unchanged original Footman. Do not close prior
+  first. Use a fresh profile; open the saved Footman study for testing, retaining
+  the unchanged original Footman file. Do not close prior
   user tester windows or overwrite their files.
 - Managed worktree: `C:\Users\PC\.codex\worktrees\citadel-native-paint\MDLxL`.
   Branch: `codex/citadel-native-paint`; base main `9e9a41c` (v0.16.0).
@@ -51,7 +53,9 @@ being displaced by filter footprints, transparent PNG rounding, and selected
 base-coat colors receiving incorrect alpha. The final pass also corrected
 wrapped color picking, destination switching, pixel-selection fill, eager flat
 texture allocation and one outlier UV sliver inflating the whole selection.
-All have targeted verification.
+All have targeted verification. The last usability pass resets tool-panel
+scroll on tool/source changes and aligns Main and Paint Undo for held stamps.
+The saved Footman study and its reproducible UI harness are in VERIFICATION.
 
 ## Evidence and next work
 
@@ -60,7 +64,7 @@ SHA-256 remains `7ee255776a6e757bd89766354df763201cd0519c488585b7c30151d5e313fc1
 Native installed Footman/Grunt/Blacksmith model files are MDX1800 and were not
 converted to manufacture compatibility evidence. Use actual MDX800 fixtures.
 
-Before handoff: repeat affected UI flows after any final edits, rebuild tracked
+Final checks: repeat affected UI flows after any final edits, rebuild tracked
 dist, retain only intended source/dist changes, push the review branch, refresh
 PR title/body around the remake, inspect its open/unmerged state and main,
 record the final quota reading, then launch the latest editor visibly LAST.

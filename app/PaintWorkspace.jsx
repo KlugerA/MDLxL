@@ -248,7 +248,7 @@ export default function PaintWorkspace({model,originalModel=model,revision,model
     endStroke();cancelPlacement();cameraProps.onWorkMode?.();setStudioTool(tool);setPickPart(tool==='select');setRegionTool(tool==='select');setShowOriginal(false);
     setBrush(value=>({...value,mode:tool==='erase'?'erase':'paint',materialId:tool==='stamp'?material?.id||null:null}));
   }
-  function studioHistory(redo=false){endStroke();cancelPlacement();if(travelPaintHistory(project,redo))notify();}
+  function studioHistory(redo=false){endStroke();commitPlacement();if(travelPaintHistory(project,redo))notify();}
   function studioPick(hit){
     if(selectionKind==='geoset'){setRegion(null);setTargetMode('geoset');selectGeoset(hit.geosetIndex);return;}
     if(selectionKind==='piece'){setRegion({geosetIndex:hit.geosetIndex,faces:connectedPaintFaces(baseModel.Geosets[hit.geosetIndex],hit.triangle),seed:hit.triangle});setTargetMode('geoset');selectGeoset(hit.geosetIndex);return;}

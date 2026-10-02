@@ -20,7 +20,8 @@ later Autoaim UI were both rejected; neither is the new workflow.
 
 1. Open Paint; choose **Edit the texture** or **New base coat** and its color.
 2. Paint, Stamp, Blend, Erase, and Select are the five main tools. The model and
-   live texture remain together, with an adjustable divider.
+   live texture remain together, with an adjustable divider. Changing tools or
+   sources returns the contextual panel to its first controls.
 3. Color painting has size, opacity, softness, swatches and an eyedropper.
    Blend carries pigment between visible selected pixels. Erase removes marks
    from the active paint layer, retaining the original skin beneath it.
@@ -29,7 +30,8 @@ later Autoaim UI were both rejected; neither is the new workflow.
    images open enlarged. Keep saves a PNG to the user's own library; Copy a
    patch grabs the current painted texture for another stamp.
 5. Stamp holds a real mapped preview until Apply/Enter or Cancel/Escape.
-   Drag to move; adjust size, opacity, rotation and horizontal flip. Full image
+   Drag to move; adjust size, opacity, rotation and horizontal flip. Main-editor
+   and Paint Undo use the same held-preview transaction; Redo restores it. Full image
    borrows source colors, Texture only borrows light/dark detail while retaining
    the painted color, and Highlights only adds the bright source detail.
 6. Select a connected piece, a whole geoset, faces by dragging, or pixels on the

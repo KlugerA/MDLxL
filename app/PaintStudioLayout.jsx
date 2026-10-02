@@ -1,4 +1,4 @@
-import React from 'react';
+import React,{useLayoutEffect,useRef} from 'react';
 import {Brush,Stamp,Blend,Eraser,MousePointer2,Undo2,Redo2,Scissors,BookmarkPlus,Check,X,Focus,Eye,Pipette} from 'lucide-react';
 
 function Slider({label,value,min=0,max=1,step=.01,onChange,suffix=''}){
@@ -11,6 +11,8 @@ const swatches=['#d9b451','#9ea9b2','#722a25','#324c70','#5c7950','#653e28','#df
  * selecting the surface. Persistence and projection remain in the workspace. */
 export default function PaintStudioLayout(p){
   const {project,brush,material,tool}=p;
+  const controls=useRef();
+  useLayoutEffect(()=>{if(controls.current)controls.current.scrollTop=0;},[tool,material?.id]);
   const limited=p.region||p.targetMode==='geoset'||p.textureRegion;
   return <div className={'paint-workspace paint-studio'+(!project?' paint-setup':'')} style={p.style} onKeyDownCapture={e=>{
     if(p.dialog||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.tagName==='INPUT'&&!/number|range/.test(e.target.type))return;
@@ -19,7 +21,7 @@ export default function PaintStudioLayout(p){
   }}>
     {project&&<>
       <header className="paint-toolbar studio-toolbar"><strong>Citadel Paint</strong><div className="studio-tools" role="group" aria-label="Painting tools">{tools.map(([id,label,Icon])=><button key={id} aria-pressed={tool===id} disabled={p.disabled} onClick={()=>p.onTool(id)}><Icon size={16}/>{label}</button>)}</div><span className="paint-toolbar-spacer"/><button title="Frame model" aria-label="Frame model" onClick={p.onFrame}><Focus size={16}/></button><button aria-pressed={p.original} onClick={p.onOriginal}><Eye size={16}/>Original</button></header>
-      <aside className="paint-panel paint-left studio-controls"><fieldset disabled={p.disabled}>
+      <aside ref={controls} className="paint-panel paint-left studio-controls"><fieldset disabled={p.disabled}>
         <section className="studio-tool-intro"><h3>{tool==='stamp'?'Place an image':tool==='blend'?'Blend your brushwork':tool==='erase'?'Erase paint':tool==='sample'?'Pick a color':tool==='select'?'Choose where to work':'Paint with color'}</h3><p className="paint-help">{tool==='stamp'?'Choose a texture. Click or drag on the model to preview it.':tool==='blend'?'Drag through colors to soften edges and pull them together.':tool==='erase'?'Remove marks from the active layer. The skin underneath stays intact.':tool==='sample'?'Click the model or texture to pick up its color.':tool==='select'?'Pick a part without taking the model apart.':'Paint on the model or its texture below.'}</p></section>
         {tool==='select'?<section><div className="studio-choices">{[['piece','Connected piece'],['geoset','Whole geoset'],['faces','Brush faces']].map(([id,label])=><button key={id} aria-pressed={p.selectionKind===id} onClick={()=>p.onSelectionKind(id)}>{label}</button>)}</div><p className="paint-help">{p.selectionKind==='faces'?'Drag across faces to include them. Shift-drag removes faces.':'Click the piece you want to work on.'}</p><button className="studio-primary" disabled={!limited} onClick={()=>p.onTool(material?'stamp':'paint')}>Use selection</button><button onClick={p.onTextureMask}>Select on texture…</button></section>:<>
           {tool==='paint'&&<section><label className="paint-color">Color<input aria-label="Paint color" type="color" value={brush.color} onChange={e=>p.onBrush({color:e.target.value})}/></label><button onClick={()=>p.onTool('sample')}><Pipette size={14}/>Pick color from model</button><div className="studio-swatches">{swatches.map(color=><button key={color} aria-label={'Color '+color} style={{background:color}} onClick={()=>p.onBrush({color})}/>)}</div></section>}
