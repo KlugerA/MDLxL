@@ -11,7 +11,7 @@ No merge or release is authorized.
   part selection/UV adjustment. Follow the user's latest workflow feedback;
   held-stamp confirmations and the earlier Autoaim design are superseded.
 - The user explicitly resumed with “Go ahead” after the reset. This phase began
-  at 0 percent used; the latest observed shared meter is 7 percent used on
+  at 0 percent used; the latest observed shared meter is 8 percent used on
   3 October 2026. Another 50 percentage points were authorized, not a requirement
   to waste the entire allowance. The earlier 19:00 boundary/reset wait belonged
   to the exhausted phase and was superseded by this direct later resume.
@@ -23,8 +23,8 @@ No merge or release is authorized.
 - Worktree: `C:/Users/PC/.codex/worktrees/citadel-native-paint/MDLxL`.
   Branch: `codex/citadel-native-paint`. Original base: 9e9a41c, v0.16.0.
 - Main advanced to 386453a (EMTR ribbon attachment fix) during this phase.
-  Integrate it into this feature branch and regenerate hashed dist to resolve
-  the generated bundle conflict; do not change the main checkout or branch.
+  Its fix is integrated into this feature branch with regenerated hashed dist.
+  The main checkout remains on codex/model-tabs at 85b7cec, untouched.
 - No merge of the Paint PR, release, version bump, offline install replacement,
   deletion of personal files, or announcement is authorized.
 
@@ -51,8 +51,9 @@ WarmKeys checks, seven Electron workflows, build and package checks. Both suppli
 MDX800 models keep their original file hashes and exported rig/animation data.
 The editable study is `out/citadel-audit/demo-1790979188839/Gold-footman-study.mdlxlpaint`.
 
-Before handoff: integrate current main, rebuild/check the final bundle, inspect
-only intended changes, push the feature branch and refresh the existing PR.
+Current main is integrated; the regenerated bundle passed the Paint interaction
+and save/reopen flows and six emitter regression tests. The feature branch and
+existing PR are the review handoff.
 Verify its actual merge state and main containment; do not call this merged or
 user-accepted while the PR is open. Open the latest tester last.
 
