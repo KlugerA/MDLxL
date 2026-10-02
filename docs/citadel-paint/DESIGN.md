@@ -1,41 +1,79 @@
-# Citadel native painting audit and design
+# Citadel Paint remake
 
-## Reference observations
+## Product direction
 
-Local Longbowman Blacksmith Speedpaint, 20:56.97, 1280×720/30fps. Viewed broad contact sheet across the video plus exact sequences at 1:16/18/20/22, 8:42/44/46/48, and 15:50/52/54/56. These show short strokes followed by smudge passes, painting in either the model or flat texture, rapid orbit/zoom inspection, and persistent texture-set/brush/layer context. The texture is never merely a library thumbnail: it is the live other view of the same work.
+The current request replaces the earlier Autoaim direction. Build a compact,
+responsive model-painting editor for Warcraft III SD: easy enough to understand
+by playing, capable enough to reskin an entire model with imagery, cutouts,
+brushwork and colors. The emitter editor is the usability benchmark. Keep the
+existing main editor and shared camera conventions.
 
-## Proven baseline
+The reference video is the local Longbowman Blacksmith speedpaint,
+`C:\Users\PC\Downloads\videoplayback (1).mp4`, 20:56.97 at 1280x720/30fps.
+Viewed sequences show short strokes followed by blending, painting in either
+model or texture view, fast orbit/zoom, and persistent sources and layers.
+The feedback recording `electron_21lGSOeZ8X.mp4` shows the shield's small UV
+allocation producing poor direct stamps. The automatic whole-skin atlas and
+later Autoaim UI were both rejected; neither is the new workflow.
 
-Base `9e9a41c` running tracked v0.16.0 dist in an isolated profile, unchanged `Downloads/Footman (Original).mdx` (MDX800). Installed native Footman/Grunt/Blacksmith are MDX1800, outside Citadel's existing entry gate; they were extracted read-only and were not repaired or converted for proof. The repository's Tzeentch Knight MDX800 fixture also opens the baseline Paint workspace.
+## Current interaction
 
-- Current Skin and New basecoat are distinct; setup defaults to a new blank coat.
-- Model and texture views alternate. Flat view is hidden/unmounted when painting in 3D.
-- Destination labelled Material, separate source labelled Texture, while Use for whole model remains prominent. Native library is hidden beneath Library options.
-- Current Skin resamples all sources into global 256/512 square rasters. Missing source images silently become neutral primer.
-- `enablePaintMaterials` / `materialTemplate` retain only the first static image plus some preceding team-colour layers, removing other source layers from the working view. Original source bytes remain separate but this is not appearance preservation.
-- Fresh cropped imagery uses exactStamp projection, but the held cursor is an undistorted DOM image. Actual projection selects destination texels, including repeated/mirrored/degenerate UVs, so that overlay cannot predict the visible result.
-- Texture brushing samples imagery relative to each dab and averages along movement. Repeated dabs smear and slide details. ExactStamp is also repeated along a drag with flow reduction.
-- Projection cache retains a map for every camera pose. Preparing surfaces includes full UV coverage, depth and seam work; cold cost and warm responsiveness must be distinguished.
-- Existing fresh UV atlas is only created during blank setup/new blank material. It appends a UV set, duplicates seam vertices with rig streams and leaves prior UV sets available. No per-stroke rewrapping occurs.
+1. Open Paint; choose **Edit the texture** or **New base coat** and its color.
+2. Paint, Stamp, Blend, Erase, and Select are the five main tools. The model and
+   live texture remain together, with an adjustable divider.
+3. Color painting has size, opacity, softness, swatches and an eyedropper.
+   Blend carries pigment between visible selected pixels. Erase removes marks
+   from the active paint layer, retaining the original skin beneath it.
+4. Choose one of five native starter sources, open the Warcraft library, or
+   import an image. Cut rectangle/ellipse/lasso/polygon/wand selections. Small
+   images open enlarged. Keep saves a PNG to the user's own library; Copy a
+   patch grabs the current painted texture for another stamp.
+5. Stamp holds a real mapped preview until Apply/Enter or Cancel/Escape.
+   Drag to move; adjust size, opacity, rotation and horizontal flip. Full image
+   borrows source colors, Texture only borrows light/dark detail while retaining
+   the painted color, and Highlights only adds the bright source detail.
+6. Select a connected piece, a whole geoset, faces by dragging, or pixels on the
+   texture. Shift subtracts faces. Selection survives switching tools; isolate
+   and color-fill remain in the same editor.
+7. Shared texture pixels can be deliberately made independent. Copy the
+   selection's existing strip beside the complete original skin, with gutters;
+   do not pack the entire model into new charts. Duplicate boundary vertices
+   through the mesh editor's stream copier; preserve positions, normals,
+   binding streams, other UV sets and geoset count. Undo restores the old state.
+8. Layer and destination controls are collapsed. UV adjustment is a deliberate
+   toggle. Resize texture preserves layout and aspect ratio. Save project,
+   Export, and Use paint remain separate existing persistence paths.
 
-Baseline captures initially live in the task visualization folder and will be copied into `out/citadel-audit`. `baseline-color-timing.json` measures renderer pointermove to two animation frames, not physical input-to-photon. First stroke included a 177 ms long task; warm frame samples were about 5–6 ms on this machine. Repeat the same protocol after changes and report bounds accurately.
+## Pixel and performance rules
 
-## Chosen interaction
+- Existing skins default to a 512-pixel working copy, nearest scaled only when
+  smaller. The authored arrangement, aspect ratio and source files remain.
+  Hidden corpse targets stay native. Texture detail offers Native for exact
+  pixel work and 1024 for finer work. This is a working-copy resolution choice,
+  not a per-stamp camera compensation or automatic UV repack.
+- Blank base coats use the existing fresh paint mapping and explicit solid RGBA
+  color. That mode intentionally creates a new paintable skin.
+- Stamp source coordinates come from destination texel centers. Seam gutters
+  and magnified screen footprints are fallback samples; they must not pull
+  source imagery toward the stamp center. Preview and Apply use the same code.
+- Compatible RGBA8 PNGs use the lossless project decoder. Browser canvas
+  premultiplication must not round feathered cutout colors during reuse.
+- UV seam coverage clips each scanline to the edge's actual filter footprint.
+  Exact depth lookup uses small screen bins. The cache is bounded by current
+  pose/selection, and screen tiles are generated only near a gesture.
 
-Keep both views in the existing center column with an adjustable split; preserve outer sidebar widths and shared camera controls. Label destination and source distinctly. Current Skin defaults to preserving authored pixels, dimensions, layers, UV sets and material properties. Show live coats in the existing sidebar.
+## Limits and remaining design work
 
-Native source recipes (path, reference dimensions and rectangle provenance) form the starter shelf; load their pixels from the configured game data. No synthetic replacement assets or fabricated native substitutes. Full native library remains directly accessible during the session. Cropping returns to the same target, camera, coat and undo history. Whole-image and cropped sources support an explicit Brush/Detail application choice: anchored repeating strokes versus one movable, mapped placement per gesture. Use the same CPU texel projection and compositing for held preview and commit.
+Automated UI coverage is not the user's acceptance. A mathematically collapsed
+UV or a subpixel-wide strip cannot encode a detailed picture while retaining
+that mapping. Shared pixels still share paint unless explicitly separated.
+The synthetic stretched/collapsed tests prove coverage and preview/history
+consistency, not attractive artwork. Do not claim arbitrary UV fidelity from
+those tests. The independently selected Footman shield has a visibly usable
+chainmail preview; unrestricted stamping can still affect shared authored UVs.
 
-Current-skin setup and painting retain authored mappings. The user's follow-up video, `electron_21lGSOeZ8X.mp4` (15.06 s), exposes the limiting case: a large shield surface samples a small skin region. The user clarified that the original projection was about 85% right and valuable for pixel-perfect work; it should remain available unchanged. The sword needed little compensation, while the shield needed more texture zoom.
-
-The first tester's automatic 1024 atlas/rebake was rejected: it chopped up the bottom texture and added lag. That mechanism and its staging/history code have been removed. **Autoaim**, off by default beside Brush Zoom, is now the only automatic compensation. It scales source imagery using the screen-to-texel stretch of the hit face, not the worst face anywhere on the model. It updates as the pointer changes faces, including within a stroke. A closer camera increases compensation; flat texture painting remains literal. The user's chosen zoom remains the baseline, and preview/commit use the same effective scale. Autoaim never resizes a destination, changes UVs or rebakes coats.
-
-Face regions and destination pixel masks restrict placement on the unchanged mapping. The explicit surface preparation dialog remains a deliberate separate operation. Its unsupported animated UVs, malformed vertex streams and undo-budget limits report errors before canonical mutation. Shared authored texels remain shared unless the user deliberately changes their mapping.
-
-Retire all old stock images and seeding. Remove old disk copies only at known seed paths whose SHA-256 matches the shipped source; modified, renamed, personal and project files survive. Keep traceable CC0 brush masks, which are not the retired texture collection.
-
-## Verification boundary
-
-Focused geometry/raster/history/preservation regressions plus rebuilt Electron pointer workflows on flat/curved/seamed/shared UVs, texture switching, native crop selection, ordinary colors, repeated coverage, orbit, undo/redo, preset and model save/reopen. Use isolated profiles and unchanged source fixtures. Screenshot comparison proves rendered output; automated checks do not establish the AFK user's acceptance or native Warcraft runtime fidelity.
-
-See [VERIFICATION.md](VERIFICATION.md) for current measured results and remaining limits. Native source images and the supplied models stay in ignored local evidence directories, outside the PR.
+Continue improving these limits based on actual images and model preservation,
+without bringing back the rejected global atlas or adding Autoaim controls.
+No native Warcraft runtime playtest has been performed. New visible strings
+are currently English. Other existing scene/view data is retained when opening
+projects, but the remake intentionally focuses its visible controls on painting.

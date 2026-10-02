@@ -1,25 +1,6 @@
 import { blendPaintPixel, rgbaColor } from './paint-raster.js';
 import { preparePaintSurface, paintSurfaceTile } from './paint-projection.js';
-
-/** Screen footprint of one destination texel on the face under the pointer.
- * Autoaim changes only source zoom, never the UV layout or destination raster.
- * The largest singular value also accounts for stretched/oblique mappings. */
-export function paintSourcePixelScale(projection,raster,hit=null){
-  let scale=0;
-  for(const triangle of projection.triangles||[]){
-    if(hit&&(triangle.geosetIndex!==hit.geosetIndex||triangle.faceIndex!==hit.triangle))continue;
-    const [a,b,c]=triangle.screen,[u,v,w]=triangle.uv;
-    const points=[a,b,c];
-    if(points.some(p=>p.w<=0)||points.every(p=>p.x<0)||points.every(p=>p.x>projection.width)||points.every(p=>p.y<0)||points.every(p=>p.y>projection.height))continue;
-    const ux=(v.x-u.x)*raster.width,uy=(v.y-u.y)*raster.height,vx=(w.x-u.x)*raster.width,vy=(w.y-u.y)*raster.height,det=ux*vy-uy*vx;
-    if(Math.abs(det)<1e-8)continue;
-    const dx=b.x-a.x,dy=b.y-a.y,ex=c.x-a.x,ey=c.y-a.y;
-    const p=(dx*vy-ex*uy)/det,q=(ex*ux-dx*vx)/det,r=(dy*vy-ey*uy)/det,s=(ey*ux-dy*vx)/det;
-    const aa=p*p+r*r,bb=q*q+s*s,ab=p*q+r*s;
-    scale=Math.max(scale,Math.sqrt((aa+bb+Math.hypot(aa-bb,2*ab))/2));
-  }
-  return scale;
-}
+import { borrowPaintPixel } from './paint-borrow.js';
 
 export function paintDecalTransform(source,brush,dragging=false) {
   const longest=Math.max(1,source.width,source.height),size=Math.max(1,Number(brush.size)||longest),zoom=Math.max(.01,Math.min(64,Number(brush.zoom)||1)),scale=size/longest*zoom;
@@ -46,20 +27,25 @@ export function pastePaintDecal(target,source,center,transform,mask=null) {
 }
 export function projectPaintDecal(target,projection,source,center,transform,flagsOrOptions=0) {
   const options=typeof flagsOrOptions==='object'?flagsOrOptions:{flags:flagsOrOptions},flags=Number(options.flags)||0,mask=options.mask,tint=rgbaColor(options.filterColor||'#ffffff');
-  const {bins,tileSize,columns}=preparePaintSurface(projection,target,flags),sample=decalSampler(source,center,transform),color=[0,0,0,0],radius=Math.hypot(transform.width,transform.height)/2;let changed=0;
+  const surface=preparePaintSurface(projection,target,flags),{tileSize,columns}=surface,sample=decalSampler(source,center,transform),color=[0,0,0,0],radius=Math.hypot(transform.width,transform.height)/2;let changed=0;
   // Mirrored faces and seam filter samples may address one texture pixel many
   // times. A placed cutout is one operation, so blend that pixel only once.
   const selected=new Map();
   for(let ty=Math.max(0,Math.floor((center.y-radius)/tileSize));ty<=Math.min(Math.ceil(projection.height/tileSize)-1,Math.floor((center.y+radius)/tileSize));ty++)for(let tx=Math.max(0,Math.floor((center.x-radius)/tileSize));tx<=Math.min(columns-1,Math.floor((center.x+radius)/tileSize));tx++){
     const points=paintSurfaceTile(projection,target,flags,tx,ty);if(!points)continue;
+    const ranks=surface.sampleRanks?.get(ty*columns+tx);
     for(let i=0;i<points.length;i+=3){
-      const offset=sample(points[i],points[i+1]);if(offset<0||!source.data[offset+3])continue;
-      const pixel=points[i+2];if(mask&&!mask[pixel])continue;const distance=(points[i]-center.x)**2+(points[i+1]-center.y)**2,previous=selected.get(pixel);
-      if(!previous||source.data[offset+3]>source.data[previous.offset+3]||source.data[offset+3]===source.data[previous.offset+3]&&distance<previous.distance)selected.set(pixel,{offset,distance});
+      const offset=sample(points[i],points[i+1]);if(offset<0)continue;
+      const pixel=points[i+2];if(mask&&!mask[pixel])continue;const distance=(points[i]-center.x)**2+(points[i+1]-center.y)**2,rank=ranks?.[i/3]??2,previous=selected.get(pixel);
+      // Texel-center projections define the image. Filter footprints are only
+      // a fallback for edges, magnified cells and collapsed mappings. Letting
+      // those footprints win pulls the source toward the center of the stamp.
+      if(!previous||rank>previous.rank||rank===previous.rank&&distance<previous.distance)selected.set(pixel,{offset,distance,rank});
     }
   }
   for(const [pixel,{offset}] of selected){
     for(let c=0;c<3;c++)color[c]=Math.round(source.data[offset+c]*tint[c]/255);color[3]=source.data[offset+3];
+    if(options.borrowMode&&options.borrowMode!=='image'&&options.reference)borrowPaintPixel(source,offset,options.reference,pixel,options.borrowMode,color);
     if(blendPaintPixel(target.data,pixel*4,color,(transform.opacity??1)*(mask?mask[pixel]/255:1),options.mode==='erase'?'erase':'paint')){
       changed++;if(options.dirtyRows){const x=pixel%target.width,row=Math.floor(pixel/target.width)*2;options.dirtyRows[row]=Math.min(options.dirtyRows[row],x);options.dirtyRows[row+1]=Math.max(options.dirtyRows[row+1],x);}
     }

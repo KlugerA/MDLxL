@@ -57,7 +57,15 @@ export function forEachPaintUVEdgeTexel(a,b,width,height,flags,visit){
   const margin=1;
   const minX=Math.max(flags&1?-width*4:0,Math.floor(Math.min(ax,bx)-margin)),maxX=Math.min(flags&1?width*4:width-1,Math.ceil(Math.max(ax,bx)+margin));
   const minY=Math.max(flags&2?-height*4:0,Math.floor(Math.min(ay,by)-margin)),maxY=Math.min(flags&2?height*4:height-1,Math.ceil(Math.max(ay,by)+margin));
-  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+  for(let y=minY;y<=maxY;y++){
+    // Clip the segment to this row's bilinear footprint first. A diagonal
+    // edge touches a thin strip, not every pixel in its bounding rectangle.
+    let rowFrom=0,rowTo=1;
+    if(Math.abs(dy)<1e-12){if(Math.abs(ay-y-.5)>1)continue;}
+    else{const first=(y-.5-ay)/dy,last=(y+1.5-ay)/dy;rowFrom=Math.max(0,Math.min(first,last));rowTo=Math.min(1,Math.max(first,last));if(rowFrom>rowTo)continue;}
+    const firstX=ax+dx*rowFrom,lastX=ax+dx*rowTo;
+    const left=Math.max(minX,Math.floor(Math.min(firstX,lastX)-margin)),right=Math.min(maxX,Math.ceil(Math.max(firstX,lastX)+margin));
+    for(let x=left;x<=right;x++){
     // Bilinear sampling uses this texel while the UV point lies inside the
     // one-texel square around its centre. Keep that interval along the edge,
     // not just a point: at high zoom the interval can be wider than the brush.
@@ -68,5 +76,6 @@ export function forEachPaintUVEdgeTexel(a,b,width,height,flags,visit){
       from=Math.max(from,Math.min(first,last));to=Math.min(to,Math.max(first,last));
     }
     if(from<=to)visit(mod(x,width),mod(y,height),from,to);
+    }
   }
 }

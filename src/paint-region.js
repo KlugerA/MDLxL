@@ -4,6 +4,16 @@ export function regionPaintTarget(target,region,scope=null){
   return {...target,coverageBindings:target.coverageBindings||target.bindings,bindings:target.bindings.filter(b=>(scope==null||b.geosetIndex===scope)&&(!region||b.geosetIndex===region.geosetIndex)).map(b=>region?{...b,faceIndices:region.faces}:b)};
 }
 
+/** View-only face isolation. Keep original face IDs for picking/projection;
+ * the model's geometry, UVs and parallel vertex streams are not rewritten. */
+export function isolatePaintRegion(model,region){
+  if(!region)return model;
+  const geo=model.Geosets[region.geosetIndex];if(!geo)return model;
+  const ids=[...region.faces].filter(id=>Number.isInteger(id)&&id>=0&&id<geo.Faces.length/3).sort((a,b)=>a-b),Geosets=[...model.Geosets];
+  Geosets[region.geosetIndex]={...geo,Faces:new geo.Faces.constructor(ids.flatMap(id=>Array.from(geo.Faces.subarray(id*3,id*3+3)))),paintFaceIndices:ids};
+  return {...model,Geosets};
+}
+
 export function connectedPaintFaces(geo,seed){
   const count=geo.Faces.length/3;if(!Number.isInteger(seed)||seed<0||seed>=count)return new Set();
   const positions=Array.from({length:geo.Vertices.length/3},(_,i)=>Array.from(geo.Vertices.subarray(i*3,i*3+3)).map(v=>Math.round(v*1e5)).join(',')),edges=new Map(),faceEdges=[];

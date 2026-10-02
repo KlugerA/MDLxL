@@ -1,42 +1,67 @@
-# Citadel native Paint working lane
+# Citadel Paint working lane
 
-Status: first tester rejected for lag and chopped-up destination layout; the correction restores original mapping and adds optional **Autoaim**. Ready for the next user test. [PR #73](https://github.com/KlugerA/MDLxL/pull/73) remains the open, attached review branch. User acceptance and merge are pending.
+Status: the **new Paint editor** is implemented and undergoing AFK verification.
+The previous Autoaim iteration is superseded. User acceptance remains pending.
+[PR #73](https://github.com/KlugerA/MDLxL/pull/73) is the attached review lane.
 
-## Authority and baseline
+## Authority and workspace
 
-- Task: coherent native-WC3 painting, simultaneous model/texture feedback, preserved existing skins, trustworthy mapped detail preview, useful region restriction, complete running-app validation, reviewable PR.
-- Earlier proposed Painting/Stamping, exact dimensions, object sensitivity and Laser Cropping are withdrawn prescriptions. Design from the intended work.
-- Managed attached worktree: `C:\Users\PC\.codex\worktrees\citadel-native-paint\MDLxL`.
-- Feature branch: `codex/citadel-native-paint`; base online main `9e9a41cc3aa7ac6dfda2277ba5c578ad556340f8` (v0.16.0).
-- Primary checkout remains on unrelated `codex/model-tabs` at `85b7cec04aa31c1a676b4d54eefd1feccc834fa1`. No open PRs at startup.
-- No merge, release/version bump, offline upgrade, or announcements authorized. User has returned with feedback; make one visible correction and await their result.
+- User authorizes a remake: a powerful, approachable toy-like model painter for
+  WC3 SD, with five starter textures, a personal library, native/file images,
+  cutting/stamping, color painting/blending, and selection within Paint.
+- Use the remaining current allowance while the user is AFK. Latest request:
+  finish the remaining 10%, then await their reset in about four hours. After
+  direct reset/resume, another **50 percentage points** are authorized. The old
+  40-point/reserve split is superseded. Do not switch models or spawn agents.
+- Initial lane baseline was 69% used; remake began around 86%. Latest observed
+  shared meter is **92% used / 8% remaining**, 2 October 2026. This rounded
+  account-wide meter is not precise per-chat attribution. Recheck before stop.
+- Earlier 19:00 Amsterdam boundary remains unless the user changes it.
+- No scheduled wake-up or automatic continuation after a reset. Await the
+  user's direct reset/resume message. Preserve progress before exhaustion.
+- **Opening the latest built program for the user is the last operational
+  action before waiting.** Complete checks, documents, push, PR and quota work
+  first. Use a fresh profile and unchanged original Footman. Do not close prior
+  user tester windows or overwrite their files.
+- Managed worktree: `C:\Users\PC\.codex\worktrees\citadel-native-paint\MDLxL`.
+  Branch: `codex/citadel-native-paint`; base main `9e9a41c` (v0.16.0).
+- Primary checkout remains on unrelated `codex/model-tabs` at `85b7cec`.
+  Preserve its state and this worktree's user-owned untracked `Textures/`.
+- No merge, release, version bump, offline installation change or announcement
+  is authorized. Push this feature branch and attach the PR; do not merge.
 
-## Mandatory allowance and stop boundaries
+## Current implementation
 
-- Initial live shared meter: **69% used / 31% remaining**, 2 October 2026 09:27 Amsterdam. Rechecked at ~09:33: still 69%.
-- Initial phase: at most the available 31 percentage points. Shared rounded readings are conservative allowance observations, not exact per-chat attribution or an enforceable quota.
-- Stop at a useful checkpoint before exhaustion, completed reviewable work, or **19:00 Amsterdam on 2 October**, whichever comes first. If meter unavailable, checkpoint rather than work blind.
-- No automatic continuation after any reset and no scheduled wake-up. Await direct user resume.
-- Phase two, only after direct resume: fresh baseline, at most 40 additional points, cumulative maximum 71. Keep prior consumption across reset. Other account use counts against availability.
-- Separate 10-point GPT-6.1 Sol High reserve is unauthorized until newly requested. Do not launch or switch into it.
-- Only confirmed regular weekly reset: 7 October 2026 20:19:55 Amsterdam. Promotional reset unverified.
+See [DESIGN.md](DESIGN.md) for the accepted direction, current mechanics and
+honest limits. The new layout is `app/PaintStudioLayout.jsx`; the existing
+workspace owns paint state, projection and persistence. The old Autoaim UI and
+helper are removed. Its obsolete Electron harness and the superseded native
+workflow harness are replaced by studio, library, brushes and surface coverage.
 
-## Delivered in phase one
+Current features: simultaneous model/texture views; paint, held adjustable
+stamps, blending and erasing; full-image/texture/highlight borrowing; native
+starters and a user library; enlarged cutouts; exact PNG reuse; whole-geoset,
+connected-piece, face and texture selection; view isolation; explicit
+independent selection pixels without splitting geosets; undo, portable project,
+Warcraft archive and ordinary MDX save/reopen.
 
-- Read project AGENTS, accepted particle editor HANDOFF and USER-FEEDBACK, and earlier crop fix evidence. Earlier crop tests did not establish visible acceptance.
-- Reference: local `C:\Users\PC\Downloads\videoplayback (1).mp4`, 142811284 bytes, 1280x720, 30 fps, duration 20:56.97. Audit captures under ignored `out/citadel-audit/reference`.
-- Simultaneous model and live texture views in the existing center; fixed outer sidebar widths; direct native library/crop access, destination selection and visible coats.
-- Current-skin setup preserves native dimensions and complete authored materials, including team colour and extra image layers. Missing skin data reports an error.
-- Twelve native source recipes, including cinematic Footman chainmail. Game pixels resolve from the configured installation; none are bundled. Old stock runtime/seeding and 180 shipped texture/variant PNGs are retired. Disk deletion requires both exact historical path and SHA-256; personal, renamed or modified files survive.
-- Anchored repeated texture coverage and one-placement Detail gestures. The held result runs through the actual texel projection, compositor and texture upload path.
-- **Autoaim** is off by default. Off retains the literal selected zoom; on adds local source zoom compensation for the hit face. Shield and sword use different compensation. Original destination size/layout, geometry and UVs remain unchanged during hover/painting. The rejected automatic atlas/rebake and its history path were removed. Explicit surface preparation remains available as a separate user action.
-- Lossless editable layer persistence, native-size/rectangular destinations, rig-stream-preserving mapping changes and source-preserving model export. Ordinary MDX save and desktop reopen exercised.
-- [VERIFICATION.md](VERIFICATION.md) records commands, captures, hashes, timing boundaries and limitations. [DESIGN.md](DESIGN.md) records why the user's direct shield-painting feedback changed the first-placement mechanism.
+Meaningful corrections found during actual UI checks include source coordinates
+being displaced by filter footprints, transparent PNG rounding, and selected
+base-coat colors receiving incorrect alpha. All have targeted verification.
 
-## Phase checkpoint and continuation
+## Evidence and next work
 
-- Final handoff allowance observation: **83% used / 17% remaining**, 11:56 Amsterdam, 2 October. That is 14 rounded shared points above the phase baseline of 69%; it is not exact per-thread consumption. Phase one stops at its reviewable checkpoint, before quota exhaustion.
-- Implementation commit: `aba23fe`; final handoff notes follow on the same branch. PR #73 remains open; do not merge without user authorization. No release/version or offline installation changes are part of this phase.
-- Feedback continuation allowance: **85% used / 15% remaining**, 12:22 Amsterdam, 2 October; 16 rounded shared points above the initial 69% baseline. No reset or second phase was invoked.
-- Open the corrected build as the last operational action after checks/handoff. Use a separate profile and the unchanged original Footman, with chainmail selected and Autoaim off. Keep earlier windows/user edits intact.
-- Await the user's next visible result. Do not schedule continuation after a reset. User acceptance and native Warcraft runtime acceptance remain open.
+[VERIFICATION.md](VERIFICATION.md) lists the latest runs. Original Footman
+SHA-256 remains `7ee255776a6e757bd89766354df763201cd0519c488585b7c30151d5e313fc13`.
+Native installed Footman/Grunt/Blacksmith model files are MDX1800 and were not
+converted to manufacture compatibility evidence. Use actual MDX800 fixtures.
+
+Before handoff: repeat affected UI flows after any final edits, rebuild tracked
+dist, retain only intended source/dist changes, push the review branch, refresh
+PR title/body around the remake, inspect its open/unmerged state and main,
+record the final quota reading, then launch the latest editor visibly LAST.
+Do not call this user-accepted or complete integration while the PR is open.
+
+Prioritize remaining work from actual visual results: compressed/shared mapping
+behavior, a representative finished reskin, and cold-gesture responsiveness.
+Do not spend the remaining allowance only repeating already-passing tests.

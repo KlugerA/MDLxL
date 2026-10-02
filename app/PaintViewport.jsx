@@ -314,7 +314,8 @@ export default function Viewport(inputProps) {
       }
       if (bounds.isEmpty()) for (const [index, geo] of (p.model?.Geosets || []).entries()) {
         if (p.paintWorkspace && p.hiddenGeosets?.has(index)) continue;
-        for (let i = 0; i < geo.Vertices.length; i += 3) bounds.expandByPoint(new THREE.Vector3().fromArray(geo.Vertices, i));
+        const vertices=p.paintWorkspace?new Set(geo.Faces):Array.from({length:geo.Vertices.length/3},(_,i)=>i);
+        for (const vertex of vertices) bounds.expandByPoint(new THREE.Vector3().fromArray(geo.Vertices, vertex*3));
       }
       if (bounds.isEmpty()) bounds.set(new THREE.Vector3(-50, -50, 0), new THREE.Vector3(50, 50, 100));
       bounds.getCenter(state.center); state.radius = Math.max(1, bounds.getSize(new THREE.Vector3()).length() / 2);
@@ -326,6 +327,20 @@ export default function Viewport(inputProps) {
       perspective.position.copy(state.center).addScaledVector(direction.lengthSq() ? direction : new THREE.Vector3(1, -1.5, .9).normalize(), fitDistance);
       controls.target.copy(state.center); perspective.zoom = ortho.zoom = 1;
       resize(); state.setView(latest.current.view || 'front');
+      if(p.paintWorkspace&&camera===perspective){
+        // Frame the visible paint surface instead of wasting space on its
+        // bounding sphere, loose vertices, or hidden corpse/helper geometry.
+        const point=new THREE.Vector3();
+        for(let pass=0;pass<3;pass++){
+          perspective.lookAt(state.center);perspective.updateMatrixWorld(true);let extent=0;
+          for(const [index,geo] of (p.model?.Geosets||[]).entries())if(!p.hiddenGeosets?.has(index))for(const vertex of new Set(geo.Faces)){
+            point.fromArray(geo.Vertices,vertex*3).project(perspective);extent=Math.max(extent,Math.abs(point.x),Math.abs(point.y));
+          }
+          if(!Number.isFinite(extent)||extent<=0)break;
+          perspective.position.sub(state.center).multiplyScalar(extent/.84).add(state.center);
+        }
+        perspective.lookAt(state.center);perspective.updateMatrixWorld(true);invalidate();
+      }
     };
     state.setView = next => {
       state.appliedView = next;
@@ -465,7 +480,7 @@ export default function Viewport(inputProps) {
       // needs screen coordinates only, not another full-model raycast.
       if (down.action === 'paint') { if (down.paintHit) latest.current.onPaintMove?.({ screen: { x: rawEnd.x, y: rawEnd.y } }); return; }
       if(down.action==='paintLamp'){latest.current.onPaintLampChange?.(down.lamp.id,paintLampDrag(down.lamp,dx,dy,camera,rawEnd.width,rawEnd.height,down.lampMode,down.shift?(latest.current.preferences?.fineSensitivity??.2):1));invalidate();return;}
-      if (down.action === 'paintPick') return;
+      if (down.action === 'paintPick') { if(latest.current.paintSelectFaces){const hit=paintHit(event);if(hit)latest.current.onPaintPick?.(hit);} return; }
       if (down.action === 'anchor') {
         const distance = Math.hypot(rawEnd.x - down.x, rawEnd.y - down.y);
         if (distance > 5) {

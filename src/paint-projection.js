@@ -66,7 +66,7 @@ function projectedSeams(model,triangles){
 }
 
 function indexPaintDepth(triangles,width,height){
-  const tileSize=32,columns=Math.ceil(width/tileSize),rows=Math.ceil(height/tileSize),bins=new Map();
+  const tileSize=8,columns=Math.ceil(width/tileSize),rows=Math.ceil(height/tileSize),bins=new Map();
   for (const triangle of triangles) {
     const [a,b,c]=triangle.screen,denominator=(b.y-c.y)*(a.x-c.x)+(c.x-b.x)*(a.y-c.y);
     if(Math.abs(denominator)<1e-9)continue;
@@ -150,12 +150,12 @@ export function fillPaintMask(raster,mask,brush,{materialRaster=null,mask:techni
 export function preparePaintSurface(projection, raster, flags = 0) {
   const key = `${raster.width}:${raster.height}:${flags}`;
   if (projection.surface?.key === key) return projection.surface;
-  const tileSize = 32, columns = Math.ceil(projection.width / tileSize), bins = new Map(), cellSamples = new Map();
+  const tileSize = 32, columns = Math.ceil(projection.width / tileSize), bins = new Map(), cellSamples = new Map(),sampleRanks=new Map();
   const coverage=paintUVCoverage(projection.uvCoverage||projection.triangles.map(t=>t.uv),raster.width,raster.height,flags);
   const selectedCoverage=paintUVFilterCoverage(projection.triangles.map(t=>t.uv),raster.width,raster.height,flags);
-  const addSample=(sx,sy,sz,pixel,cellSample=1)=>{
+  const addSample=(sx,sy,sz,pixel,cellSample=1,rank=1)=>{
     if(sx<0||sy<0||sx>=projection.width||sy>=projection.height||sz< -1||sz>1||sz>sampleDepth(projection.depth,sx,sy)+1e-7)return;
-    const bin=Math.floor(sy/tileSize)*columns+Math.floor(sx/tileSize);let values=bins.get(bin);if(!values){bins.set(bin,values=[]);cellSamples.set(bin,[]);}values.push(sx,sy,pixel);cellSamples.get(bin).push(cellSample);
+    const bin=Math.floor(sy/tileSize)*columns+Math.floor(sx/tileSize);let values=bins.get(bin);if(!values){bins.set(bin,values=[]);cellSamples.set(bin,[]);sampleRanks.set(bin,[]);}values.push(sx,sy,pixel);cellSamples.get(bin).push(cellSample);sampleRanks.get(bin).push(rank);
   };
   for(const triangle of projection.triangles){
     const [p,q,r]=triangle.screen;
@@ -165,7 +165,7 @@ export function preparePaintSurface(projection, raster, flags = 0) {
       const sx=(u*p.x*p.w+v*q.x*q.w+w*r.x*r.w)/clipW,sy=(u*p.y*p.w+v*q.y*q.w+w*r.y*r.w)/clipW,sz=(u*p.z*p.w+v*q.z*q.w+w*r.z*r.w)/clipW;
       // Interior pixels use their own face projection, not a neighbouring
       // triangle's padded edge. Keep actual island gutters for seam filtering.
-      addSample(sx,sy,sz,pixel,gutter&&coverage[pixel]?0:1);
+      addSample(sx,sy,sz,pixel,gutter&&coverage[pixel]?0:1,gutter?1:2);
     },Math.SQRT2);
   }
   if(projection.seams?.length){
@@ -183,8 +183,8 @@ export function preparePaintSurface(projection, raster, flags = 0) {
       });
     }
   }
-  for (const [bin, values] of bins) {bins.set(bin, new Float32Array(values));cellSamples.set(bin,new Uint8Array(cellSamples.get(bin)));}
-  return projection.surface = { key, tileSize, columns, bins, cellSamples, sampledTiles:new Set() };
+  for (const [bin, values] of bins) {bins.set(bin, new Float32Array(values));cellSamples.set(bin,new Uint8Array(cellSamples.get(bin)));sampleRanks.set(bin,new Uint8Array(sampleRanks.get(bin)));}
+  return projection.surface = { key, tileSize, columns, bins, cellSamples, sampleRanks, sampledTiles:new Set() };
 }
 
 /** Resolve magnified texture pixels where the brush actually touches the face.
@@ -196,7 +196,7 @@ export function paintSurfaceTile(projection,raster,flags,tx,ty){
   const surface=preparePaintSurface(projection,raster,flags),{tileSize,columns,bins,sampledTiles}=surface,key=ty*columns+tx;
   if(!sampledTiles||sampledTiles.has(key))return bins.get(key);
   sampledTiles.add(key);
-  const x0=tx*tileSize,y0=ty*tileSize,x1=Math.min(projection.width,x0+tileSize),y1=Math.min(projection.height,y0+tileSize),points=Array.from(bins.get(key)||[]),cellSamples=Array.from(surface.cellSamples.get(key)||[]);
+  const x0=tx*tileSize,y0=ty*tileSize,x1=Math.min(projection.width,x0+tileSize),y1=Math.min(projection.height,y0+tileSize),points=Array.from(bins.get(key)||[]),cellSamples=Array.from(surface.cellSamples.get(key)||[]),sampleRanks=Array.from(surface.sampleRanks.get(key)||[]);
   const address=(value,size,wrap)=>wrap?(value%size+size)%size:Math.max(0,Math.min(size-1,value));
   for(const triangle of projection.triangles){
     const [a,b,c]=triangle.screen,denominator=(b.y-c.y)*(a.x-c.x)+(c.x-b.x)*(a.y-c.y);
@@ -219,10 +219,11 @@ export function paintSurfaceTile(projection,raster,flags,tx,ty){
         // Collapsed UVs have no separable surface pixels; retain their shared
         // colour behaviour when editing an existing texture.
         cellSamples.push(collapsedUV||i===Math.round(tu)-ix&&j===Math.round(tv)-iy?1:0);
+        sampleRanks.push(0);
       }
     }
   }
-  if(points.length){bins.set(key,new Float32Array(points));surface.cellSamples.set(key,new Uint8Array(cellSamples));}
+  if(points.length){bins.set(key,new Float32Array(points));surface.cellSamples.set(key,new Uint8Array(cellSamples));surface.sampleRanks.set(key,new Uint8Array(sampleRanks));}
   return bins.get(key);
 }
 

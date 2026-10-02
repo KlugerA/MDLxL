@@ -7,7 +7,7 @@ import {paintMessage as msg} from '../src/paint-messages.js';
 /** Selection tools operate on a copyable mask. Closing never changes the source asset. */
 export default function PaintCutoutEditor({source,onClose,onUse,onSave,onMask,initialMask}) {
   const {name}=source,raster=useMemo(()=>source.nativeSource?flattenPaintRasterAlpha(source.raster):source.raster,[source]),canvas=useRef(),maskCanvas=useRef(),drag=useRef(null);
-  const [tool,setTool]=useState('rectangle'),[operation,setOperation]=useState('replace'),[tolerance,setTolerance]=useState(32),[contiguous,setContiguous]=useState(true),[feather,setFeather]=useState(0),[zoom,setZoom]=useState(()=>onMask?[1,.5,.25].find(v=>raster.width*v<window.innerWidth-100&&raster.height*v<window.innerHeight-220)||.25:1);
+  const [tool,setTool]=useState('rectangle'),[operation,setOperation]=useState('replace'),[tolerance,setTolerance]=useState(32),[contiguous,setContiguous]=useState(true),[feather,setFeather]=useState(0),[zoom,setZoom]=useState(()=>[8,4,2,1,.5,.25].find(v=>raster.width*v<window.innerWidth-160&&raster.height*v<window.innerHeight-300)||.25);
   const [mask,setMask]=useState(()=>initialMask?new Uint8ClampedArray(initialMask):new Uint8ClampedArray(raster.width*raster.height).fill(255)),[points,setPoints]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const history=useRef([]),redo=useRef([]),[square,setSquare]=useState(false);
   useEffect(()=>{paintRasterCanvas(raster,canvas.current);},[raster]);

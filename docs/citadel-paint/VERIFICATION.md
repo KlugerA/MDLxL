@@ -1,57 +1,73 @@
-# Paint verification after Autoaim feedback
+# Citadel Paint remake verification
 
-Date: 2 October 2026. Base: `9e9a41cc3aa7ac6dfda2277ba5c578ad556340f8` (0.16.0). Feature branch: `codex/citadel-native-paint`. Tracked `dist` rebuilt for Electron. No release version changed.
+All local evidence lives under ignored `out/citadel-audit`. UI operations use
+real Playwright input in Electron. Fiber access observes state; it does not
+perform edits. Profiles and save outputs are isolated. The library harness uses
+the real `PaintTextureLibrary` with a fresh test root, never the user's shelf.
 
-The first tester was rejected for lag and UV repacking. Prior automatic-atlas screenshots/test passes are historical evidence, not user acceptance. The current correction restores the original texture layout and adds the requested optional Autoaim source zoom.
+## Current checks
 
-## Inputs and preservation
+- `node --test` on Paint test files: **127 passed** (two obsolete Autoaim tests
+  retired; new borrow, selection-space, spatial stamp-fidelity and seam parity
+  regressions included).
+- `node --test tests/*.test.js`: **56 passed**.
+- `node scripts/package.mjs --check`: runtime whitelist and bundled licenses
+  verified.
+- `node node_modules/vite/bin/vite.js build`: passed; existing large-chunk
+  advisory remains. Electron runs rebuilt tracked `dist`.
 
-- Supplied Classic fixture: `C:\Users\PC\Downloads\Footman (Original).mdx`, MDX800, five geosets. SHA-256 before and after: `7ee255776a6e757bd89766354df763201cd0519c488585b7c30151d5e313fc13`.
-- Configured native installation: `D:\Warcraft III`. Source recipes, crop rectangles, inspected image dimensions and provenance hashes are in `src/paint-assets.js`; the cinematic Footman chainmail crop is `(32,149,72,72)` from `humancampaignfootman.dds`.
-- Native models extracted for the read-only audit were MDX1800. Citadel's existing MDX800 gate was retained; no supplied model was converted or repaired to make a test pass.
-- Source pictures, videos and extracted models are local ignored evidence only. No game pixels or supplied model binaries were added to Git.
-- Asset retirement tests prove exact-path/exact-hash removal and survival of modified, renamed and personal files. The primary checkout and its personal texture folders remain untouched.
+## Running-app evidence
 
-## Automated checks
+| Harness | Latest evidence folder | Exercised |
+| --- | --- | --- |
+| `test/citadel-studio.electron.cjs` | `studio-1790946649919` | Five starters, 512/native dimensions, held stamp, rotation/size, exact preview/Apply/undo/redo/Cancel, red texture borrowing, geoset/connected selection, isolate, independent pixels with identical before/after model render, Blend, project/ZIP/ordinary MDX save and reopen |
+| `test/citadel-library.electron.cjs` | `library-1790946661046` | Native-size precision, exact RGBA PNG import, ellipse cutout, Keep to custom folder, lossless shelf reload, Copy a patch, native Warcraft library crop |
+| `test/citadel-brushes.electron.cjs` | `brushes-1790946669002` | Exact color brush and eyedropper, erasing without altering original/alpha mask, undo, texture-region clipping, face click/drag/Shift subtract, opaque gold base coat |
+| `test/citadel-surfaces.electron.cjs` | `surfaces-1790946674275` | Flat/shared, seam, curved, stretched and collapsed UV preview/Apply/undo; orbit and repeat; independent shared panel with unchanged rendered skin |
 
-```powershell
-$files = rg --files test | Where-Object { $_ -match 'paint.*\.test\.js$' }
-node --test $files
-node --test tests/*.test.js
-node node_modules/vite/bin/vite.js build
-node scripts/package.mjs --check
-```
+All four listed runs have no renderer page errors and include the cleanup of
+unreachable old controls and the obsolete Autoaim helper. Repeat affected runs
+if further edits are made before handoff. PNG import is tested with nonzero hidden RGB and
+fractional alpha, so byte equality is stronger than screenshot equality.
 
-Results: **120 Paint tests and 56 compatibility tests passed; production build and package check passed.** Coverage includes native rectangular pixels, complete material-layer preservation, every alpha value in portable PNG layers, deliberate UV rebaking, seam vertex/rig streams, atomic rejection, mask exclusion, brush projection, retirement provenance, and hit-face-only Autoaim scaling. Two obsolete automatic-preparation cases were removed with that mechanism; one local Autoaim regression was added. Compatibility results are recorded in `autoaim-compatibility.log`.
+The full studio save flow verifies exported MDX800 parses, ordinary Save As
+writes portable BLP files, and native file-open reopens those textures. The
+original supplied Footman bytes remain unchanged, SHA-256:
+`7ee255776a6e757bd89766354df763201cd0519c488585b7c30151d5e313fc13`.
 
-## Running Electron workflows
+## Performance measurements
 
-```powershell
-$env:MDLXL_PLAYWRIGHT_MODULE = 'C:/Users/PC/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'
-$env:MDLXL_PAINT_FIXTURE = 'C:/Users/PC/Downloads/Footman (Original).mdx'
-$env:MDLVIS_GAME_DATA = 'D:/Warcraft III'
-node test/citadel-native-paint.electron.cjs
-node test/citadel-autoaim.electron.cjs
-node test/citadel-surfaces.electron.cjs
-```
+Same isolated Footman studio sequence at 1280x920, background throttling off:
 
-These create isolated profiles and output folders beneath ignored `out/citadel-audit`, use actual pointer/UI edits, and observe state without mutating application internals. Native file dialogs are supplied deterministic test destinations; model opening goes through the desktop Open workflow so relative BLP resolution has the real model directory.
+- Before seam/depth optimization: `studio-1790944446776`, one 175 ms cold
+  long task in the paint phase. Warm brush/stamp event-to-two-rAF samples mostly
+  5-7 ms; one 44 ms brush sample.
+- Scanline seam clipping: `studio-1790945165098`, cold long task 119 ms.
+- Smaller exact-depth bins: `studio-1790945694201`, cold long task 97 ms.
+- CPU profiles are saved beside these runs when `MDLXL_PAINT_PROFILE=1`.
+  The seam function's sampled self time fell from about 54 to 18 ms; exact
+  depth from about 60 to 30 ms. These are individual same-machine runs, not
+  a broad benchmark or input-to-photon measurements. Cold pauses still exist.
 
-- `workflow-1790936498866`: all 13 workflow checks passed after removing automatic preparation. Both views/default skin/native dimensions; destination and coat switching; untouched canonical hover; preview/commit exact raw raster and 3D screenshot equality; moving Detail without a trail; exact undo/redo; ordinary colour; native-library crop return; manual preparation; connected region; exact protected destination pixels; portable preset save/reopen; Warcraft archive parse; Use Paint + ordinary MDX/BLP save + desktop UI reopen. No renderer exceptions. Chromium translucent canvas readback tolerance is at most one RGB level; authoritative coat/compositor bytes and rendered 3D screenshots match exactly.
-- `autoaim-1790936411704`: Autoaim defaults off and restores exact chosen zoom when disabled. Brush and Detail were exercised on shield and sword. In this camera pose, Brush zoom is 1.0 with Autoaim off, about 2.06 on the shield and 1.69 on the sword when on. Detail compensation is about 1.48 versus 1.22. Hover and committed pixels match; one ordinary paint Undo restores them. Assertions prove destination dimensions, bindings, UVs and geometry unchanged throughout hover, paint, undo and camera zoom. Moving between faces without changing the camera updates the compensation; flat texture painting stays literal. Captures were visually inspected with the original 256 texture layout intact. No renderer exceptions.
-- `surfaces-1790936581726` (`autoaim-surfaces.log`): all 10 checks passed: flat/shared, seam, curved, stretched, collapsed, orbit, and explicit unique-mapping variants. No renderer exceptions. The synthetic fixture is generated in the test and never replaces a supplied source.
+The seam parity test compares every returned texel and interval against a
+rectangle/slab reference over diagonal, horizontal, vertical, collapsed and
+repeated coordinates. Smaller depth bins do not approximate visibility.
 
-## Timing boundary
+## Evidence limits
 
-Baseline evidence: `out/citadel-audit/baseline2`. Renderer pointermove to two animation frames measured approximately 5–6 ms warm, p95 about 6.1 ms, max 12.5 ms; first colour stroke included a 177 ms long task.
+Preview equality does not mean a stretched/collapsed mapping can retain a rich
+source image. Those synthetic cases validate coverage and persistence only.
+The independently selected Footman shield's chainmail preview is captured as
+`07-independent-shield-preview.png`; broad unrestricted stamps can still share
+pixels elsewhere on authored mirrored UVs. No claim of arbitrary automatic UV
+repair, finished Ghoul reskin, user acceptance, or native Warcraft playtest.
+New UI text localization is not yet complete.
 
-The Autoaim test records 24 warm pointermove-to-two-rAF samples during actual texture brushing: approximately 4.9–6.9 ms, with no observed long tasks in that sample. The automatic atlas/rebake work is removed from hover and strokes. This is not physical input-to-photon latency or a controlled comparison against the user's experience; the next visible test determines acceptance. Earlier detail-test wall times included screenshots/settling and must not be reported as brush latency.
+## Reproduction
 
-## Remaining acceptance boundaries
-
-- User rejected the initial atlas tester; acceptance of this one visible correction is pending. Native Warcraft gameplay rendering was not exercised.
-- Classic MDX800 only. Animated UV preparation, unsupported vertex streams, atlas capacity or undo-budget overflow produce explicit errors. Missing or differently laid-out native source recipes direct the user to the native library; no synthetic fallback is created.
-- Deliberately requested independent paint mapping rebakes the working skin and may duplicate seam vertices while preserving position/normal/rig values and prior UV sets. Original file bytes stay unchanged and the editable preset retains them. BLP export uses the existing JPEG-backed encoder; exact coat-byte preservation applies to the editable preset, not lossy BLP compression.
-- Autoaim adjusts source zoom only. It does not separate shared texels or create texture detail that the source lacks. Extreme closeups and unusual mappings still need user testing; pixel-perfect placement remains available with Autoaim off.
-- Region selections are session tools, not saved preset selections. Ordinary colour painting on an authored shared mapping still shares those texels until preparation.
-- No merge, release, offline upgrade or announcement performed. The open PR is the phase-one review checkpoint.
+Set `MDLXL_PLAYWRIGHT_MODULE` to the installed Playwright package,
+`MDLXL_PAINT_FIXTURE` to the unchanged Classic Footman MDX800, and
+`MDLVIS_GAME_DATA` to the configured Warcraft installation. Run the four
+`test/citadel-*.electron.cjs` harnesses named above after building dist.
+Do not run superseded historical selectors or count old screenshots as proof
+of the current editor.

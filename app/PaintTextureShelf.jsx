@@ -5,6 +5,8 @@ import {decodePaintImage,paintRasterCanvas} from './paint-raster.js';
 import {resizePaintRaster} from '../src/paint-raster.js';
 import {paintMessage as msg} from '../src/paint-messages.js';
 
+const demoIds=new Set(['wc3-chainmail','wc3-steel','wc3-riveted-plate','wc3-orc-skin','wc3-wood']);
+const demoAssets=PAINT_ASSETS.filter(a=>demoIds.has(a.id));
 const thumbnailCache=new Map(),nativeSources=new Map();let thumbnailQueue=Promise.resolve();
 async function readNativeSource(item){
   if(!window.desktop?.resolveTextures)throw Error('Open the desktop editor and connect Warcraft III data to use native sources.');
@@ -37,16 +39,18 @@ function PaintTextureShelf({onUse,onCut,onNative,onImport,onFolderChange,epoch=0
     setCatalog(next);onFolderChange?.(next.folders);
   }catch(e){onStatus?.(e.message,true);}},[native]);
   useEffect(()=>{refresh();window.addEventListener('focus',refresh);return()=>window.removeEventListener('focus',refresh);},[refresh,epoch]);
-  const sourceCatalog=useMemo(()=>collection==='native'?{items:PAINT_ASSETS.map(a=>({...a,folder:a.category,signature:a.id})),folders:['',...new Set(PAINT_ASSETS.map(a=>a.category))]}:catalog,[collection,catalog]);
+  const sourceCatalog=useMemo(()=>collection==='native'?{items:demoAssets.map(a=>({...a,folder:a.category,signature:a.id})),folders:['',...new Set(demoAssets.map(a=>a.category))]}:catalog,[collection,catalog]);
   const items=useMemo(()=>sourceCatalog.items.filter(item=>(!folder||item.folder===folder||item.folder.startsWith(folder+'/'))&&(!query||(item.name+' '+item.id).toLowerCase().includes(query.toLowerCase().trim()))),[sourceCatalog,folder,query]);
   useEffect(()=>setLimit(40),[folder,query]);
+  useEffect(()=>{if(epoch){setCollection('mine');setFolder('');setQuery('');}},[epoch]);
   const act=async(item,callback)=>{try{await callback(await readShelfTexture(item));}catch(e){onStatus?.(e.message,true);}};
-  return <section className="paint-material-section"><div className="paint-shelf-heading"><h3>Brush source</h3><PaintTool icon="crop" label="Crop selected palette texture" disabled={!selected} onClick={()=>act(selected,onCut)}/></div>
+  return <section className="paint-material-section"><div className="paint-shelf-heading"><h3>Texture shelf</h3><PaintTool icon="crop" label="Crop selected palette texture" disabled={!selected} onClick={()=>act(selected,onCut)}/></div>
     <div className="paint-button-row"><button onClick={onNative}>WC3 library…</button><button onClick={onImport}>From file…</button></div>
-    <div className="paint-brush-grid" role="group" aria-label="Source collection"><button aria-pressed={collection==='native'} onClick={()=>{setCollection('native');setFolder('');}}>Native sections</button><button aria-pressed={collection==='mine'} onClick={()=>{setCollection('mine');setFolder('');}}>My files</button></div>
-    <select aria-label={msg('paint.textureFolder')} value={folder} onChange={e=>setFolder(e.target.value)}>{sourceCatalog.folders.map(id=><option key={id} value={id}>{id||msg('paint.allFolders')}</option>)}</select>
-    <input aria-label={msg('paint.searchTextures')} type="search" placeholder="Find texture…" value={query} onChange={e=>setQuery(e.target.value)}/>
+    <div className="paint-brush-grid" role="group" aria-label="Source collection"><button aria-pressed={collection==='native'} onClick={()=>{setCollection('native');setFolder('');}}>5 starters</button><button aria-pressed={collection==='mine'} onClick={()=>{setCollection('mine');setFolder('');}}>My library</button></div>
+    {collection==='mine'&&<select aria-label={msg('paint.textureFolder')} value={folder} onChange={e=>setFolder(e.target.value)}>{sourceCatalog.folders.map(id=><option key={id} value={id}>{id||msg('paint.allFolders')}</option>)}</select>}
+    {collection==='mine'&&<input aria-label={msg('paint.searchTextures')} type="search" placeholder="Find texture…" value={query} onChange={e=>setQuery(e.target.value)}/>}
     <div className="paint-material-grid">{items.slice(0,limit).map(item=><Tile key={item.signature||item.id} item={item} selected={selected?.id===item.id} onUse={item=>act(item,source=>{onUse(source);setSelected(item);})}/>)}</div>
+    {collection==='mine'&&!items.length&&<p className="paint-help">Your own texture collection. Import an image or cut a piece from Warcraft, then choose Keep.</p>}
     {items.length>limit&&<button onClick={()=>setLimit(n=>n+40)}>{msg('paint.showMore')}</button>}
     {collection==='mine'&&<div className="paint-button-row"><button onClick={refresh}>{msg('paint.refresh')}</button>{native&&<button onClick={()=>window.desktop.openPaintTextureFolder().catch(e=>onStatus?.(e.message,true))}>{msg('paint.openFolder')}</button>}</div>}
   </section>;
