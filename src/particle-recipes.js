@@ -157,10 +157,13 @@ export function placeParticleRecipe(target, recipe, options = {}) {
     proof.serialize('mdx');
     source=candidate;
   }
-  const wrapper = createNode(target, 'Helper');
-  wrapper.Name = recipe.name; wrapper.Parent = options.parent ?? null;
   const position = options.position || [0,0,0];
   if (position.length !== 3 || position.some(n => !Number.isFinite(n))) throw Error('Invalid effect anchor.');
+  // Fitted weapon ribbons already store their edge in the weapon's bind space.
+  // Attach to that bone directly, as native Blademaster ribbons do.
+  if(options.directAttachment)return copyEffectGraph(target,source,recipe.ingredients.map(item=>item.objectId),options);
+  const wrapper = createNode(target, 'Helper');
+  wrapper.Name = recipe.name; wrapper.Parent = options.parent ?? null;
   if (position.some(n => n !== 0)) wrapper.Translation = { LineType: 0, GlobalSeqId: null, Keys: [{ Frame: options.targetInterval?.[0] || 0, Vector: new Float32Array(position) }] };
   const result = copyEffectGraph(target, source, recipe.ingredients.map(item => item.objectId), { ...options, parent: wrapper.ObjectId });
   if(options.motion==='target')for(const [originalId,newId]of result.maps.nodes)if(!recipe.ingredients.some(item=>item.objectId===originalId)){const node=target.Nodes[newId];delete node.Translation;delete node.Rotation;delete node.Scaling;}
