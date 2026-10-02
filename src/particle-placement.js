@@ -1,4 +1,5 @@
 import {placeParticleRecipe} from './particle-recipes.js';
+import {canonicalizeSerializedNodeOrder} from './node-id-order.js';
 
 /** A chosen visibility window belongs to the newly inserted effect only. */
 export function particlePlacementInterval(model,placement,{preview=false}={}) {
@@ -14,7 +15,7 @@ export function particlePlacementInterval(model,placement,{preview=false}={}) {
 export function placeTimedParticleRecipe(model,recipe,placement,{preview=false}={}) {
  const window=placement.ribbon?model.Sequences[placement.sequence]?.Interval:particlePlacementInterval(model,placement,{preview});
  const sourceInterval=Array.from(recipe.native.Sequences[recipe.defaultSequence||0]?.Interval||[0,5000]);
- const result=placeParticleRecipe(model,recipe,{parent:placement.parent===''?null:Number(placement.parent),position:placement.position,sourceInterval,targetInterval:window||sourceInterval,fit:placement.fit,motion:placement.motion});
+ const result=placeParticleRecipe(model,recipe,{parent:placement.parent===''?null:Number(placement.parent),position:placement.position,sourceInterval,targetInterval:window||sourceInterval,fit:placement.fit,motion:placement.motion,directAttachment:!!placement.ribbon});
  if(placement.ribbon){
   const selected=new Set(placement.sequences),visibility=new Map(),boundaries=new Set();
   for(let i=0;i<model.Sequences.length;i++)for(const frame of model.Sequences[i].Interval){visibility.set(frame,selected.has(i)?1:0);boundaries.add(frame);}
@@ -30,6 +31,13 @@ export function placeTimedParticleRecipe(model,recipe,placement,{preview=false}=
   for(const clip of model.Sequences)for(const boundary of clip.Interval)if(boundary<window[0]||boundary>window[1])values.set(boundary,0);
   values.set(window[0],1);values.set(window[1],0);
   for(const id of result.ids)model.Nodes[id].Visibility={LineType:0,GlobalSeqId:null,Keys:[...values].sort((a,b)=>a[0]-b[0]).map(([Frame,value])=>({Frame,Vector:new Float32Array([value])}))};
+ }
+ if(placement.ribbon){
+  // Keep pivots and every node reference aligned with the MDL/MDX section order.
+  // External editors resolve these indices before all nodes are indexed.
+  const order=canonicalizeSerializedNodeOrder(model);
+  result.ids=result.ids.map(id=>order.get(id));
+  for(const [oldId,id]of result.maps.nodes)result.maps.nodes.set(oldId,order.get(id));
  }
  return {...result,interval:window||sourceInterval};
 }

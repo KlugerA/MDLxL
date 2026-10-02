@@ -11,7 +11,7 @@ export default function ParticlePlacementStage({doc,recipe,placement,onPosition,
  React.useEffect(()=>{onError?.(graph.error||'');if(graph.interval)setTime(value=>Math.max(graph.interval[0],Math.min(graph.interval[1],value)));},[graph]);
  if(graph.error)return <div className="pe-placement-error" role="status">{graph.error}</div>;
  const anchor=graph.model.Helpers.find(n=>n.ObjectId===graph.anchorId);
- anchor.Translation={LineType:0,GlobalSeqId:null,Keys:[{Frame:graph.interval[0],Vector:new Float32Array(placement.position)}]};
+ if(!placement.ribbon)anchor.Translation={LineType:0,GlobalSeqId:null,Keys:[{Frame:graph.interval[0],Vector:new Float32Array(placement.position)}]};
  const stop=()=>{drag.current=null;},clip=doc.model.Sequences[placement.sequence]?.Interval||graph.interval;
  return <>
  <Suspense fallback={<span>Preparing placement…</span>}><GamePreview presentation="preview" model={graph.model} particleAuthoring particleLiveModel={graph.model} particleLiveRevision={placement.position.join(':')} particleLiveField="Translation" particleSelectedId={graph.ids[0]} particleAnchorId={graph.anchorId} onParticleStage={setSnapshot} onParticleSurfacePlace={surface?point=>{onPosition(point);setSurface(false);}:undefined} textureAssets={textureAssets} preferences={preferences} teamColor={teamColor} sequenceIndex={doc.model.Sequences.length?placement.sequence:-1} time={time} onTimeChange={setTime} playing={playing} playbackSpeed={speed*100} showParticles showGrid mode="textured" view="perspective" overlays={{bones:false,nodes:false,particles:false,attachments:false}}/></Suspense>
