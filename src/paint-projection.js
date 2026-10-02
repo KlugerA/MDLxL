@@ -33,6 +33,7 @@ function projectedTriangles(model, bindings, matrix, width, height, requireUV = 
     const geoset = model.Geosets?.[binding.geosetIndex], vertices = geoset?.Vertices, faces = geoset?.Faces, uv = geoset?.TVertices?.[binding.coordId] || geoset?.TVertices?.[0];
     if (!vertices?.length || !faces?.length || requireUV && !uv?.length) continue;
     for (let faceOffset = 0; faceOffset + 2 < faces.length; faceOffset += 3) {
+      if(binding.faceIndices&&!binding.faceIndices.has(geoset.paintFaceIndices?.[faceOffset/3]??faceOffset/3))continue;
       const ids = [faces[faceOffset], faces[faceOffset + 1], faces[faceOffset + 2]], screen = ids.map(id => projectPaintVertex(matrix, vertices, id * 3, width, height));
       if (screen.some(value => !value) || screen.every(value => value.z < -1 || value.z > 1)) continue;
       result.push({ geosetIndex: binding.geosetIndex, materialId: binding.materialId, layerIndex: binding.layerIndex, coordId: binding.coordId, faceIndex: faceOffset / 3, ids, screen, uv: uv?.length ? ids.map(id => ({ x: uv[id * 2], y: uv[id * 2 + 1] })) : null, normal: faceNormal(vertices, ...ids) });
@@ -114,14 +115,11 @@ function sourcePixel(material,u,v,output){
 /** Source scale is measured in screen pixels, independently of brush diameter,
  * model units and destination UVs. At 100%, one source pixel is one screen
  * pixel. A larger brush reveals more of the repeating source, never stretches it. */
-export function samplePaintSource(material,dx,dy,{zoom=1,filterColor='#ffffff',motion=null}={}){
-  const scale=Math.max(.01,Math.min(64,Number(zoom)||1)),tint=rgbaColor(filterColor),samples=motion&&Math.hypot(motion.x||0,motion.y||0)>.001?5:1,total=[0,0,0,0],pixel=[0,0,0,0];
+export function samplePaintSource(material,dx,dy,{zoom=1,filterColor='#ffffff'}={}){
+  const scale=Math.max(.01,Math.min(64,Number(zoom)||1)),tint=rgbaColor(filterColor),pixel=[0,0,0,0];
   const wrap=value=>((value%1)+1)%1;
-  for(let index=0;index<samples;index++){
-    const amount=samples===1?0:index/(samples-1),u=wrap((dx-(motion?.x||0)*amount)/(material.width*scale)+.5),v=wrap((dy-(motion?.y||0)*amount)/(material.height*scale)+.5);
-    sourcePixel(material,u,v,pixel);for(let channel=0;channel<4;channel++)total[channel]+=pixel[channel];
-  }
-  return [Math.round(total[0]/samples*tint[0]/255),Math.round(total[1]/samples*tint[1]/255),Math.round(total[2]/samples*tint[2]/255),Math.round(total[3]/samples)];
+  sourcePixel(material,wrap(dx/(material.width*scale)+.5),wrap(dy/(material.height*scale)+.5),pixel);
+  return [Math.round(pixel[0]*tint[0]/255),Math.round(pixel[1]*tint[1]/255),Math.round(pixel[2]*tint[2]/255),pixel[3]];
 }
 
 /** Fill a UV mask with the same repeating, zoom-aware source used by brush
@@ -229,11 +227,11 @@ export function paintSurfaceTile(projection,raster,flags,tx,ty){
 }
 
 /** Texture view uses image-pixel coordinates, so there is no geometry/depth work. */
-export function prepareTexturePaintProjection(size) {
-  const tileSize=32,columns=Math.ceil(size/tileSize),bins=new Map();
-  for(let y=0;y<size;y++)for(let x=0;x<size;x++){const key=Math.floor(y/tileSize)*columns+Math.floor(x/tileSize);let list=bins.get(key);if(!list){list=[];bins.set(key,list);}list.push(x+.5,y+.5,y*size+x);}
+export function prepareTexturePaintProjection(width,height=width) {
+  const tileSize=32,columns=Math.ceil(width/tileSize),bins=new Map();
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){const key=Math.floor(y/tileSize)*columns+Math.floor(x/tileSize);let list=bins.get(key);if(!list){list=[];bins.set(key,list);}list.push(x+.5,y+.5,y*width+x);}
   for(const [key,list] of bins)bins.set(key,new Float32Array(list));
-  return {width:size,height:size,surface:{key:`${size}:${size}:0`,tileSize,columns,bins}};
+  return {width,height,surface:{key:`${width}:${height}:0`,tileSize,columns,bins}};
 }
 
 export function stampProjectedBrush(raster, projection, center, brush, options = {}) {
@@ -262,7 +260,7 @@ export function stampProjectedBrush(raster, projection, center, brush, options =
       let falloff=distance<=inner?1:1-(distance-inner)/Math.max(.001,radius-inner),source=null;
       falloff=falloff*falloff*(3-2*falloff);
       if(material?.data?.length){
-        source=samplePaintSource(material,dx,dy,{zoom:brush.zoom,filterColor:brush.filterColor,motion:options.motion});
+        source=samplePaintSource(material,options.sourceOrigin?samples[i]-options.sourceOrigin.x:dx,options.sourceOrigin?samples[i+1]-options.sourceOrigin.y:dy,{zoom:brush.zoom,filterColor:brush.filterColor});
         if(!source[3])continue;
       }
       if (!material?.data?.length&&tip?.data?.length) {
@@ -293,13 +291,13 @@ export function interpolatePaintStroke(previous, next, brush) {
   return result;
 }
 
-function triangleUVRaster(triangle, size, callback) {
-  forEachPaintUVTexel(triangle.uv,size,size,0,(x,y,u,v,w)=>callback(x,y,[u,v,w]),Math.SQRT2);
+function triangleUVRaster(triangle, width, height, callback) {
+  forEachPaintUVTexel(triangle.uv,width,height,0,(x,y,u,v,w)=>callback(x,y,[u,v,w]),Math.SQRT2);
 }
 
 /** Geometry-derived broad cavity and narrow exposed-edge masks. */
-export function buildSmartPaintMasks(model, target, size) {
-  const wash = new Uint8ClampedArray(size * size), drybrush = new Uint8ClampedArray(size * size), triangles = [];
+export function buildSmartPaintMasks(model, target, size, height=size) {
+  const wash = new Uint8ClampedArray(size * height), drybrush = new Uint8ClampedArray(size * height), triangles = [];
   for (const binding of targetBindings(target)) {
     const geoset = model.Geosets?.[binding.geosetIndex], uv = geoset?.TVertices?.[binding.coordId] || geoset?.TVertices?.[0];
     if (!geoset?.Faces?.length || !uv?.length) continue;
@@ -314,7 +312,7 @@ export function buildSmartPaintMasks(model, target, size) {
     if (list.length === 1) triangles[list[0].triangleIndex].edges[list[0].opposite] = 1;
     else for (const item of list) { const other = list.find(value => value !== item), a = triangles[item.triangleIndex].normal, b = triangles[other.triangleIndex].normal, crease = Math.max(0, Math.min(1, (1 - (a[0] * b[0] + a[1] * b[1] + a[2] * b[2])) * 1.8)); triangles[item.triangleIndex].edges[item.opposite] = crease; }
   }
-  for (const triangle of triangles) triangleUVRaster(triangle, size, (x, y, b) => {
+  for (const triangle of triangles) triangleUVRaster(triangle, size, height, (x, y, b) => {
     let narrow = 0, broad = 0;
     for (let edgeIndex = 0; edgeIndex < 3; edgeIndex++) { const strength = triangle.edges[edgeIndex], distance = Math.max(0, b[edgeIndex]); narrow = Math.max(narrow, strength * Math.exp(-distance * 42)); broad = Math.max(broad, strength * Math.exp(-distance * 13)); }
     const facing = Math.max(0, triangle.normal[2]), away = Math.max(0, -triangle.normal[2]), index = y * size + x;

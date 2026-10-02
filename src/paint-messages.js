@@ -110,7 +110,7 @@ export const PAINT_MESSAGES = Object.freeze({
   'paint.showHelpers': 'Show hidden model parts',
   'paint.viewOptions': 'View options',
   'paint.moreBrushes': 'More brushes & settings',
-  'paint.brushHelp': 'Size controls the painted area. Zoom controls texture detail; 100% is actual image-pixel size. Normal speckles on clicks and smears the source while dragging. Drybrush catches raised surfaces; Wash settles into crevices.',
+  'paint.brushHelp': 'Size controls coverage; Zoom controls texture detail. Drybrush catches raised surfaces; Wash settles into crevices.',
   'paint.useColor': 'Use solid color',
   'paint.category': 'Texture category',
   'paint.materialHelp': 'Choose a texture, then brush it onto the selected geoset.',

@@ -5,10 +5,10 @@ import {paintRasterCanvas} from './paint-raster.js';
 import {paintMessage as msg} from '../src/paint-messages.js';
 
 /** Selection tools operate on a copyable mask. Closing never changes the source asset. */
-export default function PaintCutoutEditor({source,onClose,onUse,onSave}) {
+export default function PaintCutoutEditor({source,onClose,onUse,onSave,onMask,initialMask}) {
   const {name}=source,raster=useMemo(()=>source.nativeSource?flattenPaintRasterAlpha(source.raster):source.raster,[source]),canvas=useRef(),maskCanvas=useRef(),drag=useRef(null);
-  const [tool,setTool]=useState('rectangle'),[operation,setOperation]=useState('replace'),[tolerance,setTolerance]=useState(32),[contiguous,setContiguous]=useState(true),[feather,setFeather]=useState(0),[zoom,setZoom]=useState(1);
-  const [mask,setMask]=useState(()=>new Uint8ClampedArray(raster.width*raster.height).fill(255)),[points,setPoints]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const [tool,setTool]=useState('rectangle'),[operation,setOperation]=useState('replace'),[tolerance,setTolerance]=useState(32),[contiguous,setContiguous]=useState(true),[feather,setFeather]=useState(0),[zoom,setZoom]=useState(()=>onMask?[1,.5,.25].find(v=>raster.width*v<window.innerWidth-100&&raster.height*v<window.innerHeight-220)||.25:1);
+  const [mask,setMask]=useState(()=>initialMask?new Uint8ClampedArray(initialMask):new Uint8ClampedArray(raster.width*raster.height).fill(255)),[points,setPoints]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const history=useRef([]),redo=useRef([]),[square,setSquare]=useState(false);
   useEffect(()=>{paintRasterCanvas(raster,canvas.current);},[raster]);
   const softened=useMemo(()=>featherSelection(mask,raster.width,raster.height,feather),[mask,feather,raster]);
@@ -38,8 +38,8 @@ export default function PaintCutoutEditor({source,onClose,onUse,onSave}) {
   async function act(callback,whole=false){if(busy)return;setBusy(true);setError('');try{await callback({name,raster:whole?raster:extractPaintCutout(raster,softened),whole});}catch(e){setError(e.message);}finally{setBusy(false);}}
   const a=points[0],b=points.at(-1);
   return <div className="paint-modal-shade" onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){if(points.length)setPoints([]);else if(!busy)onClose();}if(event.key==='Enter'&&tool==='polygon')polygon();}}>
-    <section className="paint-cutout-dialog" role="dialog" aria-modal="true" aria-label={msg('paint.cutout')}>
-      <header><strong>{msg('paint.cutout')} · {name}</strong><button disabled={busy} onClick={onClose}>{msg('paint.close')}</button></header>
+    <section className="paint-cutout-dialog" role="dialog" aria-modal="true" aria-label={onMask?'Paint region':msg('paint.cutout')}>
+      <header><strong>{onMask?'Paint region · Destination':msg('paint.cutout')} · {name}</strong><button disabled={busy} onClick={onClose}>{msg('paint.close')}</button></header>
       <div className="paint-cutout-toolbar">{['rectangle','ellipse','lasso','polygon','wand'].map(id=><button key={id} aria-pressed={tool===id} onClick={()=>{setTool(id);setPoints([]);}}>{msg('paint.select.'+id)}</button>)}
         <select aria-label={msg('paint.selectionMode')} value={operation} onChange={e=>setOperation(e.target.value)}>{['replace','add','subtract','intersect'].map(id=><option key={id} value={id}>{msg('paint.select.'+id)}</option>)}</select>
         <button onClick={()=>commit(new Uint8ClampedArray(mask.length).fill(255))}>{msg('paint.select.all')}</button><button onClick={()=>commit(new Uint8ClampedArray(mask.length))}>{msg('paint.select.none')}</button><button onClick={()=>commit(Uint8ClampedArray.from(mask,v=>255-v))}>{msg('paint.select.invert')}</button>
@@ -57,7 +57,7 @@ export default function PaintCutoutEditor({source,onClose,onUse,onSave}) {
         <canvas ref={canvas}/><canvas ref={maskCanvas}/><svg viewBox={`0 0 ${raster.width} ${raster.height}`}>{a&&b&&(tool==='rectangle'?<rect x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)}/>:tool==='ellipse'?<ellipse cx={(a.x+b.x)/2} cy={(a.y+b.y)/2} rx={Math.abs(b.x-a.x)/2} ry={Math.abs(b.y-a.y)/2}/>:<polyline points={points.map(p=>p.x+','+p.y).join(' ')}/>)}</svg>
       </div></div>
       {error&&<p role="alert">{error}</p>}
-      <footer><button disabled={busy} onClick={()=>act(onUse)}>{msg('paint.useCutout')}</button><button disabled={busy} onClick={()=>act(onUse,true)}>{msg('paint.useTexture')}</button><button disabled={busy} onClick={()=>act(onSave)}>{msg('paint.saveTexture')}</button><span>{msg('paint.cutoutHelp')}</span></footer>
+      <footer>{onMask?<><button onClick={()=>onMask(softened)}>Use paint region</button><span>Only the selected destination pixels can receive paint. Subtract around details to protect them.</span></>:<><button disabled={busy} onClick={()=>act(onUse)}>{msg('paint.useCutout')}</button><button disabled={busy} onClick={()=>act(onUse,true)}>{msg('paint.useTexture')}</button><button disabled={busy} onClick={()=>act(onSave)}>{msg('paint.saveTexture')}</button><span>{msg('paint.cutoutHelp')}</span></>}</footer>
     </section>
   </div>;
 }

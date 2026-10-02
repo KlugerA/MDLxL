@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {shapeSelection,magicSelection,combineSelection,featherSelection,extractPaintCutout} from '../src/paint-selection.js';
-import {paintDecalTransform,pastePaintDecal,projectPaintDecal} from '../src/paint-decal.js';
+import {paintDecalTransform,pastePaintDecal,projectPaintDecal,paintSourcePixelScale} from '../src/paint-decal.js';
 import {createPaintRaster,flattenPaintRasterAlpha} from '../src/paint-raster.js';
 import {prepareTexturePaintProjection} from '../src/paint-projection.js';
 
@@ -55,4 +55,14 @@ test('a fresh crop stamps once at its exact pixels and aspect before brush adjus
   const painted=[];for(let y=0;y<9;y++)for(let x=0;x<9;x++)if(target.data[(y*9+x)*4+3])painted.push([x,y,...target.data.slice((y*9+x)*4,(y*9+x)*4+3)]);
   assert.deepEqual(painted,[[3,3,255,0,0],[4,3,0,255,0],[5,3,0,0,255],[3,4,255,255,0],[4,4,0,255,255],[5,4,255,0,255]]);
   assert.deepEqual(paintDecalTransform(source,{...brush,size:6,zoom:.5}),transform,'size and zoom remain available after the exact default');
+});
+
+test('texture detail scale follows destination capacity at camera zoom and oblique angles',()=>{
+  const projection={width:2000,height:2000,triangles:[{screen:[{x:100,y:100,w:1},{x:356,y:100,w:1},{x:100,y:228,w:1}],uv:[{x:0,y:0},{x:1,y:0},{x:0,y:1}]}]};
+  assert.equal(paintSourcePixelScale(projection,{width:128,height:64}),2);
+  assert.equal(paintSourcePixelScale(projection,{width:256,height:128}),1);
+  const zoomed=structuredClone(projection);for(const p of zoomed.triangles[0].screen){p.x*=3;p.y*=3;}assert.equal(paintSourcePixelScale(zoomed,{width:128,height:64}),6);
+  const oblique=structuredClone(projection);oblique.triangles[0].screen[2].x+=128;assert.ok(paintSourcePixelScale(oblique,{width:128,height:64})>2);
+  const enclosing=structuredClone(projection);enclosing.width=100;enclosing.height=100;enclosing.triangles[0].screen=[{x:-100,y:-100,w:1},{x:300,y:-100,w:1},{x:-100,y:300,w:1}];
+  assert.ok(paintSourcePixelScale(enclosing,{width:128,height:64})>0,'a zoomed triangle enclosing the viewport still constrains detail');
 });

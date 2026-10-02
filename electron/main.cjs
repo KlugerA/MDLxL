@@ -31,7 +31,7 @@ function getBitsAndPartsLibrary() { return bitsAndPartsLibrary ||= new BitsAndPa
 let previewBackgroundLibrary;
 let paintTextureLibrary;
 function getPaintTextureLibrary() {
-  return paintTextureLibrary ||= new PaintTextureLibrary(path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(),'Textures'),path.resolve(__dirname,'../dist/paint-assets'));
+  return paintTextureLibrary ||= new PaintTextureLibrary(path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(),'Textures'));
 }
 function getPreviewBackgroundLibrary() {
   return previewBackgroundLibrary ||= new BackgroundLibrary({directory:path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(),'Backgrounds'),bundledDirectory:path.resolve(__dirname,'../dist/backgrounds')});

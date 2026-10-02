@@ -1,6 +1,25 @@
 import { blendPaintPixel, rgbaColor } from './paint-raster.js';
 import { preparePaintSurface, paintSurfaceTile } from './paint-projection.js';
 
+/** Largest screen footprint of a destination texel. Native detail must not be
+ * sampled more finely than the destination can store when the camera zooms in.
+ * Use the largest singular value, including oblique and anisotropic mappings. */
+export function paintSourcePixelScale(projection,raster){
+  let scale=0;
+  for(const triangle of projection.triangles||[]){
+    const [a,b,c]=triangle.screen,[u,v,w]=triangle.uv;
+    const points=[a,b,c];
+    if(points.some(p=>p.w<=0)||points.every(p=>p.x<0)||points.every(p=>p.x>projection.width)||points.every(p=>p.y<0)||points.every(p=>p.y>projection.height))continue;
+    const ux=(v.x-u.x)*raster.width,uy=(v.y-u.y)*raster.height,vx=(w.x-u.x)*raster.width,vy=(w.y-u.y)*raster.height,det=ux*vy-uy*vx;
+    if(Math.abs(det)<1e-8)continue;
+    const dx=b.x-a.x,dy=b.y-a.y,ex=c.x-a.x,ey=c.y-a.y;
+    const p=(dx*vy-ex*uy)/det,q=(ex*ux-dx*vx)/det,r=(dy*vy-ey*uy)/det,s=(ey*ux-dy*vx)/det;
+    const aa=p*p+r*r,bb=q*q+s*s,ab=p*q+r*s;
+    scale=Math.max(scale,Math.sqrt((aa+bb+Math.hypot(aa-bb,2*ab))/2));
+  }
+  return scale;
+}
+
 export function paintDecalTransform(source,brush,dragging=false) {
   const longest=Math.max(1,source.width,source.height),size=Math.max(1,Number(brush.size)||longest),zoom=Math.max(.01,Math.min(64,Number(brush.zoom)||1)),scale=size/longest*zoom;
   return {width:source.width*scale,height:source.height*scale,angle:0,flipX:false,flipY:false,opacity:Math.max(0,Math.min(1,Number(brush.opacity)*Number(brush.strength??1)*(dragging?Number(brush.flow):1)))};

@@ -243,6 +243,7 @@ export default function Viewport(inputProps) {
       state.paintUniforms=createPaintLightUniforms();state.lampMarkers=new THREE.Group();scene.add(state.lampMarkers);
       const geometry = new LineSegmentsGeometry(), material = new LineMaterial({ color: 0x35d9ff, linewidth: 2, depthTest: true, depthWrite: false, transparent: true });
       state.paintOutline = new LineSegments2(geometry, material); state.paintOutline.frustumCulled = false; state.paintOutline.renderOrder = 14000; state.paintOutline.visible = false; scene.add(state.paintOutline);
+      state.paintRegion=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial({color:0x35d9ff,transparent:true,opacity:.23,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,side:THREE.DoubleSide}));state.paintRegion.visible=false;state.paintRegion.renderOrder=13999;scene.add(state.paintRegion);
     }
     state.teamGlow = makeTeamGlow();
     state.globalTime = 0;
@@ -278,7 +279,8 @@ export default function Viewport(inputProps) {
     }
     state.refreshCursor = () => { const p=latest.current;renderer.domElement.style.cursor=p.paintMode&&!p.paintSelectOnly&&!p.paintDisabled&&p.cameraMode==='work'&&!rotating?'none':viewportCursor(p.cameraMode,p.rotationNormals?'rotateNormals':p.transformMode,rotating); };
     state.setCameraAngles = values => { if (setEditorCameraAngles(camera, controls.target, values)) { controls.update(); invalidate(); } };
-    controls.addEventListener('change', invalidate);
+    const cameraChanged=()=>{latest.current.onPaintCameraChange?.();invalidate();};
+    controls.addEventListener('change', cameraChanged);
     const unbindScroll = bindScrollSensitivity(renderer.domElement, {
       getPreferences: () => latest.current.preferences,
       onChange: value => latest.current.onSensitivityChange?.(value), onIndicator: setAdjustingSensitivity,
@@ -387,7 +389,7 @@ export default function Viewport(inputProps) {
       return {
         geosetIndex: hit.object.userData.geosetIndex, materialId: hit.object.userData.materialId, layerIndex: hit.object.userData.layerIndex, textureId: textureId, coordId: hit.object.userData.coordId,
         textureTarget: { textureId, texturePath: texture?.Image || '', flags: Number(texture?.Flags) || 0 },
-        triangle: faceIndex, vertexIds: ids, barycentric: barycentric.toArray(), uv: hit.uv?.toArray() || [0, 0], worldPosition: hit.point.toArray(), normal: normal.toArray(), depth: hit.point.clone().project(camera).z,
+        triangle: p.model.Geosets[hit.object.userData.geosetIndex].paintFaceIndices?.[faceIndex]??faceIndex, subtract:event.shiftKey, vertexIds: ids, barycentric: barycentric.toArray(), uv: hit.uv?.toArray() || [0, 0], worldPosition: hit.point.toArray(), normal: normal.toArray(), depth: hit.point.clone().project(camera).z,
         screen: { x: cursor.x, y: cursor.y }, viewport: { width: cursor.width, height: cursor.height }, viewProjectionMatrix: viewProjection.elements.slice(),
       };
     }
@@ -455,6 +457,7 @@ export default function Viewport(inputProps) {
         Object.assign(paintCursor.current.style, { display: latest.current.paintSelectOnly || latest.current.paintDisabled || latest.current.cameraMode!=='work' || event.buttons>1 ? 'none' : 'block', left: `${cursor.x}px`, top: `${cursor.y}px`, width: `${width}px`, height: `${height}px`,transform:`translate(-50%,-50%) rotate(${decal?.angle||0}deg)` });
       }
       if (!down) {
+        const p=latest.current;if(p.paintMode&&!p.paintSelectOnly&&!p.paintDisabled&&p.cameraMode==='work'&&!event.buttons)p.onPaintHover?.(paintHit(event));else p.onPaintHover?.(null);
         return;
       }
       const rawEnd = point(event), end = down.action === 'select' ? rawEnd : pointerDragPoint(down, rawEnd, down.pointerSensitivity), dx = end.x - down.x, dy = end.y - down.y;
@@ -599,7 +602,7 @@ export default function Viewport(inputProps) {
     const contextMenu = event => event.preventDefault();
     const paintDragOver=event=>{if(latest.current.paintDecal&&!latest.current.paintDisabled)event.preventDefault();};
     const paintDrop=event=>{if(!latest.current.paintDecal||latest.current.paintDisabled)return;event.preventDefault();const hit=paintHit(event);if(hit)latest.current.onPaintDrop?.(hit);};
-    const paintLeave=()=>{if(paintCursor.current)paintCursor.current.style.display='none';};
+    const paintLeave=()=>{if(paintCursor.current)paintCursor.current.style.display='none';latest.current.onPaintHover?.(null);};
     renderer.domElement.addEventListener('dragover',paintDragOver);renderer.domElement.addEventListener('drop',paintDrop);renderer.domElement.addEventListener('pointerleave',paintLeave);
     renderer.domElement.addEventListener('pointerdown', pointerDown, true);
     renderer.domElement.addEventListener('pointermove', pointerMove);
@@ -761,6 +764,13 @@ export default function Viewport(inputProps) {
           outline.material.color.set(settings.color); outline.material.linewidth = settings.thickness; outline.material.resolution.set(renderer.domElement.clientWidth, renderer.domElement.clientHeight);
         }
       }
+      if(state.paintRegion){
+        const region=p.paintRegion,geo=p.model?.Geosets?.[region?.geosetIndex];state.paintRegion.visible=!!(region?.faces.size&&geo&&!hidden.has(region.geosetIndex));
+        if(state.paintRegion.visible&&(state.regionValue!==region||state.regionGeoset!==geo)){
+          const positions=[];for(let face=0;face<geo.Faces.length/3;face++)if(region.faces.has(geo.paintFaceIndices?.[face]??face))for(let corner=0;corner<3;corner++){const id=geo.Faces[face*3+corner];positions.push(...geo.Vertices.subarray(id*3,id*3+3));}
+          state.paintRegion.geometry.dispose();state.paintRegion.geometry=new THREE.BufferGeometry();state.paintRegion.geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));state.regionValue=region;state.regionGeoset=geo;
+        }
+      }
       const light = cameraLeftLight(camera, controls.target, state.radius);
       key.position.copy(light.position); key.target.position.copy(controls.target);
       ambient.position.copy(light.direction);
@@ -828,9 +838,10 @@ export default function Viewport(inputProps) {
     return () => {
       cameraMemory.current = { view: state.appliedView, perspective: perspective.clone(), ortho: ortho.clone(), target: controls.target.clone(), center: state.center.clone(), radius: state.radius };
       state.paintOutline?.geometry.dispose(); state.paintOutline?.material.dispose();
+      state.paintRegion?.geometry.dispose();state.paintRegion?.material.dispose();
       if(state.lampMarkers)clearGroup(state.lampMarkers);
       renderer.domElement.removeEventListener('dragover',paintDragOver);renderer.domElement.removeEventListener('drop',paintDrop);renderer.domElement.removeEventListener('pointerleave',paintLeave);
-      state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); unbindScroll(); resizeObserver.disconnect(); controls.removeEventListener('change', invalidate); controls.dispose();
+      state.disposed = true; state.scheduler.dispose(); document.removeEventListener('visibilitychange', state.scheduler.sync); unbindScroll(); resizeObserver.disconnect(); controls.removeEventListener('change', cameraChanged); controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', pointerDown, true); renderer.domElement.removeEventListener('pointermove', pointerMove); renderer.domElement.removeEventListener('pointerup', pointerUp); renderer.domElement.removeEventListener('webglcontextlost', contextLost);
       renderer.domElement.removeEventListener('pointercancel', cancelGesture); renderer.domElement.removeEventListener('contextmenu', contextMenu);
       window.removeEventListener('mdlvis-frame', frameModel); window.removeEventListener('mdlxl-view-camera', viewCamera); window.removeEventListener('keydown', cancelKey);
@@ -911,10 +922,14 @@ export default function Viewport(inputProps) {
       if (override?.canvas && previous?.canvas === override.canvas && previous.key === key && state.textures.has(index)) {
         if (previous.revision !== override.revision) { previous.revision = override.revision; const loaded=state.textures.get(index);loaded.clearUpdateRanges();if(!override.fullUpload)for(const range of paintRowRanges(override.uploadRows,override.raster.width))loaded.addUpdateRange(range.start,range.count);loaded.needsUpdate=true;state.scheduler?.invalidate(); } return;
       }
-      if (previous && previous.asset === asset && previous.key === key) { if (previous.error) failures.push(previous.error); return; }
+      if (!override && previous && previous.asset === asset && previous.key === key) { if (previous.error) failures.push(previous.error); return; }
       state.textures.get(index)?.dispose(); state.textures.delete(index);
       const source = { asset, key, canvas: override?.canvas || null, revision: override?.revision }; state.textureSources.set(index, source);
       if (override?.canvas) {
+        // Hover and committed coats own different GPU textures. A reused
+        // preview entry may have acknowledged an earlier texture's upload;
+        // the newly allocated texture still needs every pixel before ranges.
+        override.fullUpload=true;
         const loaded = override.raster?new THREE.DataTexture(override.raster.data,override.raster.width,override.raster.height,THREE.RGBAFormat):new THREE.CanvasTexture(override.canvas);
         loaded.flipY=false;loaded.colorSpace=THREE.NoColorSpace;loaded.wrapS=texture.Flags&1?THREE.RepeatWrapping:THREE.ClampToEdgeWrapping;loaded.wrapT=texture.Flags&2?THREE.RepeatWrapping:THREE.ClampToEdgeWrapping;
         configurePaintTexture(loaded,smoothing);
@@ -941,14 +956,14 @@ export default function Viewport(inputProps) {
   useEffect(() => { runtime.current?.resize(); }, [graphics.pixelRatio]);
   useEffect(() => { runtime.current?.scheduler.invalidate(); }, [props.paintOutline, props.paintSelectOnly]);
   useEffect(() => { runtime.current?.scheduler.invalidate(); }, [props.paintLights,props.paintBackground,props.paintSelectedLamp,props.paintLampColor]);
-  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.presentation, props.previewMode, props.previewOverlay, model, revision, props.hoveredGeoset, selectedGeoset, selectedVertices, props.selectionByGeoset, props.selectableGeosets, hiddenGeosets, props.hiddenVertices, mode, showSkeleton, showGrid, props.showAxes, props.showVertices, props.overlays, props.showCameras, props.preferences, props.rgbPreview, props.rgbPreviewSequenceIndex, workplane, transformMode, props.zoomAnchor, props.choosingZoomAnchor, sequenceIndex, time, playing, teamColor, props.suspended, props.paintTextureRevision, graphics.maxFps, graphics.pauseWhenHidden, graphics.textures, graphics.lighting]);
+  useEffect(() => { runtime.current?.scheduler.sync(); }, [props.presentation, props.previewMode, props.previewOverlay, model, revision, props.hoveredGeoset, selectedGeoset, selectedVertices, props.selectionByGeoset, props.selectableGeosets, hiddenGeosets, props.hiddenVertices, mode, showSkeleton, showGrid, props.showAxes, props.showVertices, props.overlays, props.showCameras, props.preferences, props.rgbPreview, props.rgbPreviewSequenceIndex, workplane, transformMode, props.zoomAnchor, props.choosingZoomAnchor, sequenceIndex, time, playing, teamColor, props.suspended, props.paintTextureRevision, props.paintRegion, graphics.maxFps, graphics.pauseWhenHidden, graphics.textures, graphics.lighting]);
   return <div className="viewport" style={{ position: 'relative', width: '100%', height: '100%', minHeight: props.presentation === 'preview' ? 0 : 180, background: '#ccc', overflow: 'hidden' }}>
     <div ref={host} tabIndex={0} aria-label="3D model viewport" style={{ position: 'absolute', inset: 0, outline: 'none', cursor: viewportCursor(cameraMode, transformMode) }} />
     {adjustingSensitivity !== null && <div role="status" style={sensitivityIndicatorStyle}>{sensitivityIndicatorText(adjustingSensitivity)}</div>}
     {textureMessage && <div role="status" style={{ position: 'absolute', bottom: 4, left: 5, color: '#fff0cb', fontSize: 11, pointerEvents: 'none' }}>{textureMessage}</div>}
     {backgroundMessage && <div role="status" style={{ position: 'absolute', top: 4, left: 5, color: '#5b2500', background: '#fff4d6dd', padding: '2px 5px', fontSize: 11, pointerEvents: 'none' }}>{backgroundMessage}</div>}
     {box && <div style={{ position: 'absolute', ...box, border: '1px dotted white', pointerEvents: 'none' }} />}
-    {props.paintMode && <div ref={paintCursor} aria-hidden="true" style={{display:'none',position:'absolute',pointerEvents:'none',zIndex:5}}><img src={props.paintDecal?.url||props.paintBrushPreview} style={{width:'100%',height:'100%',objectFit:'fill',filter:props.paintDecal?'none':'drop-shadow(0 0 1px #000)',opacity:props.paintDecal?.opacity??1,transform:`scale(${props.paintDecal?.flipX?-1:1},${props.paintDecal?.flipY?-1:1})`}}/></div>}
+    {props.paintMode && <div ref={paintCursor} className={props.paintDecal?'paint-detail-outline':''} aria-hidden="true" style={{display:'none',position:'absolute',pointerEvents:'none',zIndex:5}}>{!props.paintDecal&&<img src={props.paintBrushPreview} style={{width:'100%',height:'100%',objectFit:'fill',filter:'drop-shadow(0 0 1px #000)'}}/>}</div>}
     {error && <div role="alert" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: 30, color: '#300', background: '#ddd', textAlign: 'center', fontSize: 13 }}>{error}</div>}
   </div>;
 }

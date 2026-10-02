@@ -622,7 +622,7 @@ export default function App() {
     try {
       const bytes=await readInputBytes(record);
       if(/\.mdlxlpaint$/i.test(record.name)){
-        const restored=await restorePaintProject(bytes,(png)=>decodePaintImage(png,'layer.png'));
+        const restored=await restorePaintProject(bytes);
         if(!restored.modelBytes)throw new Error('The paint project does not contain its working model.');
         const opened=openDocument(restored.originalModelBytes||restored.modelBytes,restored.modelName||record.name.replace(/\.mdlxlpaint$/i,'.mdl'));
         if(!opened.model||opened.version==null)throw new Error('The paint project contains no readable model. The current model was kept.');

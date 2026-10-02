@@ -19,7 +19,7 @@ test('new/share/reassign preserves one material and image layer per geoset, with
 });
 test('invalid texture creation and assignment leave the entire project and current pixels intact',()=>{
   const model=paintFixtureModel([triangleGeoset()]),project=createPaintProject();createPaintMaterial(project,model,{name:'Armour',raster:raster(),geosets:[0]});const before=structuredClone(project);
-  assert.throws(()=>createPaintMaterial(project,model,{raster:createPaintRaster(8),geosets:[0]}),/prepared/);assert.deepEqual(project,before);
+  assert.throws(()=>createPaintMaterial(project,model,{raster:{width:8,height:8,data:new Uint8ClampedArray(1)},geosets:[0]}),/prepared/);assert.deepEqual(project,before);
   assert.throws(()=>createPaintMaterial(project,model,{raster:raster(),geosets:[999]}),/UV/);assert.deepEqual(project,before);
   assert.throws(()=>assignPaintMaterial(project,model,project.activeTargetId,[0,999]),/UV/);assert.deepEqual(project,before);
 });

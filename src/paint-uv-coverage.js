@@ -5,7 +5,7 @@ export function paintUVTriangles(model,bindings){
   for(const binding of bindings||[]){
     const key=binding.geosetIndex+':'+binding.coordId;if(seen.has(key))continue;seen.add(key);
     const geo=model.Geosets?.[binding.geosetIndex],uv=geo?.TVertices?.[binding.coordId]||geo?.TVertices?.[0];if(!uv)continue;
-    for(let i=0;i<geo.Faces.length;i+=3)triangles.push([0,1,2].map(j=>({x:uv[geo.Faces[i+j]*2],y:uv[geo.Faces[i+j]*2+1]})));
+    for(let i=0;i<geo.Faces.length;i+=3)if(!binding.faceIndices||binding.faceIndices.has(geo.paintFaceIndices?.[i/3]??i/3))triangles.push([0,1,2].map(j=>({x:uv[geo.Faces[i+j]*2],y:uv[geo.Faces[i+j]*2+1]})));
   }
   return triangles;
 }

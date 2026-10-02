@@ -106,11 +106,18 @@ test('model units do not set brush scale when screen framing is unchanged',()=>{
   assert.deepEqual(large,small);
 });
 
-test('dragging blurs only the chosen texture source instead of sampling existing paint',()=>{
+test('dragging retains source detail rather than averaging its colors over motion',()=>{
   const source=createPaintRaster(5,1);source.data.set([
     255,0,0,255, 255,0,0,255, 0,0,255,255, 0,0,255,255, 0,0,255,255,
   ]);
   const crisp=samplePaintSource(source,0,0),smeared=samplePaintSource(source,0,0,{motion:{x:1,y:0}});
   assert.deepEqual(crisp,[0,0,255,255]);
-  assert.ok(smeared[0]>crisp[0]);assert.ok(smeared[2]<crisp[2]);assert.equal(smeared[3],255);
+  assert.deepEqual(smeared,crisp);
+});
+
+test('an anchored repeat source keeps overlapping brush strokes aligned',()=>{
+  const source=createPaintRaster(8);for(let y=0;y<8;y++)for(let x=0;x<8;x++)source.data.set([x*32,y*32,40,255],(y*8+x)*4);
+  const first=createPaintRaster(64),second=createPaintRaster(64),projection=prepareTexturePaintProjection(64),settings={...brush,size:30,opacity:1,strength:1,hardness:1},options={materialRaster:source,sourceOrigin:{x:0,y:0}};
+  stampProjectedBrush(first,projection,{x:28,y:32},settings,options);stampProjectedBrush(second,projection,{x:35,y:32},settings,options);
+  let compared=0;for(let i=0;i<first.data.length;i+=4)if(first.data[i+3]===255&&second.data[i+3]===255){assert.deepEqual(first.data.subarray(i,i+3),second.data.subarray(i,i+3));compared++;}assert.ok(compared>20);
 });

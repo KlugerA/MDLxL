@@ -1,24 +1,30 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { constants } = require('node:fs');
+const { createHash } = require('node:crypto');
+const legacyStock = require('./data/paint-legacy-stock.json');
 const { IMAGE_EXTENSIONS } = require('./texture-resolver.cjs');
 
-/** User-owned texture folders. Seed once; subsequent listings mirror the disk.
+/** User-owned texture folders. Native starter sources are recipes, not seeds.
  * Reads/writes remain inside this root; imports copy bytes, never move sources.
  */
 class PaintTextureLibrary {
-  constructor(directory, seedDirectory=null) { this.directory=path.resolve(directory);this.seedDirectory=seedDirectory;this.ready=null; }
+  constructor(directory, _retiredSeedDirectory=null, stock=legacyStock.entries) { this.directory=path.resolve(directory);this.stock=stock;this.ready=null; }
   async ensure() {
     if(!this.ready)this.ready=(async()=>{
-      const created=await fs.mkdir(this.directory,{recursive:true});
-      if(created&&this.seedDirectory){
-        const manifest=JSON.parse(await fs.readFile(path.join(this.seedDirectory,'manifest.json'),'utf8'));
-        for(const asset of manifest.assets){
-          const folder=path.join(this.directory,asset.category),source=path.join(this.seedDirectory,'512',asset.id+'.png');
-          await fs.mkdir(folder,{recursive:true});await fs.copyFile(source,path.join(folder,asset.name+'.png'),constants.COPYFILE_EXCL);
-        }
-      }
+      await fs.mkdir(this.directory,{recursive:true});
       const info=await fs.lstat(this.directory);if(!info.isDirectory()||info.isSymbolicLink())throw Error('Textures must be a regular folder.');
+      // Old versions wrote no seed receipt. Both canonical relative path and
+      // exact shipped bytes must agree; renamed/edited/personal files survive.
+      for(const entry of this.stock){
+        const parts=entry.path.split('/');if(parts.length!==2||parts.some(p=>!p||p==='..')||!entry.path.endsWith('.png'))throw Error('Invalid retired stock provenance.');
+        const folder=path.join(this.directory,parts[0]),file=path.join(folder,parts[1]);
+        try{
+          const parent=await fs.lstat(folder);if(parent.isSymbolicLink()||!parent.isDirectory())continue;
+          const before=await fs.lstat(file);if(before.isSymbolicLink()||!before.isFile()||before.size>8*1024*1024)continue;
+          const bytes=await fs.readFile(file);if(createHash('sha256').update(bytes).digest('hex')!==entry.sha256)continue;
+          const after=await fs.lstat(file);if(after.ino===before.ino&&after.size===before.size&&after.mtimeMs===before.mtimeMs&&!after.isSymbolicLink())await fs.unlink(file);
+        }catch(error){if(!['ENOENT','ENOTDIR'].includes(error.code))throw error;}
+      }
     })().catch(error=>{this.ready=null;throw error;});
     return this.ready;
   }

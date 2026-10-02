@@ -23,8 +23,9 @@ export async function decodePaintImage(bytes, name = 'texture.png') {
 }
 
 export async function paintBaseRaster(asset, resolution, sourceMode = 'current') {
-  if (sourceMode === 'primer' || !asset?.bytes) return createPaintRaster(resolution, resolution, [126, 126, 118, 255]);
-  const source = await decodePaintImage(asset.bytes, asset.name); return source.width === resolution && source.height === resolution ? source : resizePaintRaster(source, resolution, resolution);
+  if (sourceMode === 'primer') return createPaintRaster(resolution, resolution, [126, 126, 118, 255]);
+  if(!asset?.bytes)throw Error('The existing skin is not loaded. Connect its Warcraft data or import the missing texture before painting it.');
+  return decodePaintImage(asset.bytes, asset.name);
 }
 
 export function paintRasterCanvas(raster, existing = null, bounds = null) {

@@ -41,6 +41,8 @@ The following six command-card/ability-style toolbar images were also converted 
 
 These interface images retain their owners' rights; no new license is granted for them. Game archives and extracted game models are not bundled. The application reads locally available game data for preview. The retained demo fixture is project-authored geometry and is not the classic shell's startup model.
 
+Citadel Paint's native starter shelf contains crop recipes in `src/paint-assets.js` and `public/paint-assets/manifest.json`. Their pixels are read from the configured local Warcraft III installation, including the cinematic Footman texture; those source images are not bundled. The retired generated/derived Paint texture collection is no longer shipped or seeded. The separate brush-mask collection retains its own provenance manifest.
+
 ## CascLib
 
 Native Warcraft III CASC reader by Ladislav Zezula, MIT. License and pinned binary provenance are in electron/casc/. The helper code is included as electron/CascBridge.cs. No Warcraft installation archives or general game-texture cache are shipped. The three specifically bundled Human console textures are documented below.

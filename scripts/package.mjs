@@ -116,7 +116,7 @@ async function verifyStage(stage) {
   for (const relative of ['electron/main.cjs', 'electron/preload.cjs', 'electron/casc/CascBridge-0.7.0.exe', 'electron/casc/CascLib.dll', 'electron/data/texture-library-catalog.json', ...['preferences', 'commands', 'localization', 'warmkey-defaults', 'preview-lighting', 'capture-settings'].map(name => `src/${name}.js`), ...['core', 'editor', 'engine', 'additions', 'forge', 'descriptors', 'materials'].map(name => `src/locales/ru-${name}.json`), 'dist/index.html', 'dist/branding/MDLxL.ico', 'dist/classic/wc3-bits-and-parts.png', ...tengwarPackage]) {
     if (!await exists(path.join(stage, relative))) throw Error(`Runtime file missing: ${relative}`);
   }
-  for (const relative of ['electron/paint-textures.cjs', 'dist/branding/citadel-paint.svg', 'dist/paint-assets/manifest.json', 'dist/paint-brushes/manifest.json', 'dist/whiteout/whiteout-paint-blp.js', 'dist/whiteout/whiteout-paint-blp.wasm', 'dist/whiteout/LICENSE', 'dist/whiteout/build.json']) {
+  for (const relative of ['electron/paint-textures.cjs', 'electron/data/paint-legacy-stock.json', 'dist/branding/citadel-paint.svg', 'dist/paint-assets/manifest.json', 'dist/paint-brushes/manifest.json', 'dist/whiteout/whiteout-paint-blp.js', 'dist/whiteout/whiteout-paint-blp.wasm', 'dist/whiteout/LICENSE', 'dist/whiteout/build.json']) {
     if (!await exists(path.join(stage, relative))) throw Error(`Citadel Paint runtime file missing: ${relative}`);
   }
 }

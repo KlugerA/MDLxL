@@ -30,14 +30,14 @@
 
 /** @typedef {{id:string,messageId:string,mode:'paint'|'wash'|'drybrush'|'erase',size:number,zoom:number,hardness:number,opacity:number,flow:number,spacing:number}} BrushPresetV1 */
 /** @typedef {{schema:'mdlxl-paint-assets',version:1,logicalAssetCount:number,assets:object[]}} PaintAssetManifestV1 */
-/** @typedef {{schema:'mdlxl-paint-project',version:1,resolution:256|512,sourceMode:'current'|'primer',targets:PaintTextureTarget[],history:{undo:PaintStroke[],redo:PaintStroke[],usedBytes:number,budgetBytes:number,maxSteps:number}}} PaintProjectV1 */
+/** @typedef {{schema:'mdlxl-paint-project',version:1,resolution:256|512|1024|2048,sourceMode:'current'|'primer',targets:PaintTextureTarget[],history:{undo:PaintStroke[],redo:PaintStroke[],usedBytes:number,budgetBytes:number,maxSteps:number}}} PaintProjectV1 */
 /** @typedef {{geosetIndex:number,materialId:number,layerIndex:number,triangle:number,barycentric:number[],uv:number[],worldPosition:number[],normal:number[],depth:number,textureId:number|null,textureTarget:{textureId:number|null,texturePath:string,flags:number}}} PaintHit */
 
 export const PAINT_PROJECT_SCHEMA = 'mdlxl-paint-project';
 export const PAINT_PROJECT_VERSION = 1;
 export const PAINT_ASSET_SCHEMA = 'mdlxl-paint-assets';
 export const PAINT_ASSET_VERSION = 1;
-export const PAINT_RESOLUTIONS = Object.freeze([256, 512]);
+export const PAINT_RESOLUTIONS = Object.freeze([256, 512, 1024, 2048]);
 export const PAINT_CONTRACTS = Object.freeze({ PaintProjectV1: 1, PaintTextureTarget: 1, PaintCoat: 1, PaintStroke: 1, BrushPresetV1: 1, PaintAssetManifestV1: 1, PaintHit: 1 });
 
 export const PAINT_COATS = Object.freeze([
@@ -55,6 +55,7 @@ export const BRUSH_PRESETS = Object.freeze([
 ]);
 
 export function isPaintResolution(value) { return PAINT_RESOLUTIONS.includes(Number(value)); }
+export function isPaintRaster(raster) { return Number.isInteger(raster?.width)&&Number.isInteger(raster?.height)&&raster.width>0&&raster.height>0&&raster.width<=4096&&raster.height<=4096&&raster.data?.length===raster.width*raster.height*4; }
 export function brushPreset(id) { return BRUSH_PRESETS.find(item => item.id === id) || BRUSH_PRESETS[0]; }
 export function coatDefinition(id) { return PAINT_COATS.find(item => item.id === id) || PAINT_COATS[0]; }
 

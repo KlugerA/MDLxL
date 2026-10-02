@@ -4,7 +4,18 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
+import {createHash} from 'node:crypto';
 const {PaintTextureLibrary}=createRequire(import.meta.url)('../electron/paint-textures.cjs');
+
+test('retirement deletes only unchanged seed bytes at their exact known path',async t=>{
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'citadel-retirement-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
+  const stock=Buffer.from('known auto-seeded PNG bytes'),hash=createHash('sha256').update(stock).digest('hex');
+  await fs.mkdir(path.join(root,'Metal'));await fs.mkdir(path.join(root,'Personal'));
+  await fs.writeFile(path.join(root,'Metal','Old.png'),stock);await fs.writeFile(path.join(root,'Metal','Modified.png'),'personal changes');await fs.writeFile(path.join(root,'Metal','Renamed.png'),stock);await fs.writeFile(path.join(root,'Personal','Old.png'),stock);
+  const library=new PaintTextureLibrary(root,null,[{path:'Metal/Old.png',sha256:hash},{path:'Metal/Modified.png',sha256:hash}]);
+  const catalog=await library.list();assert.deepEqual(catalog.items.map(i=>i.id).sort(),['Metal/Modified.png','Metal/Renamed.png','Personal/Old.png']);assert.equal(await fs.readFile(path.join(root,'Metal','Modified.png'),'utf8'),'personal changes');
+  await fs.writeFile(path.join(root,'Metal','Old.png'),'new user file');await library.list();assert.equal(await fs.readFile(path.join(root,'Metal','Old.png'),'utf8'),'new user file');
+});
 test('texture folders mirror disk renames, include empty folders and copy without overwriting',async t=>{
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'citadel-textures-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
   const lib=new PaintTextureLibrary(path.join(root,'Textures'));
