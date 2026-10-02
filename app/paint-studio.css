@@ -14,3 +14,16 @@
 .studio-toolbar{gap:10px;padding:5px 8px}.studio-toolbar>strong{font-size:12px;margin-right:10px}.studio-tools{display:flex;gap:4px}.studio-tools button{padding:4px 10px}.paint-studio .studio-primary{background:var(--ui-selected);color:var(--ui-selected-text);font-weight:bold}
 .studio-controls fieldset{gap:16px}.studio-slider{display:grid!important;grid-template-columns:1fr 47px 15px;gap:3px!important;align-items:center}.studio-slider>span{grid-column:1/-1}.studio-slider input[type=range]{width:100%;min-width:0}.studio-slider input[type=number]{text-align:right}.studio-slider small{color:var(--ui-muted)}
 .studio-swatches{display:grid;grid-template-columns:repeat(9,1fr);gap:3px}.paint-studio .studio-swatches button{min-width:0;min-height:21px;padding:0;border:1px solid var(--ui-border)}.studio-source{width:100%;height:88px;object-fit:contain;image-rendering:pixelated;background:var(--ui-field);border:1px solid var(--ui-border);border-radius:4px}.studio-source-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.studio-selection{border-top:1px solid var(--ui-border);padding-top:12px}.paint-studio .paint-start-card{padding:24px;border-radius:8px}.paint-studio .paint-start-card h2{font-size:22px}.paint-studio .paint-start-card>p{margin:0 0 18px;color:var(--ui-muted)}.paint-studio .paint-start-card .paint-button-row{margin-top:20px}.paint-studio .paint-start-options button{display:grid;padding:12px;min-height:90px}.paint-studio .paint-material-grid{max-height:none;overflow:visible}.paint-studio .paint-material-grid img{object-fit:contain;image-rendering:pixelated;height:76px}.paint-studio .paint-shelf-heading h3{font-size:13px}.paint-studio .paint-source-missing{font-size:10px}.paint-studio .paint-texture-heading{padding-left:10px}.paint-studio details>label{margin-top:9px}.paint-studio .paint-orbit-hint{font-size:10px}
+.paint-selection-guide{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;padding:7px 10px;background:#263942;color:#fff;font-size:12px;border-bottom:1px solid #5d8290}
+.paint-selection-guide strong{color:#ffe267}.paint-selection-guide small{color:#b8d1d9}.paint-selection-guide>span:last-child{margin-left:auto}
+.paint-cutout-image{cursor:crosshair}.paint-cutout-image svg{stroke:#ffe267;stroke-width:2;stroke-dasharray:none;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000)}
+.paint-cutout-image svg rect,.paint-cutout-image svg ellipse,.paint-selection-fill{fill:#ffe26728}
+.paint-cutout-image .paint-selection-fill{stroke:none}.paint-cutout-image .paint-selection-closing{stroke:#fff;stroke-dasharray:5 4;fill:none}
+.paint-cutout-image svg circle{fill:#263942;vector-effect:non-scaling-stroke}.paint-cutout-image svg .paint-selection-first{fill:#7cf1ac;stroke:#101d25}
+.paint-cutout-image svg text{fill:#fff;stroke:#111;stroke-width:2;paint-order:stroke;stroke-linejoin:round;font-weight:700}
+.studio-outside-active{color:#86f1aa;font-weight:700}
+
+.studio-brushes button>span:not(.studio-tip){max-width:100%;overflow-wrap:anywhere}
+.paint-studio .studio-brushes{grid-template-columns:repeat(3,1fr)}
+.paint-studio .studio-segments>button{flex-wrap:wrap;white-space:normal;font-size:10px}
+.paint-studio .paint-right .paint-button-row>button{flex-direction:column;justify-content:center;gap:3px}

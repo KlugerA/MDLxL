@@ -40,7 +40,8 @@ and the old five-tool toolbar.
 7. **Click to stamp, repeat immediately.** The cursor shows an image ghost;
    while pressed, the real mapped preview can be dragged. Release commits one
    undo step. Escape cancels a pressed stamp. There is no Apply confirmation or
-   held-placement instruction panel. R / Shift+R rotates 15 degrees; M mirrors.
+   held-placement instruction panel. Comma / period rotates 15 degrees; M mirrors.
+   Hold R to begin outside the edge; selected geometry and protected pixels still clip paint.
    Full image 1, Texture 2 and Highlights 3 are direct buttons. Texture borrows
    light/dark detail into the painted color; Highlights adds bright detail.
 8. Select connected Part P, Geoset G, or Faces F by clicking/dragging across
@@ -101,5 +102,6 @@ is tested with nearest filtering. General linear-filter parity is unestablished.
 The saved Footman study is a reproducible quick reskin exercise, not a polished
 asset or a novice completion-time claim. A complete Ghoul/Abomination-skin reskin,
 user acceptance and native Warcraft runtime playtest remain unexercised.
-New visible text is currently English. Existing scene/view data remains readable;
+Paint controls and guidance are localized in English, Russian, Spanish, Chinese
+and the existing Mordor cipher. Existing scene/view data remains readable;
 the visible editor focuses on painting.

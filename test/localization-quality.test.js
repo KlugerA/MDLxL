@@ -13,8 +13,9 @@ import { particleUVGroups, particleFlags } from '../src/particle-editing.js';
 import { localizedCreateElement } from '../app/localized-element.js';
 import viewMenu from '../src/view-menu.json' with { type: 'json' };
 
+import {paintSpanish} from '../src/locales/paint-ui-locales.js';
 import showcase from '../src/locales/showcase.json' with { type: 'json' };
-const spanish = { ...Object.fromEntries(Object.entries(showcase).map(([key, values]) => [key, values[1]])), ...reviewedSpanish, ...release015Spanish };
+const spanish = { ...paintSpanish, ...Object.fromEntries(Object.entries(showcase).map(([key, values]) => [key, values[1]])), ...reviewedSpanish, ...release015Spanish };
 const packs = { ru: russian, es: spanish };
 const slots = text => [...new Set(text.match(/\{\d+\}/g) || [])].sort();
 // These slots are English inflection fragments ("s", " has", "s have"),

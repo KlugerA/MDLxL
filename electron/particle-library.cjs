@@ -38,7 +38,7 @@ class ParticleLibrary {
     try {
       for(const file of await fs.readdir(path.join(this.directory,'working')))if(/^[a-f0-9]{64}\.json$/.test(file)){
         const id='work-'+file.slice(0,-5),draft=await this.readWorking(id),recipe=draft.recipe,info=await fs.stat(path.join(this.directory,'working',file));
-        const {effectNodes}=await import('../src/particle-recipes.js');
+        const {effectNodes}=await import('../dist/particle-runtime.mjs');
         items.push({id,name:recipe.name,tags:recipe.tags,categories:recipe.categories,naming:{state:'personal'},collection:'My work',updatedAt:info.mtimeMs,empty:!effectNodes(draft.state.model).length,unsupported:recipe.compatibility?.unsupported||[]});
       }
     }catch(error){if(error.code!=='ENOENT')throw error;}
@@ -73,7 +73,7 @@ class ParticleLibrary {
     }));return Object.fromEntries(values);
   }
   async exportData(id){
-    const {parseParticleData,stringifyParticleData}=await import('../src/particle-data.js'),{validateParticleRecipe}=await import('../src/particle-recipes.js');
+    const {parseParticleData,stringifyParticleData}=await import('../src/particle-data.js'),{validateParticleRecipe}=await import('../dist/particle-runtime.mjs');
     const recipe=parseParticleData(await this.read(id)),meta={...reviewFor(recipe),...(await this.metadata())[id]};
     for(const key of ['name','tags','categories','naming','previewSample'])if(meta[key]!==undefined)recipe[key]=meta[key];
     validateParticleRecipe(recipe);return stringifyParticleData(recipe);
@@ -89,7 +89,7 @@ class ParticleLibrary {
   async read(id) {
     if(!ID.test(id))throw Error('Invalid effect identity.');
     if(id.startsWith('work-')){
-      const draft=await this.readWorking(id),{extractParticleRecipe,effectNodes}=await import('../src/particle-recipes.js'),{stringifyParticleData}=await import('../src/particle-data.js');
+      const draft=await this.readWorking(id),{extractParticleRecipe,effectNodes}=await import('../dist/particle-runtime.mjs'),{stringifyParticleData}=await import('../src/particle-data.js');
       const model=draft.state.model,recipe=extractParticleRecipe(model,effectNodes(model).map(item=>item.node.ObjectId),draft.recipe);
       recipe.embeddedAssets=(draft.recipe.embeddedAssets||[]).filter(asset=>recipe.native.Textures.some(t=>t.Image?.toLowerCase()===asset.path.toLowerCase()));
       recipe.workingId=id;return stringifyParticleData(recipe);
@@ -103,7 +103,7 @@ class ParticleLibrary {
   enqueue(operation){const next=this.queue.then(operation);this.queue=next.catch(()=>{});return next;}
   async save({data,name,id}) { return this.enqueue(async()=>{
     const {parseParticleData,stringifyParticleData}=await import('../src/particle-data.js');
-    const {validateParticleRecipe}=await import('../src/particle-recipes.js');
+    const {validateParticleRecipe}=await import('../dist/particle-runtime.mjs');
     const recipe=parseParticleData(data);
     recipe.id=id&&/^my-[a-f0-9-]{36}$/.test(id)?id:'my-'+crypto.randomUUID();
     recipe.name=String(name||recipe.name).trim();validateParticleRecipe(recipe);

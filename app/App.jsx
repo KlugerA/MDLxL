@@ -178,7 +178,9 @@ export default function App() {
   useEffect(() => { setControlModelGroup('all'); setControlModelIds([]); }, [session.id]);
   const [portraitSnapRevision, setPortraitSnapRevision] = useState(0);
   const receiveCameraAngles = useCallback(value => setCameraAngles(previous => ['x','y','z'].some(axis=>Math.abs(previous[axis]-value[axis])>.001)?value:previous), []);
-  const [grabThrough, setGrabThrough] = useState(false);
+  const [grabThroughByEditor, setGrabThroughByEditor] = useState({vertices:true,bones:false});
+  const grabThrough = grabThroughByEditor[mode] ?? false;
+  const setGrabThrough = value => setGrabThroughByEditor(previous => ({...previous,[mode]:value}));
   const cameraProps = {onCameraAnglesChange:receiveCameraAngles,cameraAnglesRequest,onCameraGestureChange:setCameraGesture,onSensitivityIndicator:setAdjustingInput,grabThrough};
   useEffect(()=>setCameraGesture(false),[mode,session.id]);
   const [tool, setTool] = useState('select'), [teamColor, setTeamColor] = useState('#ff0303'), [renderMode, setRenderMode] = useState('wireframe');

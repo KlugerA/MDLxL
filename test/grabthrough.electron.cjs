@@ -44,7 +44,8 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]; window.webContents.setBackgroundThrottling(false); window.setPosition(-3000, 0); window.showInactive(); });
     await page.getByRole('button', { name: 'Quad View', exact: true }).waitFor({ timeout: 60000 });
     const vertexToggle = page.getByLabel('Grabthrough', { exact: true });
-    assert.equal(await vertexToggle.isChecked(), false, 'Vertex Grabthrough defaults off');
+    assert.equal(await vertexToggle.isChecked(), true, 'Vertex Grabthrough defaults on');
+    await vertexToggle.uncheck();
     await page.getByLabel('View direction', { exact: true }).selectOption('front');
     await page.getByLabel('Render mode', { exact: true }).selectOption('textured');
     await marqueeAll(page.getByLabel('3D model viewport'));
@@ -100,6 +101,6 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
 
     await page.getByRole('button', { name: 'Movement', exact: true }).click();
     assert.equal(await page.getByLabel('Grabthrough', { exact: true }).count(), 0, 'Grabthrough stays scoped to Vertex and Bones');
-    console.log('Grabthrough is visible in Vertex and Bones, defaults off, toggles on, and stays out of Movement.');
+    console.log('Grabthrough is visible in Vertex and Bones, defaults on in Vertex and off in Bones, toggles on, and stays out of Movement.');
   } finally { await app.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

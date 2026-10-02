@@ -390,8 +390,12 @@ export default function Viewport(inputProps) {
       if (event.altKey) return 'rotate';
       return p.cameraMode;
     }
-    function paintHit(event) {
+    function paintHit(event, outside = false) {
       const p = latest.current, cursor = point(event);
+      if (outside) {
+        camera.updateMatrixWorld(); camera.updateProjectionMatrix();
+        return { outside: true, screen: { x: cursor.x, y: cursor.y }, viewport: { width: cursor.width, height: cursor.height }, viewProjectionMatrix: new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements.slice() };
+      }
       pointer.set(cursor.x / cursor.width * 2 - 1, 1 - cursor.y / cursor.height * 2); raycaster.setFromCamera(pointer, camera);
       const hits = raycaster.intersectObjects(state.entries.flatMap(entry => entry?.meshes.filter(mesh => mesh.visible||p.paintColorfy) || []), false), hit = hits.find(value => value.object.parent?.visible);
       if (!hit) return null;
@@ -440,7 +444,7 @@ export default function Viewport(inputProps) {
         const selecting=p.paintSelectOnly||event.shiftKey||event.ctrlKey||event.metaKey;
         down.action = selecting ? 'paintPick' : 'paint';
         if (p.paintDisabled && !selecting) return;
-        const hit = paintHit(event); down.paintHit = hit;
+        const hit = paintHit(event, !selecting && p.paintOutside); down.paintHit = hit;
         if (hit) { if (selecting) p.onPaintPick?.(hit); else p.onPaintStart?.(hit); }
         return;
       }

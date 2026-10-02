@@ -1,33 +1,27 @@
 # Citadel Paint working lane
 
-Status: feedback-driven redesign is verified and ready for user testing.
-User acceptance remains pending. Review lane: [PR #73](https://github.com/KlugerA/MDLxL/pull/73).
-No merge or release is authorized.
+Status: user accepted the overall direction and authorized final cleanup, translations,
+English/Russian PDFs, 0.17.0 release, offline upgrade and announcements on 3 October 2026.
+Review lane: [PR #73](https://github.com/KlugerA/MDLxL/pull/73).
 
 ## Authority and workspace
 
-- Build an approachable WC3 SD model painter around brushwork, colors, exact
-  cutouts, game/image sources, five starters, a personal library and in-editor
-  part selection/UV adjustment. Follow the user's latest workflow feedback;
-  held-stamp confirmations and the earlier Autoaim design are superseded.
-- The user explicitly resumed with “Go ahead” after the reset. This phase began
-  at 0 percent used; the latest observed shared meter is 8 percent used on
-  3 October 2026. Another 50 percentage points were authorized, not a requirement
-  to waste the entire allowance. The earlier 19:00 boundary/reset wait belonged
-  to the exhausted phase and was superseded by this direct later resume.
-- Do not switch models, spawn agents, or schedule automatic continuation.
-- Open the latest built program visibly as the **last operational action** before
-  yielding for testing. Finish checks, docs, push, PR and quota work first. Use a
-  fresh profile and the saved Footman study. Preserve prior tester windows,
-  original models, personal library files and the untracked Textures folder.
-- Worktree: `C:/Users/PC/.codex/worktrees/citadel-native-paint/MDLxL`.
-  Branch: `codex/citadel-native-paint`. Original base: 9e9a41c, v0.16.0.
-- Main advanced to 386453a (EMTR ribbon attachment fix) during this phase.
-  Its fix and the subsequent v0.16.1 main (1273cf3) are integrated with
-  regenerated hashed dist; existing release metadata is retained.
-  The main checkout remains on codex/model-tabs at 85b7cec, untouched.
-- No merge of the Paint PR, release, version bump, offline install replacement,
-  deletion of personal files, or announcement is authorized.
+- Latest cleanup budget: up to 15 additional percentage points, starting at 9 percent
+  account usage (ceiling 24). Earlier phase budgets are superseded.
+- Hold R starts off-surface strokes without expanding the selected paint region.
+  Comma/period rotate stamps. Selection feedback and all Paint languages are included.
+- Grabthrough defaults on only in Vertices; Bones keeps its off default.
+- Publish through PR #73, verify merged online main, then publish 0.17.0 and replace
+  the offline install with complete profile/personal-file preservation.
+- Existing Mega Garithos Bot workflow announces to #patches. The user authorized a
+  separate Russian announcement/PDF to Discord channel 1550117364107051058 in server
+  1550108401235796118. Browser/desktop control currently fails during kernel startup;
+  do not claim that channel post was sent without evidence.
+- No model switching, agents or automatic continuation. Open the updated program as
+  the last operational action. Preserve existing tester windows and source fixtures.
+- Worktree: C:/Users/PC/.codex/worktrees/citadel-native-paint/MDLxL.
+  Branch: codex/citadel-native-paint. Base main 1273cf3 includes 0.16.1.
+  Primary checkout on codex/model-tabs is untouched. Untracked Textures are personal.
 
 ## Current implementation
 
@@ -47,16 +41,18 @@ still noticeably slower; retain that limit in any performance claim.
 
 ## Verification and next boundary
 
-[VERIFICATION.md](VERIFICATION.md) records 141 Paint tests, 62 compatibility/
-WarmKeys checks, seven Electron workflows, build and package checks. Both supplied
+[VERIFICATION.md](VERIFICATION.md) records 217 focused Paint/compatibility/localization
+checks, 72 particle tests, Electron workflows, build and package checks. Both supplied
 MDX800 models keep their original file hashes and exported rig/animation data.
 The editable study is `out/citadel-audit/demo-1790979188839/Gold-footman-study.mdlxlpaint`.
 
 Current main is integrated; the regenerated bundle passed the Paint interaction
 and save/reopen flows, six emitter tests and 24 NormalsXL tests. The feature branch and
-existing PR are the review handoff.
-Verify its actual merge state and main containment; do not call this merged or
-user-accepted while the PR is open. Open the latest tester last.
+existing PR are the review handoff. Hotfix 809e427 from the user's linked
+"Fix library loading failure" chat is integrated in the portable Particle Library
+runtime, including activeParticleSample and dependency-free scanner packaging.
+Verify the actual PR merge state and main containment before reporting release completion.
+Open the latest installed program last.
 
 Prioritize further work from the user's actual test: first-use projection delay,
 any confusing selection/UV behavior, and a representative finished reskin. Avoid

@@ -83,7 +83,40 @@ No visibility approximation or stamp-quality reduction was introduced.
 Shared UVs still share paint until explicitly separated. Mixed/line-degenerate
 mapping is not generally unwrapped; arbitrary linear-filter parity remains
 unestablished. A complete Ghoul reskin, user acceptance, and native Warcraft
-runtime playtest remain unexercised. New visible text is English.
+runtime playtest remain unexercised.
+
+## Release cleanup and hotfix verification
+
+- 217 focused Paint, compatibility, localization, shortcuts and selection tests passed.
+- 72 particle tests passed. The portable runtime incorporates hotfix 809e427
+  from `codex/fix-portable-particle-library`, including activeParticleSample.
+  Package validation imports the standalone runtime and scanner without node_modules.
+- `flow-1790983064958`: direct repeat stamps, Undo/Redo, brushes, palette,
+  selection, visual aids, zoom, copy/mirror/paste and shaded base coat passed.
+  Hover median 5.7 ms / p95 7.3 ms; first stamp 193.4 ms; warm stamp 29.6 ms.
+- `edges-1790983083548`: normal off-model click made no change; R-stamp changed
+  5,400 pixels inside the mask and zero outside. Off-model brush Undo, texture
+  margin painting and polygon corner/close/Backspace feedback passed.
+- `locales-1790983101802`: Paint, Stamp, help, cutout and protection dialogs
+  rendered in all five languages without page errors. Physical-key shortcuts
+  remain usable with non-Latin keyboard layouts. Screenshots were inspected.
+- Grabthrough Electron checks confirmed Vertex starts enabled, Bones starts
+  disabled and Movement has no toggle; hidden vertex selection/drawing passed.
+- Both two-page English/Russian PDF guides were rendered and all four pages
+  visually inspected; text extraction confirmed Cyrillic without replacement glyphs.
+
+These checks exercise isolated copies and profiles. The original Footman and
+Abomination model files remain unchanged. Packaged release and migration evidence
+is recorded separately during deployment; user acceptance is still pending.
+
+- `packaged-flow`: the actual 0.17.0 EXE passed the complete interaction flow,
+  with no renderer errors and cached stamps at 26.6 ms median in this run.
+- `packaged-particles`: app.getAppPath confirmed the portable resources/app.
+  Warcraft and all four My work cards rendered. The catalog held 5,018 Warcraft
+  entries, including 4,581 usable recipes; four drafts and five native recipes
+  were read. A limited scanner run parsed four assets and produced nine recipes.
+  Five known recipe-validation failures concerned a zero-duration global sequence,
+  not missing modules; the packaging hotfix does not change asset compatibility.
 
 ## Reproduction
 
