@@ -8,6 +8,7 @@ import { createPaintRaster } from '../src/paint-raster.js';
 import { enumeratePaintTargets, installFreshPaintLayer } from '../src/paint-targets.js';
 import {createPaintMaterial,repairPaintMaterials} from '../src/paint-materials.js';
 import {paintProjectModel} from '../src/paint-view.js';
+import {PAINT_ASSETS} from '../src/paint-assets.js';
 
 const asBuffer=bytes=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
 
@@ -37,7 +38,7 @@ for(const [format,resolution] of [['mdl',256],['mdx',512]])test(`paint/export/re
   const decoded=getBLPImageData(decodeBLP(asBuffer(blpBytes)),0);assert.deepEqual([decoded.width,decoded.height],[resolution,resolution]);
   const projectFiles=readStoredZip(paintBytes),manifest=JSON.parse(new TextDecoder().decode(projectFiles.get('project.json'))),assetManifest=JSON.parse(new TextDecoder().decode(projectFiles.get('assets/manifest.json')));
   assert.ok(projectFiles.has(manifest.modelFiles.original));assert.ok(projectFiles.has(manifest.modelFiles.working));assert.ok(projectFiles.has(manifest.targets[0].coats[0].file));assert.ok(projectFiles.has(manifest.targets[0].alphaMask));
-  assert.equal(assetManifest.logicalAssetCount,50);assert.equal(assetManifest.brushTips.count,8);
+  assert.equal(assetManifest.logicalAssetCount,PAINT_ASSETS.length);assert.ok(assetManifest.assets.every(asset=>asset.provenance.kind==='warcraft-native'));assert.equal(assetManifest.brushTips.count,8);
   const metadata=JSON.parse(new TextDecoder().decode(files.get('MDLxL_Forge/paint-export.json')));assert.equal(metadata.textureEncoder.id,'whiteoutlib-blp1-jpeg');
 });
 

@@ -124,6 +124,17 @@
 .paint-texture-image path{vector-effect:non-scaling-stroke}
 .paint-texture-cursor{position:absolute;display:none;pointer-events:none}
 .paint-texture-cursor img{width:100%;height:100%;object-fit:fill;filter:drop-shadow(0 0 1px #000)}
+.paint-stage-split{display:grid;grid-template-rows:minmax(100px,var(--paint-split)) 5px minmax(100px,1fr)}
+.paint-stage-split .paint-model-view{position:relative;inset:auto;min-height:0;grid-row:1}
+.paint-stage-split .paint-texture-view{position:relative;inset:auto;min-height:0;grid-row:3;overflow:hidden}
+.paint-view-divider{grid-row:2;background:var(--ui-border);cursor:row-resize;touch-action:none;z-index:5}
+.paint-view-divider:hover,.paint-view-divider:focus{background:var(--paint-selection)}
+.paint-texture-heading{padding:3px 6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border-bottom:1px solid var(--ui-border);font-weight:bold}
+.paint-stage-split .paint-texture-scroll{padding:16px}
+.paint-texture-image{margin:auto}
+.paint-stage-split .paint-orbit-hint{top:calc(var(--paint-split) - 23px);bottom:auto}
+.paint-detail-outline{border:1px dashed #fff;box-shadow:0 0 1px 1px #222;box-sizing:border-box}
+.paint-save-dialog input[type=checkbox]{width:auto}
 @media(max-width:900px){.paint-logo{width:113px}.paint-toolbar{gap:3px;padding:3px}.paint-toolbar button{padding:3px 4px;font-size:10px}.paint-footer{gap:3px}.paint-footer button{font-size:10px}}
 
 /* Compact, consistent Citadel controls; palette tiles have one action each. */

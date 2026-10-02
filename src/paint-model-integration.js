@@ -45,5 +45,6 @@ export function adoptCommittedPaintUVs(project){
   let changed=false;
   for(const target of project.targets)for(const binding of target.bindings){if(binding.sourceCoordId){binding.sourceCoordId=0;changed=true;}}
   if(Object.keys(project.uvEdits||{}).length){project.uvEdits={};project.uvRevision=(project.uvRevision||0)+1;changed=true;}
+  if(Object.keys(project.geometryEdits||{}).length){project.geometryEdits={};project.uvRevision=(project.uvRevision||0)+1;changed=true;}
   if(changed){project.materialRevision=(project.materialRevision||0)+1;project.revision++;project.dirty=true;}
 }

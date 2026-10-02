@@ -3,3 +3,4 @@ electron/ffmpeg/** -text
 # Preserve the pinned upstream module and license byte-for-byte on Windows.
 src/vendor/meshoptimizer-1.3.0/meshopt_simplifier.js -text
 src/vendor/meshoptimizer-1.3.0/LICENSE.md -text
+*.pdf binary

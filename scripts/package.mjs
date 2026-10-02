@@ -3,14 +3,14 @@ import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const source = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { verifyFFmpegBundle } = createRequire(import.meta.url)('../electron/ffmpeg-verification.cjs');
 const manifest = JSON.parse(await fs.readFile(path.join(source, 'package.json'), 'utf8'));
 const runtimeFolders = ['dist', 'electron', 'src'];
 const externalFolders = ['Backgrounds', 'BitsAndParts', 'Addons'];
-const runtimeGuides = ['ADDONS.md', 'COMMUNITY_RESEARCH.md'];
+const runtimeGuides = ['ADDONS.md', 'COMMUNITY_RESEARCH.md', 'MDLxL-Paint-Quick-Guide-EN.pdf', 'MDLxL-Paint-Quick-Guide-RU.pdf'];
 const stageEntries = [...runtimeFolders, 'docs', 'package.json', 'README.md', 'MERGER_NOTES.md', 'THIRD_PARTY_NOTICES.md', 'LICENSES.bundled.txt'].sort();
 const exists = async file => { try { await fs.access(file); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; } };
 const hash = async file => createHash('sha256').update(await fs.readFile(file)).digest('hex');
@@ -101,9 +101,12 @@ async function verifyStage(stage) {
   if(!await exists(validationBundle))throw Error('Build the portable OptimizeXL save validator before packaging.');
   if(typeof createRequire(import.meta.url)(validationBundle).validateOptimizeXLCopies!=='function')throw Error('The bundled OptimizeXL save validator could not be loaded.');
   await verifyFFmpegBundle(path.join(stage, 'electron', 'ffmpeg'));
+  const particles=await import(pathToFileURL(path.join(stage,'dist','particle-runtime.mjs')).href);
+  for(const name of ['openDocument','effectNodes','extractParticleRecipe','validateParticleRecipe','activeParticleSample'])if(typeof particles[name]!=='function')throw Error(`Packaged particle runtime missing ${name}`);
+  await import(pathToFileURL(path.join(stage,'electron','particle-library-worker.mjs')).href);
   const actual = (await fs.readdir(stage)).sort();
   if (JSON.stringify(actual) !== JSON.stringify(stageEntries)) throw Error(`Unexpected runtime staging entries: ${actual.join(', ')}`);
-  if (JSON.stringify((await fs.readdir(path.join(stage, 'docs'))).sort()) !== JSON.stringify([...runtimeGuides].sort())) throw Error('Only the two linked runtime guides belong in the package.');
+  if (JSON.stringify((await fs.readdir(path.join(stage, 'docs'))).sort()) !== JSON.stringify([...runtimeGuides].sort())) throw Error('Only the linked runtime guides belong in the package.');
   const list = await files(stage);
   if (list.some(file => file.split(path.sep).some(part => ['node_modules', 'profile', '.vite', '.vite-temp', 'work'].includes(part)) || /\.log$/i.test(file))) throw Error('Runtime stage contains a cache, profile, or log.');
   const tengwarPackage = ['LICENCE', 'readme.txt', 'tngan.ttf', 'tnganb.ttf', 'tngani.ttf', 'tnganbi.ttf', 'tngana.ttf', 'tnganab.ttf', 'tnganai.ttf', 'tnganabi.ttf', 'tngandoc.pdf'].map(name => `dist/fonts/tengwar-annatar/${name}`);
@@ -116,7 +119,7 @@ async function verifyStage(stage) {
   for (const relative of ['electron/main.cjs', 'electron/preload.cjs', 'electron/casc/CascBridge-0.7.0.exe', 'electron/casc/CascLib.dll', 'electron/data/texture-library-catalog.json', ...['preferences', 'commands', 'localization', 'warmkey-defaults', 'preview-lighting', 'capture-settings'].map(name => `src/${name}.js`), ...['core', 'editor', 'engine', 'additions', 'forge', 'descriptors', 'materials'].map(name => `src/locales/ru-${name}.json`), 'dist/index.html', 'dist/branding/MDLxL.ico', 'dist/classic/wc3-bits-and-parts.png', ...tengwarPackage]) {
     if (!await exists(path.join(stage, relative))) throw Error(`Runtime file missing: ${relative}`);
   }
-  for (const relative of ['electron/paint-textures.cjs', 'dist/branding/citadel-paint.svg', 'dist/paint-assets/manifest.json', 'dist/paint-brushes/manifest.json', 'dist/whiteout/whiteout-paint-blp.js', 'dist/whiteout/whiteout-paint-blp.wasm', 'dist/whiteout/LICENSE', 'dist/whiteout/build.json']) {
+  for (const relative of ['electron/paint-textures.cjs', 'electron/data/paint-legacy-stock.json', 'dist/branding/citadel-paint.svg', 'dist/paint-assets/manifest.json', 'dist/paint-brushes/manifest.json', 'dist/whiteout/whiteout-paint-blp.js', 'dist/whiteout/whiteout-paint-blp.wasm', 'dist/whiteout/LICENSE', 'dist/whiteout/build.json']) {
     if (!await exists(path.join(stage, relative))) throw Error(`Citadel Paint runtime file missing: ${relative}`);
   }
 }

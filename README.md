@@ -1,4 +1,4 @@
-# MDLxL 0.16.1
+# MDLxL 0.17.0
 
 Warcraft III model editor. This source continues the requested MDLVis rebuild lane, with the MDLxL name and icon.
 
@@ -6,7 +6,7 @@ For the Windows release, extract the whole ZIP and run MDLxL.exe. Keep its resou
 
 For source development, use Node.js 22.12 or newer and pnpm. Run `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run build`, then `pnpm start` to launch the desktop app directly from the checkout. `pnpm run dev` starts browser development. After building, `pnpm run package` creates the Windows package under `release/MDLxL-win32-x64`. No installer is required.
 
-Version 0.16.1 fixes EMTR weapon ribbons in external editors and repairs NormalsXL failures on zero-area faces and collapsed normal fields. It includes the model tabs, copy/paste, editing performance, Grabthrough, and UV fixes from 0.16.0. See [the 0.16.1 release notes](docs/RELEASE-0.16.1.md). The 56 compatibility regression tests run with `pnpm test`; the restored historical suite runs separately with `pnpm run test:source`. See [the compatibility fix status](docs/MDL-MDX-COMPATIBILITY-FIXES.md) for coverage and limitations. After pulling source changes, rebuild before launching: `pnpm run build`, then `pnpm start`.
+Version 0.17.0 remakes Paint around direct model brushwork, repeatable texture stamps, visible selection tools, protected pixels, quick copy/paste, and in-place UV adjustments. Hold R to start a brush or stamp outside an edge while keeping the selection protected. Paint is translated into every app language; short English and Russian PDF guides are included. Grabthrough now defaults on in Vertices and stays off in Bones. See [the 0.17.0 release notes](docs/RELEASE-0.17.0.md). The 56 compatibility regression tests run with `pnpm test`; the restored historical suite runs separately with `pnpm run test:source`. See [the compatibility fix status](docs/MDL-MDX-COMPATIBILITY-FIXES.md) for coverage and limitations. After pulling source changes, rebuild before launching: `pnpm run build`, then `pnpm start`.
 
 See `docs/ADDONS.md` for add-ons and `THIRD_PARTY_NOTICES.md` for component credits.
 

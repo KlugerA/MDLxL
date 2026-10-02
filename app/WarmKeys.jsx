@@ -142,6 +142,8 @@ export function WarmKeysProvider({ preferences, catalog = [], activeScope = 'edi
     };
     const keydown = event => {
       if (event.target?.closest?.('[data-warmkey-recording]')) { cancel(); return; }
+      // Paint owns its brush/clipboard shortcuts before global mesh commands.
+      if(latest.current.activeScope==='paint'&&!window.dispatchEvent(new CustomEvent('mdlxl-paint-key',{detail:event,cancelable:true}))){cancel();return;}
       if (event.key === 'Escape' && event.target?.ownerDocument?.querySelector('.bone-create-menu')) return;
       if (event.key?.toLowerCase() === 'a' && !event.ctrlKey && !event.metaKey && !event.altKey &&
           event.target?.ownerDocument?.querySelector('.uv-workspace-body[data-pointer-region="preview"]')) { cancel(); return; }

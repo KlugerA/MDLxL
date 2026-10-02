@@ -184,7 +184,7 @@ function applyAtlasToGeoset(geoset, charts, packed, resolution, padding) {
 /** Build one stable, non-overlapping UV atlas for fresh Citadel materials.
  * Original UV sets remain available for the "Paint Current Skin" workflow. */
 export function createFreshPaintAtlas(model, geosetIndices, resolution = 256) {
-  if (![256, 512].includes(Number(resolution))) throw Error('Fresh paint textures must be 256×256 or 512×512.');
+  if (![256, 512, 1024, 2048].includes(Number(resolution))) throw Error('Fresh paint textures must be 256, 512, 1024 or 2048 pixels.');
   const indices = [...new Set(geosetIndices)].sort((a, b) => a - b), charts = [];
   for (const index of indices) {
     const geoset = model?.Geosets?.[index];

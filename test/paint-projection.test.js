@@ -1,11 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSmartPaintMasks, fillPaintMask, interpolatePaintStroke, preparePaintProjection, prepareTexturePaintProjection, projectPaintVertex, samplePaintSource, stampProjectedBrush } from '../src/paint-projection.js';
+import { buildSmartPaintMasks, fillPaintMask, interpolatePaintStroke, preparePaintProjection, prepareTexturePaintProjection, paintSurfaceTile, projectPaintVertex, samplePaintSource, stampProjectedBrush,samePaintProjectionView } from '../src/paint-projection.js';
 import { createPaintRaster } from '../src/paint-raster.js';
 import { IDENTITY_MATRIX, paintFixtureModel, paintTarget, squareSeamGeoset, triangleGeoset } from './fixtures/paint-fixtures.js';
 
 const brush={id:'round',name:'Round',mode:'paint',size:10,hardness:1,opacity:1,flow:1,spacing:.2,strength:1,color:'#ff3010'};
 const painted=raster=>{let count=0;for(let i=3;i<raster.data.length;i+=4)if(raster.data[i])count++;return count;};
+
+test('projection reuse ignores camera roundoff but tracks navigation and viewport changes',()=>{
+  const matrix=[1.032511012767605,-.5451038144783996,-.5298721229072012,-.5293545279075431,.7148153165314217,.7873721764687959,.7653708441992875,.7646232069775591,3.4855521349024397e-17,2.422683619903993,-.3679667520188884,-.36760731104690364,-10.889867600380162,-114.18856139055634,200.97236149511187,201.39739542610585];
+  const view={matrix,width:836,height:402.59375};
+  assert.equal(samePaintProjectionView(view,matrix.map(v=>v+Math.max(1,Math.abs(v))*1e-15),836,402.59375),true);
+  for(const axis of [0,5,12,13]){const moved=[...matrix];moved[axis]+=1e-7;assert.equal(samePaintProjectionView(view,moved,836,402.59375),false);}
+  assert.equal(samePaintProjectionView(view,matrix,837,402.59375),false);
+});
+
+test('large texture views allocate only requested tiles, including partial rectangular edges',()=>{
+  const projection=prepareTexturePaintProjection(2051,1025),raster={width:2051,height:1025};
+  assert.equal(projection.surface.bins.size,0);
+  const edge=paintSurfaceTile(projection,raster,0,64,32);
+  assert.deepEqual([...edge],[2048.5,1024.5,1024*2051+2048,2049.5,1024.5,1024*2051+2049,2050.5,1024.5,1024*2051+2050]);
+  assert.equal(projection.surface.bins.size,1);assert.equal(paintSurfaceTile(projection,raster,0,64,32),edge);
+});
 
 test('screen projection maps rest-pose vertices and interpolates fast strokes without gaps',()=>{
   assert.deepEqual(projectPaintVertex(IDENTITY_MATRIX,new Float32Array([-1,1,0]),0,100,80),{x:0,y:0,z:0,w:1});
@@ -106,11 +122,18 @@ test('model units do not set brush scale when screen framing is unchanged',()=>{
   assert.deepEqual(large,small);
 });
 
-test('dragging blurs only the chosen texture source instead of sampling existing paint',()=>{
+test('dragging retains source detail rather than averaging its colors over motion',()=>{
   const source=createPaintRaster(5,1);source.data.set([
     255,0,0,255, 255,0,0,255, 0,0,255,255, 0,0,255,255, 0,0,255,255,
   ]);
   const crisp=samplePaintSource(source,0,0),smeared=samplePaintSource(source,0,0,{motion:{x:1,y:0}});
   assert.deepEqual(crisp,[0,0,255,255]);
-  assert.ok(smeared[0]>crisp[0]);assert.ok(smeared[2]<crisp[2]);assert.equal(smeared[3],255);
+  assert.deepEqual(smeared,crisp);
+});
+
+test('an anchored repeat source keeps overlapping brush strokes aligned',()=>{
+  const source=createPaintRaster(8);for(let y=0;y<8;y++)for(let x=0;x<8;x++)source.data.set([x*32,y*32,40,255],(y*8+x)*4);
+  const first=createPaintRaster(64),second=createPaintRaster(64),projection=prepareTexturePaintProjection(64),settings={...brush,size:30,opacity:1,strength:1,hardness:1},options={materialRaster:source,sourceOrigin:{x:0,y:0}};
+  stampProjectedBrush(first,projection,{x:28,y:32},settings,options);stampProjectedBrush(second,projection,{x:35,y:32},settings,options);
+  let compared=0;for(let i=0;i<first.data.length;i+=4)if(first.data[i+3]===255&&second.data[i+3]===255){assert.deepEqual(first.data.subarray(i,i+3),second.data.subarray(i,i+3));compared++;}assert.ok(compared>20);
 });

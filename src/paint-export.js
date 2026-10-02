@@ -41,7 +41,10 @@ export async function buildPaintProjectArtifact(doc, project, assets, originalMo
   }
   const working=EditorDocument.restoreRecoveryState(doc.captureRecoveryState({includeHistory:false}));
   working.model=exportPaintModel(working.model,project,originalModelBytes,doc.name);
-  return paintProjectArchive(project,{modelBytes:originalModelBytes,workingModelBytes:working.serialize(doc.format),modelName:doc.name,sourceTextures,assetManifest:{...PAINT_ASSET_MANIFEST,brushTips:PAINT_BRUSH_TIP_MANIFEST}});
+  // The working model already owns the final UV order and edits. Reapplying
+  // legacy sourceCoordId on reopen would move the original UVs back to UV0.
+  const saved={...project,uvEdits:{},generatedUVSets:project.preserveMaterials?project.generatedUVSets:Object.fromEntries(Object.keys(project.generatedUVSets||{}).map(index=>[index,0])),targets:project.targets.map(target=>({...target,bindings:target.bindings.map(binding=>binding.sourceCoordId?{...binding,sourceCoordId:0}:binding)}))};
+  return paintProjectArchive(saved,{modelBytes:originalModelBytes,workingModelBytes:working.serialize(doc.format),modelName:doc.name,sourceTextures,assetManifest:{...PAINT_ASSET_MANIFEST,brushTips:PAINT_BRUSH_TIP_MANIFEST}});
 }
 
 /** Build a new model copy, BLP textures and editable project without mutating the open document. */

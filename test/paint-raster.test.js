@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyRasterDelta, blendPaintPixel, compositePaintRasters, createPaintRaster, fillRasterMask, flattenPaintRasterAlpha, rasterRegionDelta, resizePaintRaster } from '../src/paint-raster.js';
+import { applyRasterDelta, blendPaintPixel, compositePaintRasters, createPaintRaster, fillRasterMask, flattenPaintRasterAlpha, rasterRegionDelta, resizePaintRaster, samplePaintRaster } from '../src/paint-raster.js';
+
+test('color picking follows independent U/V repeat flags and preserves authored RGB',()=>{
+  const raster=createPaintRaster(4,2);for(let y=0;y<2;y++)for(let x=0;x<4;x++)raster.data.set([x*50,y*100,34,0],(y*4+x)*4);
+  assert.deepEqual(samplePaintRaster(raster,-.4,1.2,3),[100,0,34,0]);
+  assert.deepEqual(samplePaintRaster(raster,-.4,1.2,1),[100,100,34,0]);
+  assert.deepEqual(samplePaintRaster(raster,-.4,1.2,2),[0,0,34,0]);
+  assert.deepEqual(samplePaintRaster(raster,-.4,1.2,0),[0,100,34,0]);
+  assert.deepEqual(samplePaintRaster(raster,1,1,3),[0,0,34,0]);
+});
 
 test('coat compositing preserves source alpha until an explicit alpha mask erases it',()=>{
   const base=createPaintRaster(2,2,[10,20,30,77]),coat={visible:true,opacity:1,raster:createPaintRaster(2,2,[210,80,40,255])};
