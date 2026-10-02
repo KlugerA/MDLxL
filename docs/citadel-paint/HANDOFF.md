@@ -1,6 +1,6 @@
 # Citadel native Paint working lane
 
-Status: phase-one implementation ready for user testing; review branch and PR handoff are being finalized. User acceptance and merge are pending.
+Status: phase one ready for user testing. [PR #73](https://github.com/KlugerA/MDLxL/pull/73) is pushed, open and attached to the task. User acceptance and merge are pending; online main remains the base release.
 
 ## Authority and baseline
 
@@ -35,7 +35,7 @@ Status: phase-one implementation ready for user testing; review branch and PR ha
 
 ## Phase checkpoint and continuation
 
-- Latest allowance observation before handoff preparation: **82% used / 18% remaining**, 11:47 Amsterdam, 2 October. That is 13 rounded shared points above the phase baseline of 69%; it is not exact per-thread consumption. Record the final reading with the handoff.
-- Finish branch push and attached PR; do not merge. No release/version or offline installation changes are part of this phase.
+- Final handoff allowance observation: **83% used / 17% remaining**, 11:56 Amsterdam, 2 October. That is 14 rounded shared points above the phase baseline of 69%; it is not exact per-thread consumption. Phase one stops at its reviewable checkpoint, before quota exhaustion.
+- Implementation commit: `aba23fe`; final handoff notes follow on the same branch. PR #73 remains open; do not merge without user authorization. No release/version or offline installation changes are part of this phase.
 - The user is AFK. Opening the final built program for testing must be the last operational action after checks/handoff. Use a separate test profile, the unchanged supplied Footman and an unsaved chainmail example; keep any earlier user preview open.
 - Await direct user feedback/resume. Do not schedule continuation after a reset. Visible user acceptance and native Warcraft runtime acceptance remain open.
