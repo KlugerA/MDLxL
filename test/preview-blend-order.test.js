@@ -64,7 +64,7 @@ test('weighted Classic materials keep HD skinning and render every authored laye
     Geosets: [{ MaterialID: 0, SkinWeights: new Uint8Array([0, 0, 0, 0, 255, 0, 0, 0]) }],
     Materials: [{ Shader: '', Layers: layers }],
   };
-  let bound, activeTexture = 0, hdCalls = 0, created = 0, deleted = 0;
+  let bound, activeTexture = 0, hdCalls = 0, created = 0, deleted = 0; const uploadedPixels = [];
   const gl = {
     ELEMENT_ARRAY_BUFFER: 1, ONE: 2, SRC_COLOR: 3, SAMPLE_ALPHA_TO_COVERAGE: 4,
     TEXTURE_2D: 5, TEXTURE0: 10, TEXTURE1: 11, TEXTURE2: 12, TEXTURE_MIN_FILTER: 13,
@@ -76,7 +76,7 @@ test('weighted Classic materials keep HD skinning and render every authored laye
     uniform1f() {}, uniform1i() {}, uniform3fv() {}, uniform4fv() {}, enable() {}, disable() {}, depthMask() {}, blendFuncSeparate() {},
     blendFunc(src, dst) { calls.push(['blend', src, dst]); },
     createTexture() { created++; return { created }; }, deleteTexture() { deleted++; },
-    activeTexture(unit) { activeTexture = unit; }, bindTexture() {}, texParameteri() {}, texImage2D() {},
+    activeTexture(unit) { activeTexture = unit; }, bindTexture() {}, texParameteri() {}, texImage2D(...args) { uploadedPixels.push(Array.from(args.at(-1))); },
   };
   const native = {
     isHD: true, model, shaderProgram: program, indexBuffer: buffers,
@@ -93,7 +93,9 @@ test('weighted Classic materials keep HD skinning and render every authored laye
   assert.equal(hdCalls, 0);
   assert.deepEqual(calls.filter(call => call[0] === 'mesh').map(call => call[1]), [0, 0]);
   assert.deepEqual(calls.filter(call => call[0] === 'blend').at(-1), ['blend', gl.ONE, gl.ONE]);
-  assert.equal(created, 2); assert.deepEqual(model, before);
+  assert.equal(created, 2);
+  assert.deepEqual(uploadedPixels, [[128, 128, 255, 255], [255, 255, 0, 0]]);
+  assert.deepEqual(model, before);
   adapter.dispose(); assert.equal(deleted, 2);
 });
 
