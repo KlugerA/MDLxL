@@ -11,7 +11,7 @@ Published September 29, 2026, including the September 28 workday and overnight c
 - Separate orbit and full-recording animation previews, collapsible sections, arbitrary animation loop counts and Extra Time with displayed duration.
 - Independent continuous global sequences; animation-specific emitter timing and per-emitter controls.
 - Background GIF encoding, bounded-memory large GIF handling and export size budgets.
-- Optional Hive and Catbox export profiles; deselect both for original-quality local GIFs. Catbox uses its official anonymous API, checks the 20 MiB GIF limit, retains results in the current session, and supplies direct links and Hive BBCode.
+- Optional Hive export profile; deselect it for original-quality local GIFs.
 - Showcase-only model loading, keeping editor models separate and preserving matching animation/settings across model changes.
 
 ## OptimizeXL (PRs #36, #41)

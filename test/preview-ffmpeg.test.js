@@ -105,13 +105,12 @@ test('large invalid GIF is rejected by its contents without a renderer buffer', 
   await assert.rejects(validateGIFFile(file),/complete GIF/);
 });
 
-test('local GIF size budgets target 100 MB highest and 50 MB medium per ten seconds without changing upload profiles', () => {
+test('local GIF size budgets target 100 MB highest and 50 MB medium per ten seconds without changing the Hive profile', () => {
   assert.equal(gifSizeLimit(undefined,'high',10000),100_000_000);
   assert.equal(gifSizeLimit(undefined,'medium',10000),50_000_000);
   assert.equal(gifSizeLimit(undefined,'high',5000),50_000_000);
   assert.equal(gifSizeLimit(undefined,'medium',20000),100_000_000);
   assert.equal(gifSizeLimit(undefined,'low',10000),Infinity);
-  assert.equal(gifSizeLimit('catbox','high',10000),20*1024*1024);
   assert.equal(gifSizeLimit('hive','high',5000),22_500_000);
   assert.equal(gifSizeLimit('hive-main','high',5000),Infinity);
 });
@@ -119,14 +118,13 @@ test('local GIF size budgets target 100 MB highest and 50 MB medium per ten seco
 
 test('export profiles cap dimensions, preserve frame timing and reject Hive duration overflow', { skip: process.platform !== 'win32' }, async t => {
   const store=await fixture(t);
-  for(const [exportTarget,width,height] of [['catbox',900,450],['hive',800,800]]){
+  for(const [exportTarget,width,height] of [['hive',800,800]]){
     const {jobId}=await store.begin(1,{width,height,quality:'high',loop:true,exportTarget});
     for(let i=0;i<3;i++)await store.frame(1,{jobId,width,height,time:i*1000/30,buffer:frame(i,width,height)});
     await store.finish(1,{jobId,time:100});
     const bytes=await fs.readFile(store.get(1,jobId).output);
     const w=bytes.readUInt16LE(6),h=bytes.readUInt16LE(8),decoded=inspectGIF(bytes);
-    if(exportTarget==='catbox'){assert.equal(w,864);assert.equal(h,432);assert.ok(bytes.length<=20*1024*1024);}
-    else assert.ok(w*h<=300000);
+    assert.ok(w*h<=300000);
     assert.equal(decoded.frames,3);assert.equal(decoded.delay,100);
     await store.save(1,jobId);
   }

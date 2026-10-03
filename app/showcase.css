@@ -170,14 +170,8 @@
 .showcase-model-tools { display:flex; align-items:center; justify-content:space-between; gap:4px; }
 
 .showcase-export-target { display:flex; gap:2px; margin-top:3px; }
-.showcase-export-target button { width:50%; min-height:24px; }
+.showcase-export-target button { width:100%; min-height:24px; }
 .showcase-export-note { display:block; margin:3px 0; font-size:10px; }
-.showcase-upload-results { margin:4px 0; }
-.showcase-upload-result { border-bottom:1px solid #aaa; padding:4px 0; }
-.showcase-upload-result > small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.showcase-sidebar .showcase-upload-result label { gap:3px; margin:2px 0; }
-.showcase-upload-result input { flex:1; min-width:0; width:0; font-size:10px; }
-.showcase-upload-result button { font-size:10px; white-space:nowrap; padding:1px 3px; }
 
 .showcase-model-file{display:flex;align-items:center;gap:5px;margin:4px 0}.showcase-model-file small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
