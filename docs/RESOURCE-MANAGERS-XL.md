@@ -52,6 +52,20 @@ Checked 3 October 2026:
 
 ## Verification
 
+Appearance presets include their own folder/list background, text, selection,
+hover, hierarchy lines, node-type colors and sound-folder category colors.
+Settings > Appearance exposes these colors and the list font size (10–20 px).
+All fourteen Appearance categories start expanded and can be collapsed.
+Custom presets and configuration exports retain the tree palette, font size,
+application theme and accent. Older profiles acquire a palette from their
+existing theme. These settings apply to manager lists; editor sidebars keep
+their existing controls and sizes.
+
+The appearance checks pass all 26 source tests. A rebuilt Electron test checks
+all seven palettes, category collapse state, custom colors, 17 px list text,
+custom-preset switching and on-disk preference persistence. Screenshots were
+inspected. The sound-folder scroll regression still passes.
+
 The latest focused run passed 70 of 72 source/compatibility checks. The two
 event-render-model version assertions also fail on the untouched pre-patch HEAD
 and are outside these changes. Coverage includes held keys, owner isolation,

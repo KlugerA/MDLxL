@@ -19,17 +19,17 @@
 .resource-editor.re-xl .re-list .re-selected{background:var(--ui-selected);color:var(--ui-selected-text)}
 .resource-editor.re-xl .re-list button small{font:10px system-ui;color:var(--ui-muted)}
 .resource-editor.re-xl .re-node-window{width:1100px}.resource-editor.re-xl .re-node-window .re-list-pane{width:48%;min-width:300px}
-.resource-editor.re-xl .re-node-window .re-list{background:#202832;color:#e5eaf0;border-color:#465363}
-.resource-editor.re-xl .re-node-window .re-list .re-selected{background:#344e70;color:#fff;box-shadow:inset 3px 0 #86baff}
-.resource-editor.re-xl .re-tree-row{color:#e5eaf0;min-height:29px;gap:6px;padding-top:4px;padding-bottom:4px;align-items:center;white-space:normal}
+.resource-editor.re-xl .re-node-window .re-list{background:var(--tree-background);color:var(--tree-text);border-color:var(--tree-border)}
+.resource-editor.re-xl .re-node-window .re-list .re-selected{background:var(--tree-selected);color:var(--tree-selected-text);box-shadow:inset 3px 0 var(--tree-accent)}
+.resource-editor.re-xl .re-tree-row{color:var(--tree-text);min-height:29px;gap:6px;padding-top:4px;padding-bottom:4px;align-items:center;white-space:normal}
 .resource-editor.re-xl .re-node-name{overflow:visible;overflow-wrap:anywhere;text-overflow:clip;line-height:1.35;min-width:0;font-size:12px}
-.resource-editor.re-xl .re-tree-row small{font-size:10px;color:#b6c3d2;flex:0 0 auto;max-width:85px;text-align:right;opacity:1}
-.resource-editor.re-xl .re-tree-line{width:14px;border-color:#4b5a6e}.resource-editor.re-xl .re-tree-expander{color:#d1dae4!important}
-.resource-editor.re-xl [data-node-type=Bones] .re-node-icon{color:#e7d49b}.resource-editor.re-xl [data-node-type=Helpers] .re-node-icon{color:#a4b2c4}
-.resource-editor.re-xl [data-node-type=Attachments] .re-node-icon{color:#78c7ed}.resource-editor.re-xl [data-node-type=Lights] .re-node-icon{color:#ffe26f}
-.resource-editor.re-xl [data-node-type^=Particle] .re-node-icon,.resource-editor.re-xl [data-node-type=RibbonEmitters] .re-node-icon{color:#c49afd}
-.resource-editor.re-xl [data-node-type=SND] .re-node-icon{color:#7de0ac}.resource-editor.re-xl [data-node-type=SPL] .re-node-icon{color:#ff8892}
-.resource-editor.re-xl [data-node-type=FPT] .re-node-icon{color:#eeb781}.resource-editor.re-xl [data-node-type=UBR] .re-node-icon{color:#eec17e}.resource-editor.re-xl [data-node-type=SPN] .re-node-icon{color:#91d4dc}
+.resource-editor.re-xl .re-tree-row small{font-size:10px;color:var(--tree-muted);flex:0 0 auto;max-width:85px;text-align:right;opacity:1}
+.resource-editor.re-xl .re-tree-line{width:14px;border-color:var(--tree-guide)}.resource-editor.re-xl .re-tree-expander{color:var(--tree-text)!important}
+.resource-editor.re-xl [data-node-type=Bones] .re-node-icon{color:var(--tree-nodes-bone)}.resource-editor.re-xl [data-node-type=Helpers] .re-node-icon{color:var(--tree-nodes-helper)}
+.resource-editor.re-xl [data-node-type=Attachments] .re-node-icon{color:var(--tree-nodes-attachment)}.resource-editor.re-xl [data-node-type=Lights] .re-node-icon{color:var(--tree-nodes-light)}
+.resource-editor.re-xl [data-node-type^=Particle] .re-node-icon,.resource-editor.re-xl [data-node-type=RibbonEmitters] .re-node-icon{color:var(--tree-nodes-emitter)}
+.resource-editor.re-xl [data-node-type=SND] .re-node-icon{color:var(--tree-nodes-sound)}.resource-editor.re-xl [data-node-type=SPL] .re-node-icon{color:var(--tree-nodes-splat)}
+.resource-editor.re-xl [data-node-type=FPT] .re-node-icon{color:var(--tree-nodes-footprint)}.resource-editor.re-xl [data-node-type=UBR] .re-node-icon{color:var(--tree-nodes-ubersplat)}.resource-editor.re-xl [data-node-type=SPN] .re-node-icon{color:var(--tree-nodes-spawn)}
 .resource-editor.re-xl .re-properties{padding:0 3px 0 0;scrollbar-gutter:stable}
 .resource-editor.re-xl .re-resource-preview{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap}
 .resource-editor.re-xl .re-texture-preview{width:110px;flex:0 0 110px;margin:0}.resource-editor.re-xl .re-checker{height:100px;display:grid;place-items:center;border:1px solid var(--ui-border);overflow:hidden;background:repeating-conic-gradient(#a7abb1 0 25%,#d7dae0 0 50%) 50%/16px 16px}
@@ -47,8 +47,19 @@
 .resource-editor.re-xl .re-event-editor audio{width:100%;height:34px}.resource-editor.re-xl .re-event-frames{display:flex;gap:5px;flex-wrap:wrap;align-items:center}.resource-editor.re-xl .re-event-frames>div{display:flex;flex-wrap:wrap;gap:3px;max-height:76px;overflow:auto;width:100%}
 .resource-editor.re-xl .re-footer{border-color:var(--ui-border);padding:5px 10px;min-height:34px}.resource-editor.re-xl .re-status{color:var(--ui-muted);font-size:11px}.resource-editor.re-xl .field-error{color:#c03535;font:12px/1.4 system-ui}
 @media(max-width:900px){.resource-editor.re-xl .re-node-window .re-list-pane{width:45%;min-width:230px}.resource-editor.re-xl .re-list-pane{width:30%;min-width:160px}.resource-editor.re-xl .re-body{gap:8px}}
-:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree{height:185px;overflow:auto;background:#202832;color:#e5eaf0;border:1px solid #465363;border-radius:3px}
+:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree{height:185px;overflow:auto;background:var(--tree-background);color:var(--tree-text);border:1px solid var(--tree-border);border-radius:3px}
 :root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree button{display:flex;align-items:center;gap:5px;width:100%;min-height:23px;border:0;border-radius:0;background:transparent;color:inherit;text-align:left;padding:3px 6px;font-size:12px}
-:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree button:hover{background:#2b394b}:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree [aria-selected=true]{background:#344e70;box-shadow:inset 3px 0 #86baff;color:white}
-:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree svg{display:block;width:14px;height:14px;flex-shrink:0}:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree span{flex:1;overflow-wrap:anywhere;min-width:0}:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree small{color:#b7c8dc;font-size:10px}
+:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree button:hover{background:var(--tree-hover)}:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree [aria-selected=true]{background:var(--tree-selected);box-shadow:inset 3px 0 var(--tree-accent);color:var(--tree-selected-text)}
+:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree svg{display:block;width:14px;height:14px;flex-shrink:0}:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree span{flex:1;overflow-wrap:anywhere;min-width:0}:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree small{color:var(--tree-muted);font-size:10px}
 .resource-editor.re-xl .re-decal-preview canvas{display:block;width:100%;height:auto;aspect-ratio:2;background:#8c8c8c}.resource-editor.re-xl .re-decal-preview>div{display:flex;gap:6px;align-items:center;margin-top:4px}.resource-editor.re-xl .re-decal-preview input{flex:1;min-width:0}
+
+:root[data-theme] .resource-editor.re-xl .re-list{background:var(--tree-background);color:var(--tree-text);border-color:var(--tree-border);font-size:var(--tree-font-size)}
+:root[data-theme] .resource-editor.re-xl .re-list>button{font-size:inherit;background:transparent;color:var(--tree-text)}
+:root[data-theme] .resource-editor.re-xl .re-list :is(.re-node-name,.re-tree-row){font-size:inherit;color:inherit}
+:root[data-theme] .resource-editor.re-xl .re-list :is(button,.re-tree-row):hover{background:var(--tree-hover)}
+:root[data-theme] .resource-editor.re-xl .re-list :is(button,.re-tree-row).re-selected{background:var(--tree-selected);color:var(--tree-selected-text);box-shadow:inset 3px 0 var(--tree-accent)}
+:root[data-theme] .resource-editor.re-xl .re-list small,:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree small{color:var(--tree-muted);font-size:calc(var(--tree-font-size) - 2px)}
+:root[data-theme] .resource-editor.re-xl .re-list .re-tree-expander{background:transparent;color:inherit!important}
+:root[data-theme] .resource-editor.re-xl .re-tree-line:after{border-color:var(--tree-guide)}
+:root[data-theme] .resource-editor.re-xl .re-event-editor .re-sound-tree button{font-size:var(--tree-font-size)}
+.resource-editor.re-xl [data-node-type=CollisionShapes] .re-node-icon{color:var(--tree-nodes-collision)}

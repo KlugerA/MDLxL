@@ -56,8 +56,8 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright');
   }
   await page.getByLabel('Search event data',{exact:true}).fill('');
   await page.mouse.move(5,5);
-  assert.equal(await page.locator('.re-sound-tree').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(32, 40, 50)');
-  assert.ok(['rgba(0, 0, 0, 0)','rgb(52, 78, 112)'].includes(await page.locator('.re-sound-item').first().evaluate(el=>getComputedStyle(el).backgroundColor)));
+  assert.equal(await page.locator('.re-sound-tree').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
+  assert.ok(['rgba(0, 0, 0, 0)','rgb(197, 214, 236)'].includes(await page.locator('.re-sound-item').first().evaluate(el=>getComputedStyle(el).backgroundColor)));
   assert.equal(await page.locator('.re-sound-folder svg').first().evaluate(el=>getComputedStyle(el).display),'block');
   await page.screenshot({path:path.join(out,'node-sound.png')});
   await page.getByLabel('New node type',{exact:true}).selectOption('EventObject');await page.locator('.re-list-actions').getByRole('button',{name:'New',exact:true}).click();

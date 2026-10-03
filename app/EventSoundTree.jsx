@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Folder, FolderOpen, Volume2, ChevronDown, ChevronRight } from 'lucide-react';
+import { FOLDER_COLORS } from '../src/tree-appearance.js';
 
-const colors = {Human:'#83bdff', Orc:'#df9f79', Undead:'#b2a1ed', NightElf:'#99d197', Naga:'#74d4d2', Demon:'#ef9598', Creeps:'#e4c486', Abilities:'#c7a4f2', Sound:'#88d8b6', Unavailable:'#b5bdc8'};
+const colors = Object.fromEntries(FOLDER_COLORS.map(([key]) => [key, `var(--tree-folders-${key})`]));
 const folderLabel = value => ({NightElf:'Night Elf', UI:'UI', AI:'AI'}[value] || value.replace(/([a-z])([A-Z])/g, '$1 $2'));
 export function soundFolders(row) {
   return row.files?.[0]?.split(':').at(-1).split(/[\\/]+/).filter(Boolean).slice(0, -1) || ['Unavailable'];
@@ -25,7 +26,7 @@ export default function EventSoundTree({ rows, selectedId, query, onSelect }) {
     }
     return root;
   }, [rows, query]);
-  const render = (branch, parent = '', level = 0, color = '#88d8b6') => <>
+  const render = (branch, parent = '', level = 0, color = colors.default) => <>
     {[...branch.folders].sort(([a], [b]) => a.localeCompare(b)).map(([name, folder]) => {
       const path = parent ? `${parent}/${name}` : name, open = !!query.trim() || expanded.has(path), tint = colors[name] || color;
       const Icon = open ? FolderOpen : Folder, Chevron = open ? ChevronDown : ChevronRight;

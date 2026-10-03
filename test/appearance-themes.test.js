@@ -44,8 +44,47 @@ test('every theme replaces all tokens in main and detached documents without cha
 test('preset application pairs theme and accent while native windows use the same catalog',()=>{
   const settings=readFileSync(new URL('../app/Settings.jsx',import.meta.url),'utf8');
   const desktop=readFileSync(new URL('../electron/main.cjs',import.meta.url),'utf8');
-  assert.match(settings,/theme: preset.theme, accent: APPLICATION_THEMES\[preset.theme\].accent/);
+  assert.match(settings,/theme: preset.theme, accent: preset.accent \|\| APPLICATION_THEMES\[preset.theme\].accent/);
   assert.match(settings,/Object.entries\(APPLICATION_THEMES\)/);
   assert.doesNotMatch(desktop,/theme==='dark'/);
   assert.match(desktop,/require\('\.\.\/src\/application-themes.json'\)/);
+});
+
+test('folder and node palettes belong to each preset and remain readable', () => {
+  assert.equal(new Set(Object.values(presets).map(p => p.appearance.tree.background)).size, 7);
+  assert.equal(new Set(Object.values(presets).map(p => p.appearance.tree.folders.default)).size, 7);
+  for (const preset of Object.values(presets)) {
+    const tree = preset.appearance.tree;
+    assert.ok(contrast(tree.text, tree.background) >= 4.5, preset.name + ' tree text');
+    assert.ok(contrast(tree.selectedText, tree.selected) >= 4.5, preset.name + ' selected text');
+    for (const tint of Object.values(tree.folders)) assert.ok(contrast(tint, tree.background) >= 4.5, preset.name + ' folder ' + tint);
+    for (const tint of Object.values(tree.nodes)) assert.ok(contrast(tint, tree.background) >= 3, preset.name + ' node ' + tint);
+    const old = structuredClone(preset.appearance); delete old.tree;
+    const migrated = normalizePreferences({ rendererRevision: 3, theme: preset.theme, viewportPreset: preset.id, viewportAppearance: old });
+    assert.deepEqual(migrated.viewportAppearance.tree, tree, preset.name + ' older profile');
+  }
+});
+
+test('custom tree colors, font size and theme survive profile and configuration export', () => {
+  const appearance = structuredClone(presets['blender-style'].appearance);
+  Object.assign(appearance.tree, { background: '#112233', text: '#ddeeff', fontSize: 17 });
+  appearance.tree.nodes.bone = '#abcdef'; appearance.tree.folders.Human = '#fedcba';
+  const prefs = normalizePreferences({ rendererRevision: 3, theme: 'dark', accent: '#123456', viewportPreset: 'custom-trees', viewportAppearance: appearance,
+    viewportPresets: [{ id: 'custom-trees', name: 'Custom trees', appearance, theme: 'dark', accent: '#123456' }] });
+  assert.deepEqual(importConfiguration(JSON.stringify(exportConfiguration(prefs))), prefs);
+  assert.deepEqual(normalizePreferences(JSON.parse(JSON.stringify(prefs))), prefs);
+  assert.deepEqual(prefs.viewportPresets[0].appearance.tree, appearance.tree);
+  assert.equal(prefs.viewportPresets[0].theme, 'dark'); assert.equal(prefs.viewportPresets[0].accent, '#123456');
+  const values = new Map();
+  applyApplicationTheme(prefs, { documentElement: { dataset: {}, style: { setProperty: (k, v) => values.set(k, v) } } });
+  assert.equal(values.get('--tree-background'), '#112233'); assert.equal(values.get('--tree-font-size'), '17px');
+  assert.equal(values.get('--tree-nodes-bone'), '#abcdef'); assert.equal(values.get('--tree-folders-Human'), '#fedcba');
+});
+
+test('malformed tree settings are bounded without mutating preset defaults', () => {
+  const prefs = normalizePreferences({ rendererRevision: 3, theme: 'dark', viewportAppearance: { tree: { background: 'red; color: black', fontSize: 99, nodes: { bone: '#FEDCBA' }, folders: null } } });
+  assert.equal(prefs.viewportAppearance.tree.background, presets['blender-style'].appearance.tree.background);
+  assert.equal(prefs.viewportAppearance.tree.fontSize, 20); assert.equal(prefs.viewportAppearance.tree.nodes.bone, '#fedcba');
+  prefs.viewportAppearance.tree.nodes.helper = '#000000';
+  assert.notEqual(presets['blender-style'].appearance.tree.nodes.helper, '#000000');
 });

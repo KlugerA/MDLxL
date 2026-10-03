@@ -1,3 +1,6 @@
+import themes from './application-themes.json' with { type: 'json' };
+import { normalizeTreeAppearance, treeAppearanceForTheme } from './tree-appearance.js';
+
 const color = (value, fallback) => /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
 const number = (value, min, max, fallback) => value !== null && value !== '' && Number.isFinite(Number(value))
   ? Math.round(Math.max(min, Math.min(max, Number(value))) * 100) / 100 : fallback;
@@ -13,7 +16,8 @@ function quadDefaults(background) {
   return { background: { ...background }, grid: { enabled: true, spacing: 24, majorEvery: 4, thickness: 1, opacity: .55, majorOpacity: .85, minorColor: mix(.25), majorColor: mix(.45), axisColor: mix(.7) } };
 }
 
-const profile = value => Object.freeze({
+const profile = (theme, value) => Object.freeze({
+  tree: Object.freeze(treeAppearanceForTheme(theme)),
   selectedGeoset: Object.freeze({ ...value.selectedGeoset }),
   otherGeoset: Object.freeze({ ...value.otherGeoset }),
   selectedVertex: Object.freeze({ ...value.selectedVertex }),
@@ -28,7 +32,7 @@ const profile = value => Object.freeze({
 // viewport is #cccccc, its clean vertex markers are #0000ff and the primary
 // active wire is the screenshot's pale #e5ffe5.
 export const BUILT_IN_VIEWPORT_PRESETS = Object.freeze({
-  'mdlvis-vanilla': Object.freeze({ id: 'mdlvis-vanilla', name: 'Lordaeron', theme: 'light', appearance: profile({
+  'mdlvis-vanilla': Object.freeze({ id: 'mdlvis-vanilla', name: 'Lordaeron', theme: 'light', appearance: profile('light', {
     selectedGeoset: { color: '#ffffff', thickness: 1, opacity: 1, style: 'solid', spacing: 3 },
     otherGeoset: { color: '#e5ffe5', thickness: 1, opacity: 1, style: 'solid', spacing: 3 },
     selectedVertex: { color: '#ff0000', size: 6, style: 'square' },
@@ -36,7 +40,7 @@ export const BUILT_IN_VIEWPORT_PRESETS = Object.freeze({
     background: { type: 'color', color: '#cccccc', imageData: '', imageName: '', display: 'fit', opacity: 0.7 },
     xrayVertices: false,
   }) }),
-  'blender-style': Object.freeze({ id: 'blender-style', name: 'Blackrock', theme: 'dark', appearance: profile({
+  'blender-style': Object.freeze({ id: 'blender-style', name: 'Blackrock', theme: 'dark', appearance: profile('dark', {
     selectedGeoset: { color: '#ff8a00', thickness: 1.5, opacity: 1, style: 'solid', spacing: 3 },
     otherGeoset: { color: '#707070', thickness: 1, opacity: 0.72, style: 'solid', spacing: 3 },
     selectedVertex: { color: '#ff8a00', size: 5, style: 'circle' },
@@ -44,7 +48,7 @@ export const BUILT_IN_VIEWPORT_PRESETS = Object.freeze({
     background: { type: 'color', color: '#181818', imageData: '', imageName: '', display: 'fit', opacity: 0.7 },
     xrayVertices: false,
   }) }),
-  'warm-graphite': Object.freeze({ id: 'warm-graphite', name: 'Ironforge', theme: 'warm-dark', appearance: profile({
+  'warm-graphite': Object.freeze({ id: 'warm-graphite', name: 'Ironforge', theme: 'warm-dark', appearance: profile('warm-dark', {
     selectedGeoset: { color: '#e6bd86', thickness: 1.5, opacity: 1, style: 'solid', spacing: 3 },
     otherGeoset: { color: '#a89f91', thickness: 1, opacity: 1, style: 'solid', spacing: 3 },
     selectedVertex: { color: '#e6bd86', size: 6, style: 'square' },
@@ -52,7 +56,7 @@ export const BUILT_IN_VIEWPORT_PRESETS = Object.freeze({
     background: { type: 'color', color: '#262421', imageData: '', imageName: '', display: 'fit', opacity: 0.7 },
     xrayVertices: false,
   }) }),
-  'nord': Object.freeze({ id: 'nord', name: 'Northrend', theme: 'nord', appearance: profile({
+  'nord': Object.freeze({ id: 'nord', name: 'Northrend', theme: 'nord', appearance: profile('nord', {
     selectedGeoset: { color: '#88c0d0', thickness: 1.5, opacity: 1, style: 'solid', spacing: 3 },
     otherGeoset: { color: '#81a1c1', thickness: 1, opacity: 1, style: 'solid', spacing: 3 },
     selectedVertex: { color: '#88c0d0', size: 6, style: 'square' },
@@ -60,7 +64,7 @@ export const BUILT_IN_VIEWPORT_PRESETS = Object.freeze({
     background: { type: 'color', color: '#2e3440', imageData: '', imageName: '', display: 'fit', opacity: 0.7 },
     xrayVertices: false,
   }) }),
-  'solarized-light': Object.freeze({ id: 'solarized-light', name: 'Silvermoon', theme: 'solarized-light', appearance: profile({
+  'solarized-light': Object.freeze({ id: 'solarized-light', name: 'Silvermoon', theme: 'solarized-light', appearance: profile('solarized-light', {
     selectedGeoset: { color: '#b34c1b', thickness: 1.5, opacity: 1, style: 'solid', spacing: 3 },
     otherGeoset: { color: '#657b83', thickness: 1, opacity: 1, style: 'solid', spacing: 3 },
     selectedVertex: { color: '#b34c1b', size: 6, style: 'square' },
@@ -68,7 +72,7 @@ export const BUILT_IN_VIEWPORT_PRESETS = Object.freeze({
     background: { type: 'color', color: '#fdf6e3', imageData: '', imageName: '', display: 'fit', opacity: 0.7 },
     xrayVertices: false,
   }) }),
-  'gruvbox-dark': Object.freeze({ id: 'gruvbox-dark', name: 'Durotar', theme: 'gruvbox-dark', appearance: profile({
+  'gruvbox-dark': Object.freeze({ id: 'gruvbox-dark', name: 'Durotar', theme: 'gruvbox-dark', appearance: profile('gruvbox-dark', {
     selectedGeoset: { color: '#fabd2f', thickness: 1.5, opacity: 1, style: 'solid', spacing: 3 },
     otherGeoset: { color: '#a89984', thickness: 1, opacity: 1, style: 'solid', spacing: 3 },
     selectedVertex: { color: '#fabd2f', size: 6, style: 'square' },
@@ -76,7 +80,7 @@ export const BUILT_IN_VIEWPORT_PRESETS = Object.freeze({
     background: { type: 'color', color: '#282828', imageData: '', imageName: '', display: 'fit', opacity: 0.7 },
     xrayVertices: false,
   }) }),
-  'catppuccin-mocha': Object.freeze({ id: 'catppuccin-mocha', name: 'Dalaran', theme: 'catppuccin-mocha', appearance: profile({
+  'catppuccin-mocha': Object.freeze({ id: 'catppuccin-mocha', name: 'Dalaran', theme: 'catppuccin-mocha', appearance: profile('catppuccin-mocha', {
     selectedGeoset: { color: '#cba6f7', thickness: 1.5, opacity: 1, style: 'solid', spacing: 3 },
     otherGeoset: { color: '#7f849c', thickness: 1, opacity: 1, style: 'solid', spacing: 3 },
     selectedVertex: { color: '#cba6f7', size: 6, style: 'square' },
@@ -136,6 +140,7 @@ export function normalizeViewportAppearance(value, fallback = DEFAULT_VIEWPORT_A
   const viaView = typeof highlight.viaView === 'boolean' ? highlight.viaView : highlightBase.viaView;
   const viaSelection = typeof highlight.viaSelection === 'boolean' ? highlight.viaSelection : highlightBase.viaSelection;
   return {
+    tree: normalizeTreeAppearance(input.tree, base.tree || treeAppearanceForTheme()),
     selectedGeoset: normalizeWire(input.selectedGeoset, base.selectedGeoset || DEFAULT_VIEWPORT_APPEARANCE.selectedGeoset),
     otherGeoset: normalizeWire(input.otherGeoset, base.otherGeoset || DEFAULT_VIEWPORT_APPEARANCE.otherGeoset),
     selectedVertex: normalizeVertex(input.selectedVertex, base.selectedVertex || DEFAULT_VIEWPORT_APPEARANCE.selectedVertex),
@@ -169,7 +174,9 @@ export function normalizeViewportPresets(value) {
     const name = typeof item.name === 'string' ? item.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 80) : '';
     if (!id || !name || ids.has(id) || names.has(name.toLowerCase())) continue;
     ids.add(id); names.add(name.toLowerCase());
-    output.push({ id, name, appearance: normalizeViewportAppearance(item.appearance) });
+    const theme = Object.hasOwn(themes, item.theme) ? item.theme : null;
+    const appearance = normalizeViewportAppearance(item.appearance, { ...DEFAULT_VIEWPORT_APPEARANCE, tree: treeAppearanceForTheme(theme) });
+    output.push({ id, name, appearance, ...(theme ? { theme, accent: color(item.accent, themes[theme].accent) } : {}) });
   }
   return output;
 }
