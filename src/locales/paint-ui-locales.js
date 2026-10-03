@@ -1873,12 +1873,6 @@ const rows = [
     "调整纹理大小…"
   ],
   [
-    "Make it yours.",
-    "Сделайте по-своему.",
-    "Hazlo tuyo.",
-    "画出你的风格。"
-  ],
-  [
     "Paint your model, borrow Warcraft textures, and mix them together.",
     "Рисуйте на модели, берите текстуры Warcraft и смешивайте их.",
     "Pinta tu modelo, toma texturas de Warcraft y combínalas.",
