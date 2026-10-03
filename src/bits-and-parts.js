@@ -1,12 +1,91 @@
 import { ensureDummyBone } from './dummy-bone.js';
-import { recalculateExtents } from './editor-document.js';
-import { sampleTrack } from './animation.js';
+import { importGeosets, openDocument, recalculateExtents } from './editor-document.js';
+import { sampleGeosetAnimation, sampleTrack } from './animation.js';
+import { captureMeshSelection } from './mesh-clipboard.js';
 
 const TEXTURE_SLOTS = ['TextureID', 'NormalTextureID', 'ORMTextureID', 'EmissiveTextureID', 'TeamColorTextureID', 'ReflectionsTextureID'];
 export const partPathKey = value => String(value || '').replaceAll('/', '\\').toLowerCase();
 const canonical = value => Array.isArray(value) || ArrayBuffer.isView(value) ? Array.from(value, canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().filter(key => value[key] !== undefined).map(key => [key, canonical(value[key])])) : value;
 const fingerprint = value => JSON.stringify(canonical(value));
+const constantKey = (Frame, rgb, lineType) => ({ Frame, Vector: new Float32Array(rgb), ...(lineType > 1 ? { InTan: new Float32Array(lineType === 2 ? rgb.map(() => 0) : rgb), OutTan: new Float32Array(lineType === 2 ? rgb.map(() => 0) : rgb) } : {}) });
 export const partTextureKey = texture => fingerprint({ ...texture, Image: partPathKey(texture.Image), ReplaceableId: texture.ReplaceableId || 0, Flags: texture.Flags || 0 });
+
+/** Capture only selected vertices, including loose points, across every donor
+ * geoset. Reuse the clipboard's attribute slicing and rigid dependency import. */
+export function collectPart(source, selection) {
+  if (!Object.values(selection || {}).some(ids => ids?.length)) throw Error('Select vertices in the vertex editor before collecting a Bit.');
+  const captured = captureMeshSelection(source, selection);
+  if (!captured.vertexCount) throw Error('Select vertices in the vertex editor before collecting a Bit.');
+  const model = openDocument(`Version { FormatVersion ${source.Version}, }\nModel "Collected Bit" { BlendTime 150, }`, 'Collected Bit.mdl').model;
+  model.Sequences = structuredClone(source.Sequences || []);
+  const bone = ensureDummyBone(model, { weighted: captured.indices.some(index => captured.model.Geosets[index].SkinWeights?.length) });
+  importGeosets(model, captured.model, captured.indices, null, { rigidNode: bone.ObjectId });
+  for (const geoset of model.Geosets) geoset.Anims = model.Sequences.map(() => ({ MinimumExtent: geoset.MinimumExtent.slice(), MaximumExtent: geoset.MaximumExtent.slice(), BoundsRadius: geoset.BoundsRadius }));
+  return model;
+}
+
+/** Existing displayed RGB keys become named, constant presets, using the same
+ * sampling path as Bitz import (including global color channels). */
+export function currentPartPresets(source) {
+  return (source.Sequences || []).flatMap((sequence, sequenceIndex) => {
+    const colors = [], samples = partColorSamples(source, sequenceIndex);
+    for (const channel of partColorSources(source, sequenceIndex)) if (!samples.some(sample => sample.recordIndex === channel.recordIndex)) samples.push({ rgb: resolvePartColor(source, { sequenceIndex, recordIndex: channel.recordIndex, frame: sequence.Interval[0] }) });
+    for (const sample of samples) if (!colors.some(rgb => rgb.every((value, index) => Math.abs(value - sample.rgb[index]) < 1e-6))) colors.push(sample.rgb);
+    return colors.map((rgb, index) => ({ name: colors.length === 1 ? sequence.Name : `${sequence.Name} RGB ${index + 1}`, rgb }));
+  });
+}
+
+/** Build a standalone Bit. Each chosen RGB is a real sequence with constant
+ * keys for every collected geoset; no source rig animation is carried over. */
+export function collectedPartModel(source, { name, importCurrent = false, presets = [] }) {
+  if (!String(name || '').trim()) throw Error('Name the Bit before saving.');
+  const model = structuredClone(source);
+  model.Info.Name = name.trim();
+  const appearance = model.Geosets.map((_, index) => sampleGeosetAnimation(model, index, 0, -1));
+  model.Sequences = [];
+  model.GeosetAnims = model.Geosets.map((_, index) => ({ GeosetId: index, Flags: 2, Color: new Float32Array(appearance[index].color), Alpha: appearance[index].alpha }));
+  for (const preset of [...(importCurrent ? currentPartPresets(source) : []), ...presets]) {
+    if (!preset.name?.trim()) throw Error('Name each RGB animation.');
+    const rgb = preset.rgb;
+    if (!rgb || rgb.length !== 3 || Array.from(rgb).some(value => !Number.isFinite(value) || value < 0 || value > 1)) throw Error('RGB values must be between 0 and 255.');
+    if (model.Sequences.some(sequence => sequence.Name.toLowerCase() === preset.name.trim().toLowerCase())) throw Error('RGB animation names must be unique.');
+    const start = model.Sequences.length * 1000, end = start + 900;
+    model.Sequences.push({ Name: preset.name.trim(), Interval: new Uint32Array([start, end]), NonLooping: false, MoveSpeed: 0, Rarity: 0, MinimumExtent: model.Info.MinimumExtent.slice(), MaximumExtent: model.Info.MaximumExtent.slice(), BoundsRadius: model.Info.BoundsRadius });
+    for (const record of model.GeosetAnims) {
+      if (!record.Color?.Keys) { record._MdxDefaults = { Color: record.Color.slice() }; record.Color = { LineType: 0, GlobalSeqId: null, Keys: [] }; }
+      record.Color.Keys.push(...[start, end].map(Frame => constantKey(Frame, rgb, record.Color.LineType)));
+    }
+  }
+  for (const geoset of model.Geosets) geoset.Anims = model.Sequences.map(() => ({ MinimumExtent: geoset.MinimumExtent.slice(), MaximumExtent: geoset.MaximumExtent.slice(), BoundsRadius: geoset.BoundsRadius }));
+  return model;
+}
+
+export function serializeCollectedPart(model) {
+  const document = openDocument(`Version { FormatVersion ${model.Version}, }\nModel "Collected Bit" { BlendTime 150, }`, 'Collected Bit.mdl');
+  document.apply('Collect Bit', [], target => Object.assign(target, structuredClone(model)));
+  return document.serialize('mdx');
+}
+
+/** Uniform, constant presets can be chosen directly by their animation. */
+export function partPresetColor(model, sequenceIndex) {
+  const sequence = model.Sequences?.[sequenceIndex];
+  if (!sequence) return null;
+  const sources = partColorSources(model, sequenceIndex);
+  if (new Set(sources.map(source => source.geosetIndex)).size !== model.Geosets.length) return null;
+  let rgb;
+  for (const source of sources) {
+    const track = model.GeosetAnims[source.recordIndex].Color;
+    if (source.global) return null;
+    const frames = [sequence.Interval[0], sequence.Interval[1], ...(track.Keys || []).map(key => key.Frame).filter(frame => frame >= sequence.Interval[0] && frame <= sequence.Interval[1])];
+    for (const frame of frames) {
+      const color = resolvePartColor(model, { sequenceIndex, recordIndex: source.recordIndex, frame });
+      if (rgb && color.some((value, index) => Math.abs(value - rgb[index]) > 1e-6)) return null;
+      rgb = color;
+    }
+    if (track.LineType > 1 && (track.Keys || []).some(key => key.Frame >= sequence.Interval[0] && key.Frame <= sequence.Interval[1] && ['InTan', 'OutTan'].some(field => key[field] && Array.from(key[field]).some((value, index) => Math.abs(value - (track.LineType === 2 ? 0 : rgb[index])) > 1e-6)))) return null;
+  }
+  return rgb || null;
+}
 
 export function partTextureIndices(model) {
   const indices = new Set();
@@ -72,6 +151,7 @@ export function applyPartColor(model, geosetIndices, rgb) {
     // Replacing only Color removes source color keys while preserving alpha,
     // flags unrelated to color, and all unrelated channels.
     animation.Color = new Float32Array(rgb); animation.Flags = (animation.Flags || 0) | 2; seen.add(animation.GeosetId);
+    if (animation._MdxDefaults) delete animation._MdxDefaults.Color;
   }
   for (const index of indices) if (!seen.has(index)) model.GeosetAnims.push({ GeosetId: index, Flags: 2, Alpha: 1, Color: new Float32Array(rgb) });
 }
@@ -139,7 +219,7 @@ export function commitPart(target, source, { rgb = null, texturePaths = {} } = {
   };
   applyPartColor(staged, staged.Geosets.map((_, index) => index), rgb);
   for (const geoset of staged.Geosets) {
-    if (!geoset.Vertices?.length || geoset.Vertices.length % 3 || !geoset.Faces?.length || Array.from(geoset.Faces).some(index => index >= geoset.Vertices.length / 3)) throw Error('The part contains invalid geometry.');
+    if (!geoset.Vertices?.length || geoset.Vertices.length % 3 || !geoset.Faces || geoset.Faces.length % 3 || Array.from(geoset.Faces).some(index => index < 0 || index >= geoset.Vertices.length / 3)) throw Error('The part contains invalid geometry.');
     geoset.MaterialID = materialRef(geoset.MaterialID);
   }
   const bone = ensureDummyBone(next, { weighted: staged.Geosets.some(geoset => geoset.SkinWeights?.length) });

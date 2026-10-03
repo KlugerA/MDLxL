@@ -145,7 +145,7 @@ export default function App() {
   setLanguage(preferences.language);
   useEffect(()=>{document.documentElement.lang=preferences.language;},[preferences.language]);
   const [settingsTab, setSettingsTab] = useState(null), [preferencesReady, setPreferencesReady] = useState(!window.desktop);
-  const pressedKeysIcon = './classic/pasbtn-magical-sentry.png';
+  const pressedKeysIcon = './classic/btn-magical-sentry.png';
   useEffect(() => bindDropdownWheel(document), []);
   const textureUrls = useRef(new Set());
   const timelineCommands = useRef({});
@@ -432,6 +432,10 @@ export default function App() {
   };
   const selectMode = async next => {
     if (savingRef.current || next === mode) return;
+    // Function-key mode changes can remove a focused blur-committed field
+    // before React sees its blur. Commit that pending value while its editor
+    // is still mounted (notably the final RGB channel in Animations).
+    document.activeElement?.blur?.();
     if (mode === 'showcase') { const pending = []; window.dispatchEvent(new CustomEvent('mdlvis-flush-captures', { detail: pending })); await Promise.all(pending); }
     if (mode === 'paint') { window.dispatchEvent(new CustomEvent('mdlxl-paint-flush')); if (session.paintProject && !await applyPaintToModel()) return; setRenderMode('textured'); setSelectable(new Set(visiblePaintGeosets(paintOriginalModel, activeGeoset))); setShowAllGeosets(false); }
     if (next === 'paint' && session.paintAppliedRevision !== undefined) { session.paintWorkingModel = structuredClone(doc.model); session.paintWorkingRevision++; }
@@ -1299,7 +1303,7 @@ export default function App() {
     {mode === 'uv' && window.desktop && uvWindow && <DetachedWindow childWindow={uvWindow} title="MDLxL — UV Wrapper" preferences={preferences} onClose={() => { uvWindowRef.current = null; setUVWindow(null); if (latest.current.mode === 'uv') selectMode('vertices'); }}>{uvWorkspace}{dialog?.host === 'uv' && textureLibraryDialog}</DetachedWindow>}
     {dialog?.type === 'portraitSetup' && <PortraitSetup model={model} missingCamera={dialog.missingCamera} missingSequence={dialog.missingSequence} sourceIndex={sequence >= 0 ? sequence : model.Sequences.length ? 0 : -1} disabled={doc.readOnly || saving} onCreate={completePortraitSetup} onSetCamera={setMissingPortraitCamera} onClose={() => setDialog(null)}/>}
     {dialog?.type==='forge' && <Suspense fallback={<div className="classic-modal">Loading Forge…</div>}><Forge preferences={preferences} model={model} modelPath={session.path} activeGeoset={activeGeoset} onClose={()=>setDialog(null)} onCommit={forgeItem} onDensityCommit={applyGeosetDensity}/></Suspense>}
-    {dialog?.type==='bitsAndParts' && <Suspense fallback={<div className="classic-modal">Loading BitsAndParts…</div>}><BitsAndParts model={model} preferences={preferences} textureAssets={session.assets} teamColor={teamColor} onClose={()=>setDialog(null)} onCommit={importPart}/></Suspense>}
+    {dialog?.type==='bitsAndParts' && <Suspense fallback={<div className="classic-modal">Loading BitsAndParts…</div>}><BitsAndParts model={model} selectionByGeoset={mode === 'vertices' ? validSelection : null} preferences={preferences} textureAssets={session.assets} teamColor={teamColor} onClose={()=>setDialog(null)} onCommit={importPart}/></Suspense>}
     {dialog?.type==='particles' && <Suspense fallback={<div className="classic-modal">Loading Particle Editor…</div>}><ParticleEditor onPlacedAssets={assets=>{changeOverlay('particles',true);session.assets=new Map([...session.assets,...assets]);refresh();}} doc={doc} revision={doc.revision} edit={edit} refresh={refresh} modelPath={session.path} textureAssets={session.assets} preferences={preferences} teamColor={teamColor} selectedNodeId={dialog.nodeId} attachmentNodeId={dialog.attachmentId} selectedGeometry={dialog.selection} sequenceIndex={sequence} previewFrame={time} onClose={()=>setDialog(null)} onNodeChange={id=>setSelectedNodeIds(id==null?[]:[id])}/></Suspense>}
     {dialog?.type==='shape' && <Suspense fallback={<div className="classic-modal">Loading shaping tools…</div>}><ShapingDialog model={model} selectedGeosets={[...selectable]} selectionByGeoset={validSelection} initialTool={dialog.tool} onClose={()=>setDialog(null)} onApply={(options,selection)=>edit('Shape geosets',['Geosets','Info'],m=>shapeGeosets(m,selection,options))}/></Suspense>}
     {dialog?.type==='saveFormat' && <Dialog title="Save as" onClose={()=>setDialog(null)} footer={<><button disabled={saving} onClick={async()=>{if(await save(true,'mdx'))setDialog(null);}}>Save MDX…</button><button disabled={saving} onClick={async()=>{if(await save(true,'mdl'))setDialog(null);}}>Save MDL…</button><button disabled={saving} onClick={()=>setDialog(null)}>Cancel</button></>}><p>Model version: {model.Version}</p><p>MDX saves the binary model. MDL saves editable text. Both preserve supported model data; unsupported conversion is blocked before writing.</p></Dialog>}

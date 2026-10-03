@@ -1,7 +1,7 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'C:/Users/PC/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 (async()=>{
- const root=process.cwd(),out=path.join(root,'out/catbox-review/queue-inspection-'+Date.now());fs.mkdirSync(out,{recursive:true});
+ const root=process.cwd(),out=path.join(root,'out/showcase-review/queue-inspection-'+Date.now());fs.mkdirSync(out,{recursive:true});
  const model=process.env.MDLXL_QUEUE_MODEL_A||'C:/Users/PC/Desktop/WH_WOC_KnightKhorneFlail04.mdx',hash=()=>require('node:crypto').createHash('sha256').update(fs.readFileSync(model)).digest('hex'),beforeHash=hash();
  const other=process.env.MDLXL_QUEUE_MODEL_B||'C:/Users/PC/Desktop/WH_WOC_KnightKhorneAxe01.mdx'; const otherHash=require('node:crypto').createHash('sha256').update(fs.readFileSync(other)).digest('hex');
  const cache=JSON.parse(fs.readFileSync(path.join(root,'profile/game-data-discovery.json'),'utf8')).result;
