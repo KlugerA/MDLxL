@@ -558,7 +558,8 @@ export default function GamePreview(inputProps) {
     const bounds = new THREE.Box3(), point = new THREE.Vector3();
     for (const [index, geo] of ownedModel.Geosets.entries()) if (!props.isolatedGeosets || props.isolatedGeosets.includes(index)) for (let i = 0; i < geo.Vertices.length; i += 3) bounds.expandByPoint(point.fromArray(geo.Vertices, i));
     if (bounds.isEmpty()) bounds.set(new THREE.Vector3(-50, -50, 0), new THREE.Vector3(50, 50, 100));
-    const center = bounds.getCenter(new THREE.Vector3()), boundsSize = bounds.getSize(new THREE.Vector3()), radius = Math.max(1, boundsSize.length() / 2);
+    const center = bounds.getCenter(new THREE.Vector3()), boundsSize = bounds.getSize(new THREE.Vector3());
+    let radius = Math.max(1, boundsSize.length() / 2);
     const fitRadius = () => {
       const p = latest.current, gridVisible = p.overlays?.grid ?? !!p.showGrid;
       if (p.previewSelectionMode || p.particleAuthoring) return radius;
@@ -892,6 +893,16 @@ export default function GamePreview(inputProps) {
         poseSequence = useAuthoredSequenceInterval(native.getFrame());
         if (poseSequence !== selected) updateNative(0);
         applyRestPoseMatrices(native.rendererData, p.restPose);
+        if (p.isolatedGeosets && (sequenceChanged || userSeek)) {
+          const matrices = new Map((native.rendererData.nodes || []).flatMap((node, index) => node?.matrix ? [[index, new THREE.Matrix4().fromArray(node.matrix)]] : []));
+          bounds.makeEmpty();
+          for (const index of p.isolatedGeosets) {
+            const geoset = ownedModel.Geosets[index]; if (!geoset) continue;
+            const vertices = skinGeoset(geoset, matrices);
+            for (let i = 0; i < vertices.length; i += 3) bounds.expandByPoint(point.fromArray(vertices, i));
+          }
+          if (!bounds.isEmpty()) { bounds.getCenter(center); bounds.getSize(boundsSize); radius = Math.max(1, boundsSize.length() / 2); fit(); }
+        }
         if (p.portraitMode && !state.cameraEditing && !state.cameraDetached) {
           const evaluated = evaluateModelCamera(p.model, p.model?.Cameras?.[p.portraitCameraIndex], native.getFrame(), poseSequence, globalClock);
           if (evaluated) {

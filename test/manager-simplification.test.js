@@ -9,8 +9,8 @@ import { eventCatalog, assignEventData, setEventFrame, resolveEventSound } from 
 test('native sound lookup retains identity across FLAC table paths and installed OGG files', async () => {
  const file='war3.w3mod:Units/Creeps/Spider/SpiderDeath1.flac', ogg=file.replace('.flac','.ogg');
  const bytes=new Uint8Array([1,2,3]); let request;
- const sound=await resolveEventSound(async payload=>{request=payload;return [{name:ogg,bytes}];},file,'model.mdx');
- assert.deepEqual(request,{names:[file,ogg],path:'model.mdx'});
+ const sound=await resolveEventSound(async payload=>{request=payload;return [{name:file,sourceName:ogg,bytes}];},file,'model.mdx');
+ assert.deepEqual(request,{names:[file],path:'model.mdx'});
  assert.equal(sound.mime,'audio/ogg');assert.equal(sound.bytes,bytes);
  const exact=await resolveEventSound(async()=>[{name:ogg,bytes},{name:file,bytes}],file,'model.mdx');
  assert.equal(exact.mime,'audio/flac');

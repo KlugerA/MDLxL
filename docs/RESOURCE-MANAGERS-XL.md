@@ -28,11 +28,17 @@ into an audio player. Missing definitions/files are reported, never substituted.
 The existing MPQ reader cannot decode some compressed WAV sectors; playback from
 the installed CASC sound files was verified.
 
-The sound follow-up handles native SLK paths ending in FLAC when the installation
-stores the same sound as OGG. It prefers the exact path, uses the loaded format's
-MIME type, and leaves custom paths unchanged. SpiderDeath (DSPD), the reported
-failure, now decodes and plays in the Electron regression. Splat and geoset
-preview follow-ups remain pending; accepted visibility controls are unchanged.
+Sounds are grouped in collapsible, color-coded folders from their game paths.
+Search includes names, event IDs and categories. The selected row stays visible
+when clearing search. Sound lookup first tries the authored path, then uses the
+installed CASC sound index and content keys for the same logical file in its
+installed language/module and actual audio format. It does not guess renamed
+files. A new selection clears the preceding audio immediately.
+
+Blood Splat, Footprint and Uber Splat selections have a looping animated preview
+with pause and scrubbing. It uses the existing event renderer, native atlas
+frames, timing, colors and blending. Its preview clock does not edit the model.
+Isolated geoset cameras fit the actual rendered pose at the selected frame.
 
 ## Research
 
@@ -46,15 +52,27 @@ Checked 3 October 2026:
 
 ## Verification
 
-79 focused source/compatibility tests pass: held keys, owner isolation, material
-visibility, event IDs/times, undo, MDL/MDX fixture round trips, sound mapping and
-ordinary preview preservation.
+The latest focused run passed 70 of 72 source/compatibility checks. The two
+event-render-model version assertions also fail on the untouched pre-patch HEAD
+and are outside these changes. Coverage includes held keys, owner isolation,
+event IDs/times, undo, MDL/MDX fixture round trips, sound mapping, installed-locale
+and content-key lookup, cache restart, and ordinary preview preservation.
 
 The rebuilt Electron workflow on the supplied graveguard verifies the original
 numbered geoset grids in all four editors, existing visibility checkbox, global
 clock selection, exact material-layer targeting, actual audio decoding/playback,
 event creation, MDX write/reopen, draggable windows, and actual isolated WebGL
-mesh draws. Screenshots were inspected; the original model is byte-identical.
+mesh draws. Avatar (AHAV), SpiderDeath (DSPD), PeasantDeath (DPES), FootmanDeath
+(DFOO), StarfallTarget (AEST), and CentaurDrudgeDeath (DCDD) decoded and played;
+these cover both OGG and FLAC. Native blood-splat pixels change during initial
+spread and decay. Geoset 14 at frame 6720 is centered on its rendered pose, fits
+without clipping and has the correct canvas aspect. Screenshots were inspected;
+the original model is byte-identical.
+
+A read-only audit of the installed game resolved the first sound file for 685
+of 710 event entries. The other 25 have absent definitions, placeholder names or
+stale paths in the game tables. Those remain explicit unavailable resources;
+this does not claim all catalog entries are playable or every variant was heard.
 
 The graveguard's MDL conversion already fails verification on ten helper Flags
 fields before edits. Edited MDX save/reopen passes, and focused fixtures pass

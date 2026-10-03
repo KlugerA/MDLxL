@@ -1,4 +1,4 @@
-import { parseSlk, EVENT_TABLE_PATHS } from './event-preview-data.js';
+import { parseSlk, EVENT_TABLE_PATHS, resolveEventDefinition } from './event-preview-data.js';
 
 export const EVENT_TYPES = { SND: 'Sound', SPL: 'Blood Splat', FPT: 'Footprint', UBR: 'Uber Splat', SPN: 'Spawn Object' };
 export const NODE_EVENT_TABLES = ['UI\\SoundInfo\\AnimLookups.slk', 'UI\\SoundInfo\\AnimSounds.slk', ...Object.values(EVENT_TABLE_PATHS)];
@@ -10,7 +10,7 @@ export function eventCatalog(records) {
   const catalog = { SND: [], SPL: [], FPT: [], UBR: [], SPN: [] };
   for (const [id, lookup] of table(NODE_EVENT_TABLES[0])) {
     const sound = sounds.get(lookup.SoundLabel);
-    const files = sound?.FileNames ? String(sound.FileNames).split(',').map(file => `${sound.DirectoryBase || ''}\\${file.trim()}`.replace(/\\+/g, '\\').replace(/^\\/, '')) : [];
+    const files = sound?.FileNames ? String(sound.FileNames).split(',').filter(file => /\.(wav|mp3|ogg|flac)$/i.test(file.trim())).map(file => `${sound.DirectoryBase || ''}\\${file.trim()}`.replace(/\\+/g, '\\').replace(/^\\/, '')) : [];
     catalog.SND.push({ id, label: `${lookup.SoundLabel} · ${id}`, files });
   }
   // Reforged stores event codes on AnimSounds and sound-file labels in the
@@ -32,7 +32,7 @@ export function eventCatalog(records) {
   for (const [type, name] of Object.entries(EVENT_TABLE_PATHS)) for (const [id, row] of table(name)) {
     if (id === 'INIT') continue;
     const label = row.comment || row.Model || row.file || id;
-    catalog[type].push({ id, label: `${label} · ${id}` });
+    catalog[type].push({ id, label: `${label} · ${id}`, definition:resolveEventDefinition(`${type}x${id}`, tables) });
   }
   catalog.FPT = catalog.SPL;
   for (const rows of Object.values(catalog)) rows.sort((a, b) => a.label.localeCompare(b.label));
@@ -53,12 +53,9 @@ export function loadEventCatalog(modelPath) {
 }
 
 export async function resolveEventSound(resolveResources, file, modelPath) {
-  // Installed Reforged data can retain FLAC paths in SLK while storing the
-  // corresponding sound as OGG. Keep the same sound and prefer the exact path.
-  const names = /^war3\.w3mod:.*\.flac$/i.test(file) ? [file, file.replace(/\.flac$/i, '.ogg')] : [file];
-  const records = await resolveResources({ names, path: modelPath });
-  const sound = names.map(name => records.find(record => record.name === name && record.bytes?.length)).find(Boolean);
+  const records = await resolveResources({ names:[file], path: modelPath });
+  const sound = records.find(record => record.name === file && record.bytes?.length);
   if (!sound) throw Error(`Sound not found: ${file}`);
-  const mime = { wav: 'audio/wav', mp3: 'audio/mpeg', ogg: 'audio/ogg', flac: 'audio/flac' }[sound.name.split('.').at(-1).toLowerCase()];
+  const mime = { wav: 'audio/wav', mp3: 'audio/mpeg', ogg: 'audio/ogg', flac: 'audio/flac' }[(sound.sourceName || sound.name).split('.').at(-1).toLowerCase()];
   return { bytes: sound.bytes, mime };
 }

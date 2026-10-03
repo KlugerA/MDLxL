@@ -44,20 +44,40 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright');
   await menu('Nodes');
   await page.getByLabel('Search nodes').fill('SND');
   await page.locator('.re-tree-row').filter({hasText:'SNDxDSPV'}).click();
-  await page.waitForFunction(()=>document.querySelector('[aria-label="Event data"]')?.options.length>500);
-  const soundId=process.env.MDLXL_TEST_SOUND || 'DPES';
+  await page.getByRole('tree',{name:'Sound categories'}).waitFor();
+  for (const soundId of ['AHAV','DSPD','DPES','DFOO','AEST','DCDD']) {
   await page.getByLabel('Search event data',{exact:true}).fill(soundId);
-  await page.getByLabel('Event data',{exact:true}).selectOption(soundId);
+  await page.locator(`[data-sound-id="${soundId}"]`).click();
   await page.waitForFunction(()=>{const a=document.querySelector('audio');if(document.querySelector('.field-error'))throw Error(document.querySelector('.field-error').textContent);return a?.readyState>=2;},null,{timeout:30000});
   await page.locator('audio').evaluate(async a=>{a.volume=0.05;await a.play();});
   await page.waitForFunction(()=>document.querySelector('audio').currentTime>0.1);
   await page.locator('audio').evaluate(a=>a.pause());
-  console.log('Sound loaded, decoded and played:',await page.locator('audio').evaluate(a=>({duration:a.duration,currentTime:a.currentTime})));
+  console.log(soundId, 'loaded, decoded and played:',await page.locator('audio').evaluate(a=>({duration:a.duration,currentTime:a.currentTime})));
+  }
+  await page.getByLabel('Search event data',{exact:true}).fill('');
+  await page.mouse.move(5,5);
+  assert.equal(await page.locator('.re-sound-tree').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(32, 40, 50)');
+  assert.ok(['rgba(0, 0, 0, 0)','rgb(52, 78, 112)'].includes(await page.locator('.re-sound-item').first().evaluate(el=>getComputedStyle(el).backgroundColor)));
+  assert.equal(await page.locator('.re-sound-folder svg').first().evaluate(el=>getComputedStyle(el).display),'block');
   await page.screenshot({path:path.join(out,'node-sound.png')});
   await page.getByLabel('New node type',{exact:true}).selectOption('EventObject');await page.locator('.re-list-actions').getByRole('button',{name:'New',exact:true}).click();
   await page.getByLabel('Type',{exact:true}).selectOption('SPL');
   await page.getByLabel('Search event data',{exact:true}).fill('HumanBlood');
   const blood=await page.getByLabel('Event data',{exact:true}).locator('option').filter({hasText:'HumanBlood'}).first().getAttribute('value');await page.getByLabel('Event data',{exact:true}).selectOption(blood);
+  await page.getByLabel('Blood splat animation preview',{exact:true}).waitFor();
+  await page.waitForFunction(()=>Number(document.querySelector('[aria-label="Splat preview time"]').value)>50);
+  await page.getByRole('button',{name:'Pause splat preview',exact:true}).click();
+  const splat = page.getByLabel('Blood splat animation preview',{exact:true}), scrub = page.getByLabel('Splat preview time',{exact:true});
+  const duration=Number(await scrub.getAttribute('max'));
+  await scrub.fill('200');await page.screenshot({path:path.join(out,'blood-splat-start.png')});
+  const early=await splat.screenshot();
+  await scrub.fill('1500');await page.screenshot({path:path.join(out,'blood-splat-spread.png')});
+  assert.notDeepEqual(await splat.screenshot(),early,'native splat atlas animation changes actual preview pixels');
+  const spread=await splat.screenshot();
+  await scrub.fill(String(Math.round(duration*.85)));await page.screenshot({path:path.join(out,'blood-splat-decay.png')});
+  assert.notDeepEqual(await splat.screenshot(),spread,'native splat decay changes actual preview pixels');
+  assert.equal(await page.locator('.re-decal-preview .field-error').count(),0);
+  await page.getByLabel('Resource keyframe time',{exact:true}).fill('6720');
   await page.getByRole('button',{name:/^Add at /}).click();
   const saved=await page.evaluate(()=>({bytes:Array.from(new Uint8Array(testDoc.serialize('mdx'))),events:testDoc.model.EventObjects.map(n=>({name:n.Name,times:[...n.EventTrack]}))}));
   const savedPath=path.join(root,'out/managers-v3/edited-events.mdx');fs.writeFileSync(savedPath,Buffer.from(saved.bytes));
@@ -100,6 +120,25 @@ const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright');
     });
     assert.deepEqual(drawnIds, [0], 'actual GL draws must contain only the isolated mesh');
     await page.screenshot({ path: path.join(out, 'isolated-geoset.png') });
+    await page.locator('.re-list [data-resource-index="13"]').click();
+    await page.getByText('Preview geoset',{exact:true}).click();
+    await page.locator('.re-model-stage canvas[data-clean-model-canvas]').waitFor();
+    const pose=await page.locator('.re-model-stage .game-preview-root').evaluate(el=>{
+      let fiber=el[Object.keys(el).find(k=>k.startsWith('__reactFiber'))];
+      for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){const runtime=hook.memoizedState?.current;if(!runtime?.native?.indexBuffer)continue;
+        const native=runtime.native, geo=native.model.Geosets[13], matrix=native.rendererData.nodes[geo.Groups[0][0]].matrix;
+        const low=[Infinity,Infinity,Infinity],high=[-Infinity,-Infinity,-Infinity];
+        for(let i=0;i<geo.Vertices.length;i+=3)for(let axis=0;axis<3;axis++){const v=matrix[axis]*geo.Vertices[i]+matrix[axis+4]*geo.Vertices[i+1]+matrix[axis+8]*geo.Vertices[i+2]+matrix[axis+12];low[axis]=Math.min(low[axis],v);high[axis]=Math.max(high[axis],v);}
+        const center=low.map((v,i)=>(v+high[i])/2),target=runtime.controls.target.toArray(),camera=runtime.controls.object,canvas=el.querySelector('canvas[data-clean-model-canvas]');
+        const points=[];for(let i=0;i<geo.Vertices.length;i+=3){const point=runtime.controls.target.clone().set(geo.Vertices[i],geo.Vertices[i+1],geo.Vertices[i+2]);const world=camera.matrixWorld.clone().fromArray(matrix);point.applyMatrix4(world).project(camera);points.push(point.toArray());}
+        return {center,target,points,aspect:camera.aspect,displayAspect:canvas.clientWidth/canvas.clientHeight,frame:native.getFrame()};
+      }
+    });
+    assert.equal(pose.frame,6720);assert.ok(pose.center.every((v,i)=>Math.abs(v-pose.target[i])<.001),'camera targets the drawn animated mesh');
+    assert.ok(pose.points.every(([x,y,z])=>Math.abs(x)<1&&Math.abs(y)<1&&z>-1&&z<1),'whole posed geoset fits without clipping');
+    assert.ok(Math.abs(pose.aspect-pose.displayAspect)<.01,'preview aspect matches its displayed canvas');
+    console.log('Geoset 14 at 6720 fits its actual rendered pose:',pose.center);
+    await page.screenshot({path:path.join(out,'geoset-14-6720.png')});
 
   const beforeDrag=await page.locator('.re-window').boundingBox(), caption=await page.locator('.re-caption').boundingBox();
   await page.mouse.move(caption.x+80,caption.y+15);await page.mouse.down();await page.mouse.move(caption.x+160,caption.y+45,{steps:6});await page.mouse.up();

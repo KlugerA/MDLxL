@@ -76,9 +76,13 @@ class TextureResolver {
       const modernTeamColor = /^ReplaceableTextures[\\/]TeamColor[\\/]TeamColor(?:1[2-9]|2[0-4])\.blp$/i.test(name);
       const nativeModule = /\.w3mod:/i.test(name);
       const nativeName = nativeModule && !/^war3\.w3mod:/i.test(name) ? 'war3.w3mod:' + name : name;
-      let bytes = null;
+      let bytes = null, sourceName;
       for (const source of sources) {
-        if (modernTeamColor) bytes = await this.loose(name, source.folders) || await this.casc?.read(nativeName, source.cascFolders) || await this.archived(name, source.archives);
+        if (/\.(wav|mp3|ogg|flac)$/i.test(name) && this.casc?.readSound) {
+          bytes = !nativeModule && (await this.loose(name, source.folders) || await this.archived(name, source.archives));
+          if (!bytes) { const sound = await this.casc.readSound(nativeName, source.cascFolders); bytes = sound?.bytes; sourceName = sound?.sourceName; }
+        }
+        else if (modernTeamColor) bytes = await this.loose(name, source.folders) || await this.casc?.read(nativeName, source.cascFolders) || await this.archived(name, source.archives);
         else bytes = (!nativeModule && (await this.loose(name, source.folders) || await this.archived(name, source.archives))) || await this.casc?.read(nativeName, source.cascFolders);
         // Reforged can keep event models exclusively in an SD/HD module. This
         // endpoint is also used for them; image lookup retains its own order.
@@ -90,7 +94,7 @@ class TextureResolver {
         }
         if (bytes) break;
       }
-      if (bytes) found.push({ name, bytes });
+      if (bytes) found.push({ name, bytes, ...(sourceName ? {sourceName} : {}) });
     }
     return found;
   }

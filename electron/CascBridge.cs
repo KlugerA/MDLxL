@@ -14,7 +14,7 @@ class CascBridge {
  [DllImport("CascLib.dll", CharSet=CharSet.Ansi, SetLastError=true)] static extern IntPtr CascFindFirstFile(IntPtr storage, string mask, IntPtr data, string listFile);
  [DllImport("CascLib.dll", SetLastError=true)] [return: MarshalAs(UnmanagedType.I1)] static extern bool CascFindNextFile(IntPtr find, IntPtr data);
  [DllImport("CascLib.dll")] [return: MarshalAs(UnmanagedType.I1)] static extern bool CascFindClose(IntPtr find);
- static string AssetNames(IntPtr storage, bool models) {
+ static string AssetNames(IntPtr storage, string kind) {
   // All supported CascLib versions begin CASC_FIND_DATA with char szFileName[260].
   // Reserve extra space for the version-specific trailing fields; never marshal them.
   IntPtr data = Marshal.AllocHGlobal(2048), find = IntPtr.Zero;
@@ -25,7 +25,7 @@ class CascBridge {
    do {
     string name = Marshal.PtrToStringAnsi(data) ?? "";
     string extension = Path.GetExtension(name).ToLowerInvariant();
-    if (models ? (extension == ".mdx" || extension == ".mdl") : (extension == ".blp" || extension == ".dds" || extension == ".tga" || extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".webp")) {
+    if (kind == "@sounds" ? (extension == ".wav" || extension == ".mp3" || extension == ".ogg" || extension == ".flac") : kind == "@models" ? (extension == ".mdx" || extension == ".mdl") : (extension == ".blp" || extension == ".dds" || extension == ".tga" || extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".webp")) {
      if (++count > 300000) throw new IOException("Texture library exceeds its file limit.");
      // The stable CKey follows the 260-byte filename. Nested module filenames
      // are not always accepted by name lookup, but CKey lookup is unambiguous.
@@ -58,7 +58,7 @@ class CascBridge {
    while ((line = Console.ReadLine()) != null) {
     try {
      string name = Encoding.UTF8.GetString(Convert.FromBase64String(line)).Replace('/', '\\');
-     if (name == "@textures" || name == "@models") { Console.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(AssetNames(storage, name == "@models")))); continue; }
+     if (name == "@textures" || name == "@models" || name == "@sounds") { Console.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(AssetNames(storage, name)))); continue; }
      if (name.StartsWith("@ckey:")) { byte[] bytes=ReadKey(storage,name.Substring(6));Console.WriteLine(bytes==null?"-":Convert.ToBase64String(bytes));continue; }
      bool found = false;
      string dds = Path.ChangeExtension(name,".dds");
