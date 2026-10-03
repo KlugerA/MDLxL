@@ -19,7 +19,7 @@ test('native sound lookup retains identity across FLAC table paths and installed
  await assert.rejects(resolveEventSound(async payload=>{assert.deepEqual(payload.names,[custom]);return [];},custom,'model.mdx'),/Sound not found/);
 });
 
-test('sound catalog uses native IDs and authored file mappings, retaining missing definitions', () => {
+test('sound catalog uses native IDs and authored file mappings without offering unresolved lookups', () => {
  const slk=(name,rows)=>({name,bytes:new TextEncoder().encode(rows.flatMap((row,y)=>row.map((value,x)=>`C;X${x+1};Y${y+1};K"${value}"`)).join('\n'))});
  const data=eventCatalog([
   slk('UI\\SoundInfo\\AnimLookups.slk',[['AnimSoundEvent','SoundLabel'],['DPES','PeasantDeath'],['DSPV','SpiritOfVengeanceDeath']]),
@@ -28,7 +28,7 @@ test('sound catalog uses native IDs and authored file mappings, retaining missin
   slk('war3.w3mod:UI\\SoundInfo\\DialogueHumanBase.slk',[['DialogueLabel','Filepath'],['PeasantDeath1','Units/Human/Peasant/PeasantDeath.ogg']]),
  ]);
  assert.deepEqual(data.SND.find(n=>n.id==='DPES').files,['war3.w3mod:Units/Human/Peasant/PeasantDeath.ogg']);
- assert.deepEqual(data.SND.find(n=>n.id==='DSPV').files,[]);
+ assert.equal(data.SND.some(n=>n.id==='DSPV'),false);
 });
 
 test('node visibility uses ordinary held keys, preserving other sequences, channels and undo/save', () => {

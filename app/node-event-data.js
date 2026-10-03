@@ -11,7 +11,7 @@ export function eventCatalog(records) {
   for (const [id, lookup] of table(NODE_EVENT_TABLES[0])) {
     const sound = sounds.get(lookup.SoundLabel);
     const files = sound?.FileNames ? String(sound.FileNames).split(',').filter(file => /\.(wav|mp3|ogg|flac)$/i.test(file.trim())).map(file => `${sound.DirectoryBase || ''}\\${file.trim()}`.replace(/\\+/g, '\\').replace(/^\\/, '')) : [];
-    catalog.SND.push({ id, label: `${lookup.SoundLabel} · ${id}`, files });
+    if (files.length) catalog.SND.push({ id, label: `${lookup.SoundLabel} · ${id}`, files });
   }
   // Reforged stores event codes on AnimSounds and sound-file labels in the
   // dialogue tables. Use the authored mapping; never guess a replacement path.
