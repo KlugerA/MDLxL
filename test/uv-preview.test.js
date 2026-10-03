@@ -215,19 +215,18 @@ test('preview eligibility follows checked geosets, rejects empty/mixed selection
   assert.deepEqual(drafts,{});assert.deepEqual(model,original);
 });
 
-test('temporary image-layer replacement affects only checked geosets and retains team colour plus every other layer',()=>{
+test('temporary texture replacement affects only checked geosets, retains team colour and resets the image chain',()=>{
   const {model}=imageLayerDocument(),original=structuredClone(model);
   const drafts=beginUVPreview(model,{},[0,2],asset('Textures\\Rust.blp'),2);
-  assert.deepEqual(Object.keys(drafts),['0','2']);assert.equal(drafts[0].layerIndex,2);
+  assert.deepEqual(Object.keys(drafts),['0','2']);assert.equal(drafts[0].layerIndex,undefined);
   const preview=uvPreviewModel(model,drafts);
   assert.equal(preview.Geosets[0].MaterialID,preview.Geosets[2].MaterialID);
   for(const index of [0,2]){
     const layers=preview.Materials[preview.Geosets[index].MaterialID].Layers;
-    assert.equal(layers.length,3);
+    assert.equal(layers.length,2);
     assert.deepEqual(layers[0],original.Materials[0].Layers[0]);
-    assert.deepEqual(layers[1],original.Materials[0].Layers[1]);
-    assert.equal(preview.Textures[layers[2].TextureID].Image,'Textures\\Rust.blp');
-    assert.deepEqual({...layers[2],TextureID:2},original.Materials[0].Layers[2]);
+    assert.deepEqual(layers[1],{FilterMode:1,Alpha:1,Shading:0,CoordId:0,TextureID:preview.Textures.length-1,TVertexAnimId:null});
+    assert.equal(preview.Textures[layers[1].TextureID].Image,'Textures\\Rust.blp');
   }
   assert.equal(preview.Geosets[1],model.Geosets[1]);assert.equal(preview.Geosets[1].MaterialID,0);
   assert.deepEqual(preview.Materials[0],original.Materials[0]);assert.deepEqual(model,original);
@@ -243,26 +242,25 @@ test('UV image chooser skips replaceable layers and samples individual texture a
   assert.equal(chooseUVImageLayer(model,0,1,200).path,'Textures\\Armor.blp');
   assert.equal(chooseUVImageLayer(model,0,1,450).layerIndex,2);
   assert.equal(chooseUVImageLayer(model,0,1,700).path,'Textures\\Trim.blp');
-  assert.throws(()=>beginUVPreview(model,{},[0],asset('New.blp'),0),/Replaceable and team-colour layers are preserved/);
 });
 
 test('a replaceable-only material receives a new image layer instead of losing team colour',()=>{
   const {model}=createDemoDocument(),original=structuredClone(model.Materials[0].Layers);
   const pending=beginUVPreview(model,{},[0],asset('New.blp'));
-  assert.equal(pending[0].layerIndex,original.length);
+  assert.equal(pending[0].layerIndex,undefined);
   const preview=uvPreviewModel(model,pending),layers=preview.Materials[preview.Geosets[0].MaterialID].Layers;
   assert.deepEqual(layers.slice(0,original.length),original);
   assert.equal(layers.length,original.length+1);assert.equal(layers.at(-1).FilterMode,1);
   assert.equal(chooseUVImageLayer(preview,0).path,'New.blp');
 });
 
-test('checked preview switches retain first UV snapshots through recovery and commit the chosen layer only',()=>{
+test('checked preview switches retain first UV snapshots through recovery and commit one clean image layer',()=>{
   const doc=imageLayerDocument(),model=doc.model,original=structuredClone(model);
   let drafts=beginUVPreview(model,{},[0,2],asset('First.blp'),1);
   model.Geosets[0].TVertices[0][0]=.73;model.Geosets[2].TVertices[0][0]=.42;
   drafts=beginUVPreview(model,drafts,[0,2],asset('Second.blp'),2);
   const restored=restoreUVPreviews(model,structuredClone(drafts));
-  assert.equal(restored[0].layerIndex,2);assert.deepEqual(restored[0].originalUV,original.Geosets[0].TVertices);
+  assert.equal(restored[0].layerIndex,undefined);assert.deepEqual(restored[0].originalUV,original.Geosets[0].TVertices);
   const reverted=structuredClone(model);revertUVPreviews(reverted,restored);
   for(const index of [0,2])assert.deepEqual(reverted.Geosets[index].TVertices,original.Geosets[index].TVertices);
   assert.deepEqual(reverted.Materials,original.Materials);assert.deepEqual(reverted.Textures,original.Textures);
@@ -272,7 +270,24 @@ test('checked preview switches retain first UV snapshots through recovery and co
   assert.equal(getUVPreviewSelection(model,[0,2]).enabled,true);
   for(const index of [0,2]){
     const layers=model.Materials[model.Geosets[index].MaterialID].Layers;
-    assert.deepEqual(layers[0],original.Materials[0].Layers[0]);assert.deepEqual(layers[1],original.Materials[0].Layers[1]);
-    assert.equal(model.Textures[layers[2].TextureID].Image,'Second.blp');
+    assert.equal(layers.length,2);assert.deepEqual(layers[0],original.Materials[0].Layers[0]);
+    assert.equal(model.Textures[layers[1].TextureID].Image,'Second.blp');
   }
+});
+
+test('three-layer modular texture tracks are fully replaced while procedural layers survive',()=>{
+  const doc=imageLayerDocument();doc.apply('Modular fixture',['Materials'],model=>{
+    model.Materials[0].Layers[1].TextureID={LineType:0,GlobalSeqId:null,Keys:[
+      {Frame:0,Vector:new Uint32Array([1])},{Frame:500,Vector:new Uint32Array([2])},
+    ]};
+    model.Materials[0].Layers.push({TextureID:2,Alpha:.35,FilterMode:3,Shading:4,CoordId:1,TVertexAnimId:null});
+  });
+  const model=doc.model;
+  const original=structuredClone(model),before=doc.serialize('mdx'),drafts=beginUVPreview(model,{},[0],asset('Textures\\Clean.blp'));
+  const check=value=>{const layers=value.Materials[value.Geosets[0].MaterialID].Layers;assert.equal(layers.length,2);assert.equal(value.Textures[layers[0].TextureID].ReplaceableId,1);assert.equal(value.Textures[layers[1].TextureID].Image,'Textures\\Clean.blp');};
+  check(uvPreviewModel(model,drafts));assert.deepEqual(doc.serialize('mdx'),before);
+  doc.apply('Replace modular chain',['Geosets','Materials','Textures'],value=>applyUVPreviews(value,drafts));check(model);
+  assert.deepEqual(model.Materials[0].Layers,original.Materials[0].Layers);assert.equal(model.Geosets[1].MaterialID,0);
+  check(openDocument(doc.serialize('mdx'),'modular.mdx').model);
+  doc.undo();assert.deepEqual(doc.serialize('mdx'),before);
 });

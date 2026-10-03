@@ -1,4 +1,3 @@
-import { setMaterialLayerTexture } from './material-presets.js';
 import { sampleTrack } from './animation.js';
 
 const normal = value => String(value || '').replaceAll('/', '\\').toLowerCase();
@@ -36,37 +35,45 @@ export function chooseUVImageLayer(model, geosetIndex, selectedLayer, time = 0, 
   return layers.find(layer => layer.layerIndex === selectedLayer) || layers[0] || null;
 }
 
-function layerHasImage(model, layer) {
+function layerTextureIDs(layer) {
   const value = layer?.TextureID;
-  const ids = typeof value === 'number' ? [value] : Array.isArray(value) || ArrayBuffer.isView(value) ? Array.from(value) : (value?.Keys || []).flatMap(key => Array.from(key.Vector || []));
-  return ids.some(id => { const texture = model.Textures[Math.round(id)]; return texture && !texture.ReplaceableId && String(texture.Image || '').trim(); });
+  return typeof value === 'number' ? [value] : Array.isArray(value) || ArrayBuffer.isView(value) ? Array.from(value) : (value?.Keys || []).flatMap(key => Array.from(key.Vector || []));
 }
 
-function previewLayerIndex(model, geoset, requested) {
-  const layers = model.Materials[geoset.MaterialID]?.Layers || [];
-  // With no image layer, append one. The procedural team-colour layer survives.
-  if (requested == null) { const found = layers.findIndex(layer => layerHasImage(model, layer)); return found < 0 ? layers.length : found; }
-  if (!Number.isSafeInteger(requested) || requested < 0 || requested > layers.length) throw Error('The selected image layer no longer exists. Choose an image layer again.');
-  if (requested < layers.length && !layerHasImage(model, layers[requested])) throw Error('Choose an image layer. Replaceable and team-colour layers are preserved.');
-  return requested;
+function layerHasImage(model, layer) {
+  return layerTextureIDs(layer).some(id => { const texture = model.Textures[Math.round(id)]; return texture && !texture.ReplaceableId && String(texture.Image || '').trim(); });
+}
+
+function replaceableLayer(model, layer) {
+  const ids = layerTextureIDs(layer);
+  return ids.length > 0 && ids.every(id => model.Textures[Math.round(id)]?.ReplaceableId);
+}
+
+// Texture replacement intentionally resets the ordinary material stack. A
+// sandwich of opaque, blended or animated image layers can otherwise keep the
+// old appearance above the newly selected texture. Procedural team-colour and
+// team-glow layers retain their authored settings; the user can reapply any
+// desired material preset after the replacement.
+function replaceTextureChain(model, material, textureID) {
+  const replaceable = (material.Layers || []).filter(layer => replaceableLayer(model, layer));
+  material.Layers = [...replaceable, { FilterMode: replaceable.length ? 1 : 0, Alpha: 1, Shading: 0, CoordId: 0, TextureID: textureID, TVertexAnimId: null }];
 }
 
 // UV edits live in the normal undo history. Only the texture assignment is
 // provisional; the first UV snapshot survives subsequent texture choices.
-export function beginUVPreview(model, drafts, selection, asset, layerIndex = null) {
+export function beginUVPreview(model, drafts, selection, asset) {
   const checked = getUVPreviewSelection(model, selection);
   if (!checked.enabled) throw Error(checked.reason);
   if (!asset?.name || !asset.bytes?.byteLength) throw Error('Choose a readable texture.');
   const pending = checked.geosetIndices.map(geosetIndex => {
     const geoset = model.Geosets[geosetIndex], previous = drafts[geosetIndex];
     if (previous) validateUVPreview(model, previous);
-    return { geosetIndex, geoset, previous, layerIndex: previewLayerIndex(model, geoset, layerIndex) };
+    return { geosetIndex, geoset, previous };
   });
   const next = { ...drafts };
-  for (const {geosetIndex, geoset, previous, layerIndex} of pending) next[geosetIndex] = {
+  for (const {geosetIndex, geoset, previous} of pending) next[geosetIndex] = {
     ...(previous || { geosetIndex, geosetCount: model.Geosets.length, vertexCount: geoset.Vertices.length / 3,
       faces: new Uint32Array(geoset.Faces), originalUV: copyUV(geoset) }),
-    layerIndex,
     asset: { name: asset.name, bytes: new Uint8Array(asset.bytes), source: asset.source || 'library' },
   };
   return next;
@@ -105,22 +112,17 @@ export function addLibraryTexture(model, asset) {
 
 export function applyUVPreviews(model, drafts) {
   const pending = Object.values(drafts);
-  const layerIndices = new Map(), clonedMaterials = new Map();
-  for (const draft of pending) {
-    const geoset = validateUVPreview(model, draft);
-    layerIndices.set(draft, previewLayerIndex(model, geoset, draft.layerIndex));
-  }
+  const clonedMaterials = new Map();
+  for (const draft of pending) validateUVPreview(model, draft);
   for (const draft of pending) {
     const geoset = model.Geosets[draft.geosetIndex];
-    const layerIndex = layerIndices.get(draft), textureID = addLibraryTexture(model, draft.asset);
-    const replacementKey = `${geoset.MaterialID}|${layerIndex}|${textureID}`;
+    const textureID = addLibraryTexture(model, draft.asset);
+    const replacementKey = `${geoset.MaterialID}|${textureID}`;
     if (clonedMaterials.has(replacementKey)) { geoset.MaterialID = clonedMaterials.get(replacementKey); continue; }
     const material = structuredClone(model.Materials[geoset.MaterialID] || {
       PriorityPlane: 0, RenderMode: 0, Layers: [{ FilterMode: 0, Alpha: 1, Shading: 0, CoordId: 0 }],
     });
-    material.Layers ||= [];
-    if (layerIndex === material.Layers.length) material.Layers.push({ FilterMode: material.Layers.length ? 1 : 0, Alpha: 1, Shading: 0, CoordId: 0 });
-    setMaterialLayerTexture(material, layerIndex, textureID);
+    replaceTextureChain(model, material, textureID);
     // Checked geosets with the same replacement stay together. Other users of
     // the old material retain their texture and any animated texture track.
     geoset.MaterialID = model.Materials.length;
@@ -144,7 +146,7 @@ export function uvPreviewModel(model, drafts, liveUV = null) {
   for (const draft of Object.values(drafts)) {
     // A topology edit must not accidentally paint a different geoset. Saving
     // and reverting give an explicit error until the geometry is restored.
-    try { const geoset = validateUVPreview(model, draft); previewLayerIndex(model, geoset, draft.layerIndex); } catch { continue; }
+    try { validateUVPreview(model, draft); } catch { continue; }
     preview.Geosets[draft.geosetIndex] = { ...model.Geosets[draft.geosetIndex] };
     validDrafts[draft.geosetIndex] = draft;
   }

@@ -58,16 +58,15 @@ test('5% additive tint contributes 5% RGB while ignoring texture alpha',()=>{
  assert.deepEqual([...result],[110,100,100,255]);
 });
 
-test('replacing a tint base in UV updates both passes through preview, save, reopen and undo',()=>{
+test('replacing a preset base in UV resets the image chain through preview, save, reopen and undo',()=>{
  for(const preset of ['Team Color Overlay','Color Tint']){
   const doc=fixture();doc.apply(preset,['Materials','Textures'],m=>applyMaterialPreset(m,0,preset,12));
-  const before=doc.serialize('mdx'),middle=structuredClone(doc.model.Materials[0].Layers[1]);
+  const before=doc.serialize('mdx');
   const drafts=beginUVPreview(doc.model,{},[0],{name:'Textures\\Replacement.blp',bytes:new Uint8Array([1])});
-  const check=m=>{const layers=m.Materials[m.Geosets[0].MaterialID].Layers;assert.equal(layers[0].TextureID,layers[2].TextureID);assert.equal(m.Textures[layers[0].TextureID].Image,'Textures\\Replacement.blp');assert.deepEqual(layers[1],middle);};
+  const check=m=>{const layers=m.Materials[m.Geosets[0].MaterialID].Layers,replacement=layers.at(-1);assert.equal(m.Textures[replacement.TextureID].Image,'Textures\\Replacement.blp');assert.deepEqual(replacement,{FilterMode:layers.length>1?1:0,Alpha:1,Shading:0,CoordId:0,TextureID:replacement.TextureID,TVertexAnimId:null});assert.equal(layers.length,preset==='Team Color Overlay'?2:1);if(layers.length===2)assert.equal(m.Textures[layers[0].TextureID].ReplaceableId,1);};
   check(uvPreviewModel(doc.model,drafts));assert.deepEqual(doc.serialize('mdx'),before);
   doc.apply('Replace base',['Materials','Textures','Geosets'],m=>applyUVPreviews(m,drafts));check(doc.model);
-  const reopened=openDocument(doc.serialize('mdx'),'replacement.mdx').model,layers=reopened.Materials[reopened.Geosets[0].MaterialID].Layers;
-  assert.equal(layers[0].TextureID,layers[2].TextureID);assert.equal(reopened.Textures[layers[0].TextureID].Image,'Textures\\Replacement.blp');
+  const reopened=openDocument(doc.serialize('mdx'),'replacement.mdx').model;check(reopened);
   doc.undo();assert.deepEqual(doc.serialize('mdx'),before);doc.redo();check(doc.model);
  }
 });
