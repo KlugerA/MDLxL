@@ -9,13 +9,13 @@ const { Worker, isMarkedAsUntransferable } = require('node:worker_threads');
 const MAX_TEMP_BYTES = 8 * 1024 ** 3;
 const DISK_RESERVE = 512 * 1024 ** 2;
 const FRAME_METADATA_BYTES = 512; // Charge timestamp/path/concat bookkeeping to the recording budget.
-const LOCAL_GIF_BYTES_PER_10_SECONDS = Object.freeze({ medium: 50_000_000, high: 100_000_000 });
+// Keep local Showcase saves within the former Catbox encoding budget.
+const LOCAL_GIF_LIMIT = 20 * 1024 * 1024;
 
 function gifSizeLimit(exportTarget, quality, duration) {
   if (exportTarget === 'hive') return Math.max(90000, Math.floor(45_000_000 * duration / 10000));
   if (exportTarget !== undefined && exportTarget !== null) return Infinity;
-  const local = LOCAL_GIF_BYTES_PER_10_SECONDS[quality];
-  return local ? Math.max(90000, Math.floor(local * duration / 10000)) : Infinity;
+  return LOCAL_GIF_LIMIT;
 }
 
 function bitmap(rgba, width, height) {
@@ -178,7 +178,7 @@ class PreviewRecordingStore {
     // spatial resolution, never by dropping frames or truncating the take.
     const limit = gifSizeLimit(job.exportTarget,job.quality,timing.duration);
     const target = limit * .94;
-    const presetScale=job.exportTarget==='hive'?Math.min(1,Math.sqrt(300000/(job.width*job.height))):1;
+    const presetScale=job.exportTarget===undefined||job.exportTarget===null?Math.min(1,864/Math.max(job.width,job.height)):job.exportTarget==='hive'?Math.min(1,Math.sqrt(300000/(job.width*job.height))):1;
     let width=Math.max(1,Math.floor(job.width*presetScale)),height=Math.max(1,Math.floor(job.height*presetScale));
     if(job.exportTarget==='hive-main'){width=612;height=490;}
     const output = path.join(job.directory, 'capture.gif');

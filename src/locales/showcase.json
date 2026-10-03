@@ -854,10 +854,10 @@
     "Hive · máx. 5 s · 30 FPS",
     "Hive · 最长 5 秒 · 30 FPS"
   ],
-  "Original quality · local GIF": [
-    "Исходное качество · локальный GIF",
-    "Calidad original · GIF local",
-    "原始画质 · 本地 GIF"
+  "864 px max · ≤20 MiB · local GIF": [
+    "До 864 пикс. · ≤20 МиБ · локальный GIF",
+    "Máx. 864 px · ≤20 MiB · GIF local",
+    "最长边 864 像素 · ≤20 MiB · 本地 GIF"
   ],
   "Save needs retry": [
     "Повторите сохранение",
