@@ -31,7 +31,7 @@ export default function NodeEventEditor({ node, model, modelPath, catalog, error
     {selected?.definition && ['SPL','FPT','UBR'].includes(type) && <EventDecalPreview definition={selected.definition} modelPath={modelPath}/>}
     {(error || catalogError || type === 'SND' && selected && !file) && <p className="field-error" role="alert">{error || catalogError || `Sound definition unavailable: ${selected.label}`}</p>}
     <SelectField label="Global sequence" value={global} options={[{value:-1,label:'None'},...(model.GlobalSequences || []).map((_,value)=>({value,label:String(value+1)}))]} onChange={v=>edit('Set event global sequence',['Nodes'], current=>{const target=current.Nodes[node.ObjectId]; delete target.GlobalSequenceId;if(Number(v)<0)delete target.GlobalSeqId;else target.GlobalSeqId=Number(v);})}/>
-    {global < 0 && <SelectField label="Animation" value={sequenceIndex} options={model.Sequences.map((seq,value)=>({value,label:seq.Name}))} onChange={v=>onSequenceChange(Number(v))}/>}
+    {global < 0 && <SelectField label="Preview animation" value={sequenceIndex} options={model.Sequences.map((seq,value)=>({value,label:seq.Name}))} onChange={v=>onSequenceChange(Number(v))}/>}
     <div className="re-event-frames"><span>Event tracks</span><div>{Array.from(node.EventTrack || []).map(at=><button key={at} aria-label={`Event frame ${at}`} onClick={()=>onSeek(at)}>{at}</button>)}</div><button onClick={()=>edit('Add event track',['Nodes'],current=>setEventFrame(current.Nodes[node.ObjectId],frame,true))}>Add at {frame}</button><button disabled={!Array.from(node.EventTrack || []).includes(frame)} onClick={()=>edit('Remove event track',['Nodes'],current=>setEventFrame(current.Nodes[node.ObjectId],frame,false))}>Remove</button></div>
   </div>;
 }
