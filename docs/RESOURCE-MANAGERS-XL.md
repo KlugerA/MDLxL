@@ -29,8 +29,8 @@ The existing MPQ reader cannot decode some compressed WAV sectors; playback from
 the installed CASC sound files was verified.
 
 Sounds are grouped in collapsible, color-coded folders from their game paths.
-Search includes names, event IDs and categories. The selected row stays visible
-when clearing search. Sound lookup first tries the authored path, then uses the
+Search includes names, event IDs and categories. Opening or closing folders
+preserves the list's scroll position. Sound lookup first tries the authored path, then uses the
 installed CASC sound index and content keys for the same logical file in its
 installed language/module and actual audio format. It does not guess renamed
 files. A new selection clears the preceding audio immediately.

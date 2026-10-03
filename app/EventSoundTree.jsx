@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Folder, FolderOpen, Volume2, ChevronDown, ChevronRight } from 'lucide-react';
 
 const colors = {Human:'#83bdff', Orc:'#df9f79', Undead:'#b2a1ed', NightElf:'#99d197', Naga:'#74d4d2', Demon:'#ef9598', Creeps:'#e4c486', Abilities:'#c7a4f2', Sound:'#88d8b6', Unavailable:'#b5bdc8'};
@@ -9,15 +9,11 @@ export function soundFolders(row) {
 
 export default function EventSoundTree({ rows, selectedId, query, onSelect }) {
   const [expanded, setExpanded] = useState(new Set());
-  const tree = useRef(null);
   const selected = rows.find(row => row.id === selectedId);
   useEffect(() => {
     const folders = selected ? soundFolders(selected) : [];
     setExpanded(previous => new Set([...previous, ...folders.map((_, index) => folders.slice(0, index + 1).join('/'))]));
   }, [selected]);
-  useEffect(() => {
-    if (!query.trim()) tree.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:'nearest'});
-  }, [expanded, selectedId, query]);
   const root = useMemo(() => {
     const root = {folders:new Map(), sounds:[]}, search = query.trim().toLowerCase();
     for (const row of rows) {
@@ -40,5 +36,5 @@ export default function EventSoundTree({ rows, selectedId, query, onSelect }) {
     })}
     {branch.sounds.map(row => <button type="button" role="treeitem" aria-selected={row.id === selectedId} aria-label={row.label} data-sound-id={row.id} key={row.id} className="re-sound-item" style={{paddingLeft:19 + level * 14}} onClick={() => onSelect(row.id)}><Volume2 style={{color}}/><span>{row.label.split(' · ')[0]}</span><small>{row.id}</small></button>)}
   </>;
-  return <div ref={tree} className="re-sound-tree" role="tree" aria-label="Sound categories">{render(root)}</div>;
+  return <div className="re-sound-tree" role="tree" aria-label="Sound categories">{render(root)}</div>;
 }
