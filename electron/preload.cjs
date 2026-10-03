@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld('desktop', {
   open: () => ipcRenderer.invoke('model:open'),
   listParts: () => ipcRenderer.invoke('parts:list'),
   readPart: id => ipcRenderer.invoke('parts:read', id),
+  savePart: data => ipcRenderer.invoke('parts:save', data),
   openPartsFolder: () => ipcRenderer.invoke('parts:folder'),
   save: (payload) => ipcRenderer.invoke('model:save', payload),
   saveOptimizeXL: payload => ipcRenderer.invoke('optimizexl:save', payload),

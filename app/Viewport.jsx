@@ -813,7 +813,7 @@ export default function Viewport(inputProps) {
           if (material.map !== map) { material.map = map; material.needsUpdate = true; }
           material.color.set(textured ? textureInfo?.ReplaceableId === 1 || textureInfo?.ReplaceableId === 2 ? p.teamColor : 0xffffff : p.rgbPreview ? 0xffffff : COLORS[index % COLORS.length]);
           material.userData.geosetTint.value.set(1, 1, 1);
-          if (p.rgbPreview && !pureWireframe) {
+          if ((p.rgbPreview || p.presentation === 'preview') && !pureWireframe) {
             const sampled = sampleGeosetAnimation(p.model, index, rgbState.frame, rgbState.sequenceIndex, rgbState.globalTime);
             material.userData.geosetTint.value.fromArray(sampled.color);
           }

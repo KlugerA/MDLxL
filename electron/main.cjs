@@ -154,6 +154,7 @@ ipcMain.handle('preview:openModel',async event=>{
 });
 ipcMain.handle('parts:list',()=>getBitsAndPartsLibrary().list());
 ipcMain.handle('parts:read',(_,id)=>getBitsAndPartsLibrary().read(id));
+ipcMain.handle('parts:save',(_,data)=>getBitsAndPartsLibrary().save(data));
 ipcMain.handle('parts:folder',async()=>{const {directory}=await getBitsAndPartsLibrary().list();const error=await shell.openPath(directory);if(error)throw Error(error);return directory;});
 ipcMain.handle('preview:backgrounds',()=>getPreviewBackgroundLibrary().list());
 ipcMain.handle('preview:background',(_,id)=>getPreviewBackgroundLibrary().read(id));
