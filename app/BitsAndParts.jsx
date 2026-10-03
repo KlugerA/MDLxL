@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Viewport, { textureFromAsset } from './Viewport.jsx';
 import { openDocument, validateModel } from '../src/editor-document.js';
-import { partColorSamples, partColorSources, partPathKey, partTextureIndices, partTextureKey, previewPart, resolvePartColor } from '../src/bits-and-parts.js';
+import { collectPart, partColorSamples, partColorSources, partPathKey, partPresetColor, partTextureIndices, partTextureKey, previewPart, resolvePartColor } from '../src/bits-and-parts.js';
+import CollectBit from './CollectBit.jsx';
 import { encodeForgeTga } from '../src/forge.js';
 import './bits-and-parts.css';
 
@@ -40,7 +41,8 @@ async function portableAsset(asset) {
   return { name: `MDLxL_Parts\\${hash}.${extension}`, bytes, source: 'parts' };
 }
 
-export default function BitsAndParts({ model, preferences, textureAssets = new Map(), teamColor = '#ff0000', onClose, onCommit }) {
+export default function BitsAndParts({ model, preferences, selectionByGeoset, textureAssets = new Map(), teamColor = '#ff0000', onClose, onCommit }) {
+  const [collection, setCollection] = useState(null);
   const [bank, setBank] = useState(null), [part, setPart] = useState(null), [assets, setAssets] = useState(new Map()), [selected, setSelected] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [missing, setMissing] = useState([]);
   const [useColor, setUseColor] = useState(false), [sequence, setSequence] = useState(''), [colorRecord, setColorRecord] = useState(''), [sampleFrame, setSampleFrame] = useState(''), [playing, setPlaying] = useState(false);
   const generation = useRef(0), picker = useRef(), dialog = useRef();
@@ -75,6 +77,13 @@ export default function BitsAndParts({ model, preferences, textureAssets = new M
   }, [part, useColor, sequence, colorRecord, sampleFrame]);
   const preview = useMemo(() => part ? previewPart(part.model, sample) : null, [part, sample]);
   const interval = sequence === '' ? undefined : part?.model.Sequences?.[Number(sequence)]?.Interval;
+  const chooseSequence = value => {
+    setSequence(value); setColorRecord(''); setSampleFrame('');
+    if (value !== '' && partPresetColor(part.model, Number(value))) {
+      setUseColor(true); setColorRecord(String(partColorSources(part.model, Number(value))[0].recordIndex)); setSampleFrame(String(part.model.Sequences[Number(value)].Interval[0]));
+    }
+  };
+  const collect = () => { try { setCollection(collectPart(model, selectionByGeoset)); setError(''); } catch (error) { setError(error.message); } };
   const importPart = async () => {
     if (!part || busy || (useColor && !sample)) return;
     const request = generation.current;
@@ -95,8 +104,9 @@ export default function BitsAndParts({ model, preferences, textureAssets = new M
     } catch (error) { if (generation.current === request) setError(error.message); }
     finally { if (generation.current === request) setBusy(false); }
   };
+  if (collection) return <CollectBit source={collection} preferences={preferences} textureAssets={textureAssets} teamColor={teamColor} prepareAsset={portableAsset} onClose={() => setCollection(null)} onSaved={async entry => { setCollection(null); await refresh(); await choose(entry); }}/>;
   return <div className="parts-overlay" onKeyDown={event => { if (event.key === 'Escape' && !busy) { event.stopPropagation(); onClose(); } }}><section className="parts-dialog" role="dialog" aria-modal="true" aria-label="BitsAndParts" tabIndex={-1} ref={dialog}>
-    <header><h2>BitsAndParts</h2><button onClick={onClose} disabled={busy} aria-label="Close BitsAndParts">✕</button></header>
+    <header><h2>BitsAndParts</h2><button disabled={busy || !window.desktop?.savePart || !Object.values(selectionByGeoset || {}).some(ids => ids.length)} onClick={collect}>Collect Bit</button><button onClick={onClose} disabled={busy} aria-label="Close BitsAndParts">✕</button></header>
     <div className="parts-body"><aside aria-label="Parts folders and files"><div className="parts-bank-tools"><strong>BitsAndParts</strong>{window.desktop?.listParts ? <><button disabled={busy} onClick={refresh}>Refresh</button><button onClick={() => window.desktop.openPartsFolder().catch(error => setError(error.message))}>Open folder</button></> : <button onClick={() => picker.current.click()}>Choose folder</button>}</div>
       {bank?.children.length ? <FolderTree entries={bank.children} selected={selected} onSelect={choose}/> : <p>Store MDL and MDX parts here. Nested folders such as helms/horns stay organized.</p>}
       {bank?.directory && <small className="parts-directory" title={bank.directory}>{bank.directory}</small>}
@@ -104,7 +114,7 @@ export default function BitsAndParts({ model, preferences, textureAssets = new M
     </aside><main><div className="parts-preview">{preview ? <Viewport presentation="preview" model={preview} preferences={preferences} revision={0} textureAssets={assets} teamColor={teamColor} mode="textured" view="perspective" cameraMode="free" showGrid={false} showSkeleton={false} showVertices={false} overlays={{}} selectedGeoset={-1} sequenceIndex={sequence === '' ? -1 : Number(sequence)} time={sampleFrame === '' ? interval?.[0] || 0 : Number(sampleFrame)} playing={playing} shaded/> : <p>{busy ? 'Loading preview…' : 'Select a part to preview it.'}</p>}</div>
       {part && <><strong className="parts-filename">{part.name} · {part.model.Geosets.length} geosets</strong><p className="parts-note">Import the whole part at its original coordinates and scale, attached to DummyBone. Source rig motion is not imported.</p>
       <label><input type="checkbox" checked={useColor} onChange={event => { setUseColor(event.target.checked); setColorRecord(''); setSampleFrame(''); }}/> Use an RGB from a source animation</label>
-      <div className="parts-color-controls"><label>Animation<select aria-label="Source animation" value={sequence} onChange={event => { setSequence(event.target.value); setColorRecord(''); setSampleFrame(''); }}><option value="">Choose animation</option>{part.model.Sequences.map((item, index) => <option key={index} value={index}>{item.Name}</option>)}</select></label><button disabled={sequence === ''} onClick={() => setPlaying(value => !value)}>{playing ? 'Pause preview' : 'Play preview'}</button></div>
+      <div className="parts-color-controls"><label>Animation<select aria-label="Source animation" value={sequence} onChange={event => chooseSequence(event.target.value)}><option value="">Choose animation</option>{part.model.Sequences.map((item, index) => <option key={index} value={index}>{item.Name}</option>)}</select></label><button disabled={sequence === ''} onClick={() => setPlaying(value => !value)}>{playing ? 'Pause preview' : 'Play preview'}</button></div>
       {useColor && <><div className="parts-color-controls"><label>Source RGB key<select aria-label="Source RGB key" value={colorSamples.some(item => String(item.recordIndex) === colorRecord && String(item.frame) === sampleFrame) ? `${colorRecord}/${sampleFrame}` : ''} onChange={event => { if (!event.target.value) return; const [record, frame] = event.target.value.split('/'); setColorRecord(record); setSampleFrame(frame); }}><option value="">Choose a displayed RGB key, or sample below</option>{colorSamples.map(item => <option key={`${item.recordIndex}/${item.frame}`} value={`${item.recordIndex}/${item.frame}`}>Geoset {item.geosetIndex} · frame {item.frame} · RGB {item.rgb.map(value => Math.round(value * 255)).join(', ')}</option>)}</select></label></div><div className="parts-color-controls"><label>Color source<select aria-label="Source geoset color" value={colorRecord} onChange={event => setColorRecord(event.target.value)}><option value="">Choose geoset color</option>{choices.map(item => <option key={item.recordIndex} value={item.recordIndex}>Geoset {item.geosetIndex} · record {item.recordIndex}{item.global ? ' · global color track' : item.animated ? ' · animated color' : ' · static color'}</option>)}</select></label><label>Sample frame<input aria-label="Color sample frame" type="number" min={interval?.[0]} max={interval?.[1]} placeholder={interval ? `${interval[0]}–${interval[1]}` : 'Choose animation'} value={sampleFrame} onChange={event => setSampleFrame(event.target.value)}/></label></div>
       {interval && <div className="parts-color-controls"><span>Choose a frame explicitly:</span><button onClick={() => setSampleFrame(String(interval[0]))}>Start {interval[0]}</button><button onClick={() => setSampleFrame(String(interval[1]))}>End {interval[1]}</button></div>}
       {sample ? <div className="parts-rgb"><i style={{ background: `rgb(${sample.map(value => Math.round(value * 255)).join(',')})` }}/>RGB {sample.map(value => Math.round(value * 255)).join(', ')} · applied to the whole part; alpha is preserved.</div> : <p className="parts-note">{sequence !== '' && !choices.length ? 'This animation has no usable source color.' : 'Choose an animation, geoset color and sample frame to preview one RGB.'}</p>}</>}

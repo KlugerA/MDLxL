@@ -1,14 +1,13 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {_electron}=require(process.env.MDLXL_PLAYWRIGHT_MODULE||'C:/Users/PC/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 (async()=>{
- const root=process.cwd(),out=path.join(root,'out/catbox-review/ui-'+Date.now());fs.mkdirSync(out,{recursive:true});
+ const root=process.cwd(),out=path.join(root,'out/showcase-review/ui-'+Date.now());fs.mkdirSync(out,{recursive:true});
  const fixture=process.env.MDLXL_EFFECT_MODEL;if(!fixture)throw Error('Set MDLXL_EFFECT_MODEL to the Flail model to inspect.');
  const original=require('node:crypto').createHash('sha256').update(fs.readFileSync(fixture)).digest('hex');
  const cache=JSON.parse(fs.readFileSync(path.join(root,'profile/game-data-discovery.json'),'utf8')).result;
  const entry=path.join(out,'main.cjs');fs.writeFileSync(entry,`
  const {app}=require('electron');app.getAppPath=()=>${JSON.stringify(root)};
  const {GameDataDiscovery}=require(${JSON.stringify(path.join(root,'electron/game-data.cjs'))});GameDataDiscovery.prototype.discover=async()=>(${JSON.stringify(cache)});
- global.catboxMock={calls:0,release:null};global.fetch=async(url,options)=>{if(url!=='https://catbox.moe/user/api.php')throw Error('Unexpected network request');const index=++catboxMock.calls;if(index===1)await new Promise(resolve=>catboxMock.release=resolve);return new Response('https://files.catbox.moe/test'+catboxMock.calls+'.gif');};
  app.on('browser-window-created',(_,w)=>w.webContents.setBackgroundThrottling(false));require(${JSON.stringify(path.join(root,'electron/main.cjs'))});`);
  const app=await _electron.launch({executablePath:path.join(root,'node_modules/electron/dist/electron.exe'),args:['--disable-backgrounding-occluded-windows',entry,fixture],env:{...process.env,MDLVIS_HEADLESS:'1',MDLXL_PROFILE:path.join(out,'profile')},timeout:60000});let clipboard;
  try{

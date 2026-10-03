@@ -17,8 +17,6 @@ const {TexturePreviewCache}=require('./texture-preview-cache.cjs');
 const {SessionJournal}=require('./session.cjs');
 const {savePreviewCapture}=require('./preview-capture.cjs');
 const {PreviewRecordingStore}=require('./preview-ffmpeg.cjs');
-const {CatboxUploads}=require('./catbox-upload.cjs');
-const catboxUploads=new CatboxUploads();
 const {saveForgeAssets}=require('./forge-assets.cjs');
 const {normalizeModelCloseState,needsModelClosePrompt,modelClosePrompt,modelCloseAction}=require('./model-close.cjs');
 const {saveOptimizeXLPair}=require('./optimizexl-save.cjs');
@@ -154,6 +152,7 @@ ipcMain.handle('preview:openModel',async event=>{
 });
 ipcMain.handle('parts:list',()=>getBitsAndPartsLibrary().list());
 ipcMain.handle('parts:read',(_,id)=>getBitsAndPartsLibrary().read(id));
+ipcMain.handle('parts:save',(_,data)=>getBitsAndPartsLibrary().save(data));
 ipcMain.handle('parts:folder',async()=>{const {directory}=await getBitsAndPartsLibrary().list();const error=await shell.openPath(directory);if(error)throw Error(error);return directory;});
 ipcMain.handle('preview:backgrounds',()=>getPreviewBackgroundLibrary().list());
 ipcMain.handle('preview:background',(_,id)=>getPreviewBackgroundLibrary().read(id));
@@ -173,18 +172,13 @@ ipcMain.handle('paint:exportTexture',async(_,payload)=>{
 ipcMain.on('preview:busy',(event,value)=>{if(event.sender===win?.webContents)captureBusy=!!value;});
 ipcMain.handle('preview:capture',(event,payload)=>{
   captureOwner(event);
-  const operation=savePreviewCapture(path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), 'Showcase Recordings'),payload).then(result=>payload.format==='gif'?catboxUploads.remember(captureOwner(event),result):result);
+  const operation=savePreviewCapture(path.join(app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(), 'Showcase Recordings'),payload);
   captureOperations.add(operation);operation.finally(()=>captureOperations.delete(operation)).catch(()=>{});return operation;
 });
 ipcMain.handle('preview:recordBegin',(event,payload)=>captureOperation(previewRecordings.begin(captureOwner(event),payload)));
 ipcMain.handle('preview:recordFrame',(event,payload)=>captureOperation(previewRecordings.frame(captureOwner(event),payload)));
 ipcMain.handle('preview:recordFinish',(event,payload)=>captureOperation(previewRecordings.finish(captureOwner(event),payload)));
-ipcMain.handle('preview:recordSave',(event,id)=>{const owner=captureOwner(event);return captureOperation(previewRecordings.save(owner,id).then(result=>catboxUploads.remember(owner,result)));});
-ipcMain.handle('preview:catboxUpload',(event,id)=>{
-  const owner=captureOwner(event);
-  return captureOperation(catboxUploads.upload(owner,id).then(url=>({ok:true,url}),error=>{console.warn('Catbox upload:',error);return {ok:false,error:{code:error.code||'network',message:error.message}};}));
-});
-ipcMain.handle('preview:copyLink',(event,{exportId,bbcode}={})=>clipboard.writeText(catboxUploads.link(captureOwner(event),exportId,bbcode===true)));
+ipcMain.handle('preview:recordSave',(event,id)=>captureOperation(previewRecordings.save(captureOwner(event),id)));
 ipcMain.handle('preview:recordDiscard',(event,id)=>captureOperation(previewRecordings.discard(captureOwner(event),id)));
 ipcMain.handle('model:recent',()=>recents);
 ipcMain.handle('model:clearRecent',async()=>{recents=[];await persistRecents();return [];});

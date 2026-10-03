@@ -76,11 +76,30 @@ export function applyReplaceableTextureColor(native, gl, textureID) {
   return true;
 }
 
+/** Reforged skin weights do not guarantee Reforged/PBR materials. */
+export function isExplicitHdMaterial(material) {
+  return /^Shader_HD_/i.test(material?.Shader || '') || (material?.Layers || []).some(layer => layer?.ShaderTypeId != null);
+}
+
+function createSolidTexture(gl, rgba) {
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(rgba));
+  gl.bindTexture(gl.TEXTURE_2D, null);
+  return texture;
+}
+
 /** All hooks belong to this preview's private WebGL context, not global GL. */
 export function installWarcraftPreviewAdapter(gl, model, getClock) {
   const original = { shaderSource: gl.shaderSource, bindBuffer: gl.bindBuffer, useProgram: gl.useProgram, drawElements: gl.drawElements };
   gl.shaderSource = function (shader, source) { return original.shaderSource.call(this, shader, patchWarcraftMeshVertexShader(patchWarcraftMeshFragmentShader(source))); };
   let native, location, lightingLocation, lightDirectionLocation, portraitLocation, coverageLocation, surfaceLocation, lightUniforms, activeProgram, elementBuffer, activeLayer, byIndexBuffer, setLayerProps, setLayerPropsHD, renderRibbons, updateRibbons, renderParticles, render;
+  let neutralNormalTexture, neutralOrmTexture;
+  const classicSkinnedMaterials = new Set((model.Geosets || []).flatMap(geoset => geoset.SkinWeights?.length && model.Materials?.[geoset.MaterialID]?.Layers?.length && !isExplicitHdMaterial(model.Materials[geoset.MaterialID]) ? [geoset.MaterialID] : []));
   let meshPass = null;
   return {
     ready(renderer) {
@@ -95,6 +114,14 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
       if (!location) throw new Error('The Warcraft preview shader is incompatible with geoset color editing.');
       byIndexBuffer = new Map(native.indexBuffer.map((buffer, index) => [buffer, index]));
       setLayerProps = native.setLayerProps; setLayerPropsHD = native.setLayerPropsHD;
+      if (classicSkinnedMaterials.size) {
+        // The HD shader needs both maps even when the authored material is a
+        // Classic diffuse/glow stack. These private 1x1 maps add no detail.
+        neutralNormalTexture = createSolidTexture(gl, [128, 128, 255, 255]);
+        // Classic materials have no ORM team-colour mask. Alpha zero keeps
+        // their diffuse pixels unchanged by the HD shader's team tint.
+        neutralOrmTexture = createSolidTexture(gl, [255, 255, 0, 0]);
+      }
       native.setLayerProps = function (layer, textureID) {
         activeLayer = layer;
         const result = setLayerProps.call(this, layer, textureID);
@@ -104,7 +131,19 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
         if (layer.FilterMode === 3) gl.blendFunc(gl.ONE, gl.ONE);
         return result;
       };
-      native.setLayerPropsHD = function (materialID, layers) { activeLayer = layers[0]; return setLayerPropsHD.call(this, materialID, layers); };
+      const setClassicSkinnedLayer = (materialID, layerIndex) => {
+        const layer = model.Materials[materialID].Layers[layerIndex];
+        native.setLayerProps(layer, native.rendererData.materialLayerTextureID[materialID][layerIndex]);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, neutralNormalTexture);
+        gl.uniform1i(native.shaderProgramLocations.normalSamplerUniform, 1);
+        gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, neutralOrmTexture);
+        gl.uniform1i(native.shaderProgramLocations.ormSamplerUniform, 2);
+      };
+      native.setLayerPropsHD = function (materialID, layers) {
+        activeLayer = layers[0];
+        if (classicSkinnedMaterials.has(materialID)) return setClassicSkinnedLayer(materialID, 0);
+        return setLayerPropsHD.call(this, materialID, layers);
+      };
       // Upstream draws in geoset file order. Finish opaque depth first so a
       // later face cannot paint over an earlier glow. Each mesh layer draws
       // once; original IDs, buffer mappings and within-pass order stay intact.
@@ -148,7 +187,8 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
       gl.bindBuffer = function (target, buffer) { if (target === this.ELEMENT_ARRAY_BUFFER) elementBuffer = buffer; return original.bindBuffer.call(this, target, buffer); };
       gl.drawElements = function (...args) {
         const geosetIndex = activeProgram === native.shaderProgram ? byIndexBuffer.get(elementBuffer) : undefined;
-        if (geosetIndex !== undefined) {
+        const drawLayer = () => {
+          if (geosetIndex === undefined) return original.drawElements.apply(this, args);
           if (getClock().hiddenGeosets?.has?.(geosetIndex) || Array.isArray(getClock().hiddenGeosets) && getClock().hiddenGeosets.includes(geosetIndex)) return;
           const surface = getClock().surface;
           if (surface && activeLayer !== model.Materials?.[model.Geosets[geosetIndex].MaterialID]?.Layers?.[0]) return;
@@ -176,9 +216,17 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
           if (tint[3] < .999999 && (activeLayer?.FilterMode ?? 0) <= 1) {
             this.enable(this.BLEND); this.blendFuncSeparate(this.SRC_ALPHA, this.ONE_MINUS_SRC_ALPHA, this.ONE, this.ONE_MINUS_SRC_ALPHA); this.depthMask(false);
           }
+          try { return original.drawElements.apply(this, args); }
+          finally { this.disable(this.SAMPLE_ALPHA_TO_COVERAGE); }
+        };
+        const materialID = geosetIndex === undefined ? undefined : model.Geosets[geosetIndex]?.MaterialID;
+        if (!classicSkinnedMaterials.has(materialID)) return drawLayer();
+        let result;
+        for (let layerIndex = 0; layerIndex < model.Materials[materialID].Layers.length; layerIndex++) {
+          setClassicSkinnedLayer(materialID, layerIndex);
+          result = drawLayer();
         }
-        try { return original.drawElements.apply(this, args); }
-        finally { if (geosetIndex !== undefined) this.disable(this.SAMPLE_ALPHA_TO_COVERAGE); }
+        return result;
       };
     },
     dispose() {
@@ -189,6 +237,8 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
       if (native && setLayerPropsHD) native.setLayerPropsHD = setLayerPropsHD;
       if (native?.ribbonsController && renderRibbons) native.ribbonsController.render = renderRibbons;
       if (native?.ribbonsController && updateRibbons) native.ribbonsController.update = updateRibbons;
+      if (neutralNormalTexture) gl.deleteTexture(neutralNormalTexture);
+      if (neutralOrmTexture) gl.deleteTexture(neutralOrmTexture);
     },
   };
 }
