@@ -8,7 +8,16 @@ import { useWarmKeys } from './WarmKeys.jsx';
 import { WarmKeySequence, WARMKEY_LEADER } from '../src/warmkey-defaults.js';
 import { BUILT_IN_VIEWPORT_PRESETS, MAX_VIEWPORT_BACKGROUND_DATA_LENGTH, MAX_VIEWPORT_PRESETS, viewportPresetById } from '../src/viewport-appearance.js';
 import { wireDashArray } from '../src/wire-pattern.js';
+import { TREE_COLORS, NODE_COLORS, FOLDER_COLORS, treeAppearanceForTheme } from '../src/tree-appearance.js';
 import './settings.css';
+
+function AppearanceSection({ title, children }) {
+  const [open, setOpen] = useState(true);
+  return <details className="settings-appearance-section" open={open} onToggle={event => setOpen(event.currentTarget.open)}><summary>{title}</summary><div className="settings-appearance-content">{children}</div></details>;
+}
+function AppearanceColors({ colors, value, prefix, onChange }) {
+  return <div className="settings-color-grid">{colors.map(([key, label]) => <label className="settings-color" key={key}><span>{label}</span><input type="color" aria-label={`${prefix} ${label}`} value={value[key]} onChange={event => onChange({ [key]: event.target.value })}/><code>{value[key]}</code></label>)}</div>;
+}
 
 function Toggle({ id, label, checked, onChange, description }) {
   return <label className="settings-toggle"><input data-warmkey={id} data-warmkey-label={label} type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)}/><span>{label}{description && <small>{description}</small>}</span></label>;
@@ -103,6 +112,7 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
   const viewport = change => commit({ viewportPreset: 'custom', viewportAppearance: { ...prefs.viewportAppearance, ...change } });
   const viewportPart = (part, change) => viewport({ [part]: { ...prefs.viewportAppearance[part], ...change } });
   const quadPart = (part, change) => viewportPart('quadView', { [part]: { ...prefs.viewportAppearance.quadView[part], ...change } });
+  const treePart = (part, change) => viewportPart('tree', { [part]: { ...prefs.viewportAppearance.tree[part], ...change } });
   const grid = change => commit({ grid: { ...prefs.grid, ...change } });
   useEffect(() => {
     previousFocus.current = document.activeElement;
@@ -157,7 +167,7 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
   const applyViewportPreset = id => {
     const preset = viewportPresetById(id, prefs.viewportPresets);
     if (!preset) return;
-    commit({ viewportPreset: id, viewportAppearance: preset.appearance, ...(preset.theme ? { theme: preset.theme, accent: APPLICATION_THEMES[preset.theme].accent } : {}) }); setMessage(`${preset.name} loaded.`);
+    commit({ viewportPreset: id, viewportAppearance: preset.appearance, ...(preset.theme ? { theme: preset.theme, accent: preset.accent || APPLICATION_THEMES[preset.theme].accent } : {}) }); setMessage(`${preset.name} loaded.`);
   };
   const saveViewportPreset = () => {
     const name = presetName.trim();
@@ -165,7 +175,7 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
     if (prefs.viewportPresets.length >= MAX_VIEWPORT_PRESETS) { setMessage(`You can save up to ${MAX_VIEWPORT_PRESETS} custom viewport presets.`); return; }
     if ([...Object.values(BUILT_IN_VIEWPORT_PRESETS), ...prefs.viewportPresets].some(preset => preset.name.toLowerCase() === name.toLowerCase())) { setMessage('A viewport preset with that name already exists.'); return; }
     const id = `custom-${Date.now().toString(36)}`;
-    commit({ viewportPreset: id, viewportPresets: [...prefs.viewportPresets, { id, name, appearance: prefs.viewportAppearance }] });
+    commit({ viewportPreset: id, viewportPresets: [...prefs.viewportPresets, { id, name, appearance: prefs.viewportAppearance, theme: prefs.theme, accent: prefs.accent }] });
     setPresetName(''); setMessage(`${name} saved.`);
   };
   const deleteViewportPreset = () => {
@@ -177,7 +187,7 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
   const trapFocus = event => {
     if (event.key === 'Escape' && !event.target.closest('[data-warmkey-recording]')) { event.preventDefault(); event.stopPropagation(); if (recording) setRecording(null); else onClose(); return; }
     if (event.key !== 'Tab' || event.target.closest('[data-warmkey-recording]')) return;
-    const focusable = [...panel.current.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]')].filter(element => element.getClientRects().length);
+    const focusable = [...panel.current.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]')].filter(element => element.getClientRects().length);
     const first = focusable[0], last = focusable.at(-1);
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -244,42 +254,60 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
         <Toggle id="capture:pressed-keys" label="Show pressed keys" checked={prefs.showPressedKeys} onChange={showPressedKeys=>commit({showPressedKeys})} description="Display keyboard and mouse combinations for tutorials. Text entered in fields is not shown."/>
         <button onClick={()=>commit({capture:{fps:30,recordingQuality:'medium',screenshotQuality:'medium'}})}>Restore capture defaults</button>
       </div>}
-      {tab === 'visuals' && <div className="settings-page">
-        <details className="settings-citadel"><summary>Citadel Paint</summary><div className="settings-appearance-grid">
-          {[['brushTipLight','Brush tips — light theme'],['brushTipDark','Brush tips — dark themes'],['brushCursor','Brush cursor'],['geosetSelection','Geoset selection'],['geosetBorder','Geoset border'],['lampSelection','Selected lamp']].map(([key,label])=><label className="settings-color" key={key}><span>{label}</span><input type="color" aria-label={'Citadel '+label} value={prefs.citadelPaint[key]} onChange={e=>commit({citadelPaint:{...prefs.citadelPaint,[key]:e.target.value}})}/></label>)}
-          <Numeric label="Citadel border thickness" id="citadel:borderThickness" min={1} max={6} value={prefs.citadelPaint.borderThickness} onChange={borderThickness=>commit({citadelPaint:{...prefs.citadelPaint,borderThickness}})}/>
-          <button onClick={()=>commit({citadelPaint:DEFAULT_PAINT_APPEARANCE})}>Reset Citadel colours</button>
-        </div></details>
-        <h3>Viewport appearance</h3><p>Seven built-in presets pair viewport colors with a matching application theme. They never alter model geometry, materials, UVs, animations, or saved MDL/MDX data.</p>
-        <label className="settings-select"><span>Viewport preset</span><select aria-label="Viewport appearance preset" value={prefs.viewportPreset} onChange={event => applyViewportPreset(event.target.value)}>
+      {tab === 'visuals' && <div className="settings-page settings-appearance-page">
+        <AppearanceSection title="Presets">
+        <label className="settings-select"><span>Appearance preset</span><select aria-label="Viewport appearance preset" value={prefs.viewportPreset} onChange={event => applyViewportPreset(event.target.value)}>
           {Object.values(BUILT_IN_VIEWPORT_PRESETS).map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
           {prefs.viewportPreset === 'custom' && <option value="custom">Unsaved custom appearance</option>}
           {prefs.viewportPresets.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
         </select></label>
         <div className="settings-inline-actions"><input aria-label="Custom viewport preset name" value={presetName} maxLength={80} placeholder="Custom preset name" onChange={event => setPresetName(event.target.value)}/><button onClick={saveViewportPreset}>Save as custom preset</button>{String(prefs.viewportPreset).startsWith('custom-') && <button onClick={deleteViewportPreset}>Delete selected preset</button>}</div>
-        <fieldset className="settings-appearance-group"><legend>Highlight Geoset</legend>
+        </AppearanceSection>
+        <AppearanceSection title="Interface">
+        <div className="settings-inline-actions" role="group" aria-label="Application theme"><span>Theme:</span>{Object.entries(APPLICATION_THEMES).map(([value, theme]) => <button key={value} data-warmkey={`appearance:theme:${value}`} aria-pressed={prefs.theme === value} onClick={() => commit({ theme: value, accent: theme.accent, viewportPreset: 'custom', viewportAppearance: { ...prefs.viewportAppearance, tree: treeAppearanceForTheme(value) } })}>{theme.name}</button>)}</div>
+        <label className="settings-color">UI accent <input type="color" aria-label="UI accent" value={prefs.accent} onChange={event=>commit({accent:event.target.value})}/><code>{prefs.accent}</code></label>
+        <div className="settings-graphics-grid"><Numeric id="appearance:panel-width" label="Toolbox width" value={prefs.panelWidth} min={162} max={420} unit="px" onChange={panelWidth=>commit({panelWidth})}/><Numeric id="appearance:panel-scale" label="Toolbox scale" value={prefs.panelScale} min={1} max={1.75} step={.05} unit="×" onChange={panelScale=>commit({panelScale})}/></div>
+        </AppearanceSection>
+        <AppearanceSection title="Folders & lists">
+          <AppearanceColors colors={TREE_COLORS} value={prefs.viewportAppearance.tree} prefix="Tree" onChange={change => viewportPart('tree', change)}/>
+          <Numeric label="List font size" id="appearance:tree:font-size" min={10} max={20} unit="px" value={prefs.viewportAppearance.tree.fontSize} onChange={fontSize => viewportPart('tree', { fontSize })}/>
+        </AppearanceSection>
+        <AppearanceSection title="Node colors">
+          <AppearanceColors colors={NODE_COLORS} value={prefs.viewportAppearance.tree.nodes} prefix="Node" onChange={change => treePart('nodes', change)}/>
+        </AppearanceSection>
+        <AppearanceSection title="Sound folder colors">
+          <AppearanceColors colors={FOLDER_COLORS} value={prefs.viewportAppearance.tree.folders} prefix="Folder" onChange={change => treePart('folders', change)}/>
+        </AppearanceSection>
+        <AppearanceSection title="Viewport background">
+        <div className="settings-inline-actions" role="group" aria-label="Viewport background type"><span>Type:</span><button aria-pressed={prefs.viewportAppearance.background.type === 'color'} onClick={() => viewportPart('background',{type:'color'})}>Solid color</button><button aria-pressed={prefs.viewportAppearance.background.type === 'image'} disabled={!prefs.viewportAppearance.background.imageData} onClick={() => viewportPart('background',{type:'image'})}>Image</button></div>
+        <label className="settings-color">Fallback color <input type="color" aria-label="Viewport background color" value={prefs.viewportAppearance.background.color} onChange={event => viewportPart('background',{color:event.target.value})}/><code>{prefs.viewportAppearance.background.color}</code></label>
+        <input ref={viewportImageInput} hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" onChange={event => { loadViewportBackground(event.target.files[0]); event.target.value=''; }}/>
+        <div className="settings-inline-actions"><button onClick={() => viewportImageInput.current?.click()}>Choose background image…</button>{prefs.viewportAppearance.background.imageData && <><span className="settings-muted" title={prefs.viewportAppearance.background.imageName}>{prefs.viewportAppearance.background.imageName || 'Saved image'}</span><button onClick={() => viewportPart('background',{type:'color',imageData:'',imageName:''})}>Remove image</button></>}</div>
+        {prefs.viewportAppearance.background.imageData && <div className="settings-graphics-grid"><label className="settings-select"><span>Image display</span><select aria-label="Background image display mode" value={prefs.viewportAppearance.background.display} onChange={event => viewportPart('background',{display:event.target.value})}><option value="fit">Fit</option><option value="fill">Fill</option><option value="stretch">Stretch</option><option value="center">Center / actual size</option></select></label><Numeric id="appearance:background:opacity" label="Image opacity" value={prefs.viewportAppearance.background.opacity} min={0} max={1} step={.05} onChange={opacity => viewportPart('background',{opacity})}/></div>}
+        <Toggle id="appearance:xray-vertices" label="Show occluded vertices in General View (X-Ray)" checked={prefs.viewportAppearance.xrayVertices} onChange={xrayVertices => viewport({xrayVertices})} description="Off by default: General View hides vertices behind model geometry. Wireframe View remains see-through."/>
+        </AppearanceSection>
+        <AppearanceSection title="Highlight Geoset">
           <label className="settings-color"><span>Color</span><input type="color" aria-label="Highlight Geoset color" value={prefs.viewportAppearance.geosetHighlight.color} onChange={event => viewportPart('geosetHighlight', { color: event.target.value })}/><code>{prefs.viewportAppearance.geosetHighlight.color}</code></label>
           <label className="settings-select"><span>Type</span><select aria-label="Highlight Geoset type" value={prefs.viewportAppearance.geosetHighlight.type} onChange={event => viewportPart('geosetHighlight', { type: event.target.value })}><option value="wire-vertices">Wireframe with vertices</option><option value="wire">Wireframe without vertices</option><option value="fill">Filled geoset</option></select></label>
           <label><input type="checkbox" checked={prefs.viewportAppearance.geosetHighlight.viaView} disabled={!prefs.viewportAppearance.geosetHighlight.viaSelection} onChange={event => viewportPart('geosetHighlight', { viaView: event.target.checked })}/>Highlight via View</label>
           <label><input type="checkbox" checked={prefs.viewportAppearance.geosetHighlight.viaSelection} disabled={!prefs.viewportAppearance.geosetHighlight.viaView} onChange={event => viewportPart('geosetHighlight', { viaSelection: event.target.checked })}/>Highlight via Selection</label>
-        </fieldset>
+        </AppearanceSection>
         <div className="settings-appearance-grid">
-          {[['selectedGeoset','Selected geoset'],['otherGeoset','Other visible geosets']].map(([part,label]) => <fieldset className="settings-appearance-group" key={part}><legend>{label}</legend>
+          {[['selectedGeoset','Selected geoset'],['otherGeoset','Other visible geosets']].map(([part,label]) => <AppearanceSection key={part} title={label}>
             <label className="settings-color"><span>Wire color</span><input type="color" aria-label={`${label} wire color`} value={prefs.viewportAppearance[part].color} onChange={event => viewportPart(part,{color:event.target.value})}/><code>{prefs.viewportAppearance[part].color}</code></label>
             <Numeric id={`appearance:${part}:thickness`} label="Wire thickness" value={prefs.viewportAppearance[part].thickness} min={.5} max={4} step={.25} unit="px" onChange={thickness => viewportPart(part,{thickness})}/>
             <Numeric id={`appearance:${part}:opacity`} label="Wire opacity" value={prefs.viewportAppearance[part].opacity} min={0} max={1} step={.05} onChange={opacity => viewportPart(part,{opacity})}/>
             <label className="settings-select"><span>Wire style</span><select aria-label={`${label} wire style`} value={prefs.viewportAppearance[part].style} onChange={event => viewportPart(part,{style:event.target.value})}><option value="solid">Solid</option><option value="dotted">Dotted</option><option value="dashed">Striped</option></select></label>
             {prefs.viewportAppearance[part].style !== 'solid' && <Numeric id={`appearance:${part}:spacing`} label="Line spacing" value={prefs.viewportAppearance[part].spacing} min={2} max={32} step={1} unit="px" onChange={spacing => viewportPart(part,{spacing})}/>}<WireLinePreview wire={prefs.viewportAppearance[part]} background={prefs.viewportAppearance.background.color} label={label}/>
-          </fieldset>)}
-          {[['selectedVertex','Selected vertices'],['unselectedVertex','Unselected vertices']].map(([part,label]) => <fieldset className="settings-appearance-group" key={part}><legend>{label}</legend>
+          </AppearanceSection>)}
+          {[['selectedVertex','Selected vertices'],['unselectedVertex','Unselected vertices']].map(([part,label]) => <AppearanceSection key={part} title={label}>
             <label className="settings-color"><span>Marker color</span><input type="color" aria-label={`${label} color`} value={prefs.viewportAppearance[part].color} onChange={event => viewportPart(part,{color:event.target.value})}/><code>{prefs.viewportAppearance[part].color}</code></label>
             <Numeric id={`appearance:${part}:size`} label="Marker size" value={prefs.viewportAppearance[part].size} min={2} max={16} step={1} unit="px" onChange={size => viewportPart(part,{size})}/>
             <label className="settings-select"><span>Marker style</span><select aria-label={`${label} marker style`} value={prefs.viewportAppearance[part].style} onChange={event => viewportPart(part,{style:event.target.value})}><option value="square">Square</option><option value="circle">Circle</option><option value="diamond">Diamond</option></select></label>
             <VertexMarkerPreview marker={prefs.viewportAppearance[part]} background={prefs.viewportAppearance.background.color} label={label}/>
-          </fieldset>)}
+          </AppearanceSection>)}
         </div>
-        <fieldset className="settings-appearance-group" aria-label="Quadview appearance"><legend>Quadview</legend>
-          <p className="settings-hint">A grid for each pane's editing plane. Zooming reveals finer subdivisions; these settings are saved in appearance presets and configuration exports.</p>
+        <AppearanceSection title="Quadview">
           <Toggle id="appearance:quadview:grid" label="Quadview grid" checked={prefs.viewportAppearance.quadView.grid.enabled} onChange={enabled => quadPart('grid', {enabled})}/>
           <div className="settings-color-grid">
             <label className="settings-color"><span>Background</span><input type="color" aria-label="Quadview background color" value={prefs.viewportAppearance.quadView.background.color} onChange={event => quadPart('background', {color:event.target.value})}/></label>
@@ -295,22 +323,17 @@ export default function Settings({ preferences, onChange, onClose, catalog: supp
           <input ref={quadImageInput} hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" onChange={event => { loadViewportBackground(event.target.files[0], true); event.target.value=''; }}/>
           <div className="settings-inline-actions"><button onClick={() => quadImageInput.current?.click()}>Choose Quadview background image…</button>{prefs.viewportAppearance.quadView.background.imageData && <button onClick={() => quadPart('background', {type:'color',imageData:'',imageName:''})}>Remove Quadview image</button>}</div>
           {prefs.viewportAppearance.quadView.background.imageData && <div className="settings-graphics-grid"><label>Quadview image display <select aria-label="Quadview image display" value={prefs.viewportAppearance.quadView.background.display} onChange={event => quadPart('background', {display:event.target.value})}>{['fit','fill','stretch','center'].map(value => <option key={value} value={value}>{value}</option>)}</select></label><Numeric id="appearance:quadview:image-opacity" label="Quadview image opacity" value={prefs.viewportAppearance.quadView.background.opacity} min={0} max={1} step={.05} onChange={opacity => quadPart('background', {opacity})}/></div>}
-        </fieldset>
-        <h3>Viewport background</h3>
-        <div className="settings-inline-actions" role="group" aria-label="Viewport background type"><span>Type:</span><button aria-pressed={prefs.viewportAppearance.background.type === 'color'} onClick={() => viewportPart('background',{type:'color'})}>Solid color</button><button aria-pressed={prefs.viewportAppearance.background.type === 'image'} disabled={!prefs.viewportAppearance.background.imageData} onClick={() => viewportPart('background',{type:'image'})}>Image</button></div>
-        <label className="settings-color">Fallback color <input type="color" aria-label="Viewport background color" value={prefs.viewportAppearance.background.color} onChange={event => viewportPart('background',{color:event.target.value})}/><code>{prefs.viewportAppearance.background.color}</code></label>
-        <input ref={viewportImageInput} hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" onChange={event => { loadViewportBackground(event.target.files[0]); event.target.value=''; }}/>
-        <div className="settings-inline-actions"><button onClick={() => viewportImageInput.current?.click()}>Choose background image…</button>{prefs.viewportAppearance.background.imageData && <><span className="settings-muted" title={prefs.viewportAppearance.background.imageName}>{prefs.viewportAppearance.background.imageName || 'Saved image'}</span><button onClick={() => viewportPart('background',{type:'color',imageData:'',imageName:''})}>Remove image</button></>}</div>
-        {prefs.viewportAppearance.background.imageData && <div className="settings-graphics-grid"><label className="settings-select"><span>Image display</span><select aria-label="Background image display mode" value={prefs.viewportAppearance.background.display} onChange={event => viewportPart('background',{display:event.target.value})}><option value="fit">Fit</option><option value="fill">Fill</option><option value="stretch">Stretch</option><option value="center">Center / actual size</option></select></label><Numeric id="appearance:background:opacity" label="Image opacity" value={prefs.viewportAppearance.background.opacity} min={0} max={1} step={.05} onChange={opacity => viewportPart('background',{opacity})}/></div>}
-        <Toggle id="appearance:xray-vertices" label="Show occluded vertices in General View (X-Ray)" checked={prefs.viewportAppearance.xrayVertices} onChange={xrayVertices => viewport({xrayVertices})} description="Off by default: General View hides vertices behind model geometry. Wireframe View remains see-through."/>
-        <div className="settings-inline-actions" role="group" aria-label="Application theme"><span>Theme:</span>{Object.entries(APPLICATION_THEMES).map(([value, theme]) => <button key={value} data-warmkey={`appearance:theme:${value}`} aria-pressed={prefs.theme === value} onClick={() => commit({ theme: value, accent: theme.accent })}>{theme.name}</button>)}</div>
-        <p className="settings-hint">You can change the theme separately without changing viewport colors. Hold Alt to see shortcut hints.</p>
-        <label className="settings-color">UI accent <input type="color" aria-label="UI accent" value={prefs.accent} onChange={event=>commit({accent:event.target.value})}/><code>{prefs.accent}</code></label>
-        <div className="settings-graphics-grid"><Numeric id="appearance:panel-width" label="Toolbox width" value={prefs.panelWidth} min={162} max={420} unit="px" onChange={panelWidth=>commit({panelWidth})}/><Numeric id="appearance:panel-scale" label="Toolbox scale" value={prefs.panelScale} min={1} max={1.75} step={.05} unit="×" onChange={panelScale=>commit({panelScale})}/></div>
-        <h3>Editor helpers</h3><div className="settings-color-grid">{APPEARANCE_HELPER_COLORS.map(([key, label]) => <label className="settings-color" key={key}><span>{label}</span><input data-warmkey={`appearance:color:${key}`} type="color" aria-label={`${label} color`} value={prefs.visuals[key]} onChange={event => visual({ [key]: event.target.value })}/><code>{prefs.visuals[key]}</code></label>)}</div>
+        </AppearanceSection>
+        <AppearanceSection title="Editor helpers"><div className="settings-color-grid">{APPEARANCE_HELPER_COLORS.map(([key, label]) => <label className="settings-color" key={key}><span>{label}</span><input data-warmkey={`appearance:color:${key}`} type="color" aria-label={`${label} color`} value={prefs.visuals[key]} onChange={event => visual({ [key]: event.target.value })}/><code>{prefs.visuals[key]}</code></label>)}</div>
         <label>Emitter marker<select aria-label="Emitter marker" value={prefs.emitterMarker} onChange={event=>commit({emitterMarker:event.target.value})}><option value="pentagram">Pentagram in a circle</option><option value="tetrahedron">Normal node</option><option value="cube">Cube</option></select></label>
         <div className="settings-graphics-grid">{[['keyframeSize', 'Keyframe marker size', 4, 24, 1, 'px'], ['helperSize', 'Node marker size', 3, 18, 1, 'px'], ['occludedOpacity', 'Hidden wire intensity', 0, 1, 0.05, '']].map(([key, label, min, max, step, unit]) => <Numeric key={key} id={`appearance:size:${key}`} label={label} value={prefs.visuals[key]} min={min} max={max} step={step} unit={unit} onChange={value => visual({ [key]: value })}/>)}</div>
-        <button data-warmkey="appearance:reset" onClick={() => commit({ viewportPreset: 'mdlvis-vanilla', viewportAppearance: BUILT_IN_VIEWPORT_PRESETS['mdlvis-vanilla'].appearance, visuals: DEFAULT_VISUALS })}>Restore Lordaeron and helper defaults</button>
+        </AppearanceSection>
+        <AppearanceSection title="Citadel Paint"><div className="settings-appearance-grid">
+          {[['brushTipLight','Brush tips — light theme'],['brushTipDark','Brush tips — dark themes'],['brushCursor','Brush cursor'],['geosetSelection','Geoset selection'],['geosetBorder','Geoset border'],['lampSelection','Selected lamp']].map(([key,label])=><label className="settings-color" key={key}><span>{label}</span><input type="color" aria-label={'Citadel '+label} value={prefs.citadelPaint[key]} onChange={e=>commit({citadelPaint:{...prefs.citadelPaint,[key]:e.target.value}})}/></label>)}
+          <Numeric label="Citadel border thickness" id="citadel:borderThickness" min={1} max={6} value={prefs.citadelPaint.borderThickness} onChange={borderThickness=>commit({citadelPaint:{...prefs.citadelPaint,borderThickness}})}/>
+          <button onClick={()=>commit({citadelPaint:DEFAULT_PAINT_APPEARANCE})}>Reset Citadel colours</button>
+        </div></AppearanceSection>
+        <button data-warmkey="appearance:reset" onClick={() => commit({ theme: 'light', accent: APPLICATION_THEMES.light.accent, viewportPreset: 'mdlvis-vanilla', viewportAppearance: BUILT_IN_VIEWPORT_PRESETS['mdlvis-vanilla'].appearance, visuals: DEFAULT_VISUALS })}>Restore Lordaeron and helper defaults</button>
       </div>}
       {tab === 'grid' && <div className="settings-page">
         <h3>XYZ grid</h3><p>Configure the grid shared by the 3D viewport and animation preview. Use Display → Grid to show or hide it.</p>

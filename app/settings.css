@@ -13,3 +13,13 @@
 .settings-preload{margin-top:18px;padding-top:8px;border-top:1px solid var(--ui-border,#888);min-width:0}.settings-preload-confirm{margin-top:10px;padding:10px;border:1px solid var(--ui-border,#888);background:var(--ui-field,#fff);color:var(--ui-text,#16191e)}.settings-preload-status progress{width:100%;height:16px}.settings-preload-status p{margin:6px 0}.settings-preload-status code{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.settings-preload-errors{margin-top:8px}.settings-preload-errors ul{padding-left:20px;overflow-wrap:anywhere}.settings-preload-error{color:var(--ui-text,#16191e);border-left:3px solid #c33;padding:6px 9px}
 .settings-appearance-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0 24px}.settings-appearance-group{min-width:0;margin:0;padding:10px;border:1px solid var(--ui-border,#888);background:color-mix(in srgb,var(--ui-field,#fff) 55%,transparent)}.settings-appearance-group legend{padding:0 5px;font-weight:bold}.settings-appearance-group .settings-number,.settings-appearance-group .settings-select,.settings-appearance-group .settings-color{margin:8px 0}.settings-inline-actions>input[placeholder="Custom preset name"]{min-width:190px;flex:1}@media(max-width:620px){.settings-appearance-grid{grid-template-columns:1fr}}
 .settings-appearance-preview{display:block;width:96px;height:22px;margin:5px 0 0 auto;border:1px solid var(--ui-border,#888);background:var(--ui-field,#fff);pointer-events:none}
+
+.settings-appearance-section{min-width:0;margin:0 0 8px;border:1px solid var(--ui-border);background:var(--ui-panel);color:var(--ui-text)}
+.settings-appearance-section>summary{padding:7px 9px;cursor:pointer;font-weight:600;background:var(--ui-surface);color:var(--ui-text)}
+.settings-appearance-section>summary:focus-visible{outline:2px solid var(--ui-link);outline-offset:-2px}
+.settings-appearance-content{padding:8px 10px}
+.settings-appearance-content>.settings-color-grid,.settings-appearance-content>.settings-graphics-grid{margin:6px 0 12px}
+.settings-appearance-content>.settings-inline-actions{margin:6px 0}
+.settings-appearance-content>.settings-number,.settings-appearance-content>.settings-select,.settings-appearance-content>.settings-color{margin:8px 0}
+.settings-appearance-page>.settings-appearance-grid{align-items:start;margin:0 0 8px;gap:8px}
+.settings-appearance-page>.settings-appearance-grid>.settings-appearance-section{margin:0}

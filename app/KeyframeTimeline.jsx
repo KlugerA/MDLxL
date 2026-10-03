@@ -30,7 +30,7 @@ export default function KeyframeTimeline({ model, revision, sequenceIndex = -1, 
     const options = { tracks, nodeIds: scopedNodeIds, geosetIds: selectedGeosets, activeController, highlightKeyframes, domain };
     const authored = domain ? classicTimelineTargets(model, { ...options, highlightKeyframes: false }) : [];
     const selectedTargets = domain ? classicTimelineTargets(model, { ...options, highlightKeyframes: true }) : [];
-    const selectedBoneTargets = activeController === 'animations' ? selectedTargets : domain ? ['move', 'rotate', 'scale'].flatMap(controller => classicTimelineTargets(model, { ...options, activeController: controller, highlightKeyframes: true })) : [];
+    const selectedBoneTargets = (['animations', 'nodeVisibility'].includes(activeController) || activeController.startsWith('materialVisibility:')) ? selectedTargets : domain ? ['move', 'rotate', 'scale'].flatMap(controller => classicTimelineTargets(model, { ...options, activeController: controller, highlightKeyframes: true })) : [];
     const targets = !highlightKeyframes ? authored : activeController === 'select' ? selectedBoneTargets : selectedTargets;
     const copyTargets = highlightKeyframes ? [...new Map(selectedBoneTargets.map(target => [target.trackId, target])).values()] : authored;
     const poseTargets = [...new Map((highlightKeyframes ? copyTargets : [...authored, ...selectedTargets]).map(target => [target.trackId, target])).values()];

@@ -14,6 +14,7 @@ import {createStarterRecipe,starterTextureAsset,STARTER_TEXTURE,PARTICLE_STARTER
 import {parseParticleData,stringifyParticleData} from '../src/particle-data.js';
 import {createParticleGesture} from '../src/particle-bindings.js';
 import ParticleClassicControls from './ParticleClassicControls.jsx';
+import useMovableWindow from './useMovableWindow.js';
 import ParticleCluelessControls from './ParticleCluelessControls.jsx';
 import ParticleRibbonControls from './ParticleRibbonControls.jsx';
 import {ParticleSweepControls,ParticleSweepOverlay} from './ParticleSweepTools.jsx';
@@ -218,6 +219,7 @@ export default function ParticleEditor({doc,revision=doc?.revision||0,edit,refre
   const placementAssets=useMemo(()=>new Map([...textureAssets,...assets,...(placement?.ribbon?[[pathKey(STARTER_TEXTURE),starterTextureAsset()]]:[])]),[textureAssets,assets,placement?.ribbon]);
   const focusedRange=sweepRange&&sweepRange[0]>=start&&sweepRange[1]<=end?sweepRange:[start,Math.min(end,start+Math.max(1,(end-start)*.35))];
   const asset=assets.get(pathKey(working.Textures[emitter?.TextureID]?.Image));
+  const movable = useMovableWindow(dialog);
   return <div className="resource-editor particle-editor" onKeyDown={event=>{
     event.stopPropagation();
     if(event.key==='Escape'){event.preventDefault();if(gesture.current)cancel();else if(placement)setPlacement(null);else if(ingredients)setIngredients(null);else if(library)setLibrary(false);else close();}
@@ -225,8 +227,8 @@ export default function ParticleEditor({doc,revision=doc?.revision||0,edit,refre
     if(event.key===' '&&!['INPUT','TEXTAREA','SELECT','BUTTON'].includes(event.target.tagName)){event.preventDefault();setPlaying(v=>!v);}
     if(event.key==='Tab'){const controls=[...dialog.current.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]')].filter(e=>e.getClientRects().length);if(event.shiftKey&&document.activeElement===controls[0]){event.preventDefault();controls.at(-1)?.focus();}else if(!event.shiftKey&&document.activeElement===controls.at(-1)){event.preventDefault();controls[0]?.focus();}}
   }}>
-    <section ref={dialog} tabIndex={-1} className="re-window pe-window" role="dialog" aria-modal="true" aria-label="Particle Editor" data-warmkey-scope="dialog" data-warmkey-prefix="particles">
-      <header className="re-caption"><span>Particle Editor <small>· {context}</small></span><button className="re-caption-close" aria-label="Close Particle Editor" onClick={close}>×</button></header>
+    <section ref={dialog} style={movable.style} tabIndex={-1} className="re-window pe-window" role="dialog" aria-modal="true" aria-label="Particle Editor" data-warmkey-scope="dialog" data-warmkey-prefix="particles">
+      <header className="re-caption" {...movable.handleProps}><span>Particle Editor <small>· {context}</small></span><button className="re-caption-close" aria-label="Close Particle Editor" onClick={close}>×</button></header>
       <div className="pe-toolbar"><button aria-pressed={library} onClick={toggleLibrary}>Library</button><button disabled={activeDoc.readOnly} onClick={add}>New</button>{markedPolygons>0&&<button disabled={doc.readOnly} onClick={beginRibbon}>Add ribbon</button>}<select aria-label="Particle editor mode" value={mode} onChange={e=>{cancel();setMode(e.target.value);}}><option>Clueless</option><option>Classic</option></select><select aria-label="Particle context" value={context} onChange={e=>chooseContext(e.target.value)}><option>Lab</option><option disabled={!doc}>On model</option></select><span className="pe-spacer"/><button onClick={()=>undo(false)} disabled={activeDoc.readOnly||library||examples||!!testView||!!ingredients||!activeDoc.canUndo}>Undo</button><button onClick={()=>undo(true)} disabled={activeDoc.readOnly||library||examples||!!testView||!!ingredients||!activeDoc.canRedo}>Redo</button><button disabled={!effectNodes(model).length} onClick={()=>{setName(context==='Lab'?lab.recipe.name:'My effect');setSaveOpen(v=>!v);}}>Save preset</button>{context==='Lab'&&<button disabled={!doc||doc.readOnly||!effectNodes(model).length} onClick={beginPlacement}>Add to model</button>}</div>
       {newOpen&&<div className="pe-action-strip"><span>Start with</span>{PARTICLE_STARTERS.map(([id,label])=><button key={id} disabled={!recoveryReady} onClick={async()=>{setNewOpen(false);if(await chooseRecipe({...createStarterRecipe(id),id:'lab-'+crypto.randomUUID()}))setDemo(id==='ribbon');}}>{label}</button>)}<button onClick={()=>{setExamples(true);setNewOpen(false);}}>Compare examples</button><button onClick={()=>setNewOpen(false)}>Cancel</button></div>}
       {family==='RibbonEmitters'&&context==='Lab'&&!library&&!placement&&<div className="pe-action-strip"><button aria-pressed={demo} onClick={()=>setDemo(value=>!value)}>Preview swing</button><small>For a weapon: mark its back polygons in Vertices, then open EMTR.</small></div>}
