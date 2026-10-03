@@ -201,7 +201,7 @@ export function ResourceEditor({modelPath, onEditVisibility, onWarmKeys, onViewC
   };
 
   const seek = value => { setFrame(value); onSeek?.(value); };
-  const changeSequence = value => { setManagerSequence(value); onSequenceChange?.(value); };
+  const changeSequence = value => { setManagerSequence(value); onSequenceChange?.(value); seek(model.Sequences[value].Interval[0]); };
   return <div className={`resource-editor ${friendly ? 're-xl' : ''}`} onKeyDown={keyDown}>
     <section data-warmkey-scope="dialog" data-warmkey-prefix={`resource:${currentKind}`} data-warmkey-category={`${title} controls`} className={`re-window ${currentKind === 'Nodes' ? 're-node-window' : ''} ${propertiesOpen ? 're-properties-open' : ''}`} role="dialog" aria-modal={!livePreview} aria-label={title} tabIndex={-1} ref={dialog} style={movable.style}>
       <header className="re-caption" {...movable.handleProps}><span>{title}</span><div>{onWarmKeys && <button data-warmkey="warmkeys" title="Configure hotkeys for this window" onClick={onWarmKeys}>Hotkeys</button>}<button data-warmkey="close" className="re-caption-close" aria-label={`Close ${title}`} onClick={onClose}>×</button></div></header>
