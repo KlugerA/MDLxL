@@ -33,7 +33,7 @@ export async function readShelfTexture(item) {
   const asset=await window.desktop.readPaintTexture(item.id);return {name:asset.name,raster:await decodePaintImage(asset.bytes,asset.name)};
 }
 function PaintTextureShelf({onUse,onCut,onNative,onImport,onFolderChange,epoch=0,onStatus}) {
-  const native=!!window.desktop?.listPaintTextures,[catalog,setCatalog]=useState({items:[],folders:['']}),[collection,setCollection]=useState('native'),[folder,setFolder]=useState(''),[query,setQuery]=useState(''),[limit,setLimit]=useState(40),[selected,setSelected]=useState(null);
+  const native=!!window.desktop?.listPaintTextures,[catalog,setCatalog]=useState({items:[],folders:['']}),[collection,setCollection]=useState('mine'),[folder,setFolder]=useState(''),[query,setQuery]=useState(''),[limit,setLimit]=useState(40),[selected,setSelected]=useState(null);
   const refresh=useCallback(async()=>{try{
     const next=native?await window.desktop.listPaintTextures():{items:[],folders:['']};
     setCatalog(next);onFolderChange?.(next.folders);
@@ -46,7 +46,7 @@ function PaintTextureShelf({onUse,onCut,onNative,onImport,onFolderChange,epoch=0
   const act=async(item,callback)=>{try{await callback(await readShelfTexture(item));}catch(e){onStatus?.(e.message,true);}};
   return <section className="paint-material-section"><div className="paint-shelf-heading"><h3>Texture shelf</h3><PaintTool icon="crop" label="Crop selected palette texture" disabled={!selected} onClick={()=>act(selected,onCut)}/></div>
     <div className="paint-button-row"><button onClick={onNative} aria-label="WC3 library…">WC3 library…<kbd className="paint-key" aria-hidden="true">J</kbd></button><button onClick={onImport} aria-label="From file…">From file…<kbd className="paint-key" aria-hidden="true">Ctrl+Shift+O</kbd></button></div>
-    <div className="paint-brush-grid" role="group" aria-label="Source collection"><button aria-pressed={collection==='native'} onClick={()=>{setCollection('native');setFolder('');}}>5 starters</button><button aria-pressed={collection==='mine'} onClick={()=>{setCollection('mine');setFolder('');}}>My library</button></div>
+    <div className="paint-brush-grid" role="group" aria-label="Source collection"><button aria-pressed={collection==='native'} onClick={()=>{setCollection('native');setFolder('');}}>5 starters</button><button aria-pressed={collection==='mine'} onClick={()=>{setCollection('mine');setFolder('');}}>Texture library</button></div>
     {collection==='mine'&&<select aria-label={msg('paint.textureFolder')} value={folder} onChange={e=>setFolder(e.target.value)}>{sourceCatalog.folders.map(id=><option key={id} value={id}>{id||msg('paint.allFolders')}</option>)}</select>}
     {collection==='mine'&&<input aria-label={msg('paint.searchTextures')} type="search" placeholder="Find texture…" value={query} onChange={e=>setQuery(e.target.value)}/>}
     <div className="paint-material-grid">{items.slice(0,limit).map(item=><Tile key={item.signature||item.id} item={item} selected={selected?.id===item.id} onUse={item=>act(item,source=>{onUse(source);setSelected(item);})}/>)}</div>

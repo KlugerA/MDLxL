@@ -17,7 +17,7 @@ async function run(){
     window.digest=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),x=>x.toString(16).padStart(2,'0')).join('');
     window.geometryState=()=>JSON.stringify({geosets:audit().props.model.Geosets,edits:audit().project.geometryEdits,uv:audit().project.uvEdits,bindings:audit().project.targets.map(t=>t.bindings),dimensions:audit().project.targets.map(t=>[t.base.width,t.base.height])});
   });
-  await settle();assert.equal(await page.locator('.paint-shelf-tile').count(),5);assert.deepEqual(await page.evaluate(()=>audit().project.targets.map(t=>[t.base.width,t.base.height])),[[512,512],[128,128]]);await shot('01-editor');
+  await page.getByRole('button',{name:'5 starters',exact:true}).click();await settle();assert.equal(await page.locator('.paint-shelf-tile').count(),5);assert.deepEqual(await page.evaluate(()=>audit().project.targets.map(t=>[t.base.width,t.base.height])),[[512,512],[128,128]]);await shot('01-editor');
 
 
   const b=(name)=>page.getByRole('button',{name,exact:true}),key=async k=>{await page.locator('[aria-label="3D model viewport"]').focus();await page.keyboard.press(k);await settle();};
