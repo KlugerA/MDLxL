@@ -14,7 +14,8 @@ export const SHOWCASE_FONTS = [
   {id:'rajdhani',name:'Rajdhani',family:'Showcase Rajdhani'},
   {id:'cormorantsc',name:'Cormorant SC',family:'Showcase Cormorant SC'},
   {id:'grenzegotisch',name:'Grenze Gotisch',family:'Showcase Grenze Gotisch'},
-  {id:'frizquadrata',name:'Friz Quadrata TT',family:'Showcase Friz Quadrata'},
+  // Keep the persisted selection key so existing Showcase layers use the replacement.
+  {id:'frizquadrata',name:'Marcellus',family:'Showcase Marcellus'},
 ];
 export const TEXT_EFFECTS = [
   ['solid','Solid'],['gradient','Gradient'],['neon','Neon'],['flame','Flame'],

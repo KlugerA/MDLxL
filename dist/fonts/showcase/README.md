@@ -18,7 +18,8 @@ The unmodified Google Fonts families listed in the table below are bundled for o
 | Rajdhani | Rajdhani-Regular.ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/rajdhani) |
 | Cormorant SC | CormorantSC-Regular.ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/cormorantsc) |
 | Grenze Gotisch | GrenzeGotisch[wght].ttf | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/grenzegotisch) |
+| Marcellus | `Marcellus-Regular.ttf` | [Google Fonts](https://github.com/google/fonts/tree/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/marcellus) |
 
-## User-supplied font
+## Marcellus replacement
 
-Friz Quadrata TT Regular is the unmodified `FRIZQT__.TTF` supplied by the user. Embedded notice: (c) Copyright 1997 International Typeface Corporation. All rights reserved. This file is separate from the OFL families listed above; no OFL license is claimed for it.
+Marcellus by Brian J. Bonislawsky / Astigmatic replaces the previously bundled Friz Quadrata TT font. It is unmodified from Google Fonts commit `9710da1eacb3be272583c3224dcb70f9da6eadbb`, with SHA-256 `1cf0cd10b17d35e852729962cc1ffaffed94514895972458345e2df34abb2f81`. Its complete OFL 1.1 notice is included in `marcellus/OFL.txt`. The internal `frizquadrata` selection key is retained solely to preserve existing saved Showcase layers; the displayed font and bundled file are Marcellus.
