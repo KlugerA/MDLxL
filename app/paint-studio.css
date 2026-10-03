@@ -18,6 +18,7 @@
 .paint-selection-guide strong{color:#ffe267}.paint-selection-guide small{color:#b8d1d9}.paint-selection-guide>span:last-child{margin-left:auto}
 .paint-cutout-image{cursor:crosshair}.paint-cutout-image svg{stroke:#ffe267;stroke-width:2;stroke-dasharray:none;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000)}
 .paint-cutout-image svg rect,.paint-cutout-image svg ellipse,.paint-selection-fill{fill:#ffe26728}
+.paint-cutout-image svg .paint-crop-handle{fill:#fff;stroke:#17222a;stroke-width:1.5;stroke-dasharray:none}
 .paint-cutout-image .paint-selection-fill{stroke:none}.paint-cutout-image .paint-selection-closing{stroke:#fff;stroke-dasharray:5 4;fill:none}
 .paint-cutout-image svg circle{fill:#263942;vector-effect:non-scaling-stroke}.paint-cutout-image svg .paint-selection-first{fill:#7cf1ac;stroke:#101d25}
 .paint-cutout-image svg text{fill:#fff;stroke:#111;stroke-width:2;paint-order:stroke;stroke-linejoin:round;font-weight:700}

@@ -131,6 +131,8 @@ export const PAINT_MESSAGES = Object.freeze({
   'paint.crop': 'Crop / select…',
   'paint.close': 'Close',
   'paint.cancel': 'Cancel',
+  'paint.select.crop': 'Crop',
+  'paint.cropShape': 'Crop shape',
   'paint.select.rectangle': 'Rectangle',
   'paint.select.square': 'Square',
   'paint.select.ellipse': 'Ellipse',

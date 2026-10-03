@@ -625,6 +625,18 @@ const rows = [
     "裁剪 / 选择…"
   ],
   [
+    "Crop",
+    "Обрезка",
+    "Recortar",
+    "裁剪"
+  ],
+  [
+    "Crop shape",
+    "Форма обрезки",
+    "Forma del recorte",
+    "裁剪形状"
+  ],
+  [
     "Rectangle",
     "Прямоугольник",
     "Rectángulo",

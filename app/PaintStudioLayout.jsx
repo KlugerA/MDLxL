@@ -24,7 +24,6 @@ export default function PaintStudioLayout(p){
     const k=/^Key[A-Z]$/.test(e.code)?e.code.slice(3).toLowerCase():e.code==='Comma'?',':e.code==='Period'?'.':e.key.toLowerCase(),ctrl=e.ctrlKey||e.metaKey;
     let act;
     if(k==='escape')act=()=>{p.onCancel();setHelp(false);};
-    else if(!ctrl&&k==='enter'&&p.placing)act=p.onCommit;
     else if(k==='?')act=()=>setHelp(v=>!v);
     else if(ctrl){
       act=({a:p.onSelectAll,c:e.shiftKey?p.onGrab:p.onCopy,v:p.onPaste,x:()=>p.onCopy(true),d:p.onClearSelection,i:p.onInvertSelection,z:()=>p.onHistory(e.shiftKey),y:()=>p.onHistory(true),s:p.onSave,o:e.shiftKey?p.onImport:p.onOpen,n:p.onNew,e:p.onExport,enter:p.onDone,j:p.onSeparate,k:p.onSaveSource})[k];
@@ -59,7 +58,6 @@ export default function PaintStudioLayout(p){
           <section>{material?<><img className="studio-source" src={material.preview} alt={material.name}/><strong className="studio-source-name">{material.name.split(/[\\/]/).at(-1)}</strong><div className="studio-segments"><Action label="Cut out" keys="K" onClick={p.onCrop}><Scissors size={13}/></Action><Action label="Keep" keys="Ctrl+K" onClick={p.onSaveSource}><BookmarkPlus size={13}/></Action></div></>:<small>Choose an image from the shelf.</small>}
             <div className="studio-borrow" role="group" aria-label="Borrow">{[['image','Full image','1'],['texture','Texture','2'],['highlights','Highlights','3']].map(([id,label,key])=><Action key={id} label={label} keys={key} aria-pressed={p.borrowMode===id} onClick={()=>p.onBorrowMode(id)}/>)}</div>
           </section>
-          {p.placing&&<section className="studio-placement" role="group" aria-label="Adjust placed crop"><strong>Adjust placed crop</strong><small>Drag to move it. Change size, rotation, mirror, or opacity before applying.</small><div className="studio-segments"><Action label="Apply crop" keys="Enter" className="studio-primary" onClick={p.onCommit}/><Action label="Cancel placement" keys="Esc" onClick={p.onCancel}/></div></section>}
         </>:<>
           <section><div className="studio-segments"><Action label="Color" keys="B" aria-pressed={tool==='paint'} onClick={()=>p.onTool('paint')}/><Action label="Blend" keys="D" aria-pressed={tool==='blend'} onClick={()=>p.onTool('blend')}/><button title="Pick color (I)" aria-label="Pick color from model" aria-pressed={tool==='sample'} onClick={()=>p.onTool('sample')}><Pipette size={14}/><PaintKey>I</PaintKey></button></div>
             <label className="paint-color">Color<input aria-label="Paint color" type="color" value={brush.color} onChange={e=>p.onBrush({color:e.target.value})}/></label>
