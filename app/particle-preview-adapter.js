@@ -380,6 +380,9 @@ export class ParticleAuthoringPreview {
     this.sequence=sequence;const start=this.native.model.Sequences[sequence].Interval[0];
     this.timeline=[{at:0,frame:start,global:start,fx:0,poseRate:1,fxRate:1,loop:this.fullLoop?Array.from(this.native.model.Sequences[sequence].Interval):undefined}];this.target=Math.max(0,frame-start);
     this.pending=this.makeSimulation();this.rates=null;
+    // The first replay may need several frames. Initialize the visible pose
+    // and material texture indices before GL renders that waiting frame.
+    if(!this.simulation&&this.pending)copyParticleSimulationToPreview(this.pending,this.native,particleTimelineAt(this.timeline,0));
   }
   updateSource(source,field,id){
     const before=[...this.native.model.ParticleEmitters2,...this.native.model.RibbonEmitters].find(node=>node.ObjectId===id);

@@ -1,14 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createNode} from '../src/editor-document.js';
+import {createNode,createDemoDocument} from '../src/editor-document.js';
+import {ModelRenderer} from 'war3-model';
 import {createStarterRecipe} from '../src/particle-starters.js';
-import {NativeParticleSimulation,particleTimelineAt,particlePreviewBounds} from '../app/particle-preview-adapter.js';
+import {NativeParticleSimulation,ParticleAuthoringPreview,particleTimelineAt,particlePreviewBounds} from '../app/particle-preview-adapter.js';
 import {addParticleDemonstration,particleSweepPath} from '../src/particle-sweep.js';
 import {PerspectiveCamera,Vector3} from 'three';
 const v=(...n)=>new Float32Array(n);
 const track=keys=>({LineType:0,GlobalSeqId:null,Keys:keys.map(([Frame,value])=>({Frame,Vector:v(value)}))});
 const make=()=>structuredClone(createStarterRecipe().native);
 const particles=sim=>sim.snapshot().particles;
+
+test('the first pending On model replay initializes material texture references before rendering',()=>{
+  const model=createDemoDocument().model;
+  createNode(model,'ParticleEmitter2');
+  const native=new ModelRenderer(model),preview=new ParticleAuthoringPreview(native);
+  const status=preview.advance({sequence:0,frame:800,budgetMs:0});
+  assert.equal(status.busy,true,'Exercise a replay that cannot finish in its first frame');
+  for(const [mi,material]of model.Materials.entries())for(const [li]of material.Layers.entries())
+    assert.ok(model.Textures[native.rendererData.materialLayerTextureID[mi][li]],'The mesh renderer must receive an existing texture');
+});
 
 test('a new ribbon preview frames its full demonstration swing before playback',()=>{
  const model=createStarterRecipe('ribbon').native;addParticleDemonstration(model,[0,5000]);

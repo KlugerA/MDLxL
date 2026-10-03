@@ -67,7 +67,7 @@ function normalizeVersionFields(model, target) {
 // src/editor-document.js
 var import_buffer9 = require("buffer");
 
-// ../../../../../ChatGPT/MDLxL/node_modules/.pnpm/war3-model@4.0.1/node_modules/war3-model/dist/es/war3-model.mjs
+// ../../../../Documents/ChatGPT/MDLxL/node_modules/.pnpm/war3-model@4.0.1/node_modules/war3-model/dist/es/war3-model.mjs
 var TextureFlags = /* @__PURE__ */ (function(TextureFlags2) {
   TextureFlags2[TextureFlags2["WrapWidth"] = 1] = "WrapWidth";
   TextureFlags2[TextureFlags2["WrapHeight"] = 2] = "WrapHeight";
@@ -4676,9 +4676,18 @@ var ribbonTracks = { KRHA: ["HeightAbove", 1], KRHB: ["HeightBelow", 1], KRAL: [
 var cameraTracks = { KCTR: ["Translation", 3], KCRL: ["Rotation", 1], KTTR: ["TargetTranslation", 3], KCVS: ["Visibility", 1], IDUF: ["FocusDistance", 1], ELAF: ["FocalLength", 1], PTSF: ["FStop", 1] };
 var emitterBases = {
   PREM: { key: "ParticleEmitters", fields: [["EmissionRate", 0], ["Gravity", 4], ["Longitude", 8], ["Latitude", 12], ["LifeSpan", 276], ["InitVelocity", 280]] },
-  PRE2: { key: "ParticleEmitters2", fields: [["Speed", 0], ["Variation", 4], ["Latitude", 8], ["Gravity", 12], ["EmissionRate", 20], ["Width", 24], ["Length", 28]] },
+  PRE2: { key: "ParticleEmitters2", fields: [["Speed", 0], ["Variation", 4], ["Latitude", 8], ["Gravity", 12], ["EmissionRate", 20], ["Length", 24], ["Width", 28]] },
   CORN: { key: "ParticleEmitterPopcorns", fields: [["LifeSpan", 0], ["EmissionRate", 4], ["Speed", 8], ["Color", 12, 3], ["Alpha", 24]] }
 };
+var bgrTracks = /* @__PURE__ */ new Set(["KLAC", "KLBC", "KRCO"]);
+function colorTrack(track) {
+  if (!track?.Keys) return track;
+  return { ...track, Keys: track.Keys.map((key) => {
+    const result = { ...key };
+    for (const field of ["Vector", "InTan", "OutTan"]) if (key[field]) result[field] = Float32Array.of(key[field][2], key[field][1], key[field][0]);
+    return result;
+  }) };
+}
 function readTracks(b, at, owner, schema) {
   for (let p = at; p < b.length; ) {
     const tag = b.toString("ascii", p, p + 4), def = schema[tag];
@@ -4687,11 +4696,11 @@ function readTracks(b, at, owner, schema) {
     const { track, size } = readTrack(b, p, width, integer);
     if (owner[key]?.Keys) throw new Error(`Duplicate animation ${tag}.`);
     if (owner[key] != null) (owner._MdxDefaults ||= {})[key] = owner[key];
-    owner[key] = track;
+    owner[key] = bgrTracks.has(tag) ? colorTrack(track) : track;
     p += size;
   }
 }
-var writeTracks = (owner, schema) => Object.entries(schema).map(([tag, [key, , integer]]) => writeTrack(tag, owner[key], integer));
+var writeTracks = (owner, schema) => Object.entries(schema).map(([tag, [key, , integer]]) => writeTrack(tag, bgrTracks.has(tag) ? colorTrack(owner[key]) : owner[key], integer));
 var base = (owner, key, fallback = 0) => owner[key]?.Keys ? owner._MdxDefaults?.[key] ?? fallback : owner[key] ?? fallback;
 function readMaterials(payload, version) {
   return mdxRecords(payload, "MTLS").map((b) => {
@@ -4963,7 +4972,11 @@ function parseCompatibleMdx(input) {
   }
   for (const [tag, { key, fields }] of Object.entries(emitterBases)) for (const [i, b] of mdxRecords(originals.get(tag) || import_buffer2.Buffer.alloc(0), tag).entries()) {
     const owner = model[key][i], at = 4 + b.readUInt32LE(4);
-    for (const [field, offset, width] of fields) if (owner[field]?.Keys) (owner._MdxDefaults ||= {})[field] = width === 3 ? vector(b, at + offset) : b.readFloatLE(at + offset);
+    for (const [field, offset, width] of fields) {
+      const value = width === 3 ? vector(b, at + offset) : b.readFloatLE(at + offset);
+      if (owner[field]?.Keys) (owner._MdxDefaults ||= {})[field] = value;
+      else if (tag === "PRE2" && (field === "Length" || field === "Width")) owner[field] = value;
+    }
   }
   return model;
 }
@@ -4997,6 +5010,10 @@ function generateCompatibleMdx(inputModel) {
         const n = model[key][i];
         if (emitterBases[c.tag]) {
           const at = 4 + b.readUInt32LE(4);
+          if (c.tag === "PRE2") {
+            b.writeFloatLE(base(n, "Length"), at + 24);
+            b.writeFloatLE(base(n, "Width"), at + 28);
+          }
           for (const [field, offset, width] of emitterBases[c.tag].fields) if (n[field]?.Keys && n._MdxDefaults?.[field] != null) {
             const value = n._MdxDefaults[field];
             if (width === 3) floats(value).copy(b, at + offset);
@@ -5571,6 +5588,7 @@ function finishCompatibleMdl(input, model) {
       for (const c of m.children || []) if (c.name === "Unfogged") edits.push({ start: c.start, end: c.end, text: "" });
       if (o.Flags & 131072) extra.push("Unfogged,");
       if (o.Flags & 262144) extra.push("PopcornScaling,");
+      for (const key of ["LifeSpan", "EmissionRate", "Speed", "Alpha"]) if (o[key] != null && !represented.has(key)) extra.push(mdlProperty(key, o[key], false, true));
     }
     if (m.name === "CollisionShape" && [1, 3].includes(o.Shape)) {
       const c = m.children.find((c2) => ["Box", "Sphere"].includes(c2.name));
@@ -5591,10 +5609,108 @@ Glider { GeosetId ${g.GeosetId}, }
 `).join("");
   return import_buffer4.Buffer.concat([replace(tree.bytes, edits), import_buffer4.Buffer.from(gliders)]);
 }
+function formatGeneratedMdl(input) {
+  const { bytes, members } = mdlMembers(input);
+  function render(member, depth) {
+    const indent = "	".repeat(depth);
+    if (!member.children) return indent + bytes.subarray(member.start, member.end).toString("utf8").trim();
+    const header = bytes.subarray(member.start, member.open.start).toString("utf8").trim();
+    const suffix = bytes.subarray(member.close.end, member.end).toString("utf8").trim();
+    const inline = member.name === "DontInherit" || !["VertexGroup", "EventTrack", "GlobalSequences"].includes(member.name) && member.children.length > 0 && member.children.every((child) => !child.children && child.header.every(numeric));
+    const prefix = header ? header + " " : "";
+    if (inline) return indent + prefix + "{ " + member.children.map((child) => render(child, 0)).join(" ") + " }" + suffix;
+    return indent + prefix + "{\n" + member.children.map((child) => render(child, depth + 1)).join("\n") + (member.children.length ? "\n" : "") + indent + "}" + suffix;
+  }
+  return import_buffer4.Buffer.from(members.map((member) => render(member, 0)).join("\n") + "\n");
+}
 function readMdlPivotPoints(input) {
   const m = mdlMembers(input).members[0], values = numbers({ ...m, tokens: m.tokens.filter((t) => t.start > m.open.start) }), count = number(m.header[1]);
   if (values.length !== count * 3) throw new Error("PivotPoints count does not match its coordinates.");
   return Array.from({ length: count }, (_, i) => Float32Array.from(values.slice(i * 3, i * 3 + 3)));
+}
+
+// src/node-id-order.js
+var SERIALIZED_NODE_COLLECTIONS = Object.freeze([
+  "Bones",
+  "Lights",
+  "Helpers",
+  "Attachments",
+  "ParticleEmitters",
+  "ParticleEmitters2",
+  "ParticleEmitterPopcorns",
+  "RibbonEmitters",
+  "EventObjects",
+  "CollisionShapes"
+]);
+var serializedNodes = (model) => SERIALIZED_NODE_COLLECTIONS.flatMap((collection) => model[collection] || []);
+function canonicalizeSerializedNodeOrder(model, { preserveUnusedPivots = false } = {}) {
+  const nodes = serializedNodes(model), ids = /* @__PURE__ */ new Set();
+  for (const node of nodes) {
+    if (!Number.isInteger(node?.ObjectId) || node.ObjectId < 0 || ids.has(node.ObjectId)) throw Error("The model has invalid or duplicate node object IDs.");
+    ids.add(node.ObjectId);
+  }
+  const map = new Map(nodes.map((node, index2) => [node.ObjectId, index2]));
+  const parentIds = nodes.map((node) => {
+    if (node.Parent == null || node.Parent === -1) return node.Parent;
+    if (!map.has(node.Parent)) throw Error(`Node ${node.Name || node.ObjectId} references missing parent ${node.Parent}.`);
+    return map.get(node.Parent);
+  });
+  const pivots = nodes.map((node) => {
+    const pivot = model.PivotPoints?.[node.ObjectId] || node.PivotPoint;
+    if (!pivot || pivot.length !== 3 || Array.from(pivot).some((value) => !Number.isFinite(value))) throw Error(`Node ${node.Name || node.ObjectId} has an invalid pivot reference.`);
+    return pivot;
+  });
+  if (preserveUnusedPivots) model.PivotPoints?.forEach((pivot, index2) => {
+    if (!ids.has(index2)) pivots.push(pivot);
+  });
+  const groupPlans = (model.Geosets || []).map((geoset, geosetIndex) => (geoset.Groups || []).map((group) => group.map((id) => {
+    if (!map.has(id)) throw Error(`Geoset ${geosetIndex} references missing node ${id}.`);
+    return map.get(id);
+  })));
+  const skinPlans = (model.Geosets || []).map((geoset, geosetIndex) => {
+    if (!geoset.SkinWeights?.length) return null;
+    const weights = new geoset.SkinWeights.constructor(geoset.SkinWeights), maximum = model.Version >= 1400 ? 65535 : 255;
+    for (let offset = 0; offset < weights.length; offset += 8) for (let influence = 0; influence < 4; influence++) {
+      if (!weights[offset + 4 + influence]) {
+        weights[offset + influence] = 0;
+        continue;
+      }
+      const old = weights[offset + influence], replacement = map.get(old);
+      if (replacement == null) throw Error(`Geoset ${geosetIndex} skin weights reference missing node ${old}.`);
+      if (replacement > maximum) throw Error(`Geoset ${geosetIndex} cannot represent remapped node ${replacement} in its skin-weight format.`);
+      weights[offset + influence] = replacement;
+    }
+    return weights;
+  });
+  const bindPosePlans = (model.BindPoses || []).map((pose, poseIndex) => {
+    if (!Array.isArray(pose.Matrices)) throw Error(`Bind pose ${poseIndex} has invalid matrices.`);
+    const cameraStart = pose.Matrices.length - (model.Cameras?.length || 0);
+    const matrices = nodes.map((node) => {
+      const matrix = pose.Matrices[node.ObjectId];
+      if (!matrix || node.ObjectId >= cameraStart) throw Error(`Bind pose ${poseIndex} is missing matrix ${node.ObjectId}.`);
+      return matrix;
+    });
+    return matrices.concat(pose.Matrices.slice(cameraStart));
+  });
+  nodes.forEach((node, index2) => {
+    node.ObjectId = index2;
+    node.Parent = parentIds[index2];
+    node.PivotPoint = pivots[index2];
+  });
+  for (let index2 = 0; index2 < (model.Geosets || []).length; index2++) {
+    model.Geosets[index2].Groups = groupPlans[index2];
+    model.Geosets[index2].TotalGroupsCount = groupPlans[index2].reduce((total, group) => total + group.length, 0);
+    if (skinPlans[index2]) model.Geosets[index2].SkinWeights = skinPlans[index2];
+  }
+  (model.BindPoses || []).forEach((pose, index2) => {
+    pose.Matrices = bindPosePlans[index2];
+  });
+  model.PivotPoints = pivots;
+  model.Nodes = [];
+  nodes.forEach((node) => {
+    model.Nodes[node.ObjectId] = node;
+  });
+  return map;
 }
 
 // src/geoset-animation-defaults.js
@@ -6437,7 +6553,21 @@ function surgicalMdl(original, sections, generated, keys) {
   }
   parts.push(original.subarray(cursor));
   for (const [key, bytes] of replacements) if (!inserted.has(key) && bytes.length) parts.push(import_buffer9.Buffer.from("\n"), bytes);
-  return import_buffer9.Buffer.concat(parts);
+  const output = import_buffer9.Buffer.concat(parts);
+  return orderMdlNodes(output);
+}
+function orderMdlNodes(output) {
+  const nodes = scanMdlSections(output).filter((section) => nodeCollectionKeys.has(section.key));
+  const ordered = [...nodes].sort((a, b) => SERIALIZED_NODE_COLLECTIONS.indexOf(a.key) - SERIALIZED_NODE_COLLECTIONS.indexOf(b.key));
+  const reordered = [];
+  let cursor = 0;
+  nodes.forEach((section, index2) => {
+    const from = ordered[index2];
+    reordered.push(output.subarray(cursor, section.start), output.subarray(from.start, from.end));
+    cursor = section.end;
+  });
+  reordered.push(output.subarray(cursor));
+  return import_buffer9.Buffer.concat(reordered);
 }
 function surgicalMdx(original, container, generated, keys) {
   const fresh = parseMdx(generated);
@@ -6749,19 +6879,26 @@ var EditorDocument = class _EditorDocument {
         return bytes;
       };
       if (impact.exact) return remember(this._original);
+      let saveModel = this.model;
+      if (serializedNodes(saveModel).some((node, index2) => node.ObjectId !== index2)) {
+        saveModel = clone(saveModel);
+        canonicalizeSerializedNodeOrder(saveModel, { preserveUnusedPivots: true });
+      }
       const colorIssues = geosetColorExportIssues(this.model.GeosetAnims, format);
       if (colorIssues.length) {
         nextStage("errorFormattingMs");
         throw new Error(formatSaveIssues("Cannot export geoset colors", colorIssues));
       }
-      const animations = prepareGeosetAnimationColors(this.model.GeosetAnims, format);
-      const exportModel = format === "mdl" ? { ...this.model, ParticleEmitterPopcorns: prepareMdlPopcornColors(this.model.ParticleEmitterPopcorns), GeosetAnims: animations } : { ...this.model, GeosetAnims: convertMdxGeosetColorTracks(animations), BindPoses: this.model.BindPoses?.length ? this.model.BindPoses : void 0 };
+      const animations = prepareGeosetAnimationColors(saveModel.GeosetAnims, format);
+      const exportModel = format === "mdl" ? { ...saveModel, ParticleEmitterPopcorns: prepareMdlPopcornColors(saveModel.ParticleEmitterPopcorns), GeosetAnims: animations } : { ...saveModel, GeosetAnims: convertMdxGeosetColorTracks(animations), BindPoses: saveModel.BindPoses?.length ? saveModel.BindPoses : void 0 };
       const mdlModel = format === "mdl" ? { ...exportModel, Geosets: exportModel.Geosets.map((g) => ({ ...g, TVertices: g.TVertices.length ? g.TVertices : [new Float32Array()] })), CollisionShapes: exportModel.CollisionShapes.map((n) => [1, 3].includes(n.Shape) ? { ...n, Shape: 0 } : n) } : null;
-      let generated = format === "mdl" ? finishCompatibleMdl(import_buffer9.Buffer.from(emptyFaceGroups(generate(mdlModel)), "utf8"), { ...this.model, GeosetAnims: animations }) : import_buffer9.Buffer.from(generateCompatibleMdx(exportModel));
+      let generated = format === "mdl" ? finishCompatibleMdl(import_buffer9.Buffer.from(emptyFaceGroups(generate(mdlModel)), "utf8"), { ...saveModel, GeosetAnims: animations }) : import_buffer9.Buffer.from(generateCompatibleMdx(exportModel));
       if (format === "mdl") generated = writeMdlUVSets(generated, scanMdlSections(generated), exportModel);
       generated = format === "mdl" ? writeMdlEventGlobalSequences(generated, scanMdlSections(generated), exportModel) : writeMdxEventGlobalSequences(generated, exportModel);
-      if (!impact.conversion) generated = format === "mdx" ? preserveMdxRecords(this._original, generated, this._savedModel, this.model, SECTION_TYPES) : preserveMdlRecords(this._original, generated, this._savedModel, this.model, SECTION_TYPES);
-      const keys = this._changedKeys();
+      if (format === "mdl") generated = orderMdlNodes(formatGeneratedMdl(generated));
+      const sourceModel = this._recoverySavedChanges.length ? openDocument(this._original, this.name).model : this._savedModel;
+      if (!impact.conversion) generated = format === "mdx" ? preserveMdxRecords(this._original, generated, sourceModel, saveModel, SECTION_TYPES) : preserveMdlRecords(this._original, generated, sourceModel, saveModel, SECTION_TYPES);
+      const keys = saveModel !== this.model || this._recoverySavedChanges.length ? Object.keys(SECTION_TYPES).filter((key) => fingerprint2(sourceModel[key]) !== fingerprint2(saveModel[key])) : this._changedKeys();
       const output = impact.conversion ? generated : format === "mdl" ? surgicalMdl(this._original, this._sections, generated, keys) : surgicalMdx(this._original, this._container, generated, keys);
       nextStage("reparsingMs");
       const reopened = openDocument(output, `validation.${format}`);
@@ -6771,7 +6908,7 @@ var EditorDocument = class _EditorDocument {
         throw new Error(formatSaveIssues("Save verification failed", reopened.diagnostics.filter((d) => d.severity === "error").map((d) => d.message)));
       }
       if (reopened.version !== this.version) throw new Error("Save verification failed: model version changed.");
-      assertModelEquivalent(this.model, reopened.model, { keys: Object.keys(SECTION_TYPES), timings });
+      assertModelEquivalent(saveModel, reopened.model, { keys: Object.keys(SECTION_TYPES), timings });
       for (const key of Object.keys(SECTION_TYPES)) if (Array.isArray(this.model[key]) && this.model[key].length !== reopened.model[key]?.length) throw new Error(`Save verification failed: ${key} count changed during serialization.`);
       for (let index2 = 0; index2 < this.model.Geosets.length; index2++) if (this.model.Geosets[index2].TVertices.length !== reopened.model.Geosets[index2].TVertices.length) throw new Error(`Save verification failed: Geoset ${index2} UV set count changed during serialization.`);
       const existingErrors = new Set(validateModel(this.model).filter((d) => d.severity === "error").map((d) => `${d.code}:${d.path}`));

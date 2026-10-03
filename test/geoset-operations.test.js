@@ -4,6 +4,31 @@ import { createDemoDocument, openDocument } from '../src/editor-document.js';
 import { gather, updateBounds } from '../src/mesh-tools.js';
 import { separateGeosetsByLoosePart, nuclearSeparateGeosets, mergeSimilarGeosets, deleteFreeVertices } from '../src/geoset-operations.js';
 
+test('merging animated extents accepts omitted optional radii without losing bounds', () => {
+  const model = createDemoDocument().model, original = model.Geosets[0];
+  original.Anims = [{ MinimumExtent: Float32Array.of(-3, -4, -5), MaximumExtent: Float32Array.of(3, 4, 5) }];
+  const copy = structuredClone(original); copy.Anims[0].MaximumExtent[0] = 20;
+  const index = model.Geosets.push(copy) - 1;
+  model.GeosetAnims = [];
+  assert.ok(mergeSimilarGeosets(model, { 0: [0], [index]: [0] }));
+  assert.equal(model.Geosets[0].Anims[0].MaximumExtent[0], 20);
+  assert.ok(Number.isFinite(model.Geosets[0].Anims[0].BoundsRadius));
+});
+
+test('merging native empty animation extents preserves their sentinel and accepts a real counterpart', () => {
+  for (const withRealExtent of [false, true]) {
+    const model = createDemoDocument().model, original = model.Geosets[0];
+    const empty = { BoundsRadius: 0, MinimumExtent: new Float32Array(3).fill(3.40282e38), MaximumExtent: new Float32Array(3).fill(-3.40282e38) };
+    original.Anims = [structuredClone(empty)];
+    const copy = structuredClone(original);
+    if (withRealExtent) copy.Anims[0] = { BoundsRadius: 10, MinimumExtent: Float32Array.of(-3,-4,-5), MaximumExtent: Float32Array.of(3,4,5) };
+    const expected = structuredClone(copy.Anims), index = model.Geosets.push(copy) - 1;
+    model.GeosetAnims = [];
+    assert.ok(mergeSimilarGeosets(model, { 0: [0], [index]: [0] }));
+    assert.deepEqual(model.Geosets[0].Anims, expected);
+  }
+});
+
 test('delete free vertices uses checked geosets, preserves every kept stream, and remaps faces', () => {
   const doc = createDemoDocument();
   doc.apply('Prepare free vertices', ['Geosets'], model => {
