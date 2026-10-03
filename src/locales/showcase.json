@@ -839,100 +839,25 @@
     "DETENER",
     "停止"
   ],
-  "RECORD & UPLOAD": [
-    "ЗАПИСАТЬ И ЗАГРУЗИТЬ",
-    "GRABAR Y SUBIR",
-    "录制并上传"
-  ],
   "GIF destination": [
     "Назначение GIF",
     "Destino del GIF",
     "GIF 目标"
-  ],
-  "Record saves locally, then uploads the exact GIF anonymously to Catbox": [
-    "Запись сохраняет GIF локально, затем анонимно загружает тот же файл на Catbox",
-    "La grabación se guarda localmente y después sube el mismo GIF de forma anónima a Catbox",
-    "录制先保存到本地，再将同一 GIF 匿名上传到 Catbox"
   ],
   "Hive Main Picture · 612 × 490 · 5s max · local GIF": [
     "Главное изображение Hive · 612 × 490 · до 5 с · локальный GIF",
     "Imagen principal de Hive · 612 × 490 · máx. 5 s · GIF local",
     "Hive 主图 · 612 × 490 · 最长 5 秒 · 本地 GIF"
   ],
-  "864 px max · 30 FPS · ≤20 MB · uploads after Record": [
-    "До 864 px · 30 FPS · ≤20 MB · загрузка после записи",
-    "Máx. 864 px · 30 FPS · ≤20 MB · se sube tras grabar",
-    "最大 864 px · 30 FPS · ≤20 MB · 录制后上传"
-  ],
   "Hive · 5s max · 30 FPS": [
     "Hive · до 5 с · 30 FPS",
     "Hive · máx. 5 s · 30 FPS",
     "Hive · 最长 5 秒 · 30 FPS"
   ],
-  "Original quality · local GIF": [
-    "Исходное качество · локальный GIF",
-    "Calidad original · GIF local",
-    "原始画质 · 本地 GIF"
-  ],
-  "Catbox links": [
-    "Ссылки Catbox",
-    "Enlaces de Catbox",
-    "Catbox 链接"
-  ],
-  "Copy Link": [
-    "Копировать ссылку",
-    "Copiar enlace",
-    "复制链接"
-  ],
-  "Copy Hive BBCode": [
-    "Копировать BBCode для Hive",
-    "Copiar BBCode de Hive",
-    "复制 Hive BBCode"
-  ],
-  "Link {0}": [
-    "Ссылка {0}",
-    "Enlace {0}",
-    "链接 {0}"
-  ],
-  "Hive BBCode {0}": [
-    "BBCode для Hive {0}",
-    "BBCode de Hive {0}",
-    "Hive BBCode {0}"
-  ],
-  "Hive BBCode copied": [
-    "BBCode для Hive скопирован",
-    "BBCode de Hive copiado",
-    "已复制 Hive BBCode"
-  ],
-  "Link copied": [
-    "Ссылка скопирована",
-    "Enlace copiado",
-    "链接已复制"
-  ],
-  "Could not copy the link. Select and copy the text.": [
-    "Не удалось скопировать ссылку. Выделите и скопируйте текст.",
-    "No se pudo copiar el enlace. Selecciona y copia el texto.",
-    "无法复制链接。请选择并复制文本。"
-  ],
-  "Uploading...": [
-    "Загрузка…",
-    "Subiendo…",
-    "正在上传…"
-  ],
-  "Retry Upload": [
-    "Повторить загрузку",
-    "Reintentar subida",
-    "重试上传"
-  ],
-  "Upload to Catbox": [
-    "Загрузить на Catbox",
-    "Subir a Catbox",
-    "上传到 Catbox"
-  ],
-  "GIF saved locally": [
-    "GIF сохранён локально",
-    "GIF guardado localmente",
-    "GIF 已保存到本地"
+  "864 px max · ≤20 MiB · local GIF": [
+    "До 864 пикс. · ≤20 МиБ · локальный GIF",
+    "Máx. 864 px · ≤20 MiB · GIF local",
+    "最长边 864 像素 · ≤20 MiB · 本地 GIF"
   ],
   "Save needs retry": [
     "Повторите сохранение",
@@ -1028,16 +953,6 @@
     "Не удалось сохранить GIF. Нажмите «Повторить сохранение» в витрине перед закрытием.",
     "No se pudo guardar un GIF. Usa Reintentar guardado en Exhibición antes de cerrar.",
     "有 GIF 无法保存。关闭前请在展示中重试保存。"
-  ],
-  "Catbox upload failed. Your GIF is saved locally.": [
-    "Не удалось загрузить на Catbox. GIF сохранён локально.",
-    "Falló la subida a Catbox. El GIF está guardado localmente.",
-    "Catbox 上传失败。GIF 已保存到本地。"
-  ],
-  "Catbox upload requires the desktop app.": [
-    "Для загрузки на Catbox требуется настольное приложение.",
-    "La subida a Catbox requiere la aplicación de escritorio.",
-    "上传到 Catbox 需要桌面应用。"
   ],
   "GIF encoding failed.": [
     "Не удалось закодировать GIF.",

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { openDocument } from '../src/editor-document.js';
+import { assertRoundTripFields } from '../src/model-optimizer.js';
 import { findIrregularities, sanityProposals, runOptimizeStage, simpleSettings } from '../src/optimizexl.js';
 import { prepareNuclearReduction } from '../src/optimizexl-geometry.js';
 await prepareNuclearReduction();
@@ -23,6 +24,15 @@ for (const path of paths) {
   const put = (name, bytes) => {
     results[name] = comparison[name] = { bytes: bytes.length, sha256: hash(bytes) };
     if (capture || results[name].sha256 === expected.results[name]?.sha256) return;
+    if(name==='mounted-spheres'&&process.env.MDLXL_FLAIL_MOUNTED_REFERENCE){
+      // Keep the original golden hash. A historical reference must reproduce
+      // it exactly before allowing the serializer's atomic ID permutation.
+      const reference=new Uint8Array(fs.readFileSync(process.env.MDLXL_FLAIL_MOUNTED_REFERENCE));
+      assert.equal(hash(reference),expected.results[name].sha256);
+      assertRoundTripFields(openDocument(reference,'historical.mdx').model,openDocument(bytes,'current.mdx').model);
+      comparison[name]={bytes:reference.length,sha256:hash(reference)};
+      return;
+    }
     const paths = motionEvidence.models.find(m => m.source === hash(source))?.cases[name];
     if (!paths) return; // Unrelated outputs still require their original hash.
     const projection = openDocument(bytes, 'projection.mdx'); let restored = 0;
@@ -58,7 +68,7 @@ for (const path of paths) {
     // explicitly added repairs are additional capacity, checked separately.
     const added = capture ? [] : available.filter(f => !acceptedIds.includes(f.id));
     for (const fix of added) {
-      assert.ok(stage === 'sanity' ? ['openingTrack','unusedLocalKeys','redundantTracks'].includes(fix.kind) : fix.kind === 'effectVisibility', 'Only explicitly added repair capabilities may extend this baseline');
+      assert.ok(stage === 'sanity' ? ['openingTrack','unusedLocalKeys','redundantTracks','splineResample'].includes(fix.kind) : fix.kind === 'effectVisibility', 'Only explicitly added repair capabilities may extend this baseline');
       if(fix.inspectionOnly){additionalRepairs.push({id:fix.id,inspectionOnly:true});continue;}
       const repaired = runOptimizeStage(source, stage, {}, fix);
       const repairedModel = openDocument(repaired.bytes, 'repaired.mdx').model;

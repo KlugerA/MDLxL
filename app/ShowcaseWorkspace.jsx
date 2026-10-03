@@ -297,7 +297,7 @@ export default function ShowcaseWorkspace({ model: inputModel, modelName: inputM
       if(saved?.kind==='set'){
         if(!saved.recordings?.length||!saved.working)throw Error('This recording set is incomplete.');
         await applySetup(saved.working);recordingEdits.current.clear();recordingDraft.current=null;setRecordingList(structuredClone(saved.recordings));
-        setExportTarget(['hive','catbox'].includes(saved.exportTarget)?saved.exportTarget:null);
+        setExportTarget(saved.exportTarget==='hive'?'hive':null);
       }else{
         const frame=builtin?cropPresetRect(previewSize.width,previewSize.height,SHOWCASE_CROP_PRESETS[builtin.cropPreset]):null;
         await applySetup(builtin?builtinSetup(builtin,frame):saved.setup);

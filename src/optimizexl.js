@@ -14,6 +14,7 @@ import { openingTrackProposals, applyOpeningTrack } from './optimizexl-opening-t
 import { unusedTrackProposals, applyUnusedTrack } from './optimizexl-unused-tracks.js';
 import { effectVisibilityProposals } from './optimizexl-effect-visibility.js';
 import { redundantTrackProposals, applyRedundantTrack } from './optimizexl-redundant-tracks.js';
+import { splineTrackProposals, applySplineTrack } from './optimizexl-spline-tracks.js';
 
 export const STAGES = [
   {id:'duplicates',name:'Duplicate data'}, {id:'animation',name:'Animation optimization'},
@@ -119,7 +120,8 @@ export function sanityProposals(m){const findings=boundsProposals(m);for(const [
  const proposals=[...findings,...openingTrackProposals(m,tracks(m)),...unusedTrackProposals(m,tracks(m)),...redundantTrackProposals(m,tracks(m))];
  // Static gravity replaces its entire track. It owns that track's diagnostics;
  // do not also queue key-level corrections against data it removes.
- return proposals.filter(p=>!p.path||!findings.some(owner=>owner.kind==='gravity'&&p.path.join('.')===`ParticleEmitters2.${owner.emitter}.Gravity`));}
+ const owned=proposals.filter(p=>!p.path||!findings.some(owner=>owner.kind==='gravity'&&p.path.join('.')===`ParticleEmitters2.${owner.emitter}.Gravity`));
+ return [...owned,...splineTrackProposals(m,tracks(m),owned)];}
 function applyRepair(m,fix,settings,evidenceModel=m){
  if(!fix)return;
  if(fix.kind==='batch'){
@@ -149,6 +151,14 @@ function applyRepair(m,fix,settings,evidenceModel=m){
   const current=redundantTrackProposals(evidenceModel,tracks(evidenceModel)).find(f=>f.id===fix.id);
   if(!current||current.inspectionOnly||!same(current,fix))throw Error('This redundant-key finding changed or needs manual review. Select it again.');
   applyRedundantTrack(m,current);return;
+ }
+ if(fix.kind==='splineResample'){
+  const current=sanityProposals(evidenceModel).find(f=>f.id===fix.id);
+  if(!current||!same(current,fix))throw Error('This spline finding changed. Select it again.');
+  // Resampling owns the complete track, so key-level writes cannot coexist.
+  if(!same(tracks(m).find(t=>t.path.join('.')===fix.path.join('.'))?.track,
+      tracks(evidenceModel).find(t=>t.path.join('.')===fix.path.join('.'))?.track))throw Error('This spline track has another selected correction. Approve it first and rescan.');
+  applySplineTrack(m,current);return;
  }
  if(fix.kind==='effectVisibility'){
   const current=effectVisibilityProposals(evidenceModel).find(f=>f.id===fix.id);
