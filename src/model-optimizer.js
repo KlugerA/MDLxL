@@ -5,6 +5,7 @@ import { sampleTrack } from './animation.js';
 import { writeMdxEventGlobalSequences } from './event-object-codec.js';
 import { convertMdxGeosetColorTracks } from './geoset-color-codec.js';
 import { Buffer } from 'buffer';
+import { canonicalizeSerializedNodeOrder, hasCanonicalSerializedNodeOrder, serializedNodes } from './node-id-order.js';
 
 export const OPTIMIZER_SECTIONS = ['Geosets', 'Bones', 'Helpers', 'Materials', 'Textures', 'ParticleEmitters2', 'RibbonEmitters'];
 const slots = ['TextureID', 'NormalTextureID', 'ORMTextureID', 'EmissiveTextureID', 'TeamColorTextureID', 'ReflectionsTextureID'];
@@ -185,6 +186,15 @@ export function verifyOptimization(before, after) {
 }
 
 export function assertRoundTripFields(source, reopened, path = '') {
+  // EditorDocument remaps the export snapshot, keeping live/undo IDs stable.
+  // Compare that same atomic permutation, including parents, groups and pivots,
+  // rather than rejecting a valid save or skipping reference verification.
+  if (!path && !hasCanonicalSerializedNodeOrder(source) &&
+      serializedNodes(reopened).every((node, index) => node.ObjectId === index) &&
+      serializedNodes(source).some((node, index) => node.ObjectId !== index)) {
+    source = clone(source);
+    canonicalizeSerializedNodeOrder(source, { preserveUnusedPivots: true });
+  }
   if (source === undefined || path === 'Nodes' || /\.PivotPoint$/.test(path) || /^Info\.Num/.test(path)) return;
   // MDL omits default layer alpha; its decoder represents that as null while
   // MDX stores the same fully opaque value explicitly.
