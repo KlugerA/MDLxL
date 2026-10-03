@@ -1,6 +1,6 @@
 .paint-studio{grid-template-columns:206px minmax(180px,1fr) 222px;grid-template-rows:42px minmax(0,1fr) 36px}
 .paint-studio .paint-key{display:none;font:600 10px/1.2 monospace;color:#25843a;background:#e5f4df;border:1px solid #39824655;border-radius:3px;padding:1px 3px;white-space:nowrap}
-[data-reveal-hotkeys=true] .paint-studio .paint-key,.paint-studio .paint-shortcuts .paint-key{display:inline}
+[data-reveal-hotkeys=true] .paint-studio .paint-key[data-rvl-key=true],.paint-studio .paint-shortcuts .paint-key{display:inline}
 .paint-studio .studio-toolbar{gap:5px}.studio-toolbar>strong{margin-right:4px}.studio-toolbar .studio-tools button{padding:3px 7px}.studio-toolbar button{font-size:11px;padding:3px 5px}
 .paint-studio .studio-controls fieldset{gap:12px}.paint-studio .studio-selection{padding-top:0;border-top:0;gap:5px}.studio-section-title{display:flex;align-items:center;justify-content:space-between}.studio-selection small{color:var(--ui-muted);font-size:10px}.studio-selection-count{font-size:11px}
 .studio-segments{display:flex;gap:3px;flex-wrap:wrap}.studio-segments>button{flex:1;min-width:0;font-size:11px;padding:3px}.studio-selection .studio-segments>button{flex-wrap:wrap}.studio-borrow{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}.studio-borrow button{flex-direction:column;font-size:10px;gap:2px;padding:5px 1px}

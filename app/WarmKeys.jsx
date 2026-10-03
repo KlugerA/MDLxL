@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { canHandleHotkeyEvent, chordFromEvent, effectiveBindings, formatChord, isTextEditingTarget, MAX_WARMKEY_ID_LENGTH } from '../src/preferences.js';
 import { contextualWarmKeyDefaults, warmKeyCode, WarmKeySequence, WARMKEY_LEADER } from '../src/warmkey-defaults.js';
-import { hotkeyBadge } from '../src/hotkey-badge.js';
+import { accessibleHotkey, accessiblePaintHotkey, hotkeyBadge } from '../src/hotkey-badge.js';
+import { normalizeHotkeyAppearance } from '../src/hotkey-appearance.js';
 import './settings.css';
 import './warmkey-sequences.css';
+import './hotkey-hints.css';
 
 const WarmKeysContext = createContext({ catalog: [], shortcuts: {} });
 export const useWarmKeys = () => useContext(WarmKeysContext);
@@ -29,6 +31,11 @@ function visible(element) {
 }
 function activeDialog(root) { return [...root.querySelectorAll('[role="dialog"][aria-modal="true"]')].filter(visible).at(-1); }
 function enabled(element) { return !element.disabled && element.getAttribute('aria-disabled') !== 'true' && !element.closest('fieldset[disabled]'); }
+function workflowHint(element, action) {
+  if (!enabled(element) || element.closest('.classic-menu, .classic-context, .settings-overlay, .toolbar-modules') || element.getAttribute('role')?.startsWith('menuitem')) return false;
+  if (['Modules', 'Settings', 'Help', 'Resources'].includes(action?.category)) return false;
+  return action?.category !== 'File' || action.id === 'save';
+}
 
 function actionMetadata(element, id) {
   const title = element.hasAttribute('data-warmkey-base-title') ? element.getAttribute('data-warmkey-base-title') : element.getAttribute('title');
@@ -55,7 +62,9 @@ export function WarmKeysProvider({ preferences, catalog = [], activeScope = 'edi
   }, [catalog, preferences?.hotkeys, revision]);
   const shortcuts = useMemo(() => effectiveBindings(merged, preferences?.hotkeys), [merged, preferences?.hotkeys]);
   const shortcutSignature = JSON.stringify(shortcuts);
-  latest.current = { catalog: merged, shortcuts, activeScope, revealHotkeys, onAction };
+  const hintAppearance = normalizeHotkeyAppearance(preferences?.hotkeyAppearance);
+  const appearanceSignature = JSON.stringify(hintAppearance);
+  latest.current = { catalog: merged, shortcuts, activeScope, revealHotkeys, hintAppearance, onAction };
 
   useEffect(() => { onCatalogChange?.(merged); }, [merged, onCatalogChange]);
   useEffect(() => {
@@ -72,6 +81,7 @@ export function WarmKeysProvider({ preferences, catalog = [], activeScope = 'edi
       const record = fieldBadges.get(element);
       if (!record) return;
       record.badge.remove();
+      if (!record.host.querySelector('.warmkey-field-badge')) delete record.host.dataset.rvlFieldHint;
       element.style.removeProperty('anchor-name');
       element.classList.remove('warmkey-control');
       fieldBadges.delete(element);
@@ -79,8 +89,15 @@ export function WarmKeysProvider({ preferences, catalog = [], activeScope = 'edi
     const discover = () => {
       queued = false; if (disposed || !root.current) return;
       let changed = false;
+      const actions = new Map(latest.current.catalog.map(action => [action.id, action]));
       for (const [element, record] of fieldBadges) if (!element.isConnected || !element.hasAttribute('data-warmkey') || record.badge.parentElement !== element.parentElement) removeFieldBadge(element);
-      for (const controlRoot of controlRoots()) controlRoot.ownerDocument.documentElement.dataset.revealHotkeys = String(latest.current.revealHotkeys);
+      for (const controlRoot of controlRoots()) {
+        const html = controlRoot.ownerDocument.documentElement, appearance = latest.current.hintAppearance;
+        html.dataset.revealHotkeys = String(latest.current.revealHotkeys);
+        html.dataset.hotkeyPlacement = appearance.placement;
+        html.style.setProperty('--hotkey-color', appearance.color);
+        html.style.setProperty('--hotkey-size', `${appearance.fontSize}px`);
+      }
       for (const controlRoot of controlRoots()) for (const element of controlRoot.querySelectorAll('[data-warmkey]')) {
         const id = controlActionId(element); if (!id) continue;
         const currentTitle = element.getAttribute('title') || '';
@@ -95,9 +112,11 @@ export function WarmKeysProvider({ preferences, catalog = [], activeScope = 'edi
         element.setAttribute('title', title); element.setAttribute('data-warmkey-tooltip', title);
         const field = element.matches('input, select, textarea');
         let badge = field ? fieldBadges.get(element)?.badge : element.querySelector(':scope > [data-warmkey-badge]');
-        const text = keys.length ? warmKeyCode(keys[0]) || hotkeyBadge(keys[0]) || formatChord(keys[0]) : '';
-        if (!text) { if (field) removeFieldBadge(element); else if (badge) badge.remove(); element.classList.remove('warmkey-control'); continue; }
+        const action = actions.get(id);
+        const text = workflowHint(element, action) ? keys.map(accessibleHotkey).find(Boolean) || '' : '';
+        if (!text) { if (field) removeFieldBadge(element); else if (badge) badge.remove(); element.classList.remove('warmkey-control'); delete element.dataset.rvlHint; continue; }
         element.classList.add('warmkey-control');
+        element.dataset.rvlHint = '';
         if (!badge) {
           badge = element.ownerDocument.createElement('span'); badge.className = 'warmkey-badge'; badge.dataset.warmkeyBadge = ''; badge.setAttribute('aria-hidden', 'true');
           if (field) {
@@ -106,12 +125,24 @@ export function WarmKeysProvider({ preferences, catalog = [], activeScope = 'edi
             badge.style.setProperty('position-anchor', anchor);
             badge.classList.add('warmkey-field-badge');
             element.parentElement.appendChild(badge);
-            fieldBadges.set(element, { badge });
+            const host = element.parentElement; host.dataset.rvlFieldHint = '';
+            fieldBadges.set(element, { badge, host });
           } else element.appendChild(badge);
         }
         if (badge.textContent !== text) badge.textContent = text; badge.dataset.longHint=String(text.length>3);
         badge.dataset.revealOnly = String(element.tagName !== 'BUTTON' || element.getAttribute('data-warmkey-badges') === 'false');
         if (badge.title !== keys.map(formatChord).join(' / ')) badge.title = keys.map(formatChord).join(' / ');
+      }
+      // Paint owns direct shortcuts separately from the generated command catalog.
+      for (const controlRoot of controlRoots()) for (const badge of controlRoot.querySelectorAll('.paint-key')) {
+        if (badge.closest('.paint-shortcuts')) continue;
+        const control = badge.closest('button'), label = control?.getAttribute('aria-label');
+        const base = badge.dataset.hotkeyBaseLabel ?? badge.textContent;
+        badge.dataset.hotkeyBaseLabel = base;
+        const text = !control || enabled(control) && !['Help', 'WC3 library…', 'From file…', 'New…', 'Open…'].includes(label) ? accessiblePaintHotkey(base) : '';
+        badge.dataset.rvlKey = String(!!text);
+        if (text && badge.textContent !== text) badge.textContent = text;
+        if (control) { if (text) control.dataset.rvlHint = ''; else delete control.dataset.rvlHint; }
       }
       if (changed) setRevision(value => value + 1);
     };
@@ -119,7 +150,7 @@ export function WarmKeysProvider({ preferences, catalog = [], activeScope = 'edi
     const observer = new MutationObserver(schedule);
     const observeRoots = () => {
       observer.disconnect();
-      for (const element of controlRoots()) observer.observe(element, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-warmkey', 'data-warmkey-prefix', 'data-warmkey-scope', 'data-warmkey-label', 'data-warmkey-category'] });
+      for (const element of controlRoots()) observer.observe(element, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-warmkey', 'data-warmkey-prefix', 'data-warmkey-scope', 'data-warmkey-label', 'data-warmkey-category', 'disabled', 'aria-disabled'] });
     };
     const registerRoot = event => {
       const element = event.detail?.root;
@@ -134,7 +165,7 @@ export function WarmKeysProvider({ preferences, catalog = [], activeScope = 'edi
     return () => { disposed = true; observer.disconnect(); window.removeEventListener('mdlxl-detached-root', registerRoot); for (const element of fieldBadges.keys()) removeFieldBadge(element); for (const element of controlRoots()) delete element.ownerDocument.documentElement.dataset.revealHotkeys; detachedRoots.current.clear(); if (root.current) delete root.current.__refreshWarmKeys; };
   }, []);
   // Command enablement changes during playback; only actual binding changes need a DOM scan.
-  useEffect(() => { root.current?.__refreshWarmKeys?.(); }, [shortcutSignature, revealHotkeys]);
+  useEffect(() => { root.current?.__refreshWarmKeys?.(); }, [shortcutSignature, revealHotkeys, appearanceSignature]);
 
   useEffect(() => {
     const sequence = new WarmKeySequence(); let timer;

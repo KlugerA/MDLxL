@@ -2,6 +2,7 @@ import { normalizePreviewLighting } from './preview-lighting.js';
 import APPLICATION_THEMES from './application-themes.json' with { type: 'json' };
 export { APPLICATION_THEMES };
 import { DEFAULT_PAINT_APPEARANCE, normalizePaintAppearance } from './paint-appearance.js';
+import { DEFAULT_HOTKEY_APPEARANCE, normalizeHotkeyAppearance } from './hotkey-appearance.js';
 /** Shared, DOM-free preference validation and Hotkeys rules. */
 import { normalizeWarmKeySequence, WARMKEY_LEADER } from './warmkey-defaults.js';
 import { DEFAULT_CAPTURE, normalizeCapture } from './capture-settings.js';
@@ -31,6 +32,7 @@ export const CAMERA_PRESETS = Object.freeze({
 export const DEFAULT_PREFERENCES = Object.freeze({
   rendererRevision: 3,
   citadelPaint: DEFAULT_PAINT_APPEARANCE,
+  hotkeyAppearance: DEFAULT_HOTKEY_APPEARANCE,
   uvPreviewDisplay: DEFAULT_UV_PREVIEW_DISPLAY,
   uvGrid: DEFAULT_UV_GRID,
   uvViewTileLimit: DEFAULT_UV_VIEW_TILE_LIMIT,
@@ -144,6 +146,7 @@ export function normalizePreferences(value = {}) {
   const viewportPreset = requestedPreset === 'custom' || viewportPresetById(requestedPreset, viewportPresets) ? requestedPreset : legacyCustomized ? 'custom' : DEFAULT_VIEWPORT_PRESET_ID;
   return {
     rendererRevision: 3,
+    hotkeyAppearance: normalizeHotkeyAppearance(input.hotkeyAppearance),
     uvPreviewDisplay: normalizeUVPreviewDisplay(input.uvPreviewDisplay),
     uvGrid: normalizeUVGrid(input.uvGrid),
     uvViewTileLimit: normalizeUVViewTileLimit(input.uvViewTileLimit),

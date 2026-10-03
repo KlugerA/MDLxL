@@ -1,0 +1,19 @@
+/* RVL labels take their own space; the normal layout stays compact when off. */
+[data-reveal-hotkeys=true] button[data-rvl-hint]{display:inline-flex!important;align-items:center;justify-content:center;gap:4px;height:auto!important;overflow:visible;flex-wrap:nowrap}
+[data-reveal-hotkeys=true] .classic-tool[data-rvl-hint]{width:auto!important;min-width:25px;flex-shrink:0}
+[data-reveal-hotkeys=true] :is(.warmkey-badge,.paint-key[data-rvl-key=true]){position:static!important;translate:none;visibility:visible!important;color:var(--hotkey-color,#39ff14)!important;font-size:var(--hotkey-size,10px)!important;line-height:1.2;font-weight:bold;letter-spacing:normal;max-width:none;padding:1px 2px;background:var(--ui-field,#fff);border:1px solid var(--ui-border,#aaa);border-radius:2px;text-shadow:none;pointer-events:none;white-space:nowrap;flex:0 0 auto;order:0}
+[data-reveal-hotkeys=true] .classic-tools{display:flex;flex-wrap:wrap;align-items:center;gap:2px}
+[data-reveal-hotkeys=true] .classic-tools .span-2{flex-basis:48px}
+[data-reveal-hotkeys=true][data-hotkey-placement=below] button[data-rvl-hint],[data-reveal-hotkeys=true][data-hotkey-placement=above] button[data-rvl-hint]{flex-direction:column}
+[data-reveal-hotkeys=true][data-hotkey-placement=left] button[data-rvl-hint],[data-reveal-hotkeys=true][data-hotkey-placement=right] button[data-rvl-hint]{flex-direction:row}
+[data-reveal-hotkeys=true][data-hotkey-placement=above] button[data-rvl-hint]>:is(.warmkey-badge,.paint-key),[data-reveal-hotkeys=true][data-hotkey-placement=left] button[data-rvl-hint]>:is(.warmkey-badge,.paint-key){order:-1}
+[data-reveal-hotkeys=true] [data-rvl-field-hint]{display:inline-grid!important;grid-template-columns:auto 1fr;align-items:center;gap:3px}
+[data-reveal-hotkeys=true] .warmkey-field-badge{grid-column:1/-1;justify-self:center}
+[data-reveal-hotkeys=true][data-hotkey-placement=above] .warmkey-field-badge{order:-1}
+[data-reveal-hotkeys=true]:is([data-hotkey-placement=left],[data-hotkey-placement=right]) [data-rvl-field-hint]{grid-template-columns:auto auto auto}
+[data-reveal-hotkeys=true]:is([data-hotkey-placement=left],[data-hotkey-placement=right]) .warmkey-field-badge{grid-column:auto}
+[data-reveal-hotkeys=true][data-hotkey-placement=left] .warmkey-field-badge{order:-1}
+[data-reveal-hotkeys=true] .classic-modules{grid-template-rows:auto 1px 27px}
+[data-reveal-hotkeys=true] .editor-modules{overflow-y:visible}
+[data-reveal-hotkeys=true] .paint-studio{grid-template-rows:minmax(42px,auto) minmax(0,1fr) minmax(36px,auto)}
+[data-reveal-hotkeys=true] .paint-studio :is(.paint-toolbar,.paint-footer){height:auto;flex-wrap:wrap}
