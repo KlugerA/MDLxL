@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SelectField } from './Fields.jsx';
-import { EVENT_TYPES, assignEventData, setEventFrame } from './node-event-data.js';
+import { EVENT_TYPES, assignEventData, setEventFrame, resolveEventSound } from './node-event-data.js';
 
 export default function NodeEventEditor({ node, model, modelPath, catalog, error: catalogError, edit, frame, onSeek, sequenceIndex, onSequenceChange }) {
   const type = EVENT_TYPES[node.Name?.slice(0,3)] ? node.Name.slice(0,3) : 'SND', id = node.Name?.slice(4);
@@ -12,11 +12,9 @@ export default function NodeEventEditor({ node, model, modelPath, catalog, error
   useEffect(() => {
     let active = true, url;
     setAudioUrl(''); setError('');
-    if (file) window.desktop.resolveEventResources({names:[file],path:modelPath}).then(records => {
+    if (file) resolveEventSound(window.desktop.resolveEventResources, file, modelPath).then(sound => {
       if (!active) return;
-      if (!records[0]?.bytes) { setError(`Sound not found: ${file}`); return; }
-      const mime = { wav: 'audio/wav', mp3: 'audio/mpeg', ogg: 'audio/ogg', flac: 'audio/flac' }[file.split('.').at(-1).toLowerCase()];
-      url = URL.createObjectURL(new Blob([records[0].bytes], {type:mime})); setAudioUrl(url);
+      url = URL.createObjectURL(new Blob([sound.bytes], {type:sound.mime})); setAudioUrl(url);
     }).catch(cause => { if(active) setError(cause.message); });
     return () => { active=false; if(url) URL.revokeObjectURL(url); };
   }, [file, modelPath]);

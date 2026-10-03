@@ -4,7 +4,20 @@ import { createDemoDocument, createNode, openDocument } from '../src/editor-docu
 import { setAnimationKey, sampleAnimationProperty } from '../src/animation-tracks.js';
 import { classicTimelineTargets, classicTimelineDomain } from '../src/classic-keyframes.js';
 import { clearTimelineKeys, timelineDomain } from '../src/keyframe-timeline.js';
-import { eventCatalog, assignEventData, setEventFrame } from '../app/node-event-data.js';
+import { eventCatalog, assignEventData, setEventFrame, resolveEventSound } from '../app/node-event-data.js';
+
+test('native sound lookup retains identity across FLAC table paths and installed OGG files', async () => {
+ const file='war3.w3mod:Units/Creeps/Spider/SpiderDeath1.flac', ogg=file.replace('.flac','.ogg');
+ const bytes=new Uint8Array([1,2,3]); let request;
+ const sound=await resolveEventSound(async payload=>{request=payload;return [{name:ogg,bytes}];},file,'model.mdx');
+ assert.deepEqual(request,{names:[file,ogg],path:'model.mdx'});
+ assert.equal(sound.mime,'audio/ogg');assert.equal(sound.bytes,bytes);
+ const exact=await resolveEventSound(async()=>[{name:ogg,bytes},{name:file,bytes}],file,'model.mdx');
+ assert.equal(exact.mime,'audio/flac');
+ await assert.rejects(resolveEventSound(async()=>[],file,'model.mdx'),/Sound not found/);
+ const custom='Sounds\\MyCustom.flac';
+ await assert.rejects(resolveEventSound(async payload=>{assert.deepEqual(payload.names,[custom]);return [];},custom,'model.mdx'),/Sound not found/);
+});
 
 test('sound catalog uses native IDs and authored file mappings, retaining missing definitions', () => {
  const slk=(name,rows)=>({name,bytes:new TextEncoder().encode(rows.flatMap((row,y)=>row.map((value,x)=>`C;X${x+1};Y${y+1};K"${value}"`)).join('\n'))});

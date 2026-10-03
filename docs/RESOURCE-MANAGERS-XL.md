@@ -28,6 +28,12 @@ into an audio player. Missing definitions/files are reported, never substituted.
 The existing MPQ reader cannot decode some compressed WAV sectors; playback from
 the installed CASC sound files was verified.
 
+The sound follow-up handles native SLK paths ending in FLAC when the installation
+stores the same sound as OGG. It prefers the exact path, uses the loaded format's
+MIME type, and leaves custom paths unchanged. SpiderDeath (DSPD), the reported
+failure, now decodes and plays in the Electron regression. Splat and geoset
+preview follow-ups remain pending; accepted visibility controls are unchanged.
+
 ## Research
 
 Checked 3 October 2026:

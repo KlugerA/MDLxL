@@ -51,3 +51,14 @@ export function setEventFrame(node, frame, enabled) {
 export function loadEventCatalog(modelPath) {
   return window.desktop.resolveEventResources({ names: [...NODE_EVENT_TABLES, ...NATIVE_SOUND_TABLES], path: modelPath }).then(eventCatalog);
 }
+
+export async function resolveEventSound(resolveResources, file, modelPath) {
+  // Installed Reforged data can retain FLAC paths in SLK while storing the
+  // corresponding sound as OGG. Keep the same sound and prefer the exact path.
+  const names = /^war3\.w3mod:.*\.flac$/i.test(file) ? [file, file.replace(/\.flac$/i, '.ogg')] : [file];
+  const records = await resolveResources({ names, path: modelPath });
+  const sound = names.map(name => records.find(record => record.name === name && record.bytes?.length)).find(Boolean);
+  if (!sound) throw Error(`Sound not found: ${file}`);
+  const mime = { wav: 'audio/wav', mp3: 'audio/mpeg', ogg: 'audio/ogg', flac: 'audio/flac' }[sound.name.split('.').at(-1).toLowerCase()];
+  return { bytes: sound.bytes, mime };
+}
