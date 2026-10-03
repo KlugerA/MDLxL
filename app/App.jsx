@@ -432,6 +432,10 @@ export default function App() {
   };
   const selectMode = async next => {
     if (savingRef.current || next === mode) return;
+    // Function-key mode changes can remove a focused blur-committed field
+    // before React sees its blur. Commit that pending value while its editor
+    // is still mounted (notably the final RGB channel in Animations).
+    document.activeElement?.blur?.();
     if (mode === 'showcase') { const pending = []; window.dispatchEvent(new CustomEvent('mdlvis-flush-captures', { detail: pending })); await Promise.all(pending); }
     if (mode === 'paint') { window.dispatchEvent(new CustomEvent('mdlxl-paint-flush')); if (session.paintProject && !await applyPaintToModel()) return; setRenderMode('textured'); setSelectable(new Set(visiblePaintGeosets(paintOriginalModel, activeGeoset))); setShowAllGeosets(false); }
     if (next === 'paint' && session.paintAppliedRevision !== undefined) { session.paintWorkingModel = structuredClone(doc.model); session.paintWorkingRevision++; }
