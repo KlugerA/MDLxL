@@ -25,7 +25,7 @@ export function classifyHiveFindings(findings,proposals=[]){
     }else if(/^Missing opening track for /.test(message)){kind='openingTrack';owner='sanity';}
     else if(message==='Using a gravity animation.'){kind='gravity';owner='sanity';}
     const location=hiveTrackPath(f.path);
-    const proposal=proposals.find(p=>f.type!=='unused'&&/extent|radius/i.test(message)&&p.targets?.some(t=>(f.path||'').startsWith(t.hivePath))||
+    const proposal=proposals.find(p=>p.kind==='splineResample'&&kind==='redundantTracks'&&location===p.path?.join('.')&&p.noticed.includes(frame))||proposals.find(p=>f.type!=='unused'&&/extent|radius/i.test(message)&&p.targets?.some(t=>(f.path||'').startsWith(t.hivePath))||
       p.kind==='gravity'&&location===`ParticleEmitters2.${p.emitter}.Gravity`||
       p.kind===kind&&location===p.path?.join('.')&&
       (kind==='openingTrack'?p.frame===frame:kind==='redundantTracks'?p.noticed.includes(frame):kind==='unusedLocalKeys'?p.frames.includes(frame):true));

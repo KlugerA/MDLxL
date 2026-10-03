@@ -67,7 +67,7 @@ function normalizeVersionFields(model, target) {
 // src/editor-document.js
 var import_buffer9 = require("buffer");
 
-// ../../../../Documents/ChatGPT/MDLxL/node_modules/.pnpm/war3-model@4.0.1/node_modules/war3-model/dist/es/war3-model.mjs
+// ../../../../../ChatGPT/MDLxL/node_modules/.pnpm/war3-model@4.0.1/node_modules/war3-model/dist/es/war3-model.mjs
 var TextureFlags = /* @__PURE__ */ (function(TextureFlags2) {
   TextureFlags2[TextureFlags2["WrapWidth"] = 1] = "WrapWidth";
   TextureFlags2[TextureFlags2["WrapHeight"] = 2] = "WrapHeight";
