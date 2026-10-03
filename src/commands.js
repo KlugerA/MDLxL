@@ -30,4 +30,5 @@ export const COMMANDS = coreWarmKeyDefaults([
   ...group('Modules', [['paint','Citadel Paint']]),
   ...group('Citadel Paint', [['paint:select','Select geoset or light'],['paint:draw','Paint / draw']]),
   ...group('Bones', [['bone:detach','Detach from parent bone','D'],['bone:detachVertices','Detach selected vertices from bone','V']]),
+  ...group('Modules', [['revealHotkeys','Reveal hotkeys']]),
 ]).map(action=>action.id.startsWith('paint:')?{...action,scope:'paint'}:action);

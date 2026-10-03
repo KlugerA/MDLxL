@@ -26,6 +26,8 @@ Original documentation and additional provenance are linked in the [Hive/XGM res
 
 ## Warcraft data
 
+`public/classic/btn-reveal.png` is the 64×64 RVL toolbar image, decoded from the requested `ReplaceableTextures\CommandButtons\BTNReveal.blp` in the user's local classic `war3.mpq`. Source BLP SHA-256: `a3b21c45a53dd4f19db953346e5247caf3efa348f49b20d90b848cbc05b4d6a5`. The artwork retains Blizzard Entertainment's rights.
+
 Warcraft III, its artwork and game assets belong to their respective owners, including Blizzard Entertainment. The Peon and Wisp toolbar portraits (`public/classic/peon.png` and `wisp.png`) were converted from `ReplaceableTextures\\CommandButtons\\BTNPeon.blp` and `BTNWisp.blp` in the user's local Warcraft III MPQ, at the user's request.
 
 The following six command-card/ability-style toolbar images were also converted from that authorized local classic MPQ using the source-maintenance script `work/extract-warcraft-command-icons.cjs`:
