@@ -161,7 +161,7 @@ export default function AnimationPreviewTools({ active, sessionId, captureAPI, m
   return <div className="showcase-capture">
     <button className="showcase-record" disabled={!stoppable&&(state!=='idle'||!captureAPI||locked||(disabled&&!recordingList.length))} onClick={stoppable?stop:start}>{stoppable?'STOP':'RECORD'}</button>
     <div className="showcase-export-target" role="group" aria-label="GIF destination"><button disabled={state!=='idle'||locked} aria-pressed={exportTarget==='hive'} onClick={()=>onExportTarget?.('hive')}>HIVE</button></div>
-    <small className="showcase-export-note">{mainPicture?'Hive Main Picture · 612 × 490 · 5s max · local GIF':exportTarget==='hive'?'Hive · 5s max · 30 FPS':'Original quality · local GIF'}</small>
+    <small className="showcase-export-note">{mainPicture?'Hive Main Picture · 612 × 490 · 5s max · local GIF':exportTarget==='hive'?'Hive · 5s max · 30 FPS':'864 px max · ≤20 MiB · local GIF'}</small>
     {state!=='idle'&&<div className="showcase-capture-status" role="status">{state==='retry'?'Save needs retry':state==='saving'?'Saving…':<>{translate(batchLabel)}{translate(progress)}</>}</div>}
     {background.pending>0&&<div className="showcase-capture-status" role="status">Making GIFs… {background.pending}</div>}
     {state==='retry'&&<button onClick={retry}>Retry Save</button>}
