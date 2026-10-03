@@ -122,6 +122,10 @@ async function verifyStage(stage) {
   for (const relative of ['electron/paint-textures.cjs', 'electron/data/paint-legacy-stock.json', 'dist/branding/citadel-paint.svg', 'dist/paint-assets/manifest.json', 'dist/paint-brushes/manifest.json', 'dist/whiteout/whiteout-paint-blp.js', 'dist/whiteout/whiteout-paint-blp.wasm', 'dist/whiteout/LICENSE', 'dist/whiteout/build.json']) {
     if (!await exists(path.join(stage, relative))) throw Error(`Citadel Paint runtime file missing: ${relative}`);
   }
+  const paintLibrary=path.join(stage,'dist','paint-library');
+  const defaults=JSON.parse(await fs.readFile(path.join(paintLibrary,'manifest.json'),'utf8'));
+  if(!defaults.entries.length)throw Error('The default Paint texture library is empty.');
+  for(const entry of defaults.entries)if(await hash(path.join(paintLibrary,entry.path))!==entry.sha256)throw Error(`Default Paint texture missing or changed: ${entry.path}`);
 }
 
 async function cachedElectron(version, explicit) {

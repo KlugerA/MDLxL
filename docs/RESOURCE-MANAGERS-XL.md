@@ -94,4 +94,9 @@ both formats. Previously reproduced broader Popcorn codec failures and the
 signed-time text-parser test expectation remain outside this patch. This does
 not claim the full source suite, Warcraft runtime or user acceptance passed.
 
-No release, merge, offline replacement or original-model save is included.
+Integration with main at 9130643 preserves the Citadel Paint title, adjustable
+crop controls and default texture library. The combined production build passed
+56 focused source tests and four Electron checks: appearance, sound-folder
+scrolling, the manager workflow, and the default Paint texture library.
+
+No release, offline replacement or original-model save is included.

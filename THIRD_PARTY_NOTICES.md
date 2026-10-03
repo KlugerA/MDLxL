@@ -43,6 +43,8 @@ These interface images retain their owners' rights; no new license is granted fo
 
 Citadel Paint's native starter shelf contains crop recipes in `src/paint-assets.js` and `public/paint-assets/manifest.json`. Their pixels are read from the configured local Warcraft III installation, including the cinematic Footman texture; those source images are not bundled. The retired generated/derived Paint texture collection is no longer shipped or seeded. The separate brush-mask collection retains its own provenance manifest.
 
+Citadel Paint's default texture library in `public/paint-library` contains 31 texture crops provided and selected for distribution by Avner, organized and named by visible material. These are user-authored crops of Warcraft imagery, not the retired generated stock collection. Underlying Warcraft artwork remains Blizzard Entertainment's; no independent license or exact native source path is asserted for these crops. `manifest.json` records original library names, dimensions and SHA-256 hashes. The program copies these defaults into its editable `Textures` folder without overwriting personal files.
+
 ## CascLib
 
 Native Warcraft III CASC reader by Ladislav Zezula, MIT. License and pinned binary provenance are in electron/casc/. The helper code is included as electron/CascBridge.cs. No Warcraft installation archives or general game-texture cache are shipped. The three specifically bundled Human console textures are documented below.

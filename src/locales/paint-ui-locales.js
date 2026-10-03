@@ -625,22 +625,40 @@ const rows = [
     "裁剪 / 选择…"
   ],
   [
+    "Crop",
+    "Обрезка",
+    "Recortar",
+    "裁剪"
+  ],
+  [
+    "Crop shape",
+    "Форма обрезки",
+    "Forma del recorte",
+    "裁剪形状"
+  ],
+  [
     "Rectangle",
     "Прямоугольник",
     "Rectángulo",
     "矩形"
   ],
   [
-    "Square / circle (1:1)",
-    "Квадрат / круг (1:1)",
-    "Cuadrado / círculo (1:1)",
-    "正方形 / 圆形 (1:1)"
+    "Square",
+    "Квадрат",
+    "Cuadrado",
+    "正方形"
   ],
   [
-    "Ellipse / circle",
-    "Эллипс / круг",
-    "Elipse / círculo",
-    "椭圆 / 圆形"
+    "Ellipse",
+    "Эллипс",
+    "Elipse",
+    "椭圆"
+  ],
+  [
+    "Circle",
+    "Круг",
+    "Círculo",
+    "圆形"
   ],
   [
     "Freehand lasso",
@@ -1873,12 +1891,6 @@ const rows = [
     "调整纹理大小…"
   ],
   [
-    "Make it yours.",
-    "Сделайте по-своему.",
-    "Hazlo tuyo.",
-    "画出你的风格。"
-  ],
-  [
     "Paint your model, borrow Warcraft textures, and mix them together.",
     "Рисуйте на модели, берите текстуры Warcraft и смешивайте их.",
     "Pinta tu modelo, toma texturas de Warcraft y combínalas.",
@@ -2077,10 +2089,10 @@ const rows = [
     "5 个入门素材"
   ],
   [
-    "My library",
-    "Моя библиотека",
-    "Mi biblioteca",
-    "个人素材库"
+    "Texture library",
+    "Библиотека текстур",
+    "Biblioteca de texturas",
+    "纹理库"
   ],
   [
     "Your own texture collection. Import an image or cut a piece from Warcraft, then choose Keep.",

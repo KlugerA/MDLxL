@@ -4,11 +4,11 @@ const { createHash } = require('node:crypto');
 const legacyStock = require('./data/paint-legacy-stock.json');
 const { IMAGE_EXTENSIONS } = require('./texture-resolver.cjs');
 
-/** User-owned texture folders. Native starter sources are recipes, not seeds.
+/** Editable texture folders, seeded once with the bundled default collection.
  * Reads/writes remain inside this root; imports copy bytes, never move sources.
  */
 class PaintTextureLibrary {
-  constructor(directory, _retiredSeedDirectory=null, stock=legacyStock.entries) { this.directory=path.resolve(directory);this.stock=stock;this.ready=null; }
+  constructor(directory, seedDirectory=null, stock=legacyStock.entries) { this.directory=path.resolve(directory);this.seedDirectory=seedDirectory;this.stock=stock;this.ready=null; }
   async ensure() {
     if(!this.ready)this.ready=(async()=>{
       await fs.mkdir(this.directory,{recursive:true});
@@ -24,6 +24,28 @@ class PaintTextureLibrary {
           const bytes=await fs.readFile(file);if(createHash('sha256').update(bytes).digest('hex')!==entry.sha256)continue;
           const after=await fs.lstat(file);if(after.ino===before.ino&&after.size===before.size&&after.mtimeMs===before.mtimeMs&&!after.isSymbolicLink())await fs.unlink(file);
         }catch(error){if(!['ENOENT','ENOTDIR'].includes(error.code))throw error;}
+      }
+      if(this.seedDirectory){
+        const manifestBytes=await fs.readFile(path.join(this.seedDirectory,'manifest.json'));
+        const fingerprint=createHash('sha256').update(manifestBytes).digest('hex');
+        const receipt=path.join(this.directory,'.mdlxl-default-textures.json');
+        let previous=null;try{previous=JSON.parse(await fs.readFile(receipt,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+        if(previous?.fingerprint!==fingerprint){
+          const manifest=JSON.parse(manifestBytes);
+          for(const entry of manifest.entries){
+            const parts=entry.path.split('/');
+            if(parts.length<2||parts.some(p=>!p||p==='.'||p==='..'||/[\\:]/.test(p))||!entry.path.endsWith('.png'))throw Error('Invalid default texture path.');
+            const bytes=await fs.readFile(path.join(this.seedDirectory,...parts));
+            if(createHash('sha256').update(bytes).digest('hex')!==entry.sha256)throw Error('Default texture bytes do not match their manifest.');
+            let folder=this.directory;
+            for(const part of parts.slice(0,-1)){
+              folder=path.join(folder,part);await fs.mkdir(folder).catch(error=>{if(error.code!=='EEXIST')throw error;});
+              const info=await fs.lstat(folder);if(!info.isDirectory()||info.isSymbolicLink())throw Error('Textures must be a regular folder.');
+            }
+            try{await fs.writeFile(path.join(folder,parts.at(-1)),bytes,{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}
+          }
+          await fs.writeFile(receipt,JSON.stringify({fingerprint})+'\n');
+        }
       }
     })().catch(error=>{this.ready=null;throw error;});
     return this.ready;
