@@ -24,13 +24,23 @@ function Links({ title = 'Used by', items, select }) {
   return <div className="re-relations"><span>{title}</span><div>{items.length ? items.map(item => <button key={`${item.kind}:${item.index}`} title={`Open ${item.label}`} onClick={() => select(item.kind, item.index)} translate="no">{item.label}</button>) : <small>No references</small>}</div></div>;
 }
 
-export default function ResourceDetails({ doc, kind, index, edit, select, assets, frame, sequenceIndex, onSeek, onSequenceChange, preferences, teamColor, onOpenParticleEditor, onImportTexture, onTextureFolder }) {
+function IsolatedMeshPreview({ model, ids, revision, assets, preferences, teamColor, sequenceIndex, frame }) {
+  const [open, setOpen] = useState(false), [chosen, setChosen] = useState(ids[0]);
+  const id = ids.includes(chosen) ? chosen : ids[0];
+  return <details className="re-model-preview" onToggle={event => setOpen(event.currentTarget.open)}><summary>Preview isolated mesh</summary>{open && (id == null ? <p>This material has no mesh users.</p> : <>
+    {ids.length > 1 && <label className="re-preview-choice">Mesh<select aria-label="Preview geoset" value={id} onChange={event => setChosen(Number(event.target.value))}>{ids.map(i => <option key={i} value={i}>{model.Geosets[i].Name || `Geoset ${i + 1}`}</option>)}</select></label>}
+    <p>Only {model.Geosets[id].Name || `Geoset ${id + 1}`} · drag to rotate</p>
+    <div className="re-model-stage" data-isolated-geoset={id}><Suspense fallback={<p>Loading preview…</p>}><GamePreview key={id} model={model} revision={revision} textureAssets={assets} preferences={preferences} teamColor={teamColor} presentation="preview" sequenceIndex={sequenceIndex} time={frame} playing={false} showGrid={false} showAxes={false} showParticles={false} isolatedGeosets={[id]} hiddenGeosets={new Set(model.Geosets.flatMap((_, i) => i === id ? [] : [i]))} mode="textured" view="perspective" overlays={{ bones: false, nodes: false, attachments: false, particles: false, wires: false }} /></Suspense></div>
+  </>)}</details>;
+}
+
+export default function ResourceDetails({ doc, kind, index, edit, select, assets, frame, sequenceIndex, onSeek, onSequenceChange, preferences, teamColor, onOpenParticleEditor, onImportTexture, onTextureFolder, onEditInAnimations }) {
   const model = doc.model, item = kind === 'Nodes' ? model.Nodes[index] : model[kind]?.[index];
-  const [layerIndex, setLayerIndex] = useState(0), [previewOpen, setPreviewOpen] = useState(false);
+  const [layerIndex, setLayerIndex] = useState(0);
   const visibilityProps = { model, frame, sequenceIndex, onSeek, onSequenceChange, disabled: doc.readOnly };
   const previewProps = { model, assets, revision: doc.revision, frame, sequenceIndex, teamColor };
   const visibility = (target, property, sections, label = 'Visibility', onlyAnimated = false) => <VisibilityEditor key={`${kind}:${index}:${layerIndex}:${property}`} {...visibilityProps} label={label} onlyAnimated={onlyAnimated} value={target?.[property]} fallback={target?._MdxDefaults?.[property] ?? 1} onChange={value => edit(`Set ${label.toLowerCase()}`, sections, () => { target[property] = value; })}/>;
-  const modelPreview = ids => <details className="re-model-preview" onToggle={event => setPreviewOpen(event.currentTarget.open)}><summary>Preview on model</summary>{previewOpen && <div className="re-model-stage"><Suspense fallback={<p>Loading preview…</p>}><GamePreview model={model} revision={doc.revision} textureAssets={assets} preferences={preferences} teamColor={teamColor} presentation="preview" sequenceIndex={sequenceIndex} time={frame} playing={false} showGrid={false} showAxes={false} showParticles={false} hiddenGeosets={new Set(model.Geosets.flatMap((_, i) => ids.includes(i) ? [] : [i]))} mode="textured" view="perspective"/></Suspense></div>}</details>;
+  const modelPreview = ids => <IsolatedMeshPreview {...{model, ids, assets, preferences, teamColor, sequenceIndex, frame}} revision={doc.revision}/>;
   if (!item) return null;
   if (kind === 'Materials') {
     const currentLayer = Math.min(layerIndex, item.Layers.length - 1), layer = item.Layers[currentLayer];
@@ -53,7 +63,7 @@ export default function ResourceDetails({ doc, kind, index, edit, select, assets
   if (kind === 'Nodes') {
     const type = nodeKind(model, item), supportsVisibility = visibilityKinds.includes(type);
     const effects = ['ParticleEmitters', 'ParticleEmitters2', 'ParticleEmitterPopcorns', 'RibbonEmitters'].includes(type);
-    return <fieldset className="re-friendly-fields" disabled={doc.readOnly}><div className="re-node-intro"><small>{nodeNames[type] || type} · Object ID {item.ObjectId}</small><h2 translate="no">{item.Name || `Node ${item.ObjectId}`}</h2></div><TextField label="Name" value={item.Name} onChange={name => edit('Rename node', ['Nodes'], () => { item.Name = name; })}/>{item.Parent != null && model.Nodes[item.Parent] && <Links title="Parent" items={[{ kind: 'Nodes', index: item.Parent, label: model.Nodes[item.Parent].Name || `Node ${item.Parent}` }]} select={select}/>}
+    return <fieldset className="re-friendly-fields" disabled={doc.readOnly}><div className="re-node-intro"><small>{nodeNames[type] || type} · Object ID {item.ObjectId}</small><h2 translate="no">{item.Name || `Node ${item.ObjectId}`}</h2></div>{onEditInAnimations && <button className="re-edit-animation" onClick={() => onEditInAnimations(index)}>Edit visibility in Animations →</button>}<TextField label="Name" value={item.Name} onChange={name => edit('Rename node', ['Nodes'], () => { item.Name = name; })}/>{item.Parent != null && model.Nodes[item.Parent] && <Links title="Parent" items={[{ kind: 'Nodes', index: item.Parent, label: model.Nodes[item.Parent].Name || `Node ${item.Parent}` }]} select={select}/>}
       {supportsVisibility ? <><p className="re-explanation">{effects ? 'Visibility switches emission on or off. Particles already emitted finish their lifetime.' : type === 'Lights' ? 'Set when this light is active.' : 'Set when this attached model is shown.'}</p>{visibility(item, 'Visibility', ['Nodes'], 'Visibility', true)}</> : <><p className="re-explanation">{['Bones', 'Helpers'].includes(type) ? 'Bones move geometry. Show or hide the mesh in its geoset visibility track.' : 'This node type has no native visibility track.'}</p><Links title="Geometry controlled by this node" items={nodeGeosets(model, index).map(id => ({ kind: 'Geosets', index: id, label: model.Geosets[id].Name || `Geoset ${id + 1}` }))} select={select}/></>}
       {effects && onOpenParticleEditor && <button onClick={() => onOpenParticleEditor(index)}>Open in EMTR</button>}
     </fieldset>;

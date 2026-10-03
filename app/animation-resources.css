@@ -1,0 +1,18 @@
+.animation-nodes{font:12px/1.4 system-ui,sans-serif;color:var(--ui-text)}
+.animation-nodes .sidebar-section-body{display:flex;flex-direction:column;gap:6px;padding:7px}
+.animation-nodes :is(input,select,button){font:inherit;min-width:0;color:var(--ui-text);border:1px solid var(--ui-border);border-radius:4px}
+.animation-nodes :is(input,select){width:100%;height:28px;background:var(--ui-field);padding:3px 5px}
+.animation-nodes button{height:auto;min-height:27px;background:var(--ui-surface);padding:4px 6px;white-space:normal}
+.an-options{display:flex;gap:4px}.an-options select{flex:1;width:50%}
+.an-list{max-height:130px;overflow:auto;border:1px solid var(--ui-border);border-radius:4px;background:var(--ui-field)}
+.an-list button{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px;width:100%;border:0;border-radius:0;padding:6px 7px;background:transparent}
+.an-list button span{white-space:normal;overflow-wrap:anywhere;line-height:1.35}.an-list button small{font-size:10px;color:var(--ui-muted)}
+.an-list button[aria-selected=true]{background:var(--ui-selected);color:var(--ui-selected-text);box-shadow:inset 3px 0 var(--ui-link)}
+.an-edit{display:flex;flex-direction:column;gap:6px}.an-edit>strong{overflow-wrap:anywhere;font-size:12px}.an-state,.an-scope-buttons,.an-show-hide,.an-links{display:flex;gap:4px;justify-content:space-between}.an-scope-buttons button,.an-show-hide button{flex:1}.an-show-hide button{min-height:32px;font-weight:600}.an-state b{color:var(--ui-link)}
+.animation-nodes p{margin:0}.an-help,.an-scope{font-size:11px;color:var(--ui-muted);line-height:1.4}.an-links{flex-wrap:wrap}.an-links button{font-size:11px}.an-error{color:#c03535}
+.animation-nodes .an-particle-preview{display:flex;gap:5px;align-items:center;font-size:11px}.animation-nodes .an-particle-preview input{width:14px;height:14px;flex-shrink:0}
+.classic-app .classic-geosets.geosets-readable .classic-geoset-list{display:flex;flex-direction:column;gap:2px;max-height:155px;min-height:50px;overflow:auto;background:var(--ui-field)}
+.classic-app .geosets-readable .geoset-row{display:flex;flex:0 0 auto;height:auto;min-height:30px;padding:0;border-radius:3px;font:12px/1.35 system-ui,sans-serif}
+.classic-app .geosets-readable .geoset-hover-target{display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer;padding:5px}
+.classic-app .geosets-readable .geoset-hover-target>span{white-space:normal;overflow-wrap:anywhere;min-width:0}.geosets-readable .geoset-row small{display:block;color:var(--ui-muted);font-size:10px}.geosets-readable .geoset-row input{flex-shrink:0}
+.geosets-readable .geoset-search{width:100%;min-width:0;height:27px;margin:4px 0;font:12px system-ui;border:1px solid var(--ui-border);background:var(--ui-field);color:var(--ui-text);border-radius:4px;padding:4px 6px}

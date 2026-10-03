@@ -64,8 +64,8 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     assert.equal(edited.find(([at]) => at === 100)[1], 0); assert.equal(edited.find(([at]) => at === 1100)[1], 0);
     assert.deepEqual(edited.filter(([at]) => at !== 100 && at !== 1100), ranged.filter(([at]) => at !== 100 && at !== 1100), 'Ctrl selection does not overwrite intermediate keys');
     await page.screenshot({ path: path.join(shots, 'node-manager-xl.png') });
-    await manager.getByLabel('Search nodes').fill('no such object'); assert.equal(await manager.locator('[role="treeitem"]').count(), 0);
-    await manager.getByLabel('Search nodes').fill('XL Sparks'); assert.equal(await manager.locator('[role="treeitem"]').count(), 1);
+    await manager.getByLabel('Search nodes').fill('no such object'); assert.equal(await manager.locator('.re-tree-row').count(), 0);
+    await manager.getByLabel('Search nodes').fill('XL Sparks'); assert.equal(await manager.locator('.re-tree-row').count(), 1);
     await manager.getByLabel('Search nodes').fill('');
     await close(); await menu('vertices');
     await page.getByRole('group', { name: 'Quick display', exact: true }).getByLabel('Nodes', { exact: true }).check();

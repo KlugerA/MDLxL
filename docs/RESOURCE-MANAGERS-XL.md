@@ -5,6 +5,38 @@ and visual visibility editing ahead of format fields. They remain dismissible
 windows. The main editor's sidebars and existing document/serialization boundary
 are retained. Exact native fields remain under **Advanced properties**.
 
+## Edit while watching the animation
+
+Animations now has a compact **Nodes** section directly below **Geosets**. Pick a
+node in that list or in the model viewport, then edit its visibility without
+opening another window. The main viewport keeps the animation pose visible;
+the existing bottom timeline supplies the current key, a dragged range, a whole
+animation, or Ctrl-selected separate keys. **Show** and **Hide** apply to that
+scope. For bones/helpers the controls target their actually bound geosets,
+without inventing a bone visibility channel. Changing geoset selection returns
+the timeline to its geoset/RGB scope.
+
+**Clueless** is the default in the managers and compact node controls. It puts
+plain controls, the current target and the editing scope first. **Classic**
+exposes native properties. Particle nodes have a **Preview particles** switch
+connected to the existing display setting, plus a direct EMTR link. Playback
+previews emission; already emitted particles still finish their lifetime.
+
+Global tracks identify their clock and offer **Use this clock**. They are never
+silently converted to local tracks. Nodes without native visibility or a bound
+mesh explain that limitation.
+
+All resource-manager windows, EMTR and the shared app dialogs can be dragged by
+their title bars. The node list defaults to a flat list with wrapped names;
+optional hierarchy indentation is bounded. The compact geoset picker uses
+searchable rows with mesh names/numbers and texture names instead of four dense
+columns of numbers. The existing sidebar width stays unchanged.
+
+**Preview isolated mesh** draws and frames exactly one geoset. Shared materials
+offer a mesh chooser. Explicit resource isolation survives the clean-preview
+presentation boundary; ordinary clean previews retain their existing behavior.
+The test verifies actual mesh index buffers drawn by WebGL, not only input props.
+
 ## Community evidence
 
 Research read on 3 October 2026. These are firsthand tutorials and discussions,
@@ -68,5 +100,19 @@ The 56-test compatibility suite passes. The pre-existing animation text-parser
 test expects negative times to throw, contrary to the current signed-time API;
 neither that parser nor its test is changed by this work.
 
+The revision's 38 focused visibility/preview tests pass. The broader existing
+keyframe suite has three additional issues reproduced on the unchanged base
+`1273cf38`: the Popcorn family round-trip test hangs, the Popcorn rotation fixture
+fails save verification for emission rate/speed, and the Popcorn RGB text test
+expects rounded decimals rather than the emitted Float32 values. These codec/test
+issues are outside this manager revision; the full source suite is not green.
+
 Warcraft runtime acceptance and user acceptance are separate from these checks.
 This work does not publish a release, merge the PR or replace an offline install.
+
+The second workflow check covers the compact Animations controls, actual viewport
+node picking, global-clock handoff, dragged time ranges, Ctrl-selected keys,
+manager/EMTR dragging, and actual isolated mesh draws. It also runs on the supplied
+BattleStandardSkeleton and graveguard models, checks readable names and hierarchy,
+and verifies both original files remain byte-identical. Generated changes are
+only in disposable sessions; acceptance still belongs to the user.
