@@ -1,5 +1,6 @@
 import { blendPaintPixel, rgbaColor } from './paint-raster.js';
 import { preparePaintSurface, paintSurfaceTile } from './paint-projection.js';
+import { borrowPaintPixel } from './paint-borrow.js';
 
 export function paintDecalTransform(source,brush,dragging=false) {
   const longest=Math.max(1,source.width,source.height),size=Math.max(1,Number(brush.size)||longest),zoom=Math.max(.01,Math.min(64,Number(brush.zoom)||1)),scale=size/longest*zoom;
@@ -26,20 +27,25 @@ export function pastePaintDecal(target,source,center,transform,mask=null) {
 }
 export function projectPaintDecal(target,projection,source,center,transform,flagsOrOptions=0) {
   const options=typeof flagsOrOptions==='object'?flagsOrOptions:{flags:flagsOrOptions},flags=Number(options.flags)||0,mask=options.mask,tint=rgbaColor(options.filterColor||'#ffffff');
-  const {bins,tileSize,columns}=preparePaintSurface(projection,target,flags),sample=decalSampler(source,center,transform),color=[0,0,0,0],radius=Math.hypot(transform.width,transform.height)/2;let changed=0;
+  const surface=preparePaintSurface(projection,target,flags),{tileSize,columns}=surface,sample=decalSampler(source,center,transform),color=[0,0,0,0],radius=Math.hypot(transform.width,transform.height)/2;let changed=0;
   // Mirrored faces and seam filter samples may address one texture pixel many
   // times. A placed cutout is one operation, so blend that pixel only once.
   const selected=new Map();
   for(let ty=Math.max(0,Math.floor((center.y-radius)/tileSize));ty<=Math.min(Math.ceil(projection.height/tileSize)-1,Math.floor((center.y+radius)/tileSize));ty++)for(let tx=Math.max(0,Math.floor((center.x-radius)/tileSize));tx<=Math.min(columns-1,Math.floor((center.x+radius)/tileSize));tx++){
     const points=paintSurfaceTile(projection,target,flags,tx,ty);if(!points)continue;
+    const ranks=surface.sampleRanks?.get(ty*columns+tx);
     for(let i=0;i<points.length;i+=3){
-      const offset=sample(points[i],points[i+1]);if(offset<0||!source.data[offset+3])continue;
-      const pixel=points[i+2];if(mask&&!mask[pixel])continue;const distance=(points[i]-center.x)**2+(points[i+1]-center.y)**2,previous=selected.get(pixel);
-      if(!previous||source.data[offset+3]>source.data[previous.offset+3]||source.data[offset+3]===source.data[previous.offset+3]&&distance<previous.distance)selected.set(pixel,{offset,distance});
+      const offset=sample(points[i],points[i+1]);if(offset<0)continue;
+      const pixel=points[i+2];if(mask&&!mask[pixel])continue;const distance=(points[i]-center.x)**2+(points[i+1]-center.y)**2,rank=ranks?.[i/3]??2,previous=selected.get(pixel);
+      // Texel-center projections define the image. Filter footprints are only
+      // a fallback for edges, magnified cells and collapsed mappings. Letting
+      // those footprints win pulls the source toward the center of the stamp.
+      if(!previous||rank>previous.rank||rank===previous.rank&&distance<previous.distance)selected.set(pixel,{offset,distance,rank});
     }
   }
   for(const [pixel,{offset}] of selected){
     for(let c=0;c<3;c++)color[c]=Math.round(source.data[offset+c]*tint[c]/255);color[3]=source.data[offset+3];
+    if(options.borrowMode&&options.borrowMode!=='image'&&options.reference)borrowPaintPixel(source,offset,options.reference,pixel,options.borrowMode,color);
     if(blendPaintPixel(target.data,pixel*4,color,(transform.opacity??1)*(mask?mask[pixel]/255:1),options.mode==='erase'?'erase':'paint')){
       changed++;if(options.dirtyRows){const x=pixel%target.width,row=Math.floor(pixel/target.width)*2;options.dirtyRows[row]=Math.min(options.dirtyRows[row],x);options.dirtyRows[row+1]=Math.max(options.dirtyRows[row+1],x);}
     }

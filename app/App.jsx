@@ -183,7 +183,9 @@ export default function App() {
   useEffect(() => { setControlModelGroup('all'); setControlModelIds([]); }, [session.id]);
   const [portraitSnapRevision, setPortraitSnapRevision] = useState(0);
   const receiveCameraAngles = useCallback(value => setCameraAngles(previous => ['x','y','z'].some(axis=>Math.abs(previous[axis]-value[axis])>.001)?value:previous), []);
-  const [grabThrough, setGrabThrough] = useState(false);
+  const [grabThroughByEditor, setGrabThroughByEditor] = useState({vertices:true,bones:false});
+  const grabThrough = grabThroughByEditor[mode] ?? false;
+  const setGrabThrough = value => setGrabThroughByEditor(previous => ({...previous,[mode]:value}));
   const cameraProps = {onCameraAnglesChange:receiveCameraAngles,cameraAnglesRequest,onCameraGestureChange:setCameraGesture,onSensitivityIndicator:setAdjustingInput,grabThrough};
   useEffect(()=>setCameraGesture(false),[mode,session.id]);
   const [tool, setTool] = useState('select'), [teamColor, setTeamColor] = useState('#ff0303'), [renderMode, setRenderMode] = useState('wireframe');
@@ -509,7 +511,7 @@ export default function App() {
   };
   const chooseSets = next => { if (mode === 'animation' && animationPanel === 'animations') setSelectedNodeIds([]); setSelectable(next); setSelection(previous => filterVertexSelection(previous, next, doc.model)); setActiveGeoset(previous => next.has(previous) ? previous : next.size ? next.values().next().value : -1); };
   const chooseSet = (index, event, checked) => { const shift = !!(event.shiftKey || event.nativeEvent?.shiftKey), ctrl = !!(event.ctrlKey || event.metaKey || event.nativeEvent?.ctrlKey); const next = chooseGeosets(selectable, index, { shift, ctrl, checked, anchor: rangeAnchor.current, count: model.Geosets.length }); chooseSets(next); if (next.has(index)) setActiveGeoset(index); setUvSet(0); if (!shift) rangeAnchor.current = index; };
-  const selectAll = () => { if(mode==='uv')return uvAction('select-all'); if (mode === 'animation' || mode === 'bones') { setSelectedNodeIds(model.Nodes.filter(Boolean).map(node => node.ObjectId)); return; } const next = {}; for (const gi of selectable) { const invisible = new Set(hidden[gi] || []); next[gi] = Array.from({ length: model.Geosets[gi]?.Vertices.length / 3 || 0 }, (_, i) => i).filter(i => !invisible.has(i)); } setSelection(next); };
+  const selectAll = () => { if(mode==='paint')return window.dispatchEvent(new CustomEvent('mdlxl-paint-command',{detail:'all'})); if(mode==='uv')return uvAction('select-all'); if (mode === 'animation' || mode === 'bones') { setSelectedNodeIds(model.Nodes.filter(Boolean).map(node => node.ObjectId)); return; } const next = {}; for (const gi of selectable) { const invisible = new Set(hidden[gi] || []); next[gi] = Array.from({ length: model.Geosets[gi]?.Vertices.length / 3 || 0 }, (_, i) => i).filter(i => !invisible.has(i)); } setSelection(next); };
   const frame = selectionOnly => window.dispatchEvent(new CustomEvent('mdlvis-frame', { detail: { selection: !!selectionOnly } }));
   const isPreviewMode = cleanAnimationPreview || mode==='uv';
   const effectiveRenderMode = mode === 'uv' ? 'textured' : isPreviewMode ? (previewRenderModes[mode] || 'textured') : cleanView ? 'textured' : renderMode;
@@ -627,7 +629,7 @@ export default function App() {
     try {
       const bytes=await readInputBytes(record);
       if(/\.mdlxlpaint$/i.test(record.name)){
-        const restored=await restorePaintProject(bytes,(png)=>decodePaintImage(png,'layer.png'));
+        const restored=await restorePaintProject(bytes);
         if(!restored.modelBytes)throw new Error('The paint project does not contain its working model.');
         const opened=openDocument(restored.originalModelBytes||restored.modelBytes,restored.modelName||record.name.replace(/\.mdlxlpaint$/i,'.mdl'));
         if(!opened.model||opened.version==null)throw new Error('The paint project contains no readable model. The current model was kept.');
@@ -871,6 +873,7 @@ export default function App() {
     } else if (Object.keys(updated).length) { setSelection(updated); setSelectable(previous => new Set([...previous, ...Object.keys(updated).map(Number)])); setActiveGeoset(Number(Object.keys(updated)[0])); } if (name === 'Extrude') setWorkTool('translate'); }
   }
   function copy() {
+    if(mode==='paint')return window.dispatchEvent(new CustomEvent('mdlxl-paint-command',{detail:'copy'}));
     if (mode === 'animation') return timelineCommands.current.copy?.();
     if (selectedNodeIds.length) {
       const captured = captureNodeSelection(model, selectedNodeIds);
@@ -884,6 +887,7 @@ export default function App() {
     say(`Copied ${captured.vertexCount} vertices and ${captured.triangleCount} triangles.`); refresh();
   }
   function paste(parent, special = false) {
+    if(mode==='paint')return window.dispatchEvent(new CustomEvent('mdlxl-paint-command',{detail:'paste'}));
     if (mode === 'animation') return timelineCommands.current.paste?.();
     if (!clipboard.current || doc.readOnly) return;
     const source = clipboard.current;
@@ -961,7 +965,7 @@ export default function App() {
     setSelectable(new Set(result.geosetIndices));setSelection(Object.fromEntries(result.geosetIndices.map(i=>[i,Array.from({length:doc.model.Geosets[i].Vertices.length/3},(_,v)=>v)])));setActiveGeoset(result.geosetIndices[0]);setSelectedNodeIds([result.boneId]);selectMode('vertices');setRenderMode('textured');setDialog(null);requestAnimationFrame(()=>frame(false));
     say('Part imported and attached to DummyBone.');return result;
   }
-  commands.current = { 'paint:select':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'select'})), 'paint:draw':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'draw'})), open, recent:showRecent, openRecent, clearRecent, save: () => mode==='paint'?savePaintProject():save(), saveAs: () => mode==='paint'?savePaintProject():setDialog({type:'saveFormat'}), new: () => install(newSession(createStarterDocument(preferences.newModelVersion))), recovery: listRecovery, gameData, undo: () => undo(false), redo: () => undo(true), copy, paste: () => paste(), pasteSpecial: () => { if (clipboard.current?.kind !== 'nodes') { setAnchor(''); setDialog({ type: 'pasteSpecial' }); } }, selectAll, clear: () => { if (normalsXL) { setNormalsXL(null); return; } if (mode === 'bones' && attachSourceIds.length) { setAttachSourceIds([]); return; } if (mode === 'vertices' && !window.dispatchEvent(new Event('mdlxl-cancel-gesture', { cancelable: true }))) return; if(mode==='uv')return uvAction('select-none');setSelectedNodeIds([]); setSelection({}); }, history: showHistory, grid: () => setShowGrid(v => !v), frame: toggleTextured, frameSelection: () => setViewRenderMode('solid'), fit: () => frame(false), fitSelection: () => frame(true), vertices: () => selectMode('vertices'), bones: () => {setMovementMode('select');selectMode('bones');}, uv: () => selectMode('uv'), paint: () => {setRenderMode('textured');setView('perspective');selectMode('paint');}, animation: () => selectAnimationPanel('movement'), animations: () => selectAnimationPanel('animations'), textureLibrary: () => openLibrary(), help: () => setDialog({ type: 'help' }), diagnostics: () => setDialog({ type: 'diagnostics' }), about: () => setDialog({ type: 'about' }), ...Object.fromEntries(resources.map(kind => [kind, () => setDialog({ type: 'resource', kind })])), ...Object.fromEntries(views.map(name => [name, () => setView(name)])) };
+  commands.current = { 'paint:select':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'select'})), 'paint:draw':()=>window.dispatchEvent(new CustomEvent('mdlxl-paint-tool',{detail:'draw'})), open, recent:showRecent, openRecent, clearRecent, save: () => mode==='paint'?savePaintProject():save(), saveAs: () => mode==='paint'?savePaintProject():setDialog({type:'saveFormat'}), new: () => install(newSession(createStarterDocument(preferences.newModelVersion))), recovery: listRecovery, gameData, undo: () => undo(false), redo: () => undo(true), copy, paste: () => paste(), pasteSpecial: () => { if (clipboard.current?.kind !== 'nodes') { setAnchor(''); setDialog({ type: 'pasteSpecial' }); } }, selectAll, clear: () => { if(mode==='paint')return window.dispatchEvent(new CustomEvent('mdlxl-paint-command',{detail:'clear'})); if (normalsXL) { setNormalsXL(null); return; } if (mode === 'bones' && attachSourceIds.length) { setAttachSourceIds([]); return; } if (mode === 'vertices' && !window.dispatchEvent(new Event('mdlxl-cancel-gesture', { cancelable: true }))) return; if(mode==='uv')return uvAction('select-none');setSelectedNodeIds([]); setSelection({}); }, history: showHistory, grid: () => setShowGrid(v => !v), frame: toggleTextured, frameSelection: () => setViewRenderMode('solid'), fit: () => frame(false), fitSelection: () => frame(true), vertices: () => selectMode('vertices'), bones: () => {setMovementMode('select');selectMode('bones');}, uv: () => selectMode('uv'), paint: () => {setRenderMode('textured');setView('perspective');selectMode('paint');}, animation: () => selectAnimationPanel('movement'), animations: () => selectAnimationPanel('animations'), textureLibrary: () => openLibrary(), help: () => setDialog({ type: 'help' }), diagnostics: () => setDialog({ type: 'diagnostics' }), about: () => setDialog({ type: 'about' }), ...Object.fromEntries(resources.map(kind => [kind, () => setDialog({ type: 'resource', kind })])), ...Object.fromEntries(views.map(name => [name, () => setView(name)])) };
   Object.assign(commands.current, {
     forge:()=>setDialog({type:'forge'}), optimizeModel:()=>openOptimizeXL(), bitsAndParts:()=>setDialog({type:'bitsAndParts'}), particles:()=>openParticles(),
     ...Object.fromEntries(SHAPE_TOOLS.map(tool=>['shape:'+tool.toLowerCase(),()=>setDialog({type:'shape',tool})])),
@@ -1029,7 +1033,7 @@ export default function App() {
     if(id.startsWith('keyframe:'))return ['animation','uv'].includes(mode)&&!doc.readOnly&&!saving;
     if(id==='paste'&&mode==='animation')return !doc.readOnly&&!saving;
     if (id==='pasteSpecial') return clipboard.current?.kind !== 'nodes' && !doc.readOnly && mode!=='animation';
-    if (id==='paste') return !!clipboard.current && !doc.readOnly && mode!=='animation';
+    if (id==='paste') return (mode==='paint'?!!session.paintProject:!!clipboard.current) && !doc.readOnly && mode!=='animation';
     if (id==='copy') return mode==='animation'||selectedNodeIds.length>0||selectable.size>0;
     if (id==='hide') return selectionCount>0;
     if (id==='show') return hiddenCount>0;

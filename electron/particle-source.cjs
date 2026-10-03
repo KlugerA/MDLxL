@@ -25,7 +25,7 @@ async function resolveParticleSourceAssets(payload,{discover,casc}){
 }
 /** Resolve an explicit, read-only context view from a recorded recipe identity. */
 async function resolveParticleSourceContext(source,{discover,casc}){
- const {safeParticlePath}=await import('../src/particle-data.js'),{openDocument}=await import('../src/editor-document.js'),{particleDependencyCandidates}=await import('./particle-library-worker.mjs');
+ const {safeParticlePath}=await import('../src/particle-data.js'),{openDocument}=await import('../dist/particle-runtime.mjs'),{particleDependencyCandidates}=await import('./particle-library-worker.mjs');
  if(!source||!safeParticlePath(source.physicalPath)||!/^war3[.]w3mod:/i.test(source.physicalPath)||!/^[a-f0-9]{64}$/.test(source.contentHash||'')||!/^[a-f0-9]{64}$/.test(source.buildKey||''))throw Error('This preset has no indexed source-model context.');
  const state=await particleSourceState(discover,source.buildKey);if(state.state!=='ready')throw Error(state.message);
  const bytes=await casc.readSnapshot(source.physicalPath,state.folder,state.sourceKey);if(!bytes)throw Error('The source model is unavailable. Index Warcraft assets again.');if(bytes.byteLength>128*1024*1024)throw Error('Source model exceeds the context preview budget.');if(hash(bytes)!==source.contentHash)throw Error('The source model no longer matches its indexed identity. Index Warcraft assets again.');

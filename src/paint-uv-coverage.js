@@ -5,7 +5,7 @@ export function paintUVTriangles(model,bindings){
   for(const binding of bindings||[]){
     const key=binding.geosetIndex+':'+binding.coordId;if(seen.has(key))continue;seen.add(key);
     const geo=model.Geosets?.[binding.geosetIndex],uv=geo?.TVertices?.[binding.coordId]||geo?.TVertices?.[0];if(!uv)continue;
-    for(let i=0;i<geo.Faces.length;i+=3)triangles.push([0,1,2].map(j=>({x:uv[geo.Faces[i+j]*2],y:uv[geo.Faces[i+j]*2+1]})));
+    for(let i=0;i<geo.Faces.length;i+=3)if(!binding.faceIndices||binding.faceIndices.has(geo.paintFaceIndices?.[i/3]??i/3))triangles.push([0,1,2].map(j=>({x:uv[geo.Faces[i+j]*2],y:uv[geo.Faces[i+j]*2+1]})));
   }
   return triangles;
 }
@@ -20,8 +20,20 @@ export function forEachPaintUVTexel(uv,width,height,flags,visit,padding=0){
   const denominator=(b.y-c.y)*(a.x-c.x)+(c.x-b.x)*(a.y-c.y);if(Math.abs(denominator)<1e-9)return;
   const minX=Math.max(flags&1?-width*4:0,Math.floor(minU-padding)),maxX=Math.min(flags&1?width*4:width-1,Math.ceil(maxU+padding));
   const minY=Math.max(flags&2?-height*4:0,Math.floor(minV-padding)),maxY=Math.min(flags&2?height*4:height-1,Math.ceil(maxV+padding));
-  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
-    const px=x+.5,py=y+.5;let u=((b.y-c.y)*(px-c.x)+(c.x-b.x)*(py-c.y))/denominator,v=((c.y-a.y)*(px-c.x)+(a.x-c.x)*(py-c.y))/denominator,w=1-u-v;
+  // A row intersects only a thin slice of a triangle's bounding rectangle.
+  // Keep a conservative padded band; the original barycentric/distance test
+  // below remains authoritative, including its tolerance at island borders.
+  const band=padding+1e-5*(maxU-minU+maxV-minV+1);
+  for(let y=minY;y<=maxY;y++){
+    const py=y+.5;let rowMin=Infinity,rowMax=-Infinity;
+    for(let side=0;side<3;side++){
+      const from=points[side],to=points[(side+1)%3],dy=to.y-from.y,dx=to.x-from.x;let first=0,last=1;
+      if(Math.abs(dy)<1e-12){if(Math.abs(from.y-py)>band)continue;}
+      else{const lo=(py-band-from.y)/dy,hi=(py+band-from.y)/dy;first=Math.max(0,Math.min(lo,hi));last=Math.min(1,Math.max(lo,hi));if(first>last)continue;}
+      const left=from.x+dx*first,right=from.x+dx*last;rowMin=Math.min(rowMin,left,right);rowMax=Math.max(rowMax,left,right);
+    }
+    for(let x=Math.max(minX,Math.floor(rowMin-padding-1));x<=Math.min(maxX,Math.ceil(rowMax+padding+1));x++){
+    const px=x+.5;let u=((b.y-c.y)*(px-c.x)+(c.x-b.x)*(py-c.y))/denominator,v=((c.y-a.y)*(px-c.x)+(a.x-c.x)*(py-c.y))/denominator,w=1-u-v;
     const gutter=u< -1e-5||v< -1e-5||w< -1e-5;
     if(gutter){
       if(!padding)continue;let best=Infinity,side=0,tBest=0;
@@ -30,6 +42,7 @@ export function forEachPaintUVTexel(uv,width,height,flags,visit,padding=0){
       u=side===0?1-tBest:side===2?tBest:0;v=side===0?tBest:side===1?1-tBest:0;w=1-u-v;
     }
     visit(mod(x,width),mod(y,height),u,v,w,gutter);
+    }
   }
 }
 
@@ -57,7 +70,15 @@ export function forEachPaintUVEdgeTexel(a,b,width,height,flags,visit){
   const margin=1;
   const minX=Math.max(flags&1?-width*4:0,Math.floor(Math.min(ax,bx)-margin)),maxX=Math.min(flags&1?width*4:width-1,Math.ceil(Math.max(ax,bx)+margin));
   const minY=Math.max(flags&2?-height*4:0,Math.floor(Math.min(ay,by)-margin)),maxY=Math.min(flags&2?height*4:height-1,Math.ceil(Math.max(ay,by)+margin));
-  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+  for(let y=minY;y<=maxY;y++){
+    // Clip the segment to this row's bilinear footprint first. A diagonal
+    // edge touches a thin strip, not every pixel in its bounding rectangle.
+    let rowFrom=0,rowTo=1;
+    if(Math.abs(dy)<1e-12){if(Math.abs(ay-y-.5)>1)continue;}
+    else{const first=(y-.5-ay)/dy,last=(y+1.5-ay)/dy;rowFrom=Math.max(0,Math.min(first,last));rowTo=Math.min(1,Math.max(first,last));if(rowFrom>rowTo)continue;}
+    const firstX=ax+dx*rowFrom,lastX=ax+dx*rowTo;
+    const left=Math.max(minX,Math.floor(Math.min(firstX,lastX)-margin)),right=Math.min(maxX,Math.ceil(Math.max(firstX,lastX)+margin));
+    for(let x=left;x<=right;x++){
     // Bilinear sampling uses this texel while the UV point lies inside the
     // one-texel square around its centre. Keep that interval along the edge,
     // not just a point: at high zoom the interval can be wider than the brush.
@@ -68,5 +89,6 @@ export function forEachPaintUVEdgeTexel(a,b,width,height,flags,visit){
       from=Math.max(from,Math.min(first,last));to=Math.min(to,Math.max(first,last));
     }
     if(from<=to)visit(mod(x,width),mod(y,height),from,to);
+    }
   }
 }

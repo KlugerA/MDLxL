@@ -1,3 +1,4 @@
+import {paintRussian,paintSpanish,paintChinese} from './locales/paint-ui-locales.js';
 import showcase from './locales/showcase.json' with { type: 'json' };
 const showcaseLocale = index => Object.fromEntries(Object.entries(showcase).map(([key, values]) => [key, values[index]]));
 import core from './locales/ru-core.json' with { type: 'json' };
@@ -15,7 +16,7 @@ import { chinese, mordor, spanish } from './locales/short-ui-locales.js';
 import { broadChinese, broadMordor, broadSpanish } from './locales/broad-ui-locales.js';
 import { release015Chinese, release015Russian, release015Spanish } from './locales/v015-ui-locales.js';
 
-export const russian = Object.freeze({ ...showcaseLocale(0), ...core, ...editor, ...engine, ...additions, ...forge, ...descriptors, ...materials, ...previewCache, ...optimizer, ...reviewedRussian, ...release015Russian });
+export const russian = Object.freeze({ ...paintRussian, ...showcaseLocale(0), ...core, ...editor, ...engine, ...additions, ...forge, ...descriptors, ...materials, ...previewCache, ...optimizer, ...reviewedRussian, ...release015Russian });
 export const LANGUAGES = Object.freeze([
   Object.freeze({ id: 'en', label: 'English', nativeLabel: 'English' }),
   Object.freeze({ id: 'ru', label: 'Russian', nativeLabel: 'Русский' }),
@@ -43,8 +44,8 @@ const mordorKeys = Object.freeze({ ...russian, ...reviewedSpanish, ...mordor, ..
 const blackSpeech = Object.freeze({ ...Object.fromEntries(Object.keys(mordorKeys).map(key => [key, blackSpeechCipher(key)])), 'Image/Video': blackSpeechCipher('Image') + '/' + blackSpeechCipher('Video') });
 const dictionaries = Object.freeze({
   ru: russian,
-  es: Object.freeze({ ...showcaseLocale(1), ...spanish, ...broadSpanish, ...reviewedSpanish, ...release015Spanish }),
-  zh: Object.freeze({ ...showcaseLocale(2), ...chinese, ...broadChinese, ...release015Chinese }),
+  es: Object.freeze({ ...paintSpanish, ...showcaseLocale(1), ...spanish, ...broadSpanish, ...reviewedSpanish, ...release015Spanish }),
+  zh: Object.freeze({ ...paintChinese, ...showcaseLocale(2), ...chinese, ...broadChinese, ...release015Chinese }),
   mordor: blackSpeech,
 });
 let language = 'en';

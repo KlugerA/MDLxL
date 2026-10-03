@@ -1,5 +1,7 @@
 import {addPaintProjectTarget} from './paint-project.js';
 import {enumeratePaintTargets} from './paint-targets.js';
+import {isPaintRaster} from './paint-types.js';
+import {enableCurrentPaintMaterials,validateCurrentPaintMaterials,applyCurrentPaintMaterials,assignCurrentPaintMaterial} from './paint-current-materials.js';
 
 /** Each managed geoset has one material and one editable paint image. Warcraft
  * team colour remains an engine underlay, not another user paint texture. Image
@@ -53,6 +55,7 @@ export function paintableGeosets(model,{requireUV=true}={}){
  * inherited the skin's transparent overlay. Repair assignments, never pixels.
  * Classification always uses the original materials, before Citadel remaps them. */
 export function repairPaintMaterials(project,sourceModel,validationModel=sourceModel){
+  if(project?.preserveMaterials)return false;
   if(!project?.materialMode||project.paintMaterialsVersion===3)return false;
   const eligible=new Set(paintableGeosets(sourceModel,{requireUV:!project.paintAtlasVersion}));
   const staged={...project,targets:project.targets.map(target=>({...target,bindings:target.bindings.filter(b=>eligible.has(b.geosetIndex)),materialVariants:[]}))};
@@ -74,6 +77,7 @@ export function repairPaintMaterials(project,sourceModel,validationModel=sourceM
   project.paintMaterialsVersion=3;touch(project);return true;
 }
 export function validatePaintAssignments(project,model){
+  if(project.preserveMaterials)return validateCurrentPaintMaterials(project,model);
   const assigned=new Set(),ids=new Set(),textures=new Set(),materials=new Set();
   for(const target of project.targets){
     if(ids.has(target.id)||textures.has(target.textureId))throw Error('The preset has duplicate texture or material identities.');
@@ -102,6 +106,7 @@ export function validatePaintAssignments(project,model){
 function touch(project){project.materialRevision=(project.materialRevision||0)+1;project.revision++;project.dirty=true;}
 export function assignPaintMaterial(project,model,targetId,indices,sourceModel=model){
   const target=project.targets.find(t=>t.id===targetId);if(!target)throw Error('Choose a texture first.');
+  if(project.preserveMaterials)return assignCurrentPaintMaterial(project,target,[...new Set(indices)]);
   const selected=[...new Set(indices)],sources=new Map();
   for(const index of selected){
     const geo=model.Geosets[index],sourceCoordId=target.generatedUV?project.generatedUVSets?.[index]:(layerFor(sourceFor(model,sourceModel,index),index).CoordId||0);
@@ -119,7 +124,7 @@ export function assignPaintMaterial(project,model,targetId,indices,sourceModel=m
   project.activeTargetId=target.id;touch(project);return target;
 }
 export function createPaintMaterial(project,model,{name='Texture',raster,geosets=[],nativeSource=false,sourcePath='',sourceLayer=null,sourceModel=model,basecoat=project.sourceMode==='primer',generatedUV=false}={}){
-  if(!raster||raster.width!==project.resolution||raster.height!==project.resolution||raster.data?.length!==project.resolution**2*4)throw Error('The imported texture could not be prepared.');
+  if(!isPaintRaster(raster))throw Error('The imported texture could not be prepared.');
   const textureId=nextIndex(project,model,'textureId','Textures'),materialId=nextIndex(project,model,'materialId','Materials');
   const context=sourceFor(model,sourceModel,geosets[0]),paintName=uniquePaintTextureName(project,name),layer=sourceLayer||layerFor(context,geosets[0]);
   const descriptor={id:'paint:'+crypto.randomUUID(),textureId,materialId,paintName,label:paintName,texturePath:nativeSource?sourcePath:'Textures\\'+paintName+'.blp',nativeSource,sourcePath,citadelCopy:false,basecoat:!!basecoat,generatedUV:!!generatedUV,preserveSourceAlpha:false,flags:generatedUV?0:Number(context.Textures?.[layer.TextureID]?.Flags)||0,bindings:[],geosetIndices:[],materialIds:[materialId],materialVariants:[],sharedUV:false,
@@ -141,6 +146,7 @@ export function markPaintMaterialEdited(project,target){
  * remain in the original model, but the paint working copy uses one per geoset. */
 export function enablePaintMaterials(project,model){
   if(project.materialMode){validatePaintAssignments(project,model);return false;}
+  if(project.preserveMaterials)return enableCurrentPaintMaterials(project,model);
   const used=new Set(),catalog=enumeratePaintTargets(model),baseTexture=model.Textures?.length||0,baseMaterial=model.Materials?.length||0;
   // A texture may be an overlay on one geoset and the base on another.
   // Choose each geoset's first image layer, independent of target list order.
@@ -160,6 +166,7 @@ export function enablePaintMaterials(project,model){
 
 export function applyPaintMaterials(model,project){
   if(!project?.materialMode)return model;
+  if(project.preserveMaterials)return applyCurrentPaintMaterials(model,project);
   const Textures=[...(model.Textures||[])],Materials=[...(model.Materials||[])],Geosets=[...model.Geosets];
   for(const target of project.targets){
     Textures[target.textureId]={Image:target.texturePath,ReplaceableId:0,Flags:target.flags||0};for(const entry of materialEntries(target))Materials[entry.materialId]=entry.material;

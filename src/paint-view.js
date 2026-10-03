@@ -23,7 +23,7 @@ export function paintHalfModel(model, half) {
   // The caller chooses an explicit plane; Warcraft unit origins default to 0.
   const center = Number.isFinite(half.position) ? half.position : 0;
   const Geosets = model.Geosets.map(geo => {
-    const positions = [], normals = [], faces = [], uvs = (geo.TVertices || []).map(() => []);
+    const positions = [], normals = [], faces = [], paintFaceIndices=[], uvs = (geo.TVertices || []).map(() => []);
     const vertex = id => [...geo.Vertices.slice(id * 3, id * 3 + 3), ...(geo.Normals?.length === geo.Vertices.length ? geo.Normals.slice(id * 3, id * 3 + 3) : [0, 0, 1]), ...uvs.flatMap((_, set) => [geo.TVertices[set][id * 2], geo.TVertices[set][id * 2 + 1]])];
     for (let offset = 0; offset < geo.Faces.length; offset += 3) {
       const polygon = [vertex(geo.Faces[offset]), vertex(geo.Faces[offset + 1]), vertex(geo.Faces[offset + 2])], clipped = [];
@@ -33,11 +33,12 @@ export function paintHalfModel(model, half) {
         if ((da >= 0) !== (db >= 0)) { const t = da / (da - db); clipped.push(a.map((value, channel) => value + (b[channel] - value) * t)); }
       }
       for (let i = 1; i + 1 < clipped.length; i++) for (const v of [clipped[0], clipped[i], clipped[i + 1]]) {
+        if(faces.length%3===0)paintFaceIndices.push(offset/3);
         faces.push(positions.length / 3); positions.push(...v.slice(0, 3)); normals.push(...v.slice(3, 6));
         uvs.forEach((values, set) => values.push(v[6 + set * 2], v[7 + set * 2]));
       }
     }
-    return { ...geo, Vertices: new Float32Array(positions), Normals: new Float32Array(normals), Faces: new Uint32Array(faces), TVertices: uvs.map(values => new Float32Array(values)) };
+    return { ...geo,paintFaceIndices, Vertices: new Float32Array(positions), Normals: new Float32Array(normals), Faces: new Uint32Array(faces), TVertices: uvs.map(values => new Float32Array(values)) };
   });
   return { ...model, Geosets };
 }
@@ -52,6 +53,7 @@ export function paintPartCenter(model, index, axis = 'y') {
 
 /** UV edits belong to the portable paint preset, never the source document. */
 export function paintProjectModel(model, project, originalModel = null) {
+  if(project?.geometryEdits&&Object.keys(project.geometryEdits).length)model={...model,Geosets:model.Geosets.map((g,i)=>project.geometryEdits[i]||g)};
   if(originalModel&&project?.excludedGeosets?.length){
     const excluded=new Set(project.excludedGeosets);
     model={...model,Geosets:model.Geosets.map((g,i)=>excluded.has(i)&&originalModel.Geosets[i]?{...g,MaterialID:originalModel.Geosets[i].MaterialID}:g)};
@@ -107,8 +109,8 @@ export function paintGeosetTarget(target, geosetIndex) {
   return { ...target, coverageBindings: target.coverageBindings||target.bindings, bindings: target.bindings.filter(binding => binding.geosetIndex === geosetIndex), geosetIndices: [geosetIndex] };
 }
 
-export function paintGeosetMask(model,target,size){
-  const triangles=paintUVTriangles(model,target.bindings),coverage=paintUVCoverage(paintUVTriangles(model,target.coverageBindings||target.bindings),size,size,target.flags),mask=paintUVFilterCoverage(triangles,size,size,target.flags);
-  for(const uv of triangles)forEachPaintUVTexel(uv,size,size,target.flags,(x,y,u,v,w,gutter)=>{const pixel=y*size+x;if(!gutter||!coverage[pixel])mask[pixel]=255;},Math.SQRT2);
+export function paintGeosetMask(model,target,size,height=size){
+  const triangles=paintUVTriangles(model,target.bindings),coverage=paintUVCoverage(paintUVTriangles(model,target.coverageBindings||target.bindings),size,height,target.flags),mask=paintUVFilterCoverage(triangles,size,height,target.flags);
+  for(const uv of triangles)forEachPaintUVTexel(uv,size,height,target.flags,(x,y,u,v,w,gutter)=>{const pixel=y*size+x;if(!gutter||!coverage[pixel])mask[pixel]=255;},Math.SQRT2);
   return mask;
 }

@@ -1,10 +1,11 @@
 import {Vector3,Vector4} from 'three';
 
 export function createPaintLightUniforms() {
-  return {uCitadelCount:{value:0},uCitadelFlat:{value:1},uCitadelPositions:{value:Array.from({length:8},()=>new Vector4())},uCitadelDirections:{value:Array.from({length:8},()=>new Vector3())},uCitadelColors:{value:Array.from({length:8},()=>new Vector3())},uCitadelAmbient:{value:Array.from({length:8},()=>new Vector3())},uCitadelRanges:{value:Array.from({length:8},()=>new Vector3())}};
+  return {uCitadelSculpt:{value:0},uCitadelCount:{value:0},uCitadelFlat:{value:1},uCitadelPositions:{value:Array.from({length:8},()=>new Vector4())},uCitadelDirections:{value:Array.from({length:8},()=>new Vector3())},uCitadelColors:{value:Array.from({length:8},()=>new Vector3())},uCitadelAmbient:{value:Array.from({length:8},()=>new Vector3())},uCitadelRanges:{value:Array.from({length:8},()=>new Vector3())}};
 }
 export function updatePaintLights(uniforms,settings) {
   const lights=settings?.lights||[];uniforms.uCitadelCount.value=Math.min(8,lights.length);uniforms.uCitadelFlat.value=settings?.flat===false?0:1;
+  uniforms.uCitadelSculpt.value=settings?.sculpt?1:0;
   for(let i=0;i<Math.min(8,lights.length);i++){const light=lights[i];uniforms.uCitadelPositions.value[i].set(...light.position,light.type);uniforms.uCitadelDirections.value[i].fromArray(light.direction);uniforms.uCitadelColors.value[i].fromArray(light.color);uniforms.uCitadelAmbient.value[i].fromArray(light.ambient);uniforms.uCitadelRanges.value[i].set(light.start,light.end,0);}
 }
 /** Classic vertex lighting: diffuse + ambient, clamped before texture modulation.
@@ -15,12 +16,15 @@ export function updatePaintLights(uniforms,settings) {
 export function applyPaintLightShader(shader,uniforms,unshaded) {
   Object.assign(shader.uniforms,uniforms);
   shader.vertexShader=`varying vec3 vCitadelLight;
+varying vec3 vCitadelViewNormal,vCitadelViewPosition;
 uniform int uCitadelCount;
 uniform float uCitadelFlat;
 uniform vec4 uCitadelPositions[8];
 uniform vec3 uCitadelDirections[8],uCitadelColors[8],uCitadelAmbient[8],uCitadelRanges[8];
 `+shader.vertexShader;
   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+vCitadelViewNormal=normalMatrix*normal;
+vCitadelViewPosition=(modelViewMatrix*vec4(position,1.0)).xyz;
 vCitadelLight=vec3(${unshaded?'1.0':'uCitadelFlat'});
 ${unshaded?'':`
 vec3 citadelPoint=(modelMatrix*vec4(position,1.0)).xyz;
@@ -37,6 +41,12 @@ for(int lamp=0;lamp<8;lamp++){
 }
 vCitadelLight=clamp(vCitadelLight,0.0,1.0);
 `}`);
-  shader.fragmentShader='varying vec3 vCitadelLight;\n'+shader.fragmentShader;
-  shader.fragmentShader=shader.fragmentShader.replace('#include <colorspace_fragment>','#include <colorspace_fragment>\ngl_FragColor.rgb *= vCitadelLight;');
+  shader.fragmentShader='uniform float uCitadelSculpt;\nvarying vec3 vCitadelLight,vCitadelViewNormal,vCitadelViewPosition;\n'+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <colorspace_fragment>',`#include <colorspace_fragment>
+if(uCitadelSculpt>0.5){
+  vec3 n=dot(vCitadelViewNormal,vCitadelViewNormal)>0.00001?normalize(vCitadelViewNormal):normalize(cross(dFdx(vCitadelViewPosition),dFdy(vCitadelViewPosition)));
+  if(!gl_FrontFacing)n=-n;
+  float shade=0.28+0.64*max(0.0,dot(n,normalize(vec3(-0.5,0.7,1.0))))+0.18*max(0.0,dot(n,normalize(vec3(0.8,-0.2,0.4))));
+  gl_FragColor.rgb*=shade;
+}else gl_FragColor.rgb *= vCitadelLight;`);
 }

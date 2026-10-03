@@ -1,11 +1,9 @@
 import fs from 'node:fs/promises';
-import {activeParticleSample} from '../src/particle-sampling.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { parentPort, workerData } from 'node:worker_threads';
 import { createRequire } from 'node:module';
-import { openDocument } from '../src/editor-document.js';
-import { effectNodes, extractParticleRecipe, validateParticleRecipe } from '../src/particle-recipes.js';
+import { openDocument, effectNodes, extractParticleRecipe, validateParticleRecipe, activeParticleSample } from '../dist/particle-runtime.mjs';
 import { stringifyParticleData, parseParticleData } from '../src/particle-data.js';
 const require = createRequire(import.meta.url);
 const { CascReader } = require('./casc.cjs');

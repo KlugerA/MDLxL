@@ -1,0 +1,206 @@
+{
+  "version": 1,
+  "description": "Exact original seed paths and SHA-256; never match personal files by name alone.",
+  "entries": [
+    {
+      "path": "skin/Human Fair Skin.png",
+      "sha256": "9c8239178a71a09c52a81d41ef6539b4379c5af37226039b38a5d20e6bcb4cb1"
+    },
+    {
+      "path": "skin/Human Tan Skin.png",
+      "sha256": "e0f8179b6957b031dec6eae8d4f62335189335ace3c78ca8e30c3834c2e3e736"
+    },
+    {
+      "path": "skin/Human Deep Skin.png",
+      "sha256": "be8d1e9fac904e4357f19236c17447546cba519fb658563cf31100f118e1c3d2"
+    },
+    {
+      "path": "skin/Orc Green Skin.png",
+      "sha256": "b0b2cf917453684d57cb2964c6d30f0bbb17cff5cb2ce8abca528b6fcabcce93"
+    },
+    {
+      "path": "skin/Orc Olive Skin.png",
+      "sha256": "f1ffbccb601fad0c6b3371095ea6da179d9d3a488500626a069937d16c7035cd"
+    },
+    {
+      "path": "skin/Orc Dark Skin.png",
+      "sha256": "7aafb922a93de29400a5189d2ea8e0f8108ba5efd0178679f2e90f8876322feb"
+    },
+    {
+      "path": "skin/Night Elf Violet Skin.png",
+      "sha256": "97999b6af62636ece2092ad5c49d68861a7a3101c0de60cc229a2db469429544"
+    },
+    {
+      "path": "skin/Night Elf Dusky Skin.png",
+      "sha256": "3b8c410e445bf771a39547657562e36c00a28a86fcb76af36df59dd98f045230"
+    },
+    {
+      "path": "skin/High Elf Warm Skin.png",
+      "sha256": "18cd793d1cee26426133342b68f867247cff43498643df667e9a583e51151c04"
+    },
+    {
+      "path": "skin/Undead Pallid Flesh.png",
+      "sha256": "ec81684348eb64d2244dd82a279a8ce070ee9e7719d17e80b28f9e50374d7268"
+    },
+    {
+      "path": "skin/Undead Rotted Flesh.png",
+      "sha256": "4afbe682742ea38119b5f901fe7f1a97eecd28c7a10c90046a5aebaa236eace6"
+    },
+    {
+      "path": "skin/Undead Desiccated Flesh.png",
+      "sha256": "eb30d04027af7015d425d4acfd1f9e8f16fd9aa8cbbbc4ceb8b3bbf56700a947"
+    },
+    {
+      "path": "skin/Demon Crimson Flesh.png",
+      "sha256": "766d81c1374fa784c93c959f3c8f32e299c94e05c68671077f32d43761603124"
+    },
+    {
+      "path": "skin/Demon Charred Fel Skin.png",
+      "sha256": "8b9558a6de36a5654238d6659dc764916ed7e1b30874218b36364a7395512cc2"
+    },
+    {
+      "path": "hair-fur/Black Hair Locks.png",
+      "sha256": "56ed81a679aad7fd6bedf9895c55022f842438d4a91451253efe340e866b29c3"
+    },
+    {
+      "path": "hair-fur/Brown Hair Locks.png",
+      "sha256": "fdcdc304fcfa837117167a33d7718737aa6d94c364efb57bbffb67a626d00c03"
+    },
+    {
+      "path": "hair-fur/Golden Hair Locks.png",
+      "sha256": "9001fc9e89b71655b2e8afb5a3d0d34b6a522962c3014af48585bbe27e50309f"
+    },
+    {
+      "path": "hair-fur/Silver Hair Locks.png",
+      "sha256": "bdedfccabce81e38cc4a093b58e9eb19a795529c282c27affc61b981484e5161"
+    },
+    {
+      "path": "hair-fur/Coarse Brown Fur.png",
+      "sha256": "7c4d930ca89e4f01887b1b92786c1534d9615c1bf7fa8b36622684a8f7ee83e0"
+    },
+    {
+      "path": "hair-fur/Black Fur.png",
+      "sha256": "b78886eca75b5ec252db9800b67e90ecb38c3a19f239da9afd1c8ca7a1647a90"
+    },
+    {
+      "path": "hair-fur/Grey Wolf Fur.png",
+      "sha256": "fe26fd1154b21e20458adf9f20d407698606a9386d95815e34edfcf9874a2ece"
+    },
+    {
+      "path": "hair-fur/Winter White Fur.png",
+      "sha256": "693b5eea8d175367d11d30048e504c459c52b7c3f362a49a7ef161868555dbf1"
+    },
+    {
+      "path": "metal/Polished Steel.png",
+      "sha256": "9bd0cfc4fdffe100b704b38d2790944ee892d846eb3c91222b91db6d109ef35b"
+    },
+    {
+      "path": "metal/Human Blue Steel.png",
+      "sha256": "4194b7578a2770d17d32e7873c86619a63b4c9d7b40f1ebb3e36ddc4a1ce6a8a"
+    },
+    {
+      "path": "metal/Hammered Steel.png",
+      "sha256": "37c40e3495b9ce645ed66b3a4410aa2b0e3c84677c09aad0bb2c5ad37c4b2a63"
+    },
+    {
+      "path": "metal/Battered Iron.png",
+      "sha256": "dabdef3f3b90be7faf07bb8283672bca583a9169fe15d40d57af111be3f26219"
+    },
+    {
+      "path": "metal/Orc Black Iron.png",
+      "sha256": "862d5b587be9da641c8c7a41b267ce5bff05318519faa0440f0e6772e821a7d0"
+    },
+    {
+      "path": "metal/Undead Rusted Iron.png",
+      "sha256": "6e27fe98ea02806553602b8381934de8624f24913aeb7d71731e864399862bbf"
+    },
+    {
+      "path": "metal/Bronze.png",
+      "sha256": "34a65cebe4689af6ce2238534d0035bacfabfd6e13c85ea58772915471ea71be"
+    },
+    {
+      "path": "metal/Antique Gold.png",
+      "sha256": "9ce2fb42a1b8a4c739865e53eebe0a4eb601ff2b6c808625e71f21824e7cf102"
+    },
+    {
+      "path": "metal/Elven Moonsilver.png",
+      "sha256": "878fd45aea2fcf1a07b2b92b564afe023b043cecfaf9a5ac423fd04daf15414d"
+    },
+    {
+      "path": "metal/Demon Fel Iron.png",
+      "sha256": "a4b758cfa77274d2fa98bf08e7f1b78360de4d9878ef91da9ef17a71b13d3506"
+    },
+    {
+      "path": "leather-cloth/Smooth Brown Leather.png",
+      "sha256": "243d478c21fe2fde16ec9bcbde01c7a8ae8582bb5bba402742cb4b338b1ed8b5"
+    },
+    {
+      "path": "leather-cloth/Cracked Dark Leather.png",
+      "sha256": "6625b36be24aa5c2b7a77a055af31ccbde4b80d615c3607f2b92e2847bbb20aa"
+    },
+    {
+      "path": "leather-cloth/Rawhide Stitched Leather.png",
+      "sha256": "646a76845ad43297cf33464ed9a4dc15e28bff41fe7a352eec2e6f06e20d4ad4"
+    },
+    {
+      "path": "leather-cloth/Coarse Linen.png",
+      "sha256": "068b0757d2cff95b4bed14bc2c1519a67956ec6de773c8fb4515f1ce87946bb5"
+    },
+    {
+      "path": "leather-cloth/Undead Tattered Cloth.png",
+      "sha256": "8efa2be2ce524683a7a863e610be133801898e8065e225d6477c4888df61da38"
+    },
+    {
+      "path": "leather-cloth/Elven Weave.png",
+      "sha256": "546fc33ac4ece0fbd29f1f20b9c57e18018f6d37b5a6f661e4bcd8c3df4b3ad1"
+    },
+    {
+      "path": "bone-wood/Bone and Ivory.png",
+      "sha256": "6f7cc96acd14913dc3775e65be87b32db49c17bde572f1f00dcdfd4d2c7c56e8"
+    },
+    {
+      "path": "bone-wood/Weapon Haft and Bow Wood.png",
+      "sha256": "cf1bd1b23bee08ab85a59a0ca975adc6e5dda6977953d039d6083d8d2913f584"
+    },
+    {
+      "path": "stamp/Human and Elf Eyes.png",
+      "sha256": "23ae1522230149130bd1165d2af45359c99d10554d2aea18121833f0779b1309"
+    },
+    {
+      "path": "stamp/Orc Eyes.png",
+      "sha256": "b7763713ba22a071cc66d7b9b0b14213837e7d16fbb0f4ce42d44ff4b0f1ddb7"
+    },
+    {
+      "path": "stamp/Night Elf Glowing Eyes.png",
+      "sha256": "5d8aaa5d3fdf2733eae18ea7f574e761cbfc2e8c71e1e293a96c7ad4b09fb539"
+    },
+    {
+      "path": "stamp/Undead Eyes.png",
+      "sha256": "cf478a2187e1866f66a9087cae65d59767c5141e7a8b5f358def43c28ac693db"
+    },
+    {
+      "path": "stamp/Demon and Fel Eyes.png",
+      "sha256": "619d00fdadc55a86bba48866df18c68f3d5adeb7b3575f03146fcc1ed1ac66b4"
+    },
+    {
+      "path": "stamp/Teeth, Tusks, Fangs and Claws.png",
+      "sha256": "26e16145c69ae207acb13519e1757a09e162ccdb775fda3b070071793144ccfb"
+    },
+    {
+      "path": "stamp/Scars and Wounds.png",
+      "sha256": "75a40cb00ae39abd180b49499a6d72cc42fac1eaa42ac7673c190d82a41407ab"
+    },
+    {
+      "path": "stamp/Stitches, Seams and Lacing.png",
+      "sha256": "1883cf59944fec91f9541063ce071ec206bff76ada24bac7e63caaf1f0b4d60c"
+    },
+    {
+      "path": "stamp/Rivets, Dents and Plate Edges.png",
+      "sha256": "416b17e7a753de8a22b72812ff646ce64b55b624e9411cbea7fefcc8e7d2ec95"
+    },
+    {
+      "path": "stamp/Markings, Grime and Blood.png",
+      "sha256": "5ff123be7a3520e7471b971d42a64a0fb02be36fa955d38b79d3d0473807c51c"
+    }
+  ]
+}
