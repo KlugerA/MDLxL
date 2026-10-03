@@ -631,16 +631,22 @@ const rows = [
     "矩形"
   ],
   [
-    "Square / circle (1:1)",
-    "Квадрат / круг (1:1)",
-    "Cuadrado / círculo (1:1)",
-    "正方形 / 圆形 (1:1)"
+    "Square",
+    "Квадрат",
+    "Cuadrado",
+    "正方形"
   ],
   [
-    "Ellipse / circle",
-    "Эллипс / круг",
-    "Elipse / círculo",
-    "椭圆 / 圆形"
+    "Ellipse",
+    "Эллипс",
+    "Elipse",
+    "椭圆"
+  ],
+  [
+    "Circle",
+    "Круг",
+    "Círculo",
+    "圆形"
   ],
   [
     "Freehand lasso",
