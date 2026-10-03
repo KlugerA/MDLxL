@@ -20,9 +20,9 @@ export function previewPresentationProps(props) {
     overlays: display, showGrid: grid, showAxes: grid && neutralBackground,
     showNodes: display.nodes, showSkeleton: display.bones || display.skeleton || display.nodes || display.attachments || display.particles,
     showVertices: vertices, showNormals: display.normals, showCameras: display.cameras,
-    selectionByGeoset: interactive ? props.selectionByGeoset || EMPTY_MAP : EMPTY_MAP, selectedVertices: EMPTY_IDS, selectedNodeIds: EMPTY_IDS, selectableGeosets: props.selectableGeosets || EMPTY_IDS,
-    hiddenGeosets: props.uvOnlySelected === true ? props.hiddenGeosets : undefined, hiddenVertices: undefined, hoveredGeoset: interactive ? props.hoveredGeoset ?? null : null,
-    onNodeTransform: undefined, onVertexTransform: undefined, onTransform: undefined, onSelectNodes: undefined, onSelectionChange: interactive ? props.onSelectionChange : undefined, onSelectVertices: undefined, onSelectGeoset: undefined, onInspectGeoset: undefined,
+    selectionByGeoset: interactive ? props.selectionByGeoset || EMPTY_MAP : EMPTY_MAP, selectedVertices: EMPTY_IDS, selectedNodeIds: props.cleanAnimationPreview ? props.selectedNodeIds || EMPTY_IDS : EMPTY_IDS, selectableGeosets: props.selectableGeosets || EMPTY_IDS,
+    hiddenGeosets: props.uvOnlySelected === true || Array.isArray(props.isolatedGeosets) ? props.hiddenGeosets : undefined, hiddenVertices: undefined, hoveredGeoset: interactive ? props.hoveredGeoset ?? null : null,
+    onNodeTransform: undefined, onVertexTransform: undefined, onTransform: undefined, onSelectNodes: props.cleanAnimationPreview ? props.onSelectNodes : undefined, onSelectionChange: interactive ? props.onSelectionChange : undefined, onSelectVertices: undefined, onSelectGeoset: undefined, onInspectGeoset: undefined,
   };
 }
 

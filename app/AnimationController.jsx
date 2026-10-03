@@ -29,7 +29,7 @@ const enterBlurs = event => { if (event.key === 'Enter') event.currentTarget.blu
 /** Screenshot-faithful Animations toolbox. Movement remains in its own tab. */
 export default function AnimationController({
   model, revision = 0, sequenceIndex = -1, globalSeqId = null, time = 0,
-  selectedGeosets = [], onEdit, onSeek, onTimelineChange,
+  selectedGeosets = [], selectedNodeIds = [], materialVisibility = null, onEdit, onSeek, onTimelineChange,
   disabled = false,
 }) {
   const [notice, setNotice] = useState(''), [error, setError] = useState('');
@@ -45,13 +45,26 @@ export default function AnimationController({
     const selected = [...new Set(selectedGeosets)].filter(id => model.Geosets?.[id]);
     return selected.length ? selected : (model.Geosets || []).map((_, id) => id);
   }, [selectedGeosets.join(','), model.Geosets?.length]);
-  const missingGeosets = geosetIds.filter(id => !(model.GeosetAnims || []).some(animation => animation.GeosetId === id));
+  const nodeSelection = selectedNodeIds.length > 0 || !!materialVisibility;
+  const missingGeosets = nodeSelection ? [] : geosetIds.filter(id => !(model.GeosetAnims || []).some(animation => animation.GeosetId === id));
   const targets = animationTargets(model, { geosetIds });
-  const alphaTargets = targets.filter(target => target.property === 'Alpha');
+  const alphaTargets = materialVisibility ? [materialVisibility] : nodeSelection ? animationTargets(model, { nodeIds: selectedNodeIds }).filter(target => target.property === 'Visibility') : targets.filter(target => target.property === 'Alpha');
+  const visibilitySections = materialVisibility ? ['Materials'] : nodeSelection ? ['Nodes'] : ['GeosetAnims', 'Info'];
   const colorTargets = targets.filter(target => target.property === 'Color');
+  useEffect(() => {
+    if (!nodeSelection) return;
+    const clocks = new Set(alphaTargets.map(target => {
+      const track = readAnimationTrack(model, target);
+      return Number.isInteger(track?.GlobalSeqId) && track.GlobalSeqId >= 0 ? track.GlobalSeqId : null;
+    }));
+    if (clocks.size !== 1) return;
+    const clock = [...clocks][0];
+    if (clock !== null && clock !== globalSeqId) onTimelineChange?.(`global:${clock}`);
+    else if (clock === null && globalSeqId !== null) onTimelineChange?.(model.Sequences.length ? 0 : -1);
+  }, [model, selectedNodeIds.join(','), materialVisibility?.id, materialVisibility?.layer]);
   const inlineColorTargets = colorTargets.filter(target => !readAnimationTrack(model, target)?.Keys);
   const keyedColorTargets = colorTargets.filter(target => !inlineColorTargets.includes(target));
-  const sampledAlpha = geosetIds.length ? commonValue(model, alphaTargets, frame, sequenceIndex, globalDomain ? globalSeqId : null) : null;
+  const sampledAlpha = commonValue(model, alphaTargets, frame, sequenceIndex, globalDomain ? globalSeqId : null);
   const sampledColor = geosetIds.length ? commonValue(model, colorTargets, frame, sequenceIndex, globalDomain ? globalSeqId : null) : null;
   // "All line" is the authored static-property view.  It must show the
   // inline Color value itself, not a sampled keyframe from a local sequence.
@@ -156,16 +169,25 @@ export default function AnimationController({
   function setVisibility(visible) {
     const value = visible ? 1 : 0;
     setAlpha(visible ? '100' : '0');
-    commit('Set geoset visibility keyframe', ['GeosetAnims', 'Info'], current => setAnimationKey(current, alphaTargets, frame, value, sequenceIndex, globalDomain ? globalSeqId : null), visible ? 'Selected geosets shown.' : 'Selected geosets hidden.');
+    commit('Set visibility keyframe', visibilitySections, current => writeVisibility(current, value), '');
+  }
+
+  function writeVisibility(current, value) {
+    if (nodeSelection) for (const target of alphaTargets) {
+      const track = readAnimationTrack(current, target);
+      const clock = Number.isInteger(track?.GlobalSeqId) && track.GlobalSeqId >= 0 ? track.GlobalSeqId : null;
+      if (track?.Keys && clock !== (globalDomain ? globalSeqId : null)) throw new Error(clock === null ? 'Visibility uses model sequences.' : `Visibility uses Global sequence ${clock + 1}.`);
+    }
+    return setAnimationKey(current, alphaTargets, frame, value, sequenceIndex, globalDomain ? globalSeqId : null);
   }
 
   function commitAlpha() {
-    if ((!sequence && !globalDomain) || !geosetIds.length || alpha === '') return;
+    if ((!sequence && !globalDomain) || !alphaTargets.length || alpha === '') return;
     const numeric = Number(alpha);
     if (!Number.isFinite(numeric)) { setError('Alpha must be a number from 0 to 100.'); setNotice(''); return; }
     const value = Math.max(0, Math.min(100, numeric));
     setAlpha(String(value));
-    commit('Set geoset alpha keyframe', ['GeosetAnims', 'Info'], current => setAnimationKey(current, alphaTargets, frame, value / 100, sequenceIndex, globalDomain ? globalSeqId : null), `Alpha set to ${value}%.`);
+    commit('Set alpha keyframe', visibilitySections, current => writeVisibility(current, value / 100), '');
   }
 
   function rgbValue() {
@@ -236,9 +258,9 @@ export default function AnimationController({
   // setAnimationKey/setAnimationSequences create a missing geoset animation
   // and convert inline RGB to keys. Do not make that capability depend on a
   // pre-existing animation record.
-  const colorBlocked = disabled || !geosetIds.length || !sequence && !globalDomain;
+  const colorBlocked = disabled || !alphaTargets.length || !sequence && !globalDomain;
   const inlineRgbEditable = !sequence && !globalDomain && inlineColorTargets.length === colorTargets.length;
-  const rgbBlocked = disabled || !geosetIds.length || (!sequence && !globalDomain && !inlineRgbEditable);
+  const rgbBlocked = disabled || nodeSelection || !geosetIds.length || (!sequence && !globalDomain && !inlineRgbEditable);
   const alphaNumber = alpha === '' ? NaN : Number(alpha);
   const visibleChecked = Number.isFinite(alphaNumber) && alphaNumber > 0;
   const mixedOrPartial = alpha === '' || Number.isFinite(alphaNumber) && alphaNumber !== 0 && alphaNumber !== 100;
@@ -266,14 +288,15 @@ export default function AnimationController({
     <div className="ac-sequence-actions"><button disabled={disabled} onClick={addSequence}>Create</button><button disabled={noLocalSequence} onClick={copyCurrentSequence}>Create from current</button><button disabled={disabled} onClick={addGlobal}>Global</button><button disabled={disabled || !sequence && !globalDomain} onClick={removeCurrent}>Delete</button></div>
     </SidebarSection>
     <SidebarSection title="Visibility & Color">
+    {materialVisibility && <div className="ac-caption">Material {materialVisibility.id+1} · Layer {materialVisibility.layer+1}</div>}
     <div className="ac-geoset-animation">
       <div className="ac-visibility"><span>Visibility:</span>{missingGeosets.length ? <button className="ac-create-visibility" disabled={disabled || !geosetIds.length} onClick={createVisibility}>Create Visibility</button> : <label><input type="checkbox" aria-label="Visible at current frame" checked={visibleChecked} ref={input => { if (input) input.indeterminate = mixedOrPartial; }} disabled={colorBlocked} onChange={event => setVisibility(event.target.checked)}/>On</label>}
         <label className="ac-alpha">Alpha:<input aria-label="Visibility alpha percent" type="number" min="0" max="100" step="1" placeholder={geosetIds.length ? 'Mixed' : ''} disabled={colorBlocked} value={alpha} onChange={event => setAlpha(clampAlphaPercentText(event.target.value))} onBlur={commitAlpha} onKeyDown={enterBlurs}/></label>
       </div>
       <div className="ac-color"><span>Color Tint:</span><div className="ac-rgb">{['R', 'G', 'B'].map((label, index) => <label className={`channel-${label.toLowerCase()}`} key={label}>{label}<input aria-label={`Animation ${label}`} type="number" min="0" max="255" step="1" placeholder={geosetIds.length ? 'Mixed' : ''} disabled={rgbBlocked} value={rgb[index]} onChange={event => setRgb(previous => previous.map((value, i) => i === index ? event.target.value : value))} onBlur={commitRgb} onKeyDown={enterBlurs}/></label>)}</div></div>
     </div>
-    <button disabled={noLocalSequence || !geosetIds.length} onClick={() => bakeRgb(false)}>Bake Sequence RGB</button>
-    <button disabled={disabled || globalDomain || !model.Sequences?.length || !geosetIds.length} onClick={() => bakeRgb(true)}>Bake All RGB</button>
+    <button disabled={nodeSelection || noLocalSequence || !geosetIds.length} onClick={() => bakeRgb(false)}>Bake Sequence RGB</button>
+    <button disabled={nodeSelection || disabled || globalDomain || !model.Sequences?.length || !geosetIds.length} onClick={() => bakeRgb(true)}>Bake All RGB</button>
     </SidebarSection>
     {error && <p className="ac-error" role="alert">{error}</p>}{notice && <p className="ac-notice" role="status">{notice}</p>}
   </section>;

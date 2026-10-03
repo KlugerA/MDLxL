@@ -4,10 +4,26 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { createInterface } = require('node:readline');
 const digest = value => crypto.createHash('sha256').update(value).digest('hex');
+const soundStem = name => name.replaceAll('/', '\\').toLowerCase().split(':').at(-1).replace(/\.(wav|mp3|ogg|flac)$/, '');
+
+function soundCandidates(name, names, locales) {
+  const requested = name.replaceAll('/', '\\').toLowerCase(), stem = soundStem(requested);
+  const explicitModules = requested.split(':').slice(1, -1);
+  return names.filter(candidate => {
+    const lower = candidate.toLowerCase(), locale = lower.match(/_locales\\([a-z]{4})\.w3mod:/)?.[1];
+    return soundStem(lower) === stem && explicitModules.every(module => lower.includes(module + ':')) && (!locale || locales.includes(locale));
+  }).sort((a, b) => {
+    const rank = value => {
+      const lower = value.toLowerCase();
+      return lower === requested ? -1 : (lower.includes('_de.w3mod:') ? 30 : lower.includes('_hd.w3mod:') ? 20 : lower.includes('_sd.w3mod:') ? 10 : 0) + (path.extname(lower) === path.extname(requested) ? 0 : 1);
+    };
+    return rank(a) - rank(b) || a.localeCompare(b);
+  });
+}
 
 class CascReader {
   constructor(folder, cwd) {
-    this.process = spawn(path.join(__dirname, 'casc', 'CascBridge-0.7.0.exe'), [path.resolve(folder)], { cwd, windowsHide: true, stdio: ['pipe','pipe','pipe'] });
+    this.process = spawn(path.join(__dirname, 'casc', 'CascBridge-0.8.0.exe'), [path.resolve(folder)], { cwd, windowsHide: true, stdio: ['pipe','pipe','pipe'] });
     this.lines = []; this.waiters = []; this.error = null;
     createInterface({ input: this.process.stdout }).on('line', line => {
       const waiter = this.waiters.shift(); if (waiter) waiter.resolve(line); else this.lines.push(line);
@@ -34,7 +50,7 @@ class CascReader {
     return line === '-' ? null : Buffer.from(line,'base64');
   }
   async list(kind = "textures") {
-    const records=(await this.read(kind === 'models' ? '@models' : '@textures'))?.toString('utf8').split('\n').filter(Boolean)||[],names=[],keys={};
+    const records=(await this.read(kind === 'sounds' ? '@sounds' : kind === 'models' ? '@models' : '@textures'))?.toString('utf8').split('\n').filter(Boolean)||[],names=[],keys={};
     for(const record of records){const [name,key]=record.split('\t');names.push(name);if(/^[a-f0-9]{32}$/i.test(key))keys[name.toLowerCase()]=key;}
     return {names,keys};
   }
@@ -46,7 +62,43 @@ class CascReader {
 class CascTextures {
   constructor({ cacheDirectory, openReader = (folder,cwd) => new CascReader(folder,cwd), maxBytes = 256 * 1024 * 1024 } = {}) {
     this.directory = cacheDirectory; this.openReader = openReader; this.maxBytes = maxBytes;
-    this.readers = new Map(); this.queue = Promise.resolve(); this.indexKeys = new Map();this.byteEntries=null;this.cachedBytes=0;
+    this.readers = new Map(); this.queue = Promise.resolve(); this.indexKeys = new Map();this.byteEntries=null;this.cachedBytes=0;this.soundIndexes=new Map();
+  }
+  readSound(name, folders) {
+    const operation = this.queue.catch(() => {}).then(async () => {
+      const direct = await this.lookup(name, folders);
+      if (direct) return {bytes:direct, sourceName:name};
+      for (const folder of folders || []) {
+        let build; try { build = await fs.readFile(path.join(folder, '.build.info')); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+        const install = digest(path.resolve(folder).toLowerCase() + '|' + digest(build));
+        let index = this.soundIndexes.get(install);
+        if (!index) {
+          const file = this.directory && path.join(this.directory, install + '.sounds.json');
+          if (file) try {
+            if ((await fs.stat(file)).size <= 64 * 1024 * 1024) {
+              const cached = JSON.parse(await fs.readFile(file, 'utf8'));
+              if (cached.version === 1 && Array.isArray(cached.names) && cached.names.length <= 300000 && cached.names.every(n => typeof n === 'string' && n.length <= 260)) index = cached;
+            }
+          } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
+          if (!index) {
+            if (this.directory) await fs.mkdir(this.directory, {recursive:true});
+            const reader = this.openReader(folder, this.directory || __dirname);
+            try { index = {version:1, ...await reader.list('sounds')}; } finally { reader.close(); }
+            if (file) { await fs.writeFile(file + '.tmp', JSON.stringify(index)); await fs.rename(file + '.tmp', file); }
+          }
+          this.soundIndexes.set(install, index);
+        }
+        const locales = [...build.toString().matchAll(/\b([a-z]{2}[A-Z]{2})\s+(?:speech|text)\?/g)].map(match => match[1].toLowerCase());
+        for (const candidate of soundCandidates(name, index.names, locales)) {
+          const key = index.keys?.[candidate.toLowerCase()];
+          if (!/^[a-f0-9]{32}$/i.test(key || '')) continue;
+          const bytes = await this.lookup('@ckey:' + key, [folder], new Map([[folder, install]]));
+          if (bytes?.length) return {bytes, sourceName:candidate};
+        }
+      }
+      return null;
+    });
+    this.queue = operation; return operation;
   }
   read(name, folders) {
     const operation = this.queue.catch(() => {}).then(() => this.lookup(name, folders));
@@ -144,4 +196,4 @@ class CascTextures {
   }
   async close() { await this.queue.catch(() => {}); for (const {reader,timer} of this.readers.values()) { clearTimeout(timer); reader.close(); } this.readers.clear(); }
 }
-module.exports = { CascReader, CascTextures };
+module.exports = { CascReader, CascTextures, soundCandidates };

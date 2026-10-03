@@ -39,7 +39,7 @@ const { _electron } = require(process.env.MDLXL_PLAYWRIGHT_MODULE || 'playwright
     await openManager('Materials', 'Material Manager', 'Materials list');
     await openManager('Geosets', 'Geoset Manager', 'Geosets list');
     const material = page.getByLabel('Material', { exact: true });
-    assert.equal(await material.locator('option:checked').textContent(), 'Material 1');
+    assert.match(await material.locator('option:checked').textContent(), /^Material 1(?: · .+)?$/);
     console.log('Resource managers show one-based Material and Geoset numbers while their underlying references remain unchanged');
   } finally {
     await app.close().catch(() => {});

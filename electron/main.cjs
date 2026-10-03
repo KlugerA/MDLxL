@@ -273,7 +273,7 @@ async function resolveTextures(payload, extensions){
 ipcMain.handle('texture:resolve',(_,payload)=>{const operation=resolveTextures(payload);textureOperations.add(operation);operation.finally(()=>textureOperations.delete(operation)).catch(()=>{});return operation;});
 // Event previews use the same installed-game lookup and cache as textures.
 // Limit this separate read-only endpoint to resources consumed by that preview.
-ipcMain.handle('preview:eventResources',(_,payload)=>{const operation=resolveTextures(payload,[...IMAGE_EXTENSIONS,'slk','mdl','mdx']);textureOperations.add(operation);operation.finally(()=>textureOperations.delete(operation)).catch(()=>{});return operation;});
+ipcMain.handle('preview:eventResources',(_,payload)=>{const operation=resolveTextures(payload,[...IMAGE_EXTENSIONS,'slk','mdl','mdx','wav','mp3','ogg','flac']);textureOperations.add(operation);operation.finally(()=>textureOperations.delete(operation)).catch(()=>{});return operation;});
 ipcMain.handle('preview:humanPortraitFrame',()=>{
   const operation=resolveTextures({names:HUMAN_PORTRAIT_RESOURCES},[...IMAGE_EXTENSIONS,'fdf','txt']).then(validateHumanPortraitResources);
   textureOperations.add(operation);operation.finally(()=>textureOperations.delete(operation)).catch(()=>{});return operation;

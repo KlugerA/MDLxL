@@ -1,4 +1,5 @@
 import { normalizePreviewLighting } from './preview-lighting.js';
+import { treeAppearanceForTheme } from './tree-appearance.js';
 import APPLICATION_THEMES from './application-themes.json' with { type: 'json' };
 export { APPLICATION_THEMES };
 import { DEFAULT_PAINT_APPEARANCE, normalizePaintAppearance } from './paint-appearance.js';
@@ -76,7 +77,7 @@ function customizedLegacyVisuals(value) {
 }
 export function viewportAppearanceOptions(preferences) {
   const fallback = !preferences?.viewportAppearance && customizedLegacyVisuals(preferences?.visuals) ? appearanceFromLegacy(legacyVisualOptions(preferences)) : DEFAULT_VIEWPORT_APPEARANCE;
-  return normalizeViewportAppearance(preferences?.viewportAppearance, fallback);
+  return normalizeViewportAppearance(preferences?.viewportAppearance, { ...fallback, tree: treeAppearanceForTheme(preferences?.theme) });
 }
 export function visualOptions(preferences) {
   const legacy = legacyVisualOptions(preferences), appearance = viewportAppearanceOptions(preferences);
@@ -139,7 +140,7 @@ export function normalizePreferences(value = {}) {
   }
   const legacyVisuals = legacyVisualOptions(input), legacyCustomized = !input.viewportAppearance && customizedLegacyVisuals(input.visuals);
   const viewportPresets = normalizeViewportPresets(input.viewportPresets);
-  const viewportAppearance = normalizeViewportAppearance(input.viewportAppearance, legacyCustomized ? appearanceFromLegacy(legacyVisuals) : DEFAULT_VIEWPORT_APPEARANCE);
+  const viewportAppearance = normalizeViewportAppearance(input.viewportAppearance, { ...(legacyCustomized ? appearanceFromLegacy(legacyVisuals) : DEFAULT_VIEWPORT_APPEARANCE), tree: treeAppearanceForTheme(input.theme) });
   const requestedPreset = typeof input.viewportPreset === 'string' ? input.viewportPreset : '';
   const viewportPreset = requestedPreset === 'custom' || viewportPresetById(requestedPreset, viewportPresets) ? requestedPreset : legacyCustomized ? 'custom' : DEFAULT_VIEWPORT_PRESET_ID;
   return {

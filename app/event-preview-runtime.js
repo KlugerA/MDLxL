@@ -32,7 +32,7 @@ function preserveGLState(gl) {
   };
 }
 
-function createDecalRenderer(gl) {
+export function createDecalRenderer(gl) {
   const compile = (type, source) => {
     const shader = gl.createShader(type); gl.shaderSource(shader, source); gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) { const message = gl.getShaderInfoLog(shader); gl.deleteShader(shader); throw new Error(message); }

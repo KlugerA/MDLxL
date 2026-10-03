@@ -35,6 +35,21 @@ test('UV Only Selected reaches the preview without changing other clean previews
   assert.equal(isolated.hideRgbGeoset,2);
 });
 
+test('resource preview retains explicit mesh isolation while ordinary previews stay whole', () => {
+  const hidden = new Set([1, 2]), props = { presentation: 'preview', preferences: { graphics: {} }, hiddenGeosets: hidden };
+  assert.equal(previewPresentationProps(props).hiddenGeosets, undefined);
+  const isolated = previewPresentationProps({ ...props, isolatedGeosets: [0] });
+  assert.equal(isolated.hiddenGeosets, hidden);
+  assert.deepEqual(isolated.isolatedGeosets, [0]);
+});
+
+test('Animations keeps node picking and selection while disabling geometry transforms', () => {
+  const select = () => {}, props = { presentation: 'preview', cleanAnimationPreview: true, selectedNodeIds: [4], onSelectNodes: select, onNodeTransform: () => {} };
+  const preview = previewPresentationProps(props);
+  assert.deepEqual(preview.selectedNodeIds, [4]); assert.equal(preview.onSelectNodes, select);
+  assert.equal(preview.onNodeTransform, undefined);
+});
+
 test('clean is the preview overlay default; Highlight overrides All mesh even for empty selection',()=>{
   assert.deepEqual(previewOverlayGeometry(geosets(),{}),[]);
   assert.equal(previewOverlaySettings({allMesh:true,highlightSelection:true}).mode,'selection');
