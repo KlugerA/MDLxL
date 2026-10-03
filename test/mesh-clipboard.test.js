@@ -133,7 +133,12 @@ test('three copied loose vertices make a valid T triangle and keep imported mate
     assert.equal(reopened.diagnostics.filter(item => item.severity === 'error').length, 0);
     assert.deepEqual(reopened.model.Geosets[index].Faces, new Uint16Array([0, 1, 2]));
     assert.deepEqual(reopened.model.Geosets[index].VertexGroup, final.Geosets[index].VertexGroup);
-    assert.deepEqual(reopened.model.Geosets[index].Groups, final.Geosets[index].Groups);
+    const bindings = model => model.Geosets[index].Groups.map(group => group.map(id => ({
+      name: model.Nodes[id].Name, pivot: Array.from(model.PivotPoints[id]),
+      parent: model.Nodes[id].Parent == null ? null : model.Nodes[model.Nodes[id].Parent].Name,
+    })));
+    assert.deepEqual(bindings(reopened.model), bindings(final), 'serialized IDs may change; imported bone identities must not');
+    assert.deepEqual(doc.model, final, 'saving must leave live IDs and undo state intact');
   }
 });
 

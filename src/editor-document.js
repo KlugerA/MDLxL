@@ -2,7 +2,8 @@ import { versionConversionIssues, normalizeVersionFields } from './model-version
 import { Buffer } from 'buffer';
 import { parseMDL, generateMDL } from 'war3-model';
 import { parseCompatibleMdx as parseMDX, generateCompatibleMdx as generateMDX } from './mdx-compatibility.js';
-import { prepareCompatibleMdl, finishCompatibleMdl, readMdlPivotPoints } from './mdl-compatibility.js';
+import { prepareCompatibleMdl, finishCompatibleMdl, formatGeneratedMdl, readMdlPivotPoints } from './mdl-compatibility.js';
+import { canonicalizeSerializedNodeOrder, serializedNodes, SERIALIZED_NODE_COLLECTIONS } from './node-id-order.js';
 import { assertModelEquivalent, formatSaveIssues } from './save-equivalence.js';
 import { preserveMdxRecords, preserveMdlRecords } from './record-preservation.js';
 import { parseMdx, SUPPORTED_FORMAT_VERSIONS } from './mdx-container.js';
@@ -206,7 +207,19 @@ function surgicalMdl(original, sections, generated, keys) {
   }
   parts.push(original.subarray(cursor));
   for (const [key, bytes] of replacements) if (!inserted.has(key) && bytes.length) parts.push(Buffer.from('\n'), bytes);
-  return Buffer.concat(parts);
+  const output = Buffer.concat(parts);
+  return orderMdlNodes(output);
+}
+function orderMdlNodes(output) {
+  // A newly introduced node family may have been appended after PivotPoints.
+  // Retera resolves MDL references by encounter order, so place the resulting
+  // node blocks in the same order used by the export snapshot.
+  const nodes = scanMdlSections(output).filter(section => nodeCollectionKeys.has(section.key));
+  const ordered = [...nodes].sort((a, b) => SERIALIZED_NODE_COLLECTIONS.indexOf(a.key) - SERIALIZED_NODE_COLLECTIONS.indexOf(b.key));
+  const reordered = []; let cursor = 0;
+  nodes.forEach((section, index) => { const from = ordered[index]; reordered.push(output.subarray(cursor, section.start), output.subarray(from.start, from.end)); cursor = section.end; });
+  reordered.push(output.subarray(cursor));
+  return Buffer.concat(reordered);
 }
 function surgicalMdx(original, container, generated, keys) {
   const fresh = parseMdx(generated);
@@ -483,6 +496,13 @@ export class EditorDocument {
       return bytes;
     };
     if (impact.exact) return remember(this._original);
+    // Object IDs stay stable in the editor and its undo history. Only the save
+    // snapshot is numbered in the compatible node order for external editors.
+    let saveModel = this.model;
+    if (serializedNodes(saveModel).some((node, index) => node.ObjectId !== index)) {
+      saveModel = clone(saveModel);
+      canonicalizeSerializedNodeOrder(saveModel, { preserveUnusedPivots: true });
+    }
     const colorIssues = geosetColorExportIssues(this.model.GeosetAnims, format);
     if (colorIssues.length) {
       nextStage('errorFormattingMs');
@@ -493,14 +513,21 @@ export class EditorDocument {
     // war3-model allocates 12 bytes for an empty Reforged BindPoses array but
     // emits no BPOS chunk. Omit that empty export-only property to avoid junk
     // trailing bytes; the editable model and any nonempty bind poses stay intact.
-    const animations = prepareGeosetAnimationColors(this.model.GeosetAnims, format);
-    const exportModel = format === 'mdl' ? { ...this.model, ParticleEmitterPopcorns: prepareMdlPopcornColors(this.model.ParticleEmitterPopcorns), GeosetAnims: animations } : { ...this.model, GeosetAnims: convertMdxGeosetColorTracks(animations), BindPoses: this.model.BindPoses?.length ? this.model.BindPoses : undefined };
+    const animations = prepareGeosetAnimationColors(saveModel.GeosetAnims, format);
+    const exportModel = format === 'mdl' ? { ...saveModel, ParticleEmitterPopcorns: prepareMdlPopcornColors(saveModel.ParticleEmitterPopcorns), GeosetAnims: animations } : { ...saveModel, GeosetAnims: convertMdxGeosetColorTracks(animations), BindPoses: saveModel.BindPoses?.length ? saveModel.BindPoses : undefined };
     const mdlModel = format === 'mdl' ? { ...exportModel, Geosets: exportModel.Geosets.map(g=>({...g,TVertices:g.TVertices.length?g.TVertices:[new Float32Array()]})), CollisionShapes: exportModel.CollisionShapes.map(n=>[1,3].includes(n.Shape)?{...n,Shape:0}:n) } : null;
-    let generated = format === 'mdl' ? finishCompatibleMdl(Buffer.from(emptyFaceGroups(generateMDL(mdlModel)), 'utf8'), { ...this.model, GeosetAnims: animations }) : Buffer.from(generateMDX(exportModel));
+    let generated = format === 'mdl' ? finishCompatibleMdl(Buffer.from(emptyFaceGroups(generateMDL(mdlModel)), 'utf8'), { ...saveModel, GeosetAnims: animations }) : Buffer.from(generateMDX(exportModel));
     if (format === 'mdl') generated = writeMdlUVSets(generated, scanMdlSections(generated), exportModel);
     generated = format === 'mdl' ? writeMdlEventGlobalSequences(generated, scanMdlSections(generated), exportModel) : writeMdxEventGlobalSequences(generated, exportModel);
-    if (!impact.conversion) generated = format === 'mdx' ? preserveMdxRecords(this._original, generated, this._savedModel, this.model, SECTION_TYPES) : preserveMdlRecords(this._original, generated, this._savedModel, this.model, SECTION_TYPES);
-    const keys = this._changedKeys();
+    if (format === 'mdl') generated = orderMdlNodes(formatGeneratedMdl(generated));
+    // After a remapped save the disk baseline and live IDs differ. Compare
+    // source records against their actual decoded IDs, including subsequent
+    // saves, recovery and edits that occurred while disk I/O was pending.
+    const sourceModel = this._recoverySavedChanges.length ? openDocument(this._original, this.name).model : this._savedModel;
+    if (!impact.conversion) generated = format === 'mdx' ? preserveMdxRecords(this._original, generated, sourceModel, saveModel, SECTION_TYPES) : preserveMdlRecords(this._original, generated, sourceModel, saveModel, SECTION_TYPES);
+    const keys = saveModel !== this.model || this._recoverySavedChanges.length
+      ? Object.keys(SECTION_TYPES).filter(key => fingerprint(sourceModel[key]) !== fingerprint(saveModel[key]))
+      : this._changedKeys();
     const output = impact.conversion ? generated : format === 'mdl' ? surgicalMdl(this._original, this._sections, generated, keys) : surgicalMdx(this._original, this._container, generated, keys);
     // A writer can succeed while emitting a dialect the reader cannot parse.
     // Check the final surgical/conversion result before allowing it onto disk.
@@ -512,7 +539,7 @@ export class EditorDocument {
       throw new Error(formatSaveIssues('Save verification failed', reopened.diagnostics.filter(d => d.severity === 'error').map(d => d.message)));
     }
     if (reopened.version !== this.version) throw new Error('Save verification failed: model version changed.');
-    assertModelEquivalent(this.model, reopened.model, { keys: Object.keys(SECTION_TYPES), timings });
+    assertModelEquivalent(saveModel, reopened.model, { keys: Object.keys(SECTION_TYPES), timings });
     for (const key of Object.keys(SECTION_TYPES)) if (Array.isArray(this.model[key]) && this.model[key].length !== reopened.model[key]?.length) throw new Error(`Save verification failed: ${key} count changed during serialization.`);
     for (let index = 0; index < this.model.Geosets.length; index++) if (this.model.Geosets[index].TVertices.length !== reopened.model.Geosets[index].TVertices.length) throw new Error(`Save verification failed: Geoset ${index} UV set count changed during serialization.`);
     const existingErrors = new Set(validateModel(this.model).filter((d) => d.severity === 'error').map((d) => `${d.code}:${d.path}`));

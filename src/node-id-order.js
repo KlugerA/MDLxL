@@ -1,10 +1,9 @@
-// war3-model writes node-bearing MDL/MDX sections in this order. Several
-// Warcraft tools resolve matrix IDs through that serialized order before all
-// objects are indexed, so ObjectId order must match it exactly.
+// Retera collects MDX nodes in this type order (including CORN before RIBB).
+// Use it for exported IDs and MDL encounter order so index-based readers also
+// resolve parents, matrices, pivots and bind poses to the intended objects.
 export const SERIALIZED_NODE_COLLECTIONS = Object.freeze([
   'Bones', 'Lights', 'Helpers', 'Attachments', 'ParticleEmitters',
-  'ParticleEmitters2', 'RibbonEmitters', 'EventObjects', 'CollisionShapes',
-  'ParticleEmitterPopcorns',
+  'ParticleEmitters2', 'ParticleEmitterPopcorns', 'RibbonEmitters', 'EventObjects', 'CollisionShapes',
 ]);
 
 export const serializedNodes = model => SERIALIZED_NODE_COLLECTIONS.flatMap(collection => model[collection] || []);
@@ -24,7 +23,7 @@ export function hasMonotonicSerializedNodeOrder(model) {
  * node sections. Keep that order identical to ObjectId order and remap every
  * model-owned node reference as one atomic plan before mutating the model.
  */
-export function canonicalizeSerializedNodeOrder(model) {
+export function canonicalizeSerializedNodeOrder(model, { preserveUnusedPivots = false } = {}) {
   const nodes = serializedNodes(model), ids = new Set();
   for (const node of nodes) {
     if (!Number.isInteger(node?.ObjectId) || node.ObjectId < 0 || ids.has(node.ObjectId)) throw Error('The model has invalid or duplicate node object IDs.');
@@ -41,6 +40,7 @@ export function canonicalizeSerializedNodeOrder(model) {
     if (!pivot || pivot.length !== 3 || Array.from(pivot).some(value => !Number.isFinite(value))) throw Error(`Node ${node.Name || node.ObjectId} has an invalid pivot reference.`);
     return pivot;
   });
+  if (preserveUnusedPivots) model.PivotPoints?.forEach((pivot, index) => { if (!ids.has(index)) pivots.push(pivot); });
   const groupPlans = (model.Geosets || []).map((geoset, geosetIndex) => (geoset.Groups || []).map(group => group.map(id => {
     if (!map.has(id)) throw Error(`Geoset ${geosetIndex} references missing node ${id}.`);
     return map.get(id);
@@ -59,11 +59,15 @@ export function canonicalizeSerializedNodeOrder(model) {
   });
   const bindPosePlans = (model.BindPoses || []).map((pose, poseIndex) => {
     if (!Array.isArray(pose.Matrices)) throw Error(`Bind pose ${poseIndex} has invalid matrices.`);
-    return nodes.map(node => {
+    const cameraStart = pose.Matrices.length - (model.Cameras?.length || 0);
+    const matrices = nodes.map(node => {
       const matrix = pose.Matrices[node.ObjectId];
-      if (!matrix) throw Error(`Bind pose ${poseIndex} is missing matrix ${node.ObjectId}.`);
+      if (!matrix || node.ObjectId >= cameraStart) throw Error(`Bind pose ${poseIndex} is missing matrix ${node.ObjectId}.`);
       return matrix;
     });
+    // BPOS also carries camera matrices after the node slots. They are not
+    // node references and must survive the node permutation unchanged.
+    return matrices.concat(pose.Matrices.slice(cameraStart));
   });
 
   nodes.forEach((node, index) => { node.ObjectId = index; node.Parent = parentIds[index]; node.PivotPoint = pivots[index]; });

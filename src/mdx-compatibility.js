@@ -73,9 +73,20 @@ const ribbonTracks = { KRHA: ['HeightAbove', 1], KRHB: ['HeightBelow', 1], KRAL:
 const cameraTracks = { KCTR: ['Translation', 3], KCRL: ['Rotation', 1], KTTR: ['TargetTranslation', 3], KCVS: ['Visibility', 1], IDUF: ['FocusDistance', 1], ELAF: ['FocalLength', 1], PTSF: ['FStop', 1] };
 const emitterBases = {
   PREM: {key:'ParticleEmitters',fields:[['EmissionRate',0],['Gravity',4],['Longitude',8],['Latitude',12],['LifeSpan',276],['InitVelocity',280]]},
-  PRE2: {key:'ParticleEmitters2',fields:[['Speed',0],['Variation',4],['Latitude',8],['Gravity',12],['EmissionRate',20],['Width',24],['Length',28]]},
+  PRE2: {key:'ParticleEmitters2',fields:[['Speed',0],['Variation',4],['Latitude',8],['Gravity',12],['EmissionRate',20],['Length',24],['Width',28]]},
   CORN: {key:'ParticleEmitterPopcorns',fields:[['LifeSpan',0],['EmissionRate',4],['Speed',8],['Color',12,3],['Alpha',24]]},
 };
+// Classic animated colors are BGR in MDX as well as MDL; static MDX colors
+// are RGB. Keep the editor's RGB convention without touching static defaults.
+const bgrTracks = new Set(['KLAC', 'KLBC', 'KRCO']);
+function colorTrack(track) {
+  if (!track?.Keys) return track;
+  return { ...track, Keys: track.Keys.map(key => {
+    const result = { ...key };
+    for (const field of ['Vector', 'InTan', 'OutTan']) if (key[field]) result[field] = Float32Array.of(key[field][2], key[field][1], key[field][0]);
+    return result;
+  }) };
+}
 function readTracks(b, at, owner, schema) {
   for (let p = at; p < b.length;) {
     const tag = b.toString('ascii', p, p + 4), def = schema[tag];
@@ -84,10 +95,10 @@ function readTracks(b, at, owner, schema) {
     const { track, size } = readTrack(b, p, width, integer);
     if (owner[key]?.Keys) throw new Error(`Duplicate animation ${tag}.`);
     if (owner[key] != null) (owner._MdxDefaults ||= {})[key] = owner[key];
-    owner[key] = track; p += size;
+    owner[key] = bgrTracks.has(tag) ? colorTrack(track) : track; p += size;
   }
 }
-const writeTracks = (owner, schema) => Object.entries(schema).map(([tag, [key, , integer]]) => writeTrack(tag, owner[key], integer));
+const writeTracks = (owner, schema) => Object.entries(schema).map(([tag, [key, , integer]]) => writeTrack(tag, bgrTracks.has(tag) ? colorTrack(owner[key]) : owner[key], integer));
 const base = (owner, key, fallback = 0) => owner[key]?.Keys ? (owner._MdxDefaults?.[key] ?? fallback) : (owner[key] ?? fallback);
 
 function readMaterials(payload, version) {
@@ -278,7 +289,11 @@ export function parseCompatibleMdx(input) {
   }
   for(const [tag,{key,fields}]of Object.entries(emitterBases))for(const [i,b]of mdxRecords(originals.get(tag)||Buffer.alloc(0),tag).entries()){
     const owner=model[key][i],at=4+b.readUInt32LE(4);
-    for(const [field,offset,width]of fields)if(owner[field]?.Keys)(owner._MdxDefaults||={})[field]=width===3?vector(b,at+offset):b.readFloatLE(at+offset);
+    for(const [field,offset,width]of fields) {
+      const value=width===3?vector(b,at+offset):b.readFloatLE(at+offset);
+      if(owner[field]?.Keys)(owner._MdxDefaults||={})[field]=value;
+      else if(tag==='PRE2'&&(field==='Length'||field==='Width'))owner[field]=value;
+    }
   }
   return model;
 }
@@ -309,6 +324,9 @@ export function generateCompatibleMdx(inputModel) {
         const n = model[key][i];
         if(emitterBases[c.tag]){
           const at=4+b.readUInt32LE(4);
+          // Hive's PRE2 layout is length then width. The upstream codec has
+          // these two static slots swapped; its KP2N/KP2W tracks are correct.
+          if(c.tag==='PRE2'){b.writeFloatLE(base(n,'Length'),at+24);b.writeFloatLE(base(n,'Width'),at+28);}
           for(const [field,offset,width]of emitterBases[c.tag].fields)if(n[field]?.Keys&&n._MdxDefaults?.[field]!=null){const value=n._MdxDefaults[field];if(width===3)floats(value).copy(b,at+offset);else b.writeFloatLE(value,at+offset);}
           if(c.tag!=='PREM')return b;
         }

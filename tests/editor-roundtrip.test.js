@@ -139,7 +139,7 @@ test('v1800 full editor saves preserve camera variants, lights, 16-bit bindings,
   for(const g of m.Geosets){g.LevelOfDetail=0;g.Name='LOD';g.SkinWeights=Uint16Array.from({length:g.Vertices.length/3*8},(_,i)=>i%8===0?300:i%8===4?255:0);}
   m.Cameras=[{Name:'cam',Variant:3,Position:f(1,2,3),TargetPosition:f(4,5,6),FieldOfView:1,NearClip:10,FarClip:1000,Visibility:track()}];
   const d=load(generateCompatibleMdx(m));d.apply('bind',['Geosets'],m=>{bindVertices(m,m.Geosets[0],[0],300);m.Geosets[0].Vertices[0]+=1;});
-  const r=load(d.serialize());assert.equal(r.model.Geosets[0].SkinWeights[0],300);assert.equal(r.model.Cameras[0].Variant,3);assert.deepEqual(r.model.PivotPoints[300],f(7,8,9));assert.deepEqual(r.model.Lights[0].QuadraticFalloff,track());
+  const r=load(d.serialize()),savedBone=r.model.Bones.at(-1);assert.equal(r.model.Geosets[0].SkinWeights[0],savedBone.ObjectId);assert.equal(r.model.Cameras[0].Variant,3);assert.deepEqual(savedBone.PivotPoint,f(7,8,9));assert.deepEqual(r.model.Lights[0].QuadraticFalloff,track());assert.equal(d.model.Bones.at(-1).ObjectId,300);
 });
 test('DILG survives conversion and references follow a geoset deletion',()=>{
   const b=Buffer.concat([fixture(),chunk('DILG',Buffer.concat([i32(1),i32(4)]))]);const d=load(b);

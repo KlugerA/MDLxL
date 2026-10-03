@@ -246,6 +246,9 @@ export function finishCompatibleMdl(input,model) {
     if(m.name==='ParticleEmitterPopcorn') {
       for(const c of m.children||[])if(c.name==='Unfogged')edits.push({start:c.start,end:c.end,text:''});
       if(o.Flags&0x20000)extra.push('Unfogged,');if(o.Flags&0x40000)extra.push('PopcornScaling,');
+      // The upstream generator omits zero values although these MDL fields
+      // default to one on load. Zero emission/speed/alpha must stay authored.
+      for(const key of ['LifeSpan','EmissionRate','Speed','Alpha'])if(o[key]!=null&&!represented.has(key))extra.push(mdlProperty(key,o[key],false,true));
     }
     if(m.name==='CollisionShape' && [1,3].includes(o.Shape)) {
       const c=m.children.find(c=>['Box','Sphere'].includes(c.name));if(c)edits.push({start:c.start,end:c.end,text:o.Shape===1?'Plane,':'Cylinder,'});
@@ -261,6 +264,23 @@ export function finishCompatibleMdl(input,model) {
   });
   const gliders=(model.Gliders||[]).map(g=>`\nGlider { GeosetId ${g.GeosetId}, }\n`).join('');
   return Buffer.concat([replace(tree.bytes,edits),Buffer.from(gliders)]);
+}
+
+/** Format generated syntax for line-oriented Warcraft editors. Source records
+ * are restored afterward, so this never reformats untouched authored text. */
+export function formatGeneratedMdl(input) {
+  const { bytes, members } = mdlMembers(input);
+  function render(member, depth) {
+    const indent = '\t'.repeat(depth);
+    if (!member.children) return indent + bytes.subarray(member.start, member.end).toString('utf8').trim();
+    const header = bytes.subarray(member.start, member.open.start).toString('utf8').trim();
+    const suffix = bytes.subarray(member.close.end, member.end).toString('utf8').trim();
+    const inline = member.name === 'DontInherit' || !['VertexGroup', 'EventTrack', 'GlobalSequences'].includes(member.name) && member.children.length > 0 && member.children.every(child => !child.children && child.header.every(numeric));
+    const prefix = header ? header + ' ' : '';
+    if (inline) return indent + prefix + '{ ' + member.children.map(child => render(child, 0)).join(' ') + ' }' + suffix;
+    return indent + prefix + '{\n' + member.children.map(child => render(child, depth + 1)).join('\n') + (member.children.length ? '\n' : '') + indent + '}' + suffix;
+  }
+  return Buffer.from(members.map(member => render(member, 0)).join('\n') + '\n');
 }
 
 export function readMdlPivotPoints(input) {

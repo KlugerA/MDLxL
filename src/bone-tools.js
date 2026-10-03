@@ -33,7 +33,11 @@ export function createRigNode(model, type, selection = {}) {
   let node;
   try { node = createNode(model, type); }
   finally { if (bindPoses?.length) model.BindPoses = bindPoses; }
-  for (const pose of bindPoses || []) while (pose.Matrices.length <= node.ObjectId) pose.Matrices.push(new Float32Array(IDENTITY_BIND_POSE));
+  for (const pose of bindPoses || []) {
+    const cameras = pose.Matrices.splice(pose.Matrices.length - (model.Cameras?.length || 0));
+    while (pose.Matrices.length <= node.ObjectId) pose.Matrices.push(new Float32Array(IDENTITY_BIND_POSE));
+    pose.Matrices.push(...cameras);
+  }
   node.Name = name;
   node.PivotPoint = new Float32Array(selectedVertexCenter(model, selection));
   model.PivotPoints[node.ObjectId] = node.PivotPoint;
@@ -189,8 +193,10 @@ export function deleteRigNode(model, id) {
   try { removed = deleteNode(model, id); }
   finally { if (bindPoses?.length) model.BindPoses = bindPoses; }
   for (const pose of bindPoses || []) {
+    const cameras = pose.Matrices.splice(pose.Matrices.length - (model.Cameras?.length || 0));
     if (pose.Matrices[id]) pose.Matrices[id] = new Float32Array(IDENTITY_BIND_POSE);
     while (pose.Matrices.length && !model.Nodes[pose.Matrices.length - 1]) pose.Matrices.pop();
+    pose.Matrices.push(...cameras);
   }
   for (const child of children) child.Parent = null;
   return removed;
