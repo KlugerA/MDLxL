@@ -105,13 +105,10 @@ test('large invalid GIF is rejected by its contents without a renderer buffer', 
   await assert.rejects(validateGIFFile(file),/complete GIF/);
 });
 
-test('local GIF size budgets target 100 MB highest and 50 MB medium per ten seconds without changing upload profiles', () => {
-  assert.equal(gifSizeLimit(undefined,'high',10000),100_000_000);
-  assert.equal(gifSizeLimit(undefined,'medium',10000),50_000_000);
-  assert.equal(gifSizeLimit(undefined,'high',5000),50_000_000);
-  assert.equal(gifSizeLimit(undefined,'medium',20000),100_000_000);
-  assert.equal(gifSizeLimit(undefined,'low',10000),Infinity);
-  assert.equal(gifSizeLimit('catbox','high',10000),20*1024*1024);
+test('local GIFs use the former fixed 20 MiB budget at every quality and duration without changing Hive', () => {
+  for(const target of [undefined,null])for(const quality of ['low','medium','high'])for(const duration of [100,5000,10000,20000,60000]){
+    assert.equal(gifSizeLimit(target,quality,duration),20*1024*1024);
+  }
   assert.equal(gifSizeLimit('hive','high',5000),22_500_000);
   assert.equal(gifSizeLimit('hive-main','high',5000),Infinity);
 });
@@ -119,14 +116,18 @@ test('local GIF size budgets target 100 MB highest and 50 MB medium per ten seco
 
 test('export profiles cap dimensions, preserve frame timing and reject Hive duration overflow', { skip: process.platform !== 'win32' }, async t => {
   const store=await fixture(t);
-  for(const [exportTarget,width,height] of [['catbox',900,450],['hive',800,800]]){
-    const {jobId}=await store.begin(1,{width,height,quality:'high',loop:true,exportTarget});
+  for(const [exportTarget,width,height,quality] of [['hive',800,800,'high'],[undefined,1000,500,'high'],[undefined,500,1000,'medium'],[undefined,720,360,'low']]){
+    const {jobId}=await store.begin(1,{width,height,quality,loop:true,exportTarget});
     for(let i=0;i<3;i++)await store.frame(1,{jobId,width,height,time:i*1000/30,buffer:frame(i,width,height)});
     await store.finish(1,{jobId,time:100});
     const bytes=await fs.readFile(store.get(1,jobId).output);
     const w=bytes.readUInt16LE(6),h=bytes.readUInt16LE(8),decoded=inspectGIF(bytes);
-    if(exportTarget==='catbox'){assert.equal(w,864);assert.equal(h,432);assert.ok(bytes.length<=20*1024*1024);}
-    else assert.ok(w*h<=300000);
+    if(exportTarget==='hive')assert.ok(w*h<=300000);
+    else{
+      assert.equal(Math.max(w,h),Math.min(864,Math.max(width,height)));
+      assert.ok(Math.abs(w/h-width/height)<.005);
+      assert.ok(bytes.length<=20*1024*1024);
+    }
     assert.equal(decoded.frames,3);assert.equal(decoded.delay,100);
     await store.save(1,jobId);
   }
@@ -134,4 +135,24 @@ test('export profiles cap dimensions, preserve frame timing and reject Hive dura
   await store.frame(1,{jobId,width:16,height:8,time:0,buffer:frame(0)});
   await assert.rejects(store.finish(1,{jobId,time:5010}),/Hive does not support/);
   assert.equal(store.jobs.has(jobId),false);
+});
+
+test('complex local GIF fits 20 MiB while keeping every frame, duration and loop', { skip: process.platform !== 'win32' }, async t => {
+  const store=await fixture(t),width=864,height=864,count=40;
+  const {jobId}=await store.begin(1,{width,height,quality:'high',loop:true});
+  for(let index=0;index<count;index++){
+    const pixels=new Uint8Array(width*height*4);let seed=index+1;
+    for(let p=0;p<pixels.length;p+=4){
+      seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;
+      pixels[p]=seed&255;pixels[p+1]=(seed>>>8)&255;pixels[p+2]=(seed>>>16)&255;pixels[p+3]=255;
+    }
+    await store.frame(1,{jobId,width,height,time:index*1000/30,buffer:pixels});
+  }
+  const output=await store.finish(1,{jobId,time:count*1000/30});
+  const saved=await store.save(1,jobId),bytes=await fs.readFile(saved.path),decoded=inspectGIF(bytes);
+  assert.ok(bytes.length<=20*1024*1024);
+  assert.ok(output.width<width&&output.height<height,'Complex frames must exercise the size-budget shrink');
+  assert.equal(output.outputBytes,bytes.length);
+  assert.equal(decoded.frames,count);assert.equal(decoded.delay,1330);assert.equal(decoded.loop,0);
+  t.diagnostic(`Saved complex GIF: ${bytes.length} bytes, ${output.width}x${output.height}, ${decoded.frames} frames, ${decoded.delay} ms`);
 });
