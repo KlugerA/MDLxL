@@ -83,3 +83,12 @@ test('Portrait remains an editable Movement view with gated sequences and no pla
   assert.doesNotMatch(preview,/props\.portraitSnapRevision, model, rendererRevision, sequenceIndex/);
   assert.doesNotMatch(preview,/camera.fov = snapshot.fieldOfView/);
 });
+test('Animations can enter and leave portrait framing without exposing Movement control tools', () => {
+  const app=readFileSync(new URL('../app/App.jsx',import.meta.url),'utf8');
+  const toolbar=readFileSync(new URL('../app/PortraitToolbar.jsx',import.meta.url),'utf8');
+  assert.match(app,/portraitEnabled && mode === 'animation'/);
+  assert.match(app,/mode === 'animation' && <PortraitToolbar/);
+  assert.match(app,/allowControlModel=\{animationPanel === 'movement'\}/);
+  assert.match(toolbar,/active \? 'Full Model View' : 'Portrait Frame View'/);
+  assert.match(toolbar,/active && allowControlModel && <button[^>]*>Control Model<\/button>/);
+});
