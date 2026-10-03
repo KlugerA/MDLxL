@@ -7,6 +7,28 @@ import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
 const {PaintTextureLibrary}=createRequire(import.meta.url)('../electron/paint-textures.cjs');
 
+test('bundled defaults seed all 31 exact images, preserve collisions and respect later edits and deletions',async t=>{
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'citadel-defaults-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
+  const seeds=path.resolve('public/paint-library'),manifest=JSON.parse(await fs.readFile(path.join(seeds,'manifest.json'),'utf8'));
+  assert.equal(manifest.entries.length,31);assert.equal(new Set(manifest.entries.map(e=>e.path)).size,31);
+  const collision=manifest.entries[0].path;
+  await fs.mkdir(path.dirname(path.join(root,collision)),{recursive:true});await fs.writeFile(path.join(root,collision),'personal edited texture');
+  await fs.writeFile(path.join(root,'Personal.png'),'personal image');
+  const lib=new PaintTextureLibrary(root,seeds),catalog=await lib.list();assert.equal(catalog.items.length,32);
+  for(const entry of manifest.entries){
+    const source=await fs.readFile(path.join(seeds,entry.path));
+    assert.equal(createHash('sha256').update(source).digest('hex'),entry.sha256);
+    assert.equal(source.toString('hex',0,8),'89504e470d0a1a0a');assert.equal(source.readUInt32BE(16),entry.width);assert.equal(source.readUInt32BE(20),entry.height);
+    if(entry.path!==collision)assert.deepEqual(await fs.readFile(path.join(root,entry.path)),source);
+  }
+  assert.equal(await fs.readFile(path.join(root,collision),'utf8'),'personal edited texture');
+  const deleted=manifest.entries[1].path,edited=manifest.entries[2].path;
+  await fs.unlink(path.join(root,deleted));await fs.writeFile(path.join(root,edited),'user repaint');
+  const reopened=new PaintTextureLibrary(root,seeds);await reopened.list();
+  await assert.rejects(fs.access(path.join(root,deleted)),{code:'ENOENT'});assert.equal(await fs.readFile(path.join(root,edited),'utf8'),'user repaint');
+  assert.equal(await fs.readFile(path.join(root,'Personal.png'),'utf8'),'personal image');
+});
+
 test('retirement deletes only unchanged seed bytes at their exact known path',async t=>{
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'citadel-retirement-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
   const stock=Buffer.from('known auto-seeded PNG bytes'),hash=createHash('sha256').update(stock).digest('hex');
