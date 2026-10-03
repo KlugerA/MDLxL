@@ -118,7 +118,9 @@ export function installWarcraftPreviewAdapter(gl, model, getClock) {
         // The HD shader needs both maps even when the authored material is a
         // Classic diffuse/glow stack. These private 1x1 maps add no detail.
         neutralNormalTexture = createSolidTexture(gl, [128, 128, 255, 255]);
-        neutralOrmTexture = createSolidTexture(gl, [255, 255, 0, 255]);
+        // Classic materials have no ORM team-colour mask. Alpha zero keeps
+        // their diffuse pixels unchanged by the HD shader's team tint.
+        neutralOrmTexture = createSolidTexture(gl, [255, 255, 0, 0]);
       }
       native.setLayerProps = function (layer, textureID) {
         activeLayer = layer;
