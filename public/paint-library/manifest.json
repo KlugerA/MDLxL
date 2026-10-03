@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "title": "Citadel Paint default textures",
+  "contributor": "Avner",
+  "provenance": "User-provided Warcraft texture crops; underlying artwork by Blizzard Entertainment. Exact native source paths were not supplied.",
+  "entries": [
+    {
+      "path": "Armor/Silver Chainmail.png",
+      "originalPath": "Armor/ChainMail.png",
+      "sha256": "bb9105eadaa0cb21ca814b157ea543c5f84ee9c3aac4d8328e09fb75cf3c3f08",
+      "width": 66,
+      "height": 72
+    },
+    {
+      "path": "Armor/Dark Steel Scales.png",
+      "originalPath": "Armor/Scale Armor.png",
+      "sha256": "4ac4ace0f30b692f4a23b76c0f121f5e7ae656e96488cf642afb6d04864d164e",
+      "width": 89,
+      "height": 76
+    },
+    {
+      "path": "Skin/Elf/Rose Elf Skin.png",
+      "originalPath": "Elf Skin 1.png",
+      "sha256": "e68996f04edb79b6b5a103c1f33e682ab720a63d090369b2a6698772b7a6ede5",
+      "width": 100,
+      "height": 64
+    },
+    {
+      "path": "Hair/Black Hair Strands.png",
+      "originalPath": "Hair/Black Hair.png",
+      "sha256": "c51083139ccb71515a55075abad1282fcf86835d5e8e99634b6e97e1bd092979",
+      "width": 55,
+      "height": 67
+    },
+    {
+      "path": "Hair/Golden Blonde Hair.png",
+      "originalPath": "Hair/Blonde Hair.png",
+      "sha256": "22aebf95deff58cd092c2529b1b9a197a0d875702a0ed6f48a61bd124c535be3",
+      "width": 47,
+      "height": 51
+    },
+    {
+      "path": "Metal/Dented Iron.png",
+      "originalPath": "Metal/Bruised Metal.png",
+      "sha256": "048e31b2781803e10aaad65397100328b72d4390ff3651d8e2a487673fc5ac17",
+      "width": 26,
+      "height": 21
+    },
+    {
+      "path": "Metal/Polished Copper.png",
+      "originalPath": "Metal/Copper Shine.png",
+      "sha256": "72877e81c7cd0479acc730e3191e977c2c169a6737bb344784c2c5eff8264af9",
+      "width": 41,
+      "height": 30
+    },
+    {
+      "path": "Metal/Brushed Silver.png",
+      "originalPath": "Metal/Metal 1.png",
+      "sha256": "ee355267a0a1d4e75e24e296e1d716647f1015c1216dc4b31927cd66f4fc89af",
+      "width": 47,
+      "height": 34
+    },
+    {
+      "path": "Metal/Hammered Dark Steel.png",
+      "originalPath": "Metal/Metal Rough 1.png",
+      "sha256": "490855d5f0fe7aa06827e0bd700b5629b886b876eda08de1177853ea982a36ab",
+      "width": 20,
+      "height": 34
+    },
+    {
+      "path": "Metal/Polished Dark Steel.png",
+      "originalPath": "Metal/Simple Shine.png",
+      "sha256": "5d9f8119dc27fc1a3ae3662018da32bdfcd55b540709c63b0e1ebc93285249b3",
+      "width": 52,
+      "height": 22
+    },
+    {
+      "path": "Skin/Night Elf/Blue Night Elf Skin.png",
+      "originalPath": "Night Elf Skin 2.png",
+      "sha256": "0c5f071020942af64d767d93f419b844efa6f52ba34fda0b78d042a5001abbf7",
+      "width": 62,
+      "height": 70
+    },
+    {
+      "path": "Skin/Night Elf/Blue Night Elf Muscle.png",
+      "originalPath": "Night Elf Skin 3.png",
+      "sha256": "dbe0a9c99af1d0c1fe4af792880a5e887e246d31a8632bd2dea324bfae94cd5f",
+      "width": 49,
+      "height": 71
+    },
+    {
+      "path": "Skin/Orc/Bright Green Orc Skin.png",
+      "originalPath": "Orc Skin 3.png",
+      "sha256": "20a2e361b1e18ed61e9475e45cfab9e2d23f4a1a44ea856d0fb39c510a50de08",
+      "width": 37,
+      "height": 42
+    },
+    {
+      "path": "Fur/Layered Gray Fur.png",
+      "originalPath": "Patterns/Fur 1.png",
+      "sha256": "870b9e6263339783e91afadeed11b9f3983f569c0e2c1636303243db0b447041",
+      "width": 111,
+      "height": 116
+    },
+    {
+      "path": "Fur/Coarse Brown Fur.png",
+      "originalPath": "Patterns/Fur 2.png",
+      "sha256": "2853149bc7a46e3261e5722a2ed4ed8a2dc34de9197c68f1e07a7d49fb72493d",
+      "width": 87,
+      "height": 76
+    },
+    {
+      "path": "Fur/Russet Fur.png",
+      "originalPath": "Patterns/Fur 3.png",
+      "sha256": "b6ba321404f871d2f672f316af20864a8120638376e6a7e9c8fa4bd684738208",
+      "width": 110,
+      "height": 74
+    },
+    {
+      "path": "Organic/Exposed Sinew.png",
+      "originalPath": "Patterns/Gore.png",
+      "sha256": "7baa02e9b3c4a7dfd0a50b96cc45a82d5a0ba959ffc586c5ddeb3d248be39987",
+      "width": 63,
+      "height": 48
+    },
+    {
+      "path": "Effects/Orange and Magenta Streaks.png",
+      "originalPath": "Patterns/Psychedelic.png",
+      "sha256": "72c3af57e7faf2e0ad59168dcfe8c1479ca9b184f6f130a6b36c931bd827fe0e",
+      "width": 44,
+      "height": 47
+    },
+    {
+      "path": "Stone/Dark Cracked Rock.png",
+      "originalPath": "Patterns/Rock 1.png",
+      "sha256": "f9c4eece5811e60ec0b8953203927683f6b682a40dc8aa667b569d9241797db7",
+      "width": 77,
+      "height": 50
+    },
+    {
+      "path": "Stone/Dry Stacked Stone.png",
+      "originalPath": "Patterns/Stone Wall 2.png",
+      "sha256": "a693fca40799e94f63801f04822f8078bd497697280bd5e1f389be621d69c3d6",
+      "width": 61,
+      "height": 58
+    },
+    {
+      "path": "Stone/Mossy Stone Blocks.png",
+      "originalPath": "Patterns/Stone Wall.png",
+      "sha256": "6b83797c21d8375bc27fc11c6ffa2e9bb7724e219efe3403d3e0b1b02e41429d",
+      "width": 62,
+      "height": 60
+    },
+    {
+      "path": "Skin/Elf/Rose Elf Muscle.png",
+      "originalPath": "Skins/Elf Skin 2.png",
+      "sha256": "7b182a21604096bf3d5fa34c279f596e80a3fe0cf3cee93df07a35b644d9a8f9",
+      "width": 67,
+      "height": 98
+    },
+    {
+      "path": "Skin/Human/Tan Human Skin.png",
+      "originalPath": "Skins/Human Skin 1.png",
+      "sha256": "0916f3462e04ce59d155d11774a562a892c55c93a00123d593c519bbdbf0f10a",
+      "width": 64,
+      "height": 59
+    },
+    {
+      "path": "Skin/Human/Pale Human Muscle.png",
+      "originalPath": "Skins/Human Skin 2.png",
+      "sha256": "f07e24c615364e634c71fa9f716f662958fae77900975ba8746c4aeae8597582",
+      "width": 57,
+      "height": 60
+    },
+    {
+      "path": "Skin/Human/Tan Human Muscle.png",
+      "originalPath": "Skins/Human Skin 3.png",
+      "sha256": "edcf5ec97dde4217005ab8d619816613e3c11a9da863bb42a3a2089636634e50",
+      "width": 65,
+      "height": 76
+    },
+    {
+      "path": "Skin/Night Elf/Violet Night Elf Skin.png",
+      "originalPath": "Skins/Night Elf Skin 1.png",
+      "sha256": "b83df699a7dcce704c6fa36368e46fb91939e7267d2d68b102123f005935e49a",
+      "width": 68,
+      "height": 47
+    },
+    {
+      "path": "Skin/Orc/Dark Olive Orc Skin.png",
+      "originalPath": "Skins/Orc Skin 2.png",
+      "sha256": "b8cc24ae3d423661f0b0dd0a2f1c5dbc3adf7b585cda7e05b9eac935acd5275c",
+      "width": 35,
+      "height": 32
+    },
+    {
+      "path": "Skin/Orc/Olive Orc Muscle.png",
+      "originalPath": "Skins/Orc Skin.png",
+      "sha256": "043286fc8271592e893cb5f1aa3ea3775161cd78a5cc31382375ace527846ef0",
+      "width": 50,
+      "height": 44
+    },
+    {
+      "path": "Hair/Silver White Hair.png",
+      "originalPath": "White Hair.png",
+      "sha256": "1cd1d8ad8f396ab3162287d644b0addf8e84d34d5ca2229cb8efc86ab4c3544e",
+      "width": 57,
+      "height": 59
+    },
+    {
+      "path": "Wood/Dark Wood Grain.png",
+      "originalPath": "Wood/Wood 1.png",
+      "sha256": "8b5b01f35e31cb262f790874a212946acfb36df6fa79b8e5b99faea3031148d0",
+      "width": 60,
+      "height": 36
+    },
+    {
+      "path": "Wood/Pale Wood Grain.png",
+      "originalPath": "Wood/Wood 2.png",
+      "sha256": "0aebd2f8de159a51bb96b4dc8c81c072fdb22f5107d6278231d4b3abf1d9b60b",
+      "width": 42,
+      "height": 53
+    }
+  ]
+}

@@ -2089,10 +2089,10 @@ const rows = [
     "5 个入门素材"
   ],
   [
-    "My library",
-    "Моя библиотека",
-    "Mi biblioteca",
-    "个人素材库"
+    "Texture library",
+    "Библиотека текстур",
+    "Biblioteca de texturas",
+    "纹理库"
   ],
   [
     "Your own texture collection. Import an image or cut a piece from Warcraft, then choose Keep.",
