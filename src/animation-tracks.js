@@ -6,7 +6,7 @@ import { createVisibilityGeosetAnimation } from './geoset-animation-defaults.js'
 const NODE_CHANNELS = {
   Attachments: ['Visibility'], ParticleEmitters: ['Visibility'], ParticleEmitters2: ['Visibility'],
   ParticleEmitterPopcorns: ['Visibility', 'Color', 'Alpha'],
-  // Ribbon RGB and Particle2 lifecycle RGB remain in Node Manager: the current
+  // Ribbon RGB and Particle2 lifecycle RGB remain in EMTR: the current
   // codec only supports their static colors, so exposing keyframes loses data.
   Lights: ['Visibility', 'Color', 'AmbColor'], RibbonEmitters: ['Visibility', 'Alpha'],
 };
@@ -15,7 +15,7 @@ const clone = value => structuredClone(value);
 const dimensions = property => property === 'Color' || property === 'AmbColor' ? 3 : 1;
 const fallback = property => dimensions(property) === 3 ? [1, 1, 1] : 1;
 const lineDefault = property => dimensions(property) === 3 ? 1 : 0;
-const keyId = target => `${target.kind}:${target.id}:${target.property}`;
+const keyId = target => `${target.kind}:${target.id}:${target.kind === 'material' ? target.layer + ':' : ''}${target.property}`;
 export const animationTrackId = keyId;
 
 function validFrame(frame) {
@@ -28,12 +28,14 @@ function vectorValue(value, property) {
   return new Float32Array(array);
 }
 function channelAllowed(model, target) {
+  if (target.kind === 'material') return target.property === 'Alpha' && !!model.Materials?.[target.id]?.Layers?.[target.layer];
   if (target.kind === 'geoset') return !!model.Geosets?.[target.id] && ['Alpha', 'Color'].includes(target.property);
   if (target.kind !== 'node') return false;
   return Object.entries(NODE_CHANNELS).some(([name, channels]) => channels.includes(target.property) && model[name]?.some(n => n.ObjectId === target.id));
 }
 function resolveTarget(model, target, create = false) {
   if (!channelAllowed(model, target)) throw new Error('This animation target or property is no longer available.');
+  if (target.kind === 'material') return model.Materials[target.id].Layers[target.layer];
   if (target.kind === 'node') return allNodes(model).find(n => n.ObjectId === target.id);
   const existing = (model.GeosetAnims || []).filter(a => a.GeosetId === target.id);
   if (existing.length > 1) throw new Error(`Geoset ${target.id + 1} has multiple geoset animations. Resolve the duplicate before editing its tracks.`);

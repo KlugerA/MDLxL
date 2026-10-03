@@ -1,6 +1,5 @@
 import { animationTrackId } from './animation-tracks.js';
 import { timelineDomain, timelineTracks, timelineReadTrack, pasteTimelineKeys, pasteTimelinePose } from './keyframe-timeline.js';
-import { nodeVisibilityTargets } from './node-visibility.js';
 
 const transforms = { move: 'Translation', rotate: 'Rotation', scale: 'Scaling' };
 const appearance = new Set(['Alpha', 'Color', 'AmbColor', 'Visibility']);
@@ -39,13 +38,14 @@ export function classicTimelineTargets(model, { tracks = null, nodeIds = [], geo
   const ownDomain = domain || classicTimelineDomain(model), available = timelineTracks(model);
   const editable = new Map(available.filter(target => !target.readOnly).map(target => [target.trackId, target]));
   const nodes = new Set(nodeIds), geosets = new Set(geosetIds), seen = new Set(), result = [];
-  const visibilityIds = activeController === 'nodeVisibility' ? new Set(nodeVisibilityTargets(model, nodeIds).map(animationTrackId)) : null;
   for (const candidate of tracks || available) {
     const target = editable.get(animationTrackId(candidate));
     if (!target || candidate.readOnly || seen.has(target.trackId) || target.globalSeqId !== ownDomain.globalSeqId) continue;
+    if (target.kind === 'material' && activeController !== `materialVisibility:${target.id}:${target.layer}`) continue;
     let included;
-    if (!highlightKeyframes) included = !!timelineReadTrack(model, target)?.Keys?.length;
-    else if (visibilityIds) included = visibilityIds.has(target.trackId);
+    if (activeController.startsWith('materialVisibility:')) included = target.kind === 'material' && activeController === `materialVisibility:${target.id}:${target.layer}`;
+    else if (!highlightKeyframes) included = !!timelineReadTrack(model, target)?.Keys?.length;
+    else if (activeController === 'nodeVisibility') included = target.kind === 'node' && nodes.has(target.id) && target.property === 'Visibility';
     else if (activeController === 'animations') included = target.kind === 'geoset' ? geosets.has(target.id) && ['Alpha', 'Color'].includes(target.property) : target.kind === 'node' && nodes.has(target.id) && appearance.has(target.property);
     else included = target.kind === 'node' && nodes.has(target.id) && target.property === transforms[activeController];
     if (included) { seen.add(target.trackId); result.push(target); }

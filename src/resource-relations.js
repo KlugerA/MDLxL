@@ -35,12 +35,3 @@ export function materialUsers(model, id) {
     ...(model.RibbonEmitters || []).filter(n => n.MaterialID === id).map(n => ({ kind: 'Nodes', index: n.ObjectId, label: n.Name || `Ribbon ${n.ObjectId}` })),
   ];
 }
-export const blendModes = [
-  ['Opaque', 'Solid surface. Texture transparency and layer opacity do not fade this layer.'],
-  ['Cutout', 'Hard cutout from the texture alpha: leaves, hair and torn cloth.'],
-  ['Blend', 'Smooth transparency. Use opacity to fade this layer.'],
-  ['Additive', 'Adds light. Black disappears; bright pixels glow.'],
-  ['Add alpha', 'Additive light with the Warcraft AddAlpha filter.'],
-  ['Modulate', 'Multiplies the background color. Useful for darkening effects.'],
-  ['Modulate 2×', 'Multiplies and brightens the background.'],
-];

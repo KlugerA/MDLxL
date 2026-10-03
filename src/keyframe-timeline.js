@@ -9,12 +9,13 @@ const globalId = track => Number.isInteger(track?.GlobalSeqId) && track.GlobalSe
 const vector = value => typeof value === 'number' ? [value] : Array.from(value || []);
 const defaults = property => ({ Translation: [0, 0, 0], Rotation: [0, 0, 0, 1], Scaling: [1, 1, 1], Color: [1, 1, 1], AmbColor: [1, 1, 1] })[property] || 1;
 const labels = { Translation: 'Translation', Rotation: 'Rotation', Scaling: 'Scaling', Color: 'RGB', AmbColor: 'Ambient RGB', Alpha: 'Alpha', Visibility: 'Visibility' };
-export const timelineSections = ['Nodes', 'GeosetAnims', 'Info'];
+export const timelineSections = ['Nodes', 'GeosetAnims', 'Materials', 'Info'];
 export const timelineKeyId = (track, frame) => `${typeof track === 'string' ? track : animationTrackId(track)}@${frame}`;
 
 /** Only codec-supported channels are editable. Unhandled authored tracks remain visible context. */
 export function timelineTracks(model) {
   const nodes = allNodes(model), targets = animationTargets(model, { nodeIds: nodes.map(node => node.ObjectId), geosetIds: (model.Geosets || []).map((_, i) => i) });
+  (model.Materials || []).forEach((material,id) => (material.Layers || []).forEach((_,layer) => targets.push({kind:'material', id, layer, property:'Alpha', label:`Material ${id+1} · Layer ${layer+1}`, channel:'Visibility'})));
   for (const node of nodes) for (const property of transforms) targets.push({ kind: 'node', id: node.ObjectId, property, label: node.Name || `Node ${node.ObjectId}`, authoredName: !!node.Name, channel: labels[property] });
   const supported = new Set(targets.map(animationTrackId));
   for (const node of nodes) for (const [property, value] of Object.entries(node)) {
@@ -134,7 +135,8 @@ function editableTrack(model, target, domain, template) {
 function commit(model, prepared) {
   for (const { target, track, enableColor = true } of prepared) {
     let owner;
-    if (target.kind === 'node') owner = allNodes(model).find(node => node.ObjectId === target.id);
+    if (target.kind === 'material') owner = model.Materials[target.id].Layers[target.layer];
+    else if (target.kind === 'node') owner = allNodes(model).find(node => node.ObjectId === target.id);
     else {
       owner = model.GeosetAnims?.find(item => item.GeosetId === target.id);
       if (!owner) { owner = createVisibilityGeosetAnimation(target.id); (model.GeosetAnims ||= []).push(owner); }
