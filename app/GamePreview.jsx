@@ -970,7 +970,7 @@ export default function GamePreview(inputProps) {
       const needsGeometry = presentationGuides || p.onSelectionChange || p.onSelectNodes || p.onInspectGeoset || p.highlightSelection && p.onHoverGeoset || overlayOptions.normals || overlayOptions.wires || overlayOptions.vertices || Object.values(p.selectionByGeoset || {}).some(ids => ids.length || ids.size);
       if (needsGeometry) {
         const cacheable = !p.playing && !nodeGesture && !hasBillboardedNodes;
-        const cacheKey = `${native.getFrame()}:${poseSequence}:${globalClock}:${!!overlayOptions.normals}`;
+        const cacheKey = `${native.getFrame()}:${poseSequence}:${globalClock}:${!!p.restPose}:${!!overlayOptions.normals}`;
         if (!cacheable || posedGeometryCache?.key !== cacheKey) {
           const geosets = ownedModel.Geosets.flatMap((geo, index) => sampleGeosetAnimation(ownedModel, index, native.getFrame(), poseSequence, globalClock).alpha > .001 ? [{ index, faces: geo.Faces, vertices: skinGeoset(geo, getPoseMatrices()), normals: overlayOptions.normals && geo.Normals?.length === geo.Vertices.length ? skinGeosetNormals(geo, getPoseMatrices()) : null }] : []);
           posedGeometryCache = cacheable ? { key: cacheKey, geosets } : null;
